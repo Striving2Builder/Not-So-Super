@@ -184,7 +184,7 @@ export class NightCase extends ClubZone {
     } else {
       sfx.lose();
       this.alert = Math.min(99, this.alert + 20);
-      await dialog({ speaker: w.name, text: '"Forget it." They clam up and signal a bouncer.<span class="hint">Bouncer alert +20. Find that clue another way.</span>' });
+      await dialog({ speaker: w.name, text: '"Forget it." They clam up and signal a bouncer.<span class="hint">Bouncer alert +20. The other clues may be enough — or check under the drinks for notes.</span>' });
     }
   }
 
@@ -197,7 +197,9 @@ export class NightCase extends ClubZone {
   /** Some drinks hide a note with a clue: the risky shortcut. */
   async noteUnderDrink() {
     if (!chance(0.5)) return;
-    const c = this.case.anyUnfound(['witness', 'captive']);
+    // A witness who clammed up can't be asked again, so their clue may turn up in a note instead.
+    const w = this.witness, witnessLost = w && w.talked && !w.told;
+    const c = this.case.anyUnfound(witnessLost ? ['captive'] : ['witness', 'captive']);
     if (c) await this.revealClue(c, 'A folded note was tucked under the glass.');
   }
 
@@ -260,7 +262,8 @@ export class NightCase extends ClubZone {
       const freed = this.captives.filter((c) => c.freed).length;
       this.g.state.stats.photos += this.case.photos;
       if (this.g.state.isNight) unlockLead(this.g, 'Solved case');
-      setTimeout(() => this.g.endZone(this.zone, this.case.winResult(this.zone.reward, freed * 5)), 1100);
+      // bonus = evidence from untrapped bait items (set by the shared takeItem)
+      setTimeout(() => this.g.endZone(this.zone, this.case.winResult(this.zone.reward, freed * 5 + this.bonus)), 1100);
     } else {
       sfx.lose();
       this.g.endZone(this.zone, this.case.loseResult(accused));
@@ -273,7 +276,8 @@ export class NightCase extends ClubZone {
     const cf = this.case, found = cf.found.length;
     const nextClue = this.clueObjs.find((o) => !o.clue.found);
     const list = [{ t: `Find clues (${found}/${cf.clues.length})`, done: found === cf.clues.length, target: nextClue && nextClue.pos }];
-    if (this.witness) list.push({ t: 'Question the witness', done: this.witness.talked, target: this.witness.mesh.position });
+    const w = this.witness;
+    if (w) list.push({ t: w.talked && !w.told ? 'Witness clammed up' : 'Question the witness', done: w.talked, target: w.mesh.position }); // either way, nothing more to do there
     if (this.captives.length) list.push({ t: `Free the captives (${this.captives.filter((c) => c.freed).length}/${this.captives.length})`, done: this.captives.every((c) => c.freed), target: (this.captives.find((c) => !c.freed) || {}).person?.position });
     list.push({ t: 'Get a tip from the informant (new lead)', done: !!this.tipGiven, target: this.informant.mesh.position });
     list.push({ t: `Accuse the culprit — SUSPECTS (${found}/3 clues)`, done: false, final: true, target: null });
