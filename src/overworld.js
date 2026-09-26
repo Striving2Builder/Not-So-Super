@@ -6,6 +6,9 @@ import { drawHeroTop, glow } from './art.js';
 import { clamp, lerp, pick, chance, rand, dist, shade, rgba, easeOut, easeInOut, fmtClock, fmtTime, wobble, $ } from './util.js';
 import { heroReady, HeroSprite } from './hero3d.js';
 import { loadClub } from './clubzone.js';
+import { stepFlight, speedFraction, cameraZoom, cameraLead, FLIGHT } from './flight.js';
+import { Sky, SpeedFX } from './sky.js';
+import { FlightAudio } from './flightaudio.js';
 import { nightCaseFields } from './nightcase.js';
 import { toast, banner, flash, openModal, closeModal } from './ui.js';
 import { hash2 } from './rng.js';
@@ -22,7 +25,7 @@ export class Overworld {
     this.g = g;
     this.zones = [];
     this.parts = [];
-    this.hero = { x: 0, y: 0, vx: 0, vy: 0, ang: 0, z: ALT, bank: 0 };
+    this.hero = { x: 0, y: 0, vx: 0, vy: 0, ang: 0, z: ALT, bank: 0, speed: 0, lean: 0, hover: 1 };
     this.cam = { x: 0, y: 0 };
     this.zoom = 1;
     this.k = 1;
@@ -32,6 +35,10 @@ export class Overworld {
     this.smokeT = 0;
     this.attract = false;
     this.district = null;
+    this.shake = 0;
+    this.inCloud = 0;
+    this.fx = new SpeedFX();
+    this.audio = new FlightAudio();
   }
 
   reset() {
@@ -39,8 +46,8 @@ export class Overworld {
     const s = c.seeds.find((s) => s.type === 'downtown') || { x: c.landCols / 2, y: c.rows / 2 };
     this.hero.x = Math.round(s.x) * BLOCK + ROAD / 2;
     this.hero.y = Math.round(s.y) * BLOCK + ROAD / 2;
-    this.hero.vx = this.hero.vy = 0;
-    this.hero.z = ALT;
+    Object.assign(this.hero, { vx: 0, vy: 0, speed: 0, hover: 1, z: ALT });
+    this.sky = new Sky(c.seed, c.W, c.H, ALT);
     this.cam.x = this.hero.x; this.cam.y = this.hero.y;
     this.zones = [];
     this.parts = [];
@@ -58,12 +65,25 @@ export class Overworld {
     ]);
     this.diving = null;
     this.rising = null;
-    if (p.returnFrom) { this.rising = 0; this.zoom = 2.4; this.hero.z = 40; }
+    if (p.returnFrom) { this.rising = 0; this.zoom = 2.4; this.hero.z = 40; this.hero.speed = 0; }
+    if (!this.attract) this.audio.start();
     $('hud-extra').innerHTML = '';
     $('objectives').classList.remove('on');
   }
 
-  exit() { $('prompt').classList.remove('on'); }
+  exit() {
+    $('prompt').classList.remove('on');
+    this.audio.stop();
+  }
+
+  /** Siren from the nearest incident: louder as she approaches, panned to its side of the screen. */
+  nearestSiren() {
+    const h = this.hero;
+    let best = null, bd = 1600;
+    for (const z of this.zones) { const d = dist(z.x, z.y, h.x, h.y); if (d < bd) { bd = d; best = z; } }
+    if (!best) return null;
+    return { vol: 1 - bd / 1600, pan: clamp((best.x - h.x) / 800, -1, 1) };
+  }
 
   // ------------------------------------------------------------------ zones
   maintainZones(initial = false) {
@@ -160,24 +180,28 @@ export class Overworld {
       a = { x: (tx - h.x) / m, y: (ty - h.y) / m };
     } else a = wobble(inp.axis(), st ? st.intox : 0, this.t);
     const boost = !this.attract && inp.down('boost');
-    const max = boost ? 1100 : 560;
-    const acc = Math.min(1, dt * 3);
-    h.vx += (a.x * max - h.vx) * acc;
-    h.vy += (a.y * max - h.vy) * acc;
-    h.x = clamp(h.x + h.vx * dt, 0, city.W);
-    h.y = clamp(h.y + h.vy * dt, 0, city.H);
-    const spd = Math.hypot(h.vx, h.vy);
-    if (spd > 25) {
-      const target = Math.atan2(h.vy, h.vx);
-      let da = target - h.ang;
-      while (da > Math.PI) da -= Math.PI * 2;
-      while (da < -Math.PI) da += Math.PI * 2;
-      h.ang += da * Math.min(1, dt * 6);
-      h.bank = lerp(h.bank, clamp(da, -1, 1), Math.min(1, dt * 5));
+    const ev = stepFlight(h, a, boost, dt);
+    h.x = clamp(h.x, 0, city.W);
+    h.y = clamp(h.y, 0, city.H);
+    const frac = speedFraction(h);
+    if (!this.attract) {
+      if (ev.boostStart) { sfx.boost(); this.shake = Math.max(this.shake, 5); }
+      if (ev.sonic) { sfx.sonicBoom(); this.shake = 12; this.fx.sonicBoom(); }
     }
-    this.cam.x += (h.x + h.vx * 0.3 - this.cam.x) * Math.min(1, dt * 4);
-    this.cam.y += (h.y + h.vy * 0.3 - this.cam.y) * Math.min(1, dt * 4);
-    if (boost && spd > 700 && chance(dt * 30)) this.parts.push({ x: h.x - h.vx * 0.05, y: h.y - h.vy * 0.05, z: h.z, vx: 0, vy: 0, vz: 0, life: 0.4, max: 0.4, size: 5, col: '#bfe8ff', glow: true });
+    // Camera: look further ahead and pull out as she speeds up (dive/rise animations own the zoom).
+    const lead = cameraLead(h);
+    this.cam.x += (h.x + h.vx * lead - this.cam.x) * Math.min(1, dt * 4);
+    this.cam.y += (h.y + h.vy * lead - this.cam.y) * Math.min(1, dt * 4);
+    if (this.rising === null) this.zoom += (cameraZoom(h) - this.zoom) * Math.min(1, dt * 2);
+    this.shake = Math.max(0, this.shake - dt * 20);
+    // Contrail at top speed.
+    if (h.speed > FLIGHT.sonic && chance(dt * 40)) this.parts.push({ x: h.x - h.vx * 0.04, y: h.y - h.vy * 0.04, z: h.z, vx: 0, vy: 0, vz: 0, life: 0.6, max: 0.6, size: 5, col: '#dff4ff', glow: true });
+    this.sky.update(dt);
+    this.inCloud = this.sky.immersion(h);
+    if (this.inCloud > 0.3 && !this.wasInCloud) sfx.whoosh();
+    this.wasInCloud = this.inCloud > 0.3;
+    this.fx.update(dt, frac, h.ang, this.g.w, this.g.h);
+    if (!this.attract) this.audio.update(frac, this.nearestSiren(), this.inCloud);
 
     // --- district tracking (drives tabloid heat)
     const d = city.districtAt(h.x, h.y);
@@ -340,9 +364,10 @@ export class Overworld {
     const P = (z) => CAMH / (CAMH - z);
     const SX = (x, z = 0) => cx + (x - camX) * k * P(z);
     const SY = (y, z = 0) => cy + (y - camY) * k * P(z);
-    const V = { cx, cy, k, P, SX, SY, night, lights: [], t: this.t };
+    const V = { cx, cy, k, P, SX, SY, night, lights: [], t: this.t, W, H };
 
     ctx.save();
+    if (this.shake > 0) ctx.translate(rand(-this.shake, this.shake), rand(-this.shake, this.shake));
     if (st && st.intox > 30) {
       const a = Math.sin(this.t * 1.1) * (st.intox - 30) * 0.0009;
       ctx.translate(cx, cy); ctx.rotate(a); ctx.scale(1 + (st.intox - 30) * 0.0008, 1 + (st.intox - 30) * 0.0008); ctx.translate(-cx, -cy);
@@ -467,7 +492,11 @@ export class Overworld {
     }
     ctx.globalAlpha = 1;
 
-    // zone beacons
+    // clouds below her altitude
+    this.sky.draw(ctx, V, h.z, false);
+
+    // zone beacons (beams now; icons after the upper clouds so they always read)
+    const icons = [];
     for (const z of this.zones) {
       if (Math.abs(z.x - camX) > hw || Math.abs(z.y - camY) > hh) continue;
       const top = 230 + Math.sin(this.t * 3 + z.uid) * 10;
@@ -476,33 +505,27 @@ export class Overworld {
       grd.addColorStop(0, rgba(z.color, 0.55)); grd.addColorStop(1, rgba(z.color, 0));
       ctx.strokeStyle = grd; ctx.lineWidth = 10 * k; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(tx, ty); ctx.stroke();
-      const locked = st && st.locked(z.lockKey);
-      this.drawIcon(ctx, tx, ty, 15 * k * P(top), z, locked, z === this.near);
+      icons.push([tx, ty, 15 * k * P(top), z, st && st.locked(z.lockKey)]);
     }
 
     // heroine
     const hs = k * P(h.z) * 1.3;
+    this.fx.draw(ctx, SX(h.x, h.z), SY(h.y, h.z), hs);
     const hx = SX(h.x, h.z), hy = SY(h.y, h.z) + Math.sin(this.t * 2.2) * 2 * k;
     this.heroScreen = { x: hx, y: hy };
-    if (Math.hypot(h.vx, h.vy) > 700) {
-      ctx.strokeStyle = 'rgba(190,230,255,.35)'; ctx.lineWidth = 2;
-      for (let i = -1; i <= 1; i++) {
-        const ox = Math.cos(h.ang + Math.PI / 2) * i * 10 * hs, oy = Math.sin(h.ang + Math.PI / 2) * i * 10 * hs;
-        ctx.beginPath(); ctx.moveTo(hx + ox - Math.cos(h.ang) * 40 * hs, hy + oy - Math.sin(h.ang) * 40 * hs);
-        ctx.lineTo(hx + ox - Math.cos(h.ang) * 90 * hs, hy + oy - Math.sin(h.ang) * 90 * hs); ctx.stroke();
-      }
-    }
     if (heroReady()) {
       // Real rigged model rendered top-down with the Flying clip; heading is +x on the sprite.
       if (!this.sprite) this.sprite = new HeroSprite(192, 192);
       const sp = this.sprite;
       sp.hero.pose(this.diving ? 'jump' : 'fly', this.diving ? 0.9 : this.t);
-      if (!this.diving) sp.hero.superFly();
+      // Arms relax out of the punch-forward pose as she slows into a hover.
+      if (!this.diving) sp.hero.superFly(1 - 0.8 * h.hover);
       // Airspeed drives the cape: it streams behind her (-z) and lifts a little off her back (+y).
       // Airflow over her back holds the cape up against gravity (y ≈ 10) and streams it to her feet.
-      const air = 8 + Math.hypot(h.vx, h.vy) / 60;
-      sp.hero.setWind(Math.sin(this.t * 2.3) * 1.8, 10.5, -air);
-      const img = sp.render({ view: 'top', yaw: 0, span: 2.6 });
+      const air = 8 + h.speed / 50;
+      sp.hero.setWind(Math.sin(this.t * 2.3) * 1.8, 10.5 * (1 - 0.6 * h.hover), -air);
+      // Bank into turns, pitch up into a hover when slow, dip the head when accelerating.
+      const img = sp.render({ view: 'top', yaw: 0, span: 2.6, roll: h.bank * 0.45, pitch: h.hover * 1.15 - h.lean * 0.25 });
       const size = 2.6 * 40 * hs; // 1 sprite metre ≈ 40 art units
       ctx.save();
       ctx.translate(hx, hy); ctx.rotate(h.ang);
@@ -510,9 +533,19 @@ export class Overworld {
       ctx.restore();
     } else drawHeroTop(ctx, hx, hy, hs, h.ang, this.t, h.bank);
 
+    // clouds above her, then markers on top so they always read
+    this.sky.draw(ctx, V, h.z, true);
+    for (const [x, y, r, z, locked] of icons) this.drawIcon(ctx, x, y, r, z, locked, z === this.near);
+
     // off-screen zone arrows
     if (!this.attract && !this.diving) this.drawArrows(ctx, V);
     ctx.restore();
+
+    // Inside a cloud: brief white-out.
+    if (this.inCloud > 0.05) {
+      ctx.fillStyle = `rgba(235,242,255,${Math.min(0.75, this.inCloud * 0.9) * (1 - 0.5 * night)})`;
+      ctx.fillRect(0, 0, W, H);
+    }
 
     if (this.diving) {
       const e = Math.min(1, this.diving.t / DIVE_T);

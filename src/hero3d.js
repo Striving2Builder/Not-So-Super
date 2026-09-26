@@ -194,10 +194,11 @@ export class HeroSprite {
    * view 'top':  camera straight down, heading = +x on the sprite.
    * yaw rotates the character about the vertical axis (side view: PI/2 faces right).
    */
-  render({ view = 'side', yaw = Math.PI / 2, span = 2.6, lift = 0.12 } = {}) {
+  /** roll = bank about her forward axis; pitch > 0 lifts her head (upright hover). Radians. */
+  render({ view = 'side', yaw = Math.PI / 2, span = 2.6, lift = 0.12, roll = 0, pitch = 0 } = {}) {
     const a = this.w / this.h;
     const c = this.cam;
-    this.pivot.rotation.set(0, yaw, 0);
+    this.pivot.rotation.set(-pitch, yaw, roll);
     if (view === 'top') {
       const half = span / 2;
       c.left = -half * a; c.right = half * a; c.top = half; c.bottom = -half;

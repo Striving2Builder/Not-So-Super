@@ -86,8 +86,24 @@ function spinSting() {
   }
 }
 
+/** Shared audio graph for looping sounds (flight wind, sirens). null if audio is unavailable. */
+export function audioGraph() {
+  const a = audio();
+  if (!a) return null;
+  if (!noiseBuf) {
+    noiseBuf = a.createBuffer(1, a.sampleRate, a.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  return { ctx: a, out: master, noise: noiseBuf };
+}
+
 export const sfx = {
   spin: spinSting,
+  /** Boost ignition: a rising rush. */
+  boost() { noise(0.5, 0.35, 1800); tone(180, 0.45, 'sawtooth', 0.08, 260); },
+  /** Sonic boom: deep double thump + crack. */
+  sonicBoom() { tone(70, 0.6, 'sine', 0.5, -40); noise(0.35, 0.6, 700); tone(55, 0.5, 'sine', 0.35, -25, 0.12); noise(0.08, 0.5, 5000, 0.02); },
   /** Cartoon impact for POW! bursts: thump + slap. */
   pow() { tone(150, 0.14, 'square', 0.22, -110); noise(0.09, 0.55, 2600); tone(1200, 0.05, 'triangle', 0.08, -600, 0.01); },
   get enabled() { return enabled; },
