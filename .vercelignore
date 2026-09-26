@@ -1,0 +1,6 @@
+# Not needed on the live site
+tools/
+assets/models/source_anims/
+assets/clubs/replacements/
+server.js
+README.md
