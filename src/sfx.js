@@ -27,15 +27,20 @@ function tone(freq, dur, type = 'square', vol = 0.3, slide = 0, delay = 0) {
   o.start(t); o.stop(t + dur + 0.02);
 }
 
-function noise(dur, vol = 0.3, freq = 1200, delay = 0) {
-  const a = enabled && audio(); if (!a) return;
+/** The shared white-noise buffer (one second, created once). */
+function ensureNoise(a) {
   if (!noiseBuf) {
     noiseBuf = a.createBuffer(1, a.sampleRate, a.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   }
+  return noiseBuf;
+}
+
+function noise(dur, vol = 0.3, freq = 1200, delay = 0) {
+  const a = enabled && audio(); if (!a) return;
   const t = a.currentTime + delay;
-  const s = a.createBufferSource(); s.buffer = noiseBuf;
+  const s = a.createBufferSource(); s.buffer = ensureNoise(a);
   const f = a.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = freq;
   const g = a.createGain();
   g.gain.setValueAtTime(vol, t);
@@ -54,8 +59,7 @@ function spinSting() {
   const t = a.currentTime;
   const out = a.createGain(); out.gain.value = 0.9; out.connect(master);
   // 1) swirling whoosh: noise through a sweeping band-pass, tremolo'd
-  if (!noiseBuf) noise(0.001, 0.0001);
-  const n = a.createBufferSource(); n.buffer = noiseBuf; n.loop = true;
+  const n = a.createBufferSource(); n.buffer = ensureNoise(a); n.loop = true;
   const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 3;
   bp.frequency.setValueAtTime(300, t); bp.frequency.exponentialRampToValueAtTime(3200, t + 0.7); bp.frequency.exponentialRampToValueAtTime(500, t + 1.2);
   const ng = a.createGain(); ng.gain.setValueAtTime(0.0001, t); ng.gain.exponentialRampToValueAtTime(0.5, t + 0.15); ng.gain.exponentialRampToValueAtTime(0.0001, t + 1.25);
@@ -90,12 +94,7 @@ function spinSting() {
 export function audioGraph() {
   const a = audio();
   if (!a) return null;
-  if (!noiseBuf) {
-    noiseBuf = a.createBuffer(1, a.sampleRate, a.sampleRate);
-    const d = noiseBuf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-  }
-  return { ctx: a, out: master, noise: noiseBuf };
+  return { ctx: a, out: master, noise: ensureNoise(a) };
 }
 
 export const sfx = {

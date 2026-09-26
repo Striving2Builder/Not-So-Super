@@ -18,7 +18,7 @@ import { sfx } from './sfx.js';
 
 const TILT = 0.2;    // oblique view: perspective centre sits this fraction of the screen below centre
 const PERCH_EVERY = 40; // seconds between super-hearing reveals
-const ALT = 360;     // cruising altitude
+const ALT = BANDS[CRUISE_BAND].z; // cruising altitude (single source: flight.js)
 const DIVE_T = 1.1;
 const NEAR_R = 130;
 const TARGET = { street: 5, case: 2, special: 2 };
@@ -54,6 +54,8 @@ export class Overworld {
     Object.assign(this.hero, { vx: 0, vy: 0, speed: 0, hover: 1, z: ALT, band: CRUISE_BAND, perch: null });
     this.camH = ALT + CAM_ABOVE;
     this.airspace = new Airspace(c.seed, c.W, c.H, ALT);
+    this.lastHeard = undefined;
+    this.hearRings = [];
     this.sky = new Sky(c.seed, c.W, c.H, ALT);
     this.cam.x = this.hero.x; this.cam.y = this.hero.y;
     this.zones = [];
@@ -136,6 +138,7 @@ export class Overworld {
     h.speed = 0;
     this.perchT = 0;
     this.listened = false;
+    this.waitNoted = false;
     sfx.whoosh();
   }
 
@@ -153,13 +156,18 @@ export class Overworld {
     this.hearRings = (this.hearRings || []).filter((r) => (r.t += dt) < 1.6);
     if (this.perchT > 0.6 && Math.floor(this.perchT / 0.8) > Math.floor((this.perchT - dt) / 0.8)) this.hearRings.push({ t: 0 });
     if (this.listened || this.perchT < 1.6) return;
+    const h = this.hero;
+    // Cooldown on the overworld's own clock (this.t), which reset() clears with lastHeard.
+    const wait = PERCH_EVERY - (this.t - (this.lastHeard ?? -Infinity));
+    if (wait > 0) {
+      // Keep listening while she stays perched; just tell her once how long it'll be.
+      if (!this.waitNoted) { this.waitNoted = true; toast(`👂 Quiet out there… listening (${Math.ceil(wait)}s)`, 'info'); }
+      return;
+    }
     this.listened = true;
-    const st = this.g.state, h = this.hero;
-    const wait = PERCH_EVERY - (st.time - (this.lastHeard ?? -PERCH_EVERY));
-    if (wait > 0) { toast(`👂 Quiet out there… listen again in ${Math.ceil(wait)}s`, 'info'); return; }
     const z = this.spawn(pick(['street', 'street', 'case']), true, undefined, { x: h.x, y: h.y, r: 1500 });
     if (!z) { toast('👂 Nothing but traffic noise.', 'info'); return; }
-    this.lastHeard = st.time;
+    this.lastHeard = this.t;
     z.name = `Heard: ${z.name}`;
     z.ttl += 60;
     sfx.pickup();
@@ -174,12 +182,19 @@ export class Overworld {
       const blk = c.block(bx + dx, by + dy);
       if (!blk) continue;
       for (const o of blk.b) {
-        if (o.kind !== 'box' || o.h <= h.z) continue; // only buildings taller than her are walls
-        const px = clamp(h.x, o.x, o.x + o.w), py = clamp(h.y, o.y, o.y + o.d);
+        if ((o.kind !== 'box' && o.kind !== 'round') || o.h <= h.z) continue; // only structures taller than her
+        // Already above the footprint (descending onto it, rising out of a zone on its lot):
+        // she floats over the roof instead of being shoved sideways through the walls.
+        const inside = o.kind === 'box' ? h.x >= o.x && h.x <= o.x + o.w && h.y >= o.y && h.y <= o.y + o.d
+          : Math.hypot(h.x - o.x, h.y - o.y) <= o.rad;
+        if (inside) { h.z = o.h + 2; continue; }
+        // Flying into its side: it's a wall.
+        let px, py;
+        if (o.kind === 'box') { px = clamp(h.x, o.x, o.x + o.w); py = clamp(h.y, o.y, o.y + o.d); }
+        else { const a = Math.atan2(h.y - o.y, h.x - o.x); px = o.x + Math.cos(a) * o.rad; py = o.y + Math.sin(a) * o.rad; }
         const ddx = h.x - px, ddy = h.y - py, d = Math.hypot(ddx, ddy);
-        if (d >= R) continue;
-        if (d > 0.01) { h.x = px + (ddx / d) * R; h.y = py + (ddy / d) * R; }
-        else { h.x -= Math.cos(h.ang) * R; h.y -= Math.sin(h.ang) * R; }
+        if (d >= R || d < 1e-6) continue;
+        h.x = px + (ddx / d) * R; h.y = py + (ddy / d) * R;
         if (h.speed > 350) { this.shake = Math.max(this.shake, 8); sfx.hit(); }
         h.speed *= 0.35;
       }
@@ -212,6 +227,9 @@ export class Overworld {
     }
     ctx.restore();
   }
+
+  /** Called by the main loop while a modal (pause, map, dialog) is up. */
+  onPaused() { this.audio.silence(); }
 
   /** Siren from the nearest incident: louder as she approaches, panned to its side of the screen. */
   nearestSiren() {
@@ -325,7 +343,8 @@ export class Overworld {
     const ev = stepFlight(h, h.perch ? { x: 0, y: 0 } : a, boost && !h.perch, dt, BANDS[h.band].speedMul);
     if (this.rising === null) stepAltitude(h, dt);
     this.camH += (h.z + CAM_ABOVE - this.camH) * Math.min(1, dt * 4);
-    if (h.z < 300 && !h.perch) this.collideBuildings(h); // perched = standing on the roof, not hitting it
+    // perched = standing on the roof; rising out of a zone = the camera move owns her position
+    if (h.z < 300 && !h.perch && this.rising === null) this.collideBuildings(h);
     h.x = clamp(h.x, 0, city.W);
     h.y = clamp(h.y, 0, city.H);
     if (h.perch) this.updatePerch(dt);
@@ -362,7 +381,9 @@ export class Overworld {
     }
     const D = DISTRICTS[d];
     // photographers can't snap her from high up; skimming the rooftops is riskier
-    g.vice = { active: !!(D && D.vice) && !h.perch, where: D && D.name, rate: 1.1 * BANDS[h.band].vice };
+    // exposure follows her actual height, so a low perch is as risky as skimming
+    const exposure = h.perch ? BANDS[h.z < BANDS[CRUISE_BAND].z - 60 ? 0 : CRUISE_BAND].vice : BANDS[h.band].vice;
+    g.vice = { active: !!(D && D.vice), where: D && D.name, rate: 1.1 * exposure };
 
     // --- zones
     if (!this.attract) {

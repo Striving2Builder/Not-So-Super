@@ -291,7 +291,8 @@ function frame(now) {
   const m = game.mode;
   if (m) {
     try {
-      if (!UI.open) {
+      if (UI.open) { if (m.onPaused) m.onPaused(); }
+      else {
         m.update(dt);
         if (game.state && !game.title) {
           game.state.tick(dt, game.vice);

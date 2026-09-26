@@ -38,9 +38,18 @@ export class FlightAudio {
     if (!n) return;
     const t = n.ctx.currentTime, on = sfx.enabled ? 1 : 0;
     n.windGain.gain.setTargetAtTime(on * (0.03 + 0.32 * speedFrac * speedFrac) * (1 - 0.4 * inCloud), t, 0.15);
-    n.band.frequency.setTargetAtTime(300 + 2600 * speedFrac - 900 * inCloud, t, 0.2);
+    n.band.frequency.setTargetAtTime(Math.max(150, 300 + 2600 * speedFrac - 900 * inCloud), t, 0.2);
     n.sirenGain.gain.setTargetAtTime(on * (siren ? siren.vol * 0.06 : 0), t, 0.3);
     if (n.pan && siren) n.pan.pan.setTargetAtTime(siren.pan, t, 0.2);
+  }
+
+  /** Mute the loops without tearing them down (pause, map, dialogs). */
+  silence() {
+    const n = this.nodes;
+    if (!n) return;
+    const t = n.ctx.currentTime;
+    n.windGain.gain.setTargetAtTime(0, t, 0.08);
+    n.sirenGain.gain.setTargetAtTime(0, t, 0.08);
   }
 
   /** Fade out and release everything (leaving the overworld, title screen). */
