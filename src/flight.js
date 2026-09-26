@@ -34,8 +34,9 @@ const CLIMB_RATE = 380; // units/s
 export function stepAltitude(h, dt) {
   const target = h.perch ? h.perch.z : BANDS[h.band].z;
   const d = target - h.z;
-  // proportional ease with a speed cap; snaps the last unit so it settles exactly
-  h.z = Math.abs(d) < 1 ? target : h.z + clamp(d * 3 * dt, -CLIMB_RATE * dt, CLIMB_RATE * dt);
+  // proportional ease, capped, with a minimum rate so landings finish decisively
+  const step = Math.sign(d) * Math.min(Math.abs(d), Math.max(Math.abs(d) * 3, 90) * dt, CLIMB_RATE * dt);
+  h.z += step;
 }
 
 /**

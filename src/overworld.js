@@ -174,7 +174,7 @@ export class Overworld {
       const blk = c.block(bx + dx, by + dy);
       if (!blk) continue;
       for (const o of blk.b) {
-        if (o.kind !== 'box' || o.h < h.z - 15) continue;
+        if (o.kind !== 'box' || o.h <= h.z) continue; // only buildings taller than her are walls
         const px = clamp(h.x, o.x, o.x + o.w), py = clamp(h.y, o.y, o.y + o.d);
         const ddx = h.x - px, ddy = h.y - py, d = Math.hypot(ddx, ddy);
         if (d >= R) continue;
@@ -325,7 +325,7 @@ export class Overworld {
     const ev = stepFlight(h, h.perch ? { x: 0, y: 0 } : a, boost && !h.perch, dt, BANDS[h.band].speedMul);
     if (this.rising === null) stepAltitude(h, dt);
     this.camH += (h.z + CAM_ABOVE - this.camH) * Math.min(1, dt * 4);
-    if (h.z < 300) this.collideBuildings(h);
+    if (h.z < 300 && !h.perch) this.collideBuildings(h); // perched = standing on the roof, not hitting it
     h.x = clamp(h.x, 0, city.W);
     h.y = clamp(h.y, 0, city.H);
     if (h.perch) this.updatePerch(dt);
@@ -525,7 +525,7 @@ export class Overworld {
     if (this.shake > 0) ctx.translate(rand(-this.shake, this.shake), rand(-this.shake, this.shake));
     if (st && st.intox > 30) {
       const a = Math.sin(this.t * 1.1) * (st.intox - 30) * 0.0009;
-      ctx.translate(cx, cy); ctx.rotate(a); ctx.scale(1 + (st.intox - 30) * 0.0008, 1 + (st.intox - 30) * 0.0008); ctx.translate(-cx, -cy);
+      ctx.translate(cx, scy); ctx.rotate(a); ctx.scale(1 + (st.intox - 30) * 0.0008, 1 + (st.intox - 30) * 0.0008); ctx.translate(-cx, -scy);
     }
     // outskirts + roads
     ctx.fillStyle = '#26402a'; ctx.fillRect(-60, -60, W + 120, H + 120);
@@ -725,7 +725,7 @@ export class Overworld {
 
     if (this.diving) {
       const e = Math.min(1, this.diving.t / DIVE_T);
-      const grd = ctx.createRadialGradient(cx, cy, Math.min(W, H) * 0.2 * (1 - e * 0.6), cx, cy, Math.max(W, H) * 0.7);
+      const grd = ctx.createRadialGradient(cx, scy, Math.min(W, H) * 0.2 * (1 - e * 0.6), cx, scy, Math.max(W, H) * 0.7);
       grd.addColorStop(0, 'rgba(255,255,255,0)'); grd.addColorStop(1, `rgba(255,255,255,${e * 0.8})`);
       ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
     }
