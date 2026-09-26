@@ -17,13 +17,35 @@ export const FLIGHT = {
 };
 
 /**
+ * Altitude bands. `speedMul` scales top speed; `vice` scales tabloid heat gained over vice
+ * districts (photographers can't snap you from high up). The camera rides CAM_ABOVE units above her,
+ * so climbing naturally widens the view and skimming makes the towers loom.
+ */
+export const BANDS = [
+  { id: 'skim', z: 150, speedMul: 0.8, vice: 1.8, label: 'Rooftop skim' },
+  { id: 'cruise', z: 360, speedMul: 1, vice: 1.1, label: 'Cruising' },
+  { id: 'high', z: 620, speedMul: 1.3, vice: 0.4, label: 'High patrol' },
+];
+export const CRUISE_BAND = 1;
+export const CAM_ABOVE = 740;
+const CLIMB_RATE = 380; // units/s
+
+/** Ease toward the current band's height (or a perch). */
+export function stepAltitude(h, dt) {
+  const target = h.perch ? h.perch.z : BANDS[h.band].z;
+  const d = target - h.z;
+  // proportional ease with a speed cap; snaps the last unit so it settles exactly
+  h.z = Math.abs(d) < 1 ? target : h.z + clamp(d * 3 * dt, -CLIMB_RATE * dt, CLIMB_RATE * dt);
+}
+
+/**
  * Advance the hero one step. `h` holds {x, y, ang, speed, bank, lean, hover, vx, vy}.
  * `a` is the stick {x, y} (magnitude 0..1). Returns one-shot events for FX/audio.
  */
-export function stepFlight(h, a, boosting, dt) {
+export function stepFlight(h, a, boosting, dt, speedMul = 1) {
   const ev = { boostStart: false, sonic: false };
   const mag = Math.min(1, Math.hypot(a.x, a.y));
-  const top = boosting ? FLIGHT.boost : FLIGHT.cruise;
+  const top = (boosting ? FLIGHT.boost : FLIGHT.cruise) * speedMul;
   const target = mag * top;
   const prev = h.speed || 0;
 

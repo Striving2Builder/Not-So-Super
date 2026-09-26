@@ -17,7 +17,7 @@ Touches only the flight code; biggest payoff per change.
 6. **Flight audio** (`src/flightaudio.js`): wind loop pitched by speed, boost whoosh, sonic boom,
    sirens from the nearest incident, louder as you approach.
 
-## Phase 2 — The sky is a place
+## Phase 2 — The sky is a place ✅ done
 7. **Altitude bands**: high patrol (fast, wide view), cruise, rooftop skim (towers become
    obstacles, street life visible). Climb/dive control; zone dives become real descents.
 8. **District atmospheres** (a layer between rooftops and her altitude):

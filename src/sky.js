@@ -64,7 +64,7 @@ export class Sky {
     // Clouds above her are fainter so the city stays readable; at night they fade to a dim veil.
     const alpha = (above ? 0.42 : 0.5) * (1 - 0.55 * V.night);
     for (const c of this.clouds) {
-      if ((c.z >= z) !== above) continue;
+      if ((c.z >= z) !== above || c.z > V.camH - 180) continue; // too close to the camera (e.g. mid-dive)
       const p = V.P(c.z), x = V.SX(c.x, c.z), y = V.SY(c.y, c.z), s = c.rad * V.k * p;
       if (x < -s || y < -s || x > V.W + s || y > V.H + s) continue;
       ctx.save();

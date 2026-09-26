@@ -6,7 +6,9 @@ import { drawHeroTop, glow } from './art.js';
 import { clamp, lerp, pick, chance, rand, dist, shade, rgba, easeOut, easeInOut, fmtClock, fmtTime, wobble, $ } from './util.js';
 import { heroReady, HeroSprite } from './hero3d.js';
 import { loadClub } from './clubzone.js';
-import { stepFlight, speedFraction, cameraZoom, cameraLead, FLIGHT } from './flight.js';
+import { stepFlight, stepAltitude, speedFraction, cameraZoom, cameraLead, FLIGHT, BANDS, CRUISE_BAND, CAM_ABOVE } from './flight.js';
+import { Airspace } from './airspace.js';
+import { drawAtmosphere, FOG_Z } from './atmosphere.js';
 import { Sky, SpeedFX } from './sky.js';
 import { FlightAudio } from './flightaudio.js';
 import { nightCaseFields } from './nightcase.js';
@@ -14,7 +16,8 @@ import { toast, banner, flash, openModal, closeModal } from './ui.js';
 import { hash2 } from './rng.js';
 import { sfx } from './sfx.js';
 
-const CAMH = 1100;   // camera height above ground (world units)
+const TILT = 0.2;    // oblique view: perspective centre sits this fraction of the screen below centre
+const PERCH_EVERY = 40; // seconds between super-hearing reveals
 const ALT = 360;     // cruising altitude
 const DIVE_T = 1.1;
 const NEAR_R = 130;
@@ -25,7 +28,9 @@ export class Overworld {
     this.g = g;
     this.zones = [];
     this.parts = [];
-    this.hero = { x: 0, y: 0, vx: 0, vy: 0, ang: 0, z: ALT, bank: 0, speed: 0, lean: 0, hover: 1 };
+    this.hero = { x: 0, y: 0, vx: 0, vy: 0, ang: 0, z: ALT, bank: 0, speed: 0, lean: 0, hover: 1, band: CRUISE_BAND, perch: null };
+    this.camH = ALT + CAM_ABOVE;
+    this.hearT = 0;
     this.cam = { x: 0, y: 0 };
     this.zoom = 1;
     this.k = 1;
@@ -46,7 +51,9 @@ export class Overworld {
     const s = c.seeds.find((s) => s.type === 'downtown') || { x: c.landCols / 2, y: c.rows / 2 };
     this.hero.x = Math.round(s.x) * BLOCK + ROAD / 2;
     this.hero.y = Math.round(s.y) * BLOCK + ROAD / 2;
-    Object.assign(this.hero, { vx: 0, vy: 0, speed: 0, hover: 1, z: ALT });
+    Object.assign(this.hero, { vx: 0, vy: 0, speed: 0, hover: 1, z: ALT, band: CRUISE_BAND, perch: null });
+    this.camH = ALT + CAM_ABOVE;
+    this.airspace = new Airspace(c.seed, c.W, c.H, ALT);
     this.sky = new Sky(c.seed, c.W, c.H, ALT);
     this.cam.x = this.hero.x; this.cam.y = this.hero.y;
     this.zones = [];
@@ -62,10 +69,13 @@ export class Overworld {
       { id: 'dive', label: 'DIVE', key: 'Space', cls: 'big' },
       { id: 'boost', label: 'BOOST', key: 'Shift' },
       { id: 'map', label: 'MAP', key: 'M', slot: 2 },
+      { id: 'climb', label: '▲<br>UP', key: 'R', slot: 3 },
+      { id: 'descend', label: '▼<br>DOWN', key: 'F', slot: 4 },
+      { id: 'perch', label: 'PERCH', key: 'H', slot: 5 },
     ]);
     this.diving = null;
     this.rising = null;
-    if (p.returnFrom) { this.rising = 0; this.zoom = 2.4; this.hero.z = 40; this.hero.speed = 0; }
+    if (p.returnFrom) { this.rising = 0; this.zoom = 1.6; Object.assign(this.hero, { z: 40, speed: 0, band: CRUISE_BAND, perch: null }); }
     if (!this.attract) this.audio.start();
     $('hud-extra').innerHTML = '';
     $('objectives').classList.remove('on');
@@ -74,6 +84,133 @@ export class Overworld {
   exit() {
     $('prompt').classList.remove('on');
     this.audio.stop();
+  }
+
+  // ------------------------------------------------------------------ altitude, perching, hearing
+  /** World-units to offset the camera so the tilted view still centres on her. */
+  tiltOffset() {
+    const P = this.camH / (this.camH - this.hero.z), T = this.g.h * TILT;
+    return ((P - 1) * T) / (this.k * P);
+  }
+
+  altitudeInput(inp, a) {
+    const h = this.hero;
+    if (inp.pressed('perch')) { if (h.perch) this.leavePerch(); else this.tryPerch(); }
+    if (inp.pressed('climb')) {
+      if (h.perch) this.leavePerch();
+      else if (h.band < BANDS.length - 1) { h.band++; sfx.whoosh(); }
+    }
+    if (inp.pressed('descend') && !h.perch && h.band > 0) { h.band--; sfx.whoosh(); }
+    if (h.perch && Math.hypot(a.x, a.y) > 0.45) this.leavePerch(); // push off to take flight
+  }
+
+  /** The tallest building footprint under (x, y), or null. */
+  buildingAt(x, y) {
+    const c = this.g.city, bx = Math.floor(x / BLOCK), by = Math.floor(y / BLOCK);
+    let best = null;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const blk = c.block(bx + dx, by + dy);
+      if (!blk) continue;
+      for (const o of blk.b) {
+        const inside = o.kind === 'box' ? x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.d
+          : o.kind === 'round' ? Math.hypot(x - o.x, y - o.y) <= o.rad : false;
+        if (inside && (!best || o.h > best.h)) best = o;
+      }
+    }
+    return best;
+  }
+
+  /** A roof she can land on right now (slow enough, over a building worth standing on). */
+  perchTarget() {
+    const h = this.hero;
+    if (h.perch || h.speed > 140) return null;
+    const b = this.buildingAt(h.x, h.y);
+    return b && b.h >= 35 ? b : null;
+  }
+
+  tryPerch() {
+    const b = this.perchTarget();
+    if (!b) { toast('Slow down over a rooftop to perch', 'info'); return; }
+    const h = this.hero;
+    h.perch = { z: b.h + 2 };
+    h.speed = 0;
+    this.perchT = 0;
+    this.listened = false;
+    sfx.whoosh();
+  }
+
+  leavePerch() {
+    const h = this.hero;
+    if (!h.perch) return;
+    h.perch = null;
+    for (let i = 0; i < 12; i++) this.parts.push({ x: h.x, y: h.y, z: h.z, vx: rand(-90, 90), vy: rand(-90, 90), vz: rand(20, 60), life: 0.7, max: 0.7, size: 5, col: '#c8c0b0' });
+    sfx.whoosh();
+  }
+
+  /** While perched: after a moment, super-hearing picks up a crime nearby (with a cooldown). */
+  updatePerch(dt) {
+    this.perchT += dt;
+    this.hearRings = (this.hearRings || []).filter((r) => (r.t += dt) < 1.6);
+    if (this.perchT > 0.6 && Math.floor(this.perchT / 0.8) > Math.floor((this.perchT - dt) / 0.8)) this.hearRings.push({ t: 0 });
+    if (this.listened || this.perchT < 1.6) return;
+    this.listened = true;
+    const st = this.g.state, h = this.hero;
+    const wait = PERCH_EVERY - (st.time - (this.lastHeard ?? -PERCH_EVERY));
+    if (wait > 0) { toast(`👂 Quiet out there… listen again in ${Math.ceil(wait)}s`, 'info'); return; }
+    const z = this.spawn(pick(['street', 'street', 'case']), true, undefined, { x: h.x, y: h.y, r: 1500 });
+    if (!z) { toast('👂 Nothing but traffic noise.', 'info'); return; }
+    this.lastHeard = st.time;
+    z.name = `Heard: ${z.name}`;
+    z.ttl += 60;
+    sfx.pickup();
+    toast(`👂 Super-hearing: ${z.name} in ${DISTRICTS[z.district].name}!`, 'good');
+    if (this.heroScreen) this.g.commentary.thought('Did I hear… trouble?', this.heroScreen.x, this.heroScreen.y - 30);
+  }
+
+  /** Low-altitude rooftop skimming: towers taller than her are solid. */
+  collideBuildings(h) {
+    const c = this.g.city, bx = Math.floor(h.x / BLOCK), by = Math.floor(h.y / BLOCK), R = 18;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const blk = c.block(bx + dx, by + dy);
+      if (!blk) continue;
+      for (const o of blk.b) {
+        if (o.kind !== 'box' || o.h < h.z - 15) continue;
+        const px = clamp(h.x, o.x, o.x + o.w), py = clamp(h.y, o.y, o.y + o.d);
+        const ddx = h.x - px, ddy = h.y - py, d = Math.hypot(ddx, ddy);
+        if (d >= R) continue;
+        if (d > 0.01) { h.x = px + (ddx / d) * R; h.y = py + (ddy / d) * R; }
+        else { h.x -= Math.cos(h.ang) * R; h.y -= Math.sin(h.ang) * R; }
+        if (h.speed > 350) { this.shake = Math.max(this.shake, 8); sfx.hit(); }
+        h.speed *= 0.35;
+      }
+    }
+  }
+
+  /** Little pedestrians walking the sidewalks — only worth drawing when she's low. */
+  drawPedestrians(ctx, V, city, bx0, bx1, by0, by1) {
+    const fade = clamp((260 - this.hero.z) / 90, 0, 1) * (1 - 0.5 * V.night);
+    if (fade <= 0) return;
+    const cols = ['#e05a5a', '#5ab0e0', '#e0c05a', '#6ad08a', '#c07ae0', '#f0f0f0', '#333333'];
+    const side = LOT - 6, per = side * 4, r = Math.max(1.3, 2.4 * V.k);
+    ctx.save();
+    ctx.globalAlpha = fade;
+    for (let by = by0; by <= by1; by++) for (let bx = bx0; bx <= bx1; bx++) {
+      const b = city.block(bx, by);
+      if (b.d === 'farm') continue;
+      const n = b.d === 'suburb' ? 3 : 6;
+      for (let i = 0; i < n; i++) {
+        const s = hash2(bx * 7 + i, by, 5);
+        const dir = i % 2 ? 1 : -1;
+        let u = (s * per + dir * this.t * (10 + s * 10)) % per;
+        if (u < 0) u += per;
+        const e = Math.floor(u / side), f = u % side;
+        const x = b.x0 + 3 + (e === 0 ? f : e === 1 ? side : e === 2 ? side - f : 0);
+        const y = b.y0 + 3 + (e === 0 ? 0 : e === 1 ? f : e === 2 ? side : side - f);
+        ctx.fillStyle = cols[i % cols.length];
+        ctx.beginPath(); ctx.arc(V.SX(x), V.SY(y), r, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.restore();
   }
 
   /** Siren from the nearest incident: louder as she approaches, panned to its side of the screen. */
@@ -98,7 +235,8 @@ export class Overworld {
   }
 
   /** Create one incident of `kind` on the map; returns the zone (or null if there's no room). */
-  spawn(kind, initial, forceVenue) {
+  /** `near` = {x, y, r}: only place it within r of that point (super-hearing). */
+  spawn(kind, initial, forceVenue, near) {
     const city = this.g.city, h = this.hero;
     // After dark, most cases are night cases inside the 3D clubs.
     const night = kind === 'case' && this.g.state && this.g.state.isNight && chance(0.75);
@@ -110,7 +248,8 @@ export class Overworld {
     const cands = city.blocks.filter((b) => {
       if (districts !== '*' && !districts.includes(b.d)) return false;
       const cx = b.x0 + LOT / 2, cy = b.y0 + LOT / 2;
-      return dist(cx, cy, h.x, h.y) > (initial ? 250 : 500) && this.zones.every((z) => dist(z.x, z.y, cx, cy) > 520);
+      if (near && dist(cx, cy, near.x, near.y) > near.r) return false;
+      return dist(cx, cy, h.x, h.y) > (near ? 200 : initial ? 250 : 500) && this.zones.every((z) => dist(z.x, z.y, cx, cy) > 520);
     });
     if (!cands.length) return null;
     const b = pick(cands);
@@ -157,17 +296,19 @@ export class Overworld {
       d.t += dt;
       const e = easeInOut(Math.min(1, d.t / DIVE_T));
       h.x = lerp(d.sx, d.z.x, e); h.y = lerp(d.sy, d.z.y, e);
-      h.z = lerp(ALT, 30, e);
-      this.zoom = lerp(1, 2.4, e);
-      this.cam.x = h.x; this.cam.y = h.y;
+      h.z = lerp(d.z0, 30, e);
+      this.zoom = lerp(d.zoom0, 1.6, e);
+      this.camH = h.z + CAM_ABOVE;
+      this.cam.x = h.x; this.cam.y = h.y - this.tiltOffset();
       if (d.t >= DIVE_T && !d.fired) { d.fired = true; flash(); g.startZone(d.z); }
       return;
     }
     if (this.rising !== null) {
       this.rising += dt;
       const e = easeOut(Math.min(1, this.rising / 1.1));
-      h.z = lerp(40, ALT, e);
-      this.zoom = lerp(2.4, 1, e);
+      h.z = lerp(40, BANDS[h.band].z, e);
+      this.zoom = lerp(1.6, 1, e);
+      this.camH = h.z + CAM_ABOVE;
       if (this.rising >= 1.1) this.rising = null;
     }
 
@@ -180,9 +321,14 @@ export class Overworld {
       a = { x: (tx - h.x) / m, y: (ty - h.y) / m };
     } else a = wobble(inp.axis(), st ? st.intox : 0, this.t);
     const boost = !this.attract && inp.down('boost');
-    const ev = stepFlight(h, a, boost, dt);
+    if (!this.attract) this.altitudeInput(inp, a);
+    const ev = stepFlight(h, h.perch ? { x: 0, y: 0 } : a, boost && !h.perch, dt, BANDS[h.band].speedMul);
+    if (this.rising === null) stepAltitude(h, dt);
+    this.camH += (h.z + CAM_ABOVE - this.camH) * Math.min(1, dt * 4);
+    if (h.z < 300) this.collideBuildings(h);
     h.x = clamp(h.x, 0, city.W);
     h.y = clamp(h.y, 0, city.H);
+    if (h.perch) this.updatePerch(dt);
     const frac = speedFraction(h);
     if (!this.attract) {
       if (ev.boostStart) { sfx.boost(); this.shake = Math.max(this.shake, 5); }
@@ -191,12 +337,13 @@ export class Overworld {
     // Camera: look further ahead and pull out as she speeds up (dive/rise animations own the zoom).
     const lead = cameraLead(h);
     this.cam.x += (h.x + h.vx * lead - this.cam.x) * Math.min(1, dt * 4);
-    this.cam.y += (h.y + h.vy * lead - this.cam.y) * Math.min(1, dt * 4);
+    this.cam.y += (h.y + h.vy * lead - this.tiltOffset() - this.cam.y) * Math.min(1, dt * 4);
     if (this.rising === null) this.zoom += (cameraZoom(h) - this.zoom) * Math.min(1, dt * 2);
     this.shake = Math.max(0, this.shake - dt * 20);
     // Contrail at top speed.
     if (h.speed > FLIGHT.sonic && chance(dt * 40)) this.parts.push({ x: h.x - h.vx * 0.04, y: h.y - h.vy * 0.04, z: h.z, vx: 0, vy: 0, vz: 0, life: 0.6, max: 0.6, size: 5, col: '#dff4ff', glow: true });
     this.sky.update(dt);
+    this.airspace.update(dt);
     this.inCloud = this.sky.immersion(h);
     if (this.inCloud > 0.3 && !this.wasInCloud) sfx.whoosh();
     this.wasInCloud = this.inCloud > 0.3;
@@ -214,7 +361,8 @@ export class Overworld {
       }
     }
     const D = DISTRICTS[d];
-    g.vice = { active: !!(D && D.vice), where: D && D.name, rate: 1.1 };
+    // photographers can't snap her from high up; skimming the rooftops is riskier
+    g.vice = { active: !!(D && D.vice) && !h.perch, where: D && D.name, rate: 1.1 * BANDS[h.band].vice };
 
     // --- zones
     if (!this.attract) {
@@ -275,7 +423,8 @@ export class Overworld {
     if (!z) { toast('Fly over a crime marker to dive in', 'info'); return; }
     const lock = st.locked(z.lockKey);
     if (lock) { toast(`You promised to stay out of ${z.lockKey} zones for ${fmtTime(lock)}`, 'bad'); sfx.lose(); return; }
-    this.diving = { z, t: 0, sx: this.hero.x, sy: this.hero.y };
+    this.diving = { z, t: 0, sx: this.hero.x, sy: this.hero.y, z0: this.hero.z, zoom0: this.zoom };
+    this.hero.perch = null;
     this.g.commentary.onDive(z); // spinning-emblem transition + sting
     if (VENUES[z.venue]?.club) loadClub(VENUES[z.venue].club); // start loading the building during the dive
   }
@@ -299,7 +448,9 @@ export class Overworld {
     const st = this.g.state;
     const D = DISTRICTS[this.district];
     $('hud-title').textContent = D ? D.name : 'Harbor';
-    $('hud-sub').textContent = `${fmtClock(st.clock)} · ${this.zones.length} incidents${D && D.vice ? ' · ⚠ vice district' : ''}`;
+    const alt = this.hero.perch ? 'Perched' : BANDS[this.hero.band].label;
+    $('hud-sub').textContent = `${fmtClock(st.clock)} · ${alt} · ${this.zones.length} incidents${D && D.vice ? ' · ⚠ vice' : ''}`;
+    this.g.input.setButton('perch', { lit: !this.hero.perch && !!this.perchTarget() });
     this.drawMinimap();
   }
 
@@ -358,13 +509,17 @@ export class Overworld {
   render(ctx) {
     const g = this.g, W = g.w, H = g.h, city = g.city, st = g.state;
     const night = st ? st.night : 0.8;
-    const k = (Math.min(W, H) / 760) * this.zoom;
+    // The ground gets smaller as the camera climbs (true perspective); she stays the same size.
+    const k = (Math.min(W, H) / 760) * this.zoom * ((ALT + CAM_ABOVE) / this.camH);
     this.k = k;
-    const cx = W / 2, cy = H / 2, camX = this.cam.x, camY = this.cam.y;
-    const P = (z) => CAMH / (CAMH - z);
+    const cx = W / 2, scy = H / 2, camX = this.cam.x, camY = this.cam.y, camH = this.camH;
+    // Perspective centre below the screen centre = a slight oblique view: roofs lean up-screen,
+    // south faces show. Ground points are unaffected; height lifts things by (P-1)·T.
+    const T = H * TILT, cy = scy + T;
+    const P = (z) => camH / (camH - z);
     const SX = (x, z = 0) => cx + (x - camX) * k * P(z);
-    const SY = (y, z = 0) => cy + (y - camY) * k * P(z);
-    const V = { cx, cy, k, P, SX, SY, night, lights: [], t: this.t, W, H };
+    const SY = (y, z = 0) => scy + (y - camY) * k * P(z) - (P(z) - 1) * T;
+    const V = { cx, cy, scy, k, P, SX, SY, night, lights: [], t: this.t, W, H, camH };
 
     ctx.save();
     if (this.shake > 0) ctx.translate(rand(-this.shake, this.shake), rand(-this.shake, this.shake));
@@ -443,6 +598,10 @@ export class Overworld {
       }
     }
 
+    // street life, visible when she's low
+    const h = this.hero;
+    if (h.z < 260) this.drawPedestrians(ctx, V, city, bx0, bx1, by0, by1);
+
     // zone ground rings
     for (const z of this.zones) {
       if (Math.abs(z.x - camX) > hw || Math.abs(z.y - camY) > hh) continue;
@@ -454,7 +613,6 @@ export class Overworld {
     }
 
     // hero shadow (sun from the north-west)
-    const h = this.hero;
     ctx.fillStyle = 'rgba(0,0,0,.28)';
     ctx.beginPath(); ctx.ellipse(SX(h.x + h.z * 0.12), SY(h.y + h.z * 0.2), 20 * k, 9 * k, h.ang, 0, Math.PI * 2); ctx.fill();
 
@@ -492,8 +650,14 @@ export class Overworld {
     }
     ctx.globalAlpha = 1;
 
-    // clouds below her altitude
+    // sky layers below her: district haze (seen from above), clouds, searchlights, flyers
+    const visBlocks = [];
+    for (let by = by0; by <= by1; by++) for (let bx = bx0; bx <= bx1; bx++) visBlocks.push(city.block(bx, by));
+    const clock = st ? st.clock : 22 * 60;
+    if (h.z > FOG_Z) drawAtmosphere(ctx, V, city, visBlocks, clock, false);
     this.sky.draw(ctx, V, h.z, false);
+    this.airspace.drawSearchlights(ctx, V);
+    this.airspace.drawFlyers(ctx, V, h.z, false);
 
     // zone beacons (beams now; icons after the upper clouds so they always read)
     const icons = [];
@@ -517,24 +681,36 @@ export class Overworld {
       // Real rigged model rendered top-down with the Flying clip; heading is +x on the sprite.
       if (!this.sprite) this.sprite = new HeroSprite(192, 192);
       const sp = this.sprite;
-      sp.hero.pose(this.diving ? 'jump' : 'fly', this.diving ? 0.9 : this.t);
-      // Arms relax out of the punch-forward pose as she slows into a hover.
-      if (!this.diving) sp.hero.superFly(1 - 0.8 * h.hover);
+      if (h.perch) sp.hero.pose('idle', this.t); // standing on the roof (seen from above)
+      else {
+        sp.hero.pose(this.diving ? 'jump' : 'fly', this.diving ? 0.9 : this.t);
+        // Arms relax out of the punch-forward pose as she slows into a hover.
+        if (!this.diving) sp.hero.superFly(1 - 0.8 * h.hover);
+      }
       // Airspeed drives the cape: it streams behind her (-z) and lifts a little off her back (+y).
       // Airflow over her back holds the cape up against gravity (y ≈ 10) and streams it to her feet.
       const air = 8 + h.speed / 50;
       sp.hero.setWind(Math.sin(this.t * 2.3) * 1.8, 10.5 * (1 - 0.6 * h.hover), -air);
       // Bank into turns, pitch up into a hover when slow, dip the head when accelerating.
-      const img = sp.render({ view: 'top', yaw: 0, span: 2.6, roll: h.bank * 0.45, pitch: h.hover * 1.15 - h.lean * 0.25 });
+      const img = sp.render({ view: 'top', yaw: 0, span: 2.6, roll: h.perch ? 0 : h.bank * 0.45, pitch: h.perch ? 0 : h.hover * 1.15 - h.lean * 0.25 });
       const size = 2.6 * 40 * hs; // 1 sprite metre ≈ 40 art units
       ctx.save();
       ctx.translate(hx, hy); ctx.rotate(h.ang);
       ctx.drawImage(img, -size / 2, -size / 2, size, size);
       ctx.restore();
     } else drawHeroTop(ctx, hx, hy, hs, h.ang, this.t, h.bank);
+    // super-hearing: sound rings pulsing out while perched
+    if (h.perch) for (const r of this.hearRings || []) {
+      const e = r.t / 1.6;
+      ctx.strokeStyle = `rgba(160,220,255,${0.7 * (1 - e)})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(hx, hy, (30 + e * 320) * k, 0, Math.PI * 2); ctx.stroke();
+    }
 
     // clouds above her, then markers on top so they always read
+    if (h.z <= FOG_Z) drawAtmosphere(ctx, V, city, visBlocks, clock, true);
+    this.airspace.drawFlyers(ctx, V, h.z, true);
     this.sky.draw(ctx, V, h.z, true);
+    this.airspace.drawPlanes(ctx, V);
     for (const [x, y, r, z, locked] of icons) this.drawIcon(ctx, x, y, r, z, locked, z === this.near);
 
     // off-screen zone arrows
@@ -568,10 +744,10 @@ export class Overworld {
     for (const z of this.zones) {
       const sx = V.SX(z.x), sy = V.SY(z.y);
       if (sx > m && sx < W - m && sy > m + 50 && sy < H - m) continue;
-      const a = Math.atan2(sy - V.cy, sx - V.cx);
+      const a = Math.atan2(sy - V.scy, sx - V.cx);
       const tx = Math.cos(a), ty = Math.sin(a);
       const s = Math.min((W / 2 - m) / Math.abs(tx || 1e-6), (H / 2 - m - 20) / Math.abs(ty || 1e-6));
-      const ax = V.cx + tx * s, ay = V.cy + ty * s;
+      const ax = V.cx + tx * s, ay = V.scy + ty * s;
       ctx.save(); ctx.translate(ax, ay); ctx.rotate(a);
       ctx.fillStyle = z.color; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-4, -9); ctx.lineTo(-4, 9); ctx.closePath(); ctx.fill(); ctx.stroke();

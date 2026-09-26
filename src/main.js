@@ -192,7 +192,7 @@ function victoryPaper(zone, res) {
 
 // ---------------------------------------------------------------- menus
 const HOWTO = `<div class="howto">
-  <h3>Patrol</h3>Fly over the city with the joystick (or <kbd>WASD</kbd>/arrows). <kbd>Shift</kbd>/BOOST to go fast. Glowing beacons are incidents — fly over one and press DIVE (<kbd>Space</kbd>). <kbd>M</kbd> opens the map.
+  <h3>Patrol</h3>Fly over the city with the joystick (or <kbd>WASD</kbd>/arrows). <kbd>Shift</kbd>/BOOST to go fast. Change altitude with <kbd>R</kbd>/▲ and <kbd>F</kbd>/▼: high patrol is fast and hides you from tabloid cameras; skimming the rooftops lets you see the streets, but towers get in the way. Slow down over a rooftop and press <kbd>H</kbd>/PERCH to land and use super-hearing to pick up nearby crimes. Glowing beacons are incidents — fly over one and press DIVE (<kbd>Space</kbd>). <kbd>M</kbd> opens the map.
   <h3>Street crime ( ! and fires)</h3>Side-scrolling brawls. PUNCH (<kbd>J</kbd>) combos, JUMP (<kbd>L</kbd>/<kbd>Space</kbd>) for flying kicks, HEAT VISION / FREEZE BREATH (<kbd>K</kbd>). Stand next to captives to untie them.
   <h3>Investigations ( ? )</h3>Tap objects to search. X-RAY (<kbd>X</kbd>) sees inside sealed things. CAMERA (<kbd>C</kbd>) photographs found clues for bonus rep. Question the witness, then accuse the suspect whose traits match your clues.
   <h3>Special zones ( ★ and ☠ bosses)</h3>3D infiltrations. Get the door code, find the keycard, get into the back room, finish the job and escape. USE (<kbd>E</kbd>), PUNCH (<kbd>F</kbd>) guards from behind, X-RAY reveals bait. Drag the screen to turn the camera. <b>You can be captured here.</b>
