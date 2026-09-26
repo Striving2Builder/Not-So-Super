@@ -1,0 +1,11 @@
+# Raw club source files (1.8 GB, several files over GitHub's 100 MB limit). Kept locally only;
+# the web-ready conversions live in assets/clubs/ (see tools/export_club.py).
+assets/models/3D Nightclubs/
+
+# Not used by the game
+assets/capture/TV_image.png
+
+node_modules/
+*.blend1
+.DS_Store
+Thumbs.db

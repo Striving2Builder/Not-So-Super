@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#070a14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Supergirl: City Patrol</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M4 6h56v18L32 60 4 24z' fill='%23f7d31e' stroke='%23d82630' stroke-width='4'/%3E%3Ctext x='32' y='40' font-size='34' font-weight='900' text-anchor='middle' fill='%23d82630' font-family='Georgia'%3E$%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="game">
+  <canvas id="c2d"></canvas>
+  <div id="three-host"></div>
+  <div id="xray-tint"></div>
+  <div id="intox-tint"></div>
+
+  <div id="hud">
+    <div id="hud-left" class="panel">
+      <div class="rep"><span id="rep-val">0</span><small>REP</small></div>
+      <div class="rank" id="rank">Rookie</div>
+      <div class="barlabel"><span>Intoxication</span></div>
+      <div class="bar"><i id="intox-bar" class="b-intox"></i></div>
+      <div class="barlabel"><span>Tabloid heat</span></div>
+      <div class="bar"><i id="vice-bar" class="b-vice"></i></div>
+      <div id="hud-extra"></div>
+      <div id="lockouts"></div>
+    </div>
+    <div id="hud-top" class="panel"><div id="hud-title"></div><div id="hud-sub"></div></div>
+    <div id="hud-right">
+      <canvas id="minimap" width="160" height="160"></canvas>
+      <button id="fs-btn" class="iconbtn" aria-label="Fullscreen">⛶</button>
+      <button id="pause-btn" class="iconbtn" aria-label="Pause">❚❚</button>
+    </div>
+    <div id="objectives" class="panel"></div>
+    <div id="prompt" class="panel"></div>
+    <div id="marker"><span></span></div>
+  </div>
+
+  <div id="touch"><div id="stick-zone"><div id="stick-base"><div id="stick-knob"></div></div></div></div>
+  <div id="btns"></div>
+  <div id="comic-layer"></div>
+  <div id="toasts"></div>
+  <div id="banner"></div>
+  <div id="flash"></div>
+  <div id="modal-root"></div>
+
+  <div id="title">
+    <div class="title-card">
+      <div class="logo"><span class="shield">$</span></div>
+      <h1>SUPERGIRL</h1>
+      <h2>City Patrol</h2>
+      <p class="tag">Patrol the skies. Dive into danger. Make the front page.</p>
+      <div class="title-btns">
+        <button id="btn-continue" class="big">Continue Patrol</button>
+        <button id="btn-new" class="big">New City</button>
+        <button id="btn-how">How to Play</button>
+      </div>
+      <label class="seed">City seed <input id="seed-input" inputmode="numeric" maxlength="9"></label>
+      <p class="hint" id="rotate-hint">Best played in landscape.</p>
+    </div>
+  </div>
+</div>
+<script type="importmap">{ "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }</script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

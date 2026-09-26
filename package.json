@@ -1,0 +1,9 @@
+{
+  "name": "supergirl-city-patrol",
+  "version": "0.1.0",
+  "private": true,
+  "description": "2.5D top-down superheroine patrol game for HTML5 browsers",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
