@@ -19,6 +19,7 @@ import { sfx } from './sfx.js';
 // Premade clubs. Add more by exporting another .blend with tools/export_club.py.
 export const CLUBS = {
   triangle: { file: 'assets/clubs/triangle.glb', meta: 'assets/clubs/triangle.json' },
+  clubhouse: { file: 'assets/clubs/clubhouse.glb', meta: 'assets/clubs/clubhouse.json' },
 };
 
 const RADIUS = 0.35, STEP = 0.45, HEADROOM = 1.9;
@@ -93,10 +94,21 @@ export function loadClub(key) {
         if (ray.intersectObject(collider)[0]) continue;
         const p = h.point.clone();
         if (capsulePush(collider, p.clone()) > 0.04) continue; // not enough room to stand
+        // Enclosed = walls in at least 3 of 4 directions (floor/roof slabs can overhang the walls,
+        // so "is there a roof" isn't enough to tell inside from outside).
+        let walls = 0;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          ray.set(new THREE.Vector3(x, h.point.y + 1.2, z), new THREE.Vector3(dx, 0, dz)); ray.far = 25;
+          if (ray.intersectObject(collider)[0]) walls++;
+        }
+        p.indoor = walls >= 3;
         floor.push(p);
-        const k = p.y.toFixed(1); hits[k] = (hits[k] || 0) + 1;
       }
     }
+    // Some models have floor slabs extending outside the walls; keep play indoors when possible.
+    const indoor = floor.filter((p) => p.indoor);
+    if (indoor.length >= 60) floor.splice(0, floor.length, ...indoor);
+    for (const p of floor) { const k = p.y.toFixed(1); hits[k] = (hits[k] || 0) + 1; }
     const mainY = +Object.entries(hits).sort((a, b) => b[1] - a[1])[0][0];
     return { scene, meta, collider, floor, box, mainY };
   });
@@ -299,12 +311,15 @@ export class ClubZone extends Special3D {
   collide(p, r) {
     super.collide(p, r);                       // cages and other dynamic boxes
     capsulePush(this.club.collider, p, r);     // the club itself
-    // grounding: snap to the floor below (steps up to STEP, falls down otherwise)
+    // grounding: snap to the floor below (steps up to STEP). No floor there (an open doorway to
+    // nowhere, a gap in the model) → treat it as a wall and stay where she last stood.
     const ray = this._gray || (this._gray = new THREE.Raycaster());
-    ray.firstHitOnly = true; ray.far = STEP + 3;
+    ray.firstHitOnly = true; ray.far = STEP + 1.2;
     ray.set(new THREE.Vector3(p.x, p.y + STEP, p.z), DOWN);
     const h = ray.intersectObject(this.club.collider)[0];
-    if (h && h.face.normal.y > 0.6) p.y = h.point.y;
+    const last = this._lastGood || (this._lastGood = p.clone());
+    if (h && h.face.normal.y > 0.6) { p.y = h.point.y; last.copy(p); }
+    else { p.x = last.x; p.z = last.z; p.y = last.y; }
   }
 
   clearLOS(a, b) {

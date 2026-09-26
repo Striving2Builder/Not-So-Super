@@ -65,6 +65,7 @@ export const VENUES = {
   "Gentlemen's Club":  { districts: ['naughty'], themes: ['blackmail', 'hypnosis', 'extortion', 'intoxication'], vice: true, kind: 'gentlemens', bg: '#0e0610', floor: '#2a1430', wall: '#3d1a44', lights: [0xff44cc, 0xcc66ff, 0xffc890] },
   // Premade clubs (see src/clubzone.js / tools/export_club.py). `club` = key in CLUBS.
   'Triangle Club':     { districts: ['nightclub', 'entertainment', 'naughty'], themes: ['drugs', 'blackmail', 'trafficking', 'intoxication', 'gang'], vice: true, kind: 'premade', club: 'triangle', bg: '#0a0610', floor: '#2a1d33', wall: '#3a2a44', lights: [0xff5fd0, 0x7fd0ff, 0xffc890] },
+  'The Clubhouse':     { districts: ['warehouse', 'nightclub', 'lair'], themes: ['gang', 'weapons', 'drugs', 'extortion'], vice: true, kind: 'premade', club: 'clubhouse', bg: '#05070c', floor: '#1a1a20', wall: '#3a1a18', lights: [0x27e0ff, 0xff3030, 0xffc890] },
   'Underground Lair':  { districts: ['lair'], themes: ['mindcontrol', 'hypnosis', 'weapons', 'trafficking'], vice: true, kind: 'lair', bg: '#030805', floor: '#1a201c', wall: '#2a322c', lights: [0x39ff6a, 0xa0ff39, 0x39ffd0] },
 };
 
