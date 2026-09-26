@@ -318,8 +318,10 @@ export class ClubZone extends Special3D {
     ray.set(new THREE.Vector3(p.x, p.y + STEP, p.z), DOWN);
     const h = ray.intersectObject(this.club.collider)[0];
     const last = this._lastGood || (this._lastGood = p.clone());
-    if (h && h.face.normal.y > 0.6) { p.y = h.point.y; last.copy(p); }
-    else { p.x = last.x; p.z = last.z; p.y = last.y; }
+    if (h) {
+      if (h.face.normal.y > 0.6) p.y = h.point.y; // steep bits (bevels, ramp edges): keep height
+      last.copy(p);
+    } else { p.x = last.x; p.z = last.z; p.y = last.y; } // no floor at all → treat as a wall
   }
 
   clearLOS(a, b) {

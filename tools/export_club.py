@@ -124,13 +124,15 @@ for m in bpy.data.materials:
         nm = next((n for n in N if n.type == 'NORMAL_MAP'), None)
         if nm:
             Lk.new(nm.outputs['Normal'], P.inputs['Normal'])
-        if E:
+        # only carry emission over if the Emission node actually drives the output and glows
+        feeds = E and any(upstream(o, 'EMISSION') == E for o in outs)
+        if feeds and E.inputs['Strength'].default_value > 0:
             ec = E.inputs['Color']
             if ec.is_linked:
                 Lk.new(ec.links[0].from_socket, P.inputs['Emission Color'])
             else:
                 P.inputs['Emission Color'].default_value = ec.default_value
-            P.inputs['Emission Strength'].default_value = max(1.0, E.inputs['Strength'].default_value)
+            P.inputs['Emission Strength'].default_value = E.inputs['Strength'].default_value
         P.inputs['Roughness'].default_value = 0.8
     if alpha_mix:
         fac = alpha_mix.inputs[0].links[0].from_socket
@@ -202,6 +204,11 @@ for i, img in enumerate(bpy.data.images):
     img.reload()
     converted += 1
 log('converted DDS to PNG', converted, '(ffmpeg found)' if ffmpeg else '(NO ffmpeg on PATH)')
+# Anything still in an odd format (packed DDS, EXR, TIFF…) gets a known one so the glTF
+# encoder re-encodes it from pixel data instead of choking on it.
+for img in bpy.data.images:
+    if img.type == 'IMAGE' and img.file_format not in ('PNG', 'JPEG', 'WEBP'):
+        img.file_format = 'PNG'
 
 # 3b) downsize big textures
 scaled = 0
@@ -223,7 +230,7 @@ for img in list(bpy.data.images):
         continue
     try:
         w, h = img.size[:]
-        rgb = bpy.data.images.new(img.name + '_rgb', w, h, alpha=False)
+        rgb = bpy.data.images.new(img.name + '_rgb', w, h, alpha=True)  # keep gray+alpha cut-outs
         rgb.pixels.foreach_set(list(img.pixels))  # Blender exposes pixels as RGBA even for grayscale
         rgb.colorspace_settings.name = img.colorspace_settings.name
         rgb.pack()
