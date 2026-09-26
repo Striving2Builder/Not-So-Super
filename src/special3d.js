@@ -126,6 +126,9 @@ export class Special3D {
 
   spawnPoint() { return { pos: new THREE.Vector3(0, 0, 10), heading: Math.PI }; }
 
+  /** How far the camera may sit from her along `off` (club raids shorten it past obstacles). */
+  cameraReach(h, off) { return off.length(); }
+
   /** Should the boss confrontation start now? */
   bossTrigger(h) { return this.doorOpen && h.position.z < -13; }
 
@@ -1031,7 +1034,7 @@ export class Special3D {
     const h = this.hero.position, st = this.g.state;
     const pitch = 0.86, dist = 7.6;
     const off = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist, Math.cos(this.yaw) * Math.cos(pitch) * dist);
-    const want = h.clone().add(off);
+    const want = h.clone().add(off.multiplyScalar(this.cameraReach(h, off) / dist));
     this.cam.position.lerp(want, 0.2);
     this.cam.lookAt(h.x, h.y + 1.1, h.z);
     if (st.intox > 30) {

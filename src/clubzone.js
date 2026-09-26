@@ -20,6 +20,7 @@ import { sfx } from './sfx.js';
 export const CLUBS = {
   triangle: { file: 'assets/clubs/triangle.glb', meta: 'assets/clubs/triangle.json' },
   clubhouse: { file: 'assets/clubs/clubhouse.glb', meta: 'assets/clubs/clubhouse.json' },
+  stripclub: { file: 'assets/clubs/stripclub.glb', meta: 'assets/clubs/stripclub.json' },
 };
 
 const RADIUS = 0.35, STEP = 0.45, HEADROOM = 1.9;
@@ -85,25 +86,40 @@ export function loadClub(key) {
     const ray = new THREE.Raycaster(); ray.firstHitOnly = true;
     const floor = [];
     const hits = {};
+    // Walk down each column through every surface (models sit at any height, some have
+    // several storeys), keeping upward-facing spots with standing room above.
+    const cand = [];
     for (let x = box.min.x + 0.5; x < box.max.x; x += 1) {
       for (let z = box.min.z + 0.5; z < box.max.z; z += 1) {
-        ray.set(new THREE.Vector3(x, 2.4, z), DOWN); ray.far = 4;
-        const h = ray.intersectObject(collider)[0];
-        if (!h || h.face.normal.y < 0.85 || h.point.y > 1.6 || h.point.y < -0.4) continue;
-        ray.set(new THREE.Vector3(x, h.point.y + 0.05, z), UP); ray.far = HEADROOM;
-        if (ray.intersectObject(collider)[0]) continue;
-        const p = h.point.clone();
-        if (capsulePush(collider, p.clone()) > 0.04) continue; // not enough room to stand
-        // Enclosed = walls in at least 3 of 4 directions (floor/roof slabs can overhang the walls,
-        // so "is there a roof" isn't enough to tell inside from outside).
-        let walls = 0;
-        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          ray.set(new THREE.Vector3(x, h.point.y + 1.2, z), new THREE.Vector3(dx, 0, dz)); ray.far = 25;
-          if (ray.intersectObject(collider)[0]) walls++;
+        let y0 = box.max.y + 0.5;
+        for (let n = 0; n < 12; n++) {
+          ray.set(new THREE.Vector3(x, y0, z), DOWN); ray.far = y0 - box.min.y + 0.1;
+          const h = ray.intersectObject(collider)[0];
+          if (!h) break;
+          y0 = h.point.y - 0.05;
+          if (h.face.normal.y < 0.85) continue;
+          ray.set(new THREE.Vector3(x, h.point.y + 0.05, z), UP); ray.far = HEADROOM;
+          if (ray.intersectObject(collider)[0]) continue;
+          cand.push(h.point.clone());
         }
-        p.indoor = walls >= 3;
-        floor.push(p);
       }
+    }
+    // Main floor = the most common walkable height; play within a storey of it.
+    const lv = {};
+    for (const p of cand) { const k = p.y.toFixed(1); lv[k] = (lv[k] || 0) + 1; }
+    const baseY = cand.length ? +Object.entries(lv).sort((a, b) => b[1] - a[1])[0][0] : 0;
+    for (const p of cand) {
+      if (p.y < baseY - 0.5 || p.y > baseY + 1.6) continue;
+      if (capsulePush(collider, p.clone()) > 0.04) continue; // not enough room to stand
+      // Enclosed = walls in at least 3 of 4 directions (floor/roof slabs can overhang the walls,
+      // so "is there a roof" isn't enough to tell inside from outside).
+      let walls = 0;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        ray.set(new THREE.Vector3(p.x, p.y + 1.2, p.z), new THREE.Vector3(dx, 0, dz)); ray.far = 25;
+        if (ray.intersectObject(collider)[0]) walls++;
+      }
+      p.indoor = walls >= 3;
+      floor.push(p);
     }
     // Some models have floor slabs extending outside the walls; keep play indoors when possible.
     const indoor = floor.filter((p) => p.indoor);
@@ -400,6 +416,19 @@ export class ClubZone extends Special3D {
   }
 
   allDone() { return this.hasCode && this.bossDone && this.evidence.every((e) => e.done) && this.captives.every((c) => c.freed); }
+
+  /** Pull the camera in when a booth, wall or pillar (below the slice plane) blocks the view. */
+  cameraReach(h, off) {
+    const d = off.length();
+    const from = new THREE.Vector3(h.x, h.y + 1.3, h.z);
+    const ray = this._cray || (this._cray = new THREE.Raycaster());
+    ray.firstHitOnly = true;
+    ray.set(from, off.clone().normalize()); ray.far = d;
+    const hit = ray.intersectObject(this.club.collider)[0];
+    // ignore anything above the slice plane: it isn't drawn, so it can't block the view
+    if (!hit || hit.point.y > h.y + 2.7) return d;
+    return Math.max(2.2, hit.distance - 0.4);
+  }
 
   // ------------------------------------------------------------------ render
   render() {

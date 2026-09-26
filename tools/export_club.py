@@ -226,7 +226,8 @@ expanded = 0
 for img in list(bpy.data.images):
     # Blender reports 4 channels for everything; the real format shows in the bit depth
     # (8 or 16 bits per pixel = single-channel grayscale).
-    if img.type != 'IMAGE' or not img.size[0] or img.depth >= 24:
+    gray = img.depth <= (32 if img.is_float else 16)  # float: 32 bits = 1 channel
+    if img.type != 'IMAGE' or not img.size[0] or not gray:
         continue
     try:
         w, h = img.size[:]

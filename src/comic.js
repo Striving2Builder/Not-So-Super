@@ -53,7 +53,7 @@ export const comic = {
     el.style.left = clampX(x, w / 2) - w / 2 + 'px';
     el.style.top = Math.max(60, Math.min(innerHeight - h - 10, y - h / 2)) + 'px';
     el.style.setProperty('--rot', rand(-18, 18).toFixed(1) + 'deg');
-    const fs = Math.min(64, (w / Math.max(3, word.length)) * 1.45);
+    const fs = Math.min(64, (w / Math.max(3, word.length)) * 1.2);
     el.innerHTML = `<svg viewBox="0 0 200 156" preserveAspectRatio="none">
       <polygon points="${burstPoints(100, 78, 96, 58, 13, 0.12)}" fill="${rim}" stroke="#111" stroke-width="4" stroke-linejoin="round"/>
       <polygon points="${burstPoints(100, 78, 78, 50, 11, 0.1)}" fill="${fill}" stroke="#111" stroke-width="3" stroke-linejoin="round"/>
