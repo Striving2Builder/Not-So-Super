@@ -55,6 +55,23 @@ export const CASES = [
   { id: 'spiked',    name: 'Spiked Drinks',    districts: ['nightclub', 'entertainment', 'naughty', 'redlight'], setting: 'alley', reward: 22, crime: 'the spiked-drinks scandal' },
 ];
 
+// Night cases: 3D investigations inside the premade clubs (src/nightcase.js). They replace the
+// 2D scenes in nightlife districts after dark. `clueProps` are the evidence objects you search;
+// `captives` adds people to free (one of them becomes the witness); `extraTemptations` adds drinks.
+export const NIGHT_DISTRICTS = ['nightclub', 'entertainment', 'naughty', 'redlight', 'casino', 'warehouse', 'docks', 'lair'];
+export const NIGHT_JOBS = ['bouncer', 'bartender', 'club promoter', 'DJ', 'VIP host', 'club manager', 'coat-check attendant', 'regular customer', 'dealer'];
+export const NIGHT_CASES = {
+  trafficking:   { name: 'Trafficking Ring', crime: 'the trafficking ring', captives: 2, clueProps: ['Forged Passports', 'Cargo Manifest', 'Burner Phone'] },
+  humantraffic:  { name: 'Human Trafficking', crime: 'the human-trafficking pipeline', captives: 3, clueProps: ['Bus Tickets', 'Stack of Fake IDs', 'Ledger of Names'] },
+  drugs:         { name: 'Drug Ring', crime: "the club's drug ring", clueProps: ['Baggies Stash', 'Cash Envelope', 'Pager'] },
+  weapons:       { name: 'Secret Weapon Parts', crime: 'the smuggled weapon parts', clueProps: ['Machined Trigger Assembly', 'Blueprint Scraps', 'Crate Label'] },
+  gang:          { name: 'Gang Shakedown', crime: 'the gang shakedown', clueProps: ['Gang Colors', 'Protection Ledger', 'Brass Knuckles'] },
+  murder:        { name: 'Murder in the VIP Room', crime: 'the VIP-room murder', chalk: true, clueProps: ['Broken Glass', 'Torn Cufflink', 'Lipstick Note'] },
+  intoxication:  { name: 'Drug Intoxication', crime: 'the spiked-drink poisonings', extraTemptations: 2, clueProps: ['Vial of Powder', 'Pipette', 'Bar Tab'] },
+  blackmail:     { name: 'Blackmail', crime: 'the blackmail photos', clueProps: ['Photo Negatives', 'Hidden Camera', 'Ransom Letter'] },
+  captive:       { name: 'Captive Situation', crime: 'the hostage situation', captives: 2, clueProps: ['Zip Ties', 'Ransom Recording', 'Van Keys'] },
+};
+
 // Special zones (3D third-person). One venue per special district.
 export const VENUES = {
   'Nightclub':         { districts: ['nightclub'], themes: ['drugs', 'intoxication', 'gang', 'blackmail', 'hypnosis'], vice: true, kind: 'club', bg: '#0c0716', floor: '#1b1428', wall: '#2c2142', lights: [0xff2fd0, 0x27e0ff, 0x9d4dff] },

@@ -71,12 +71,14 @@ export class Special3D {
     document.body.classList.add('three');
     this.zone = zone;
     this.V = VENUES[zone.venue];
-    this.theme = THEMES[zone.theme];
+    this.theme = this.themeFor(zone);
     Object.assign(this, {
       done: false, busy: false, t: 0, alert: 0, en: 100, xray: false, inside: 0, bonus: 0, wrong: 0,
       hasCode: false, hasKey: false, doorOpen: false, bossDone: !zone.boss, bossMet: false, punchT: 0,
       code: String(1000 + Math.floor(Math.random() * 9000)),
       colliders: [], inter: [], guards: [], anims: [], hidden: [], itemSpots: [], evidence: [], captives: [],
+      // per-zone references: this object is reused for every zone, so nothing may carry over
+      boss: null, informant: null, near: null, _lastGood: null,
     });
     const S = (this.scene = new THREE.Scene());
     S.background = new THREE.Color(this.V.bg);
@@ -99,16 +101,27 @@ export class Special3D {
     S.add(this.hero);
 
     g.input.setStick(true);
-    g.input.setButtons([
+    this.setupControls();
+    $('hud-title').textContent = zone.name;
+    $('objectives').classList.add('on');
+    this.announce();
+  }
+
+  // ---- presentation hooks (night cases override these)
+  themeFor(zone) { return THEMES[zone.theme]; }
+
+  setupControls() {
+    this.g.input.setButtons([
       { id: 'interact', label: 'USE', key: 'E', cls: 'big' },
       { id: 'punch', label: 'PUNCH', key: 'F' },
       { id: 'xray', label: 'X-RAY', key: 'X', slot: 2 },
     ]);
     $('hud-extra').innerHTML = `<div class="barlabel"><span>Guard alert</span></div><div class="bar"><i id="b-alert" class="b-alert"></i></div>
       <div class="barlabel"><span>X-ray power</span></div><div class="bar"><i id="b-en" class="b-en"></i></div>`;
-    $('hud-title').textContent = zone.name;
-    $('objectives').classList.add('on');
-    banner(zone.venue.toUpperCase(), `${this.theme.name} · Risk of capture`, '#ff3fb8');
+  }
+
+  announce() {
+    banner(this.zone.venue.toUpperCase(), `${this.theme.name} · Risk of capture`, '#ff3fb8');
     setTimeout(() => { if (!this.done) toast('Drag the screen to turn the camera. Stay out of the guards\' vision cones.', 'info'); }, 1600);
   }
 

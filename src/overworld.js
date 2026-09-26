@@ -1,11 +1,12 @@
 // Flying patrol over the procedural city, drawn in 2.5D: every point is projected with a
 // straight-down perspective camera, so rooftops grow and lean away from screen centre.
 import { BLOCK, ROAD, LOT } from './city.js';
-import { DISTRICTS, STREET_CRIMES, CASES, VENUES, THEMES, BOSSES, HERO } from './data.js';
+import { DISTRICTS, STREET_CRIMES, CASES, VENUES, THEMES, BOSSES, HERO, NIGHT_DISTRICTS } from './data.js';
 import { drawHeroTop, glow } from './art.js';
 import { clamp, lerp, pick, chance, rand, dist, shade, rgba, easeOut, easeInOut, fmtClock, fmtTime, wobble, $ } from './util.js';
 import { heroReady, HeroSprite } from './hero3d.js';
 import { loadClub } from './clubzone.js';
+import { nightCaseFields } from './nightcase.js';
 import { toast, banner, flash, openModal, closeModal } from './ui.js';
 import { hash2 } from './rng.js';
 import { sfx } from './sfx.js';
@@ -67,19 +68,23 @@ export class Overworld {
   // ------------------------------------------------------------------ zones
   maintainZones(initial = false) {
     const counts = { street: 0, case: 0, special: 0 };
-    for (const z of this.zones) counts[z.kind]++;
+    for (const z of this.zones) if (!z.lead) counts[z.kind]++; // leads are extra, beyond the quota
     // Always keep one club raid (premade 3D club) somewhere on the map.
     const clubs = Object.keys(VENUES).filter((v) => VENUES[v].club);
-    if (clubs.length && !this.zones.some((z) => VENUES[z.venue]?.club)) { this.spawn('special', initial, pick(clubs)); return; }
+    if (clubs.length && !this.zones.some((z) => z.mode === 'special' && VENUES[z.venue]?.club)) { this.spawn('special', initial, pick(clubs)); return; }
     for (const k of ['street', 'case', 'special']) {
       if (counts[k] < TARGET[k]) { this.spawn(k, initial); return; }
     }
   }
 
+  /** Create one incident of `kind` on the map; returns the zone (or null if there's no room). */
   spawn(kind, initial, forceVenue) {
     const city = this.g.city, h = this.hero;
+    // After dark, most cases are night cases inside the 3D clubs.
+    const night = kind === 'case' && this.g.state && this.g.state.isNight && chance(0.75);
     let def, districts, venueName;
     if (kind === 'street') { def = pick(STREET_CRIMES); districts = def.districts; }
+    else if (night) districts = NIGHT_DISTRICTS;
     else if (kind === 'case') { def = pick(CASES); districts = def.districts; }
     else { venueName = forceVenue || pick(Object.keys(VENUES)); def = VENUES[venueName]; districts = def.districts; }
     const cands = city.blocks.filter((b) => {
@@ -87,7 +92,7 @@ export class Overworld {
       const cx = b.x0 + LOT / 2, cy = b.y0 + LOT / 2;
       return dist(cx, cy, h.x, h.y) > (initial ? 250 : 500) && this.zones.every((z) => dist(z.x, z.y, cx, cy) > 520);
     });
-    if (!cands.length) return;
+    if (!cands.length) return null;
     const b = pick(cands);
     const z = { uid: this.uid++, kind, district: b.d, t: 0, x: b.x0 + LOT / 2, y: b.y0 + LOT / 2 };
     if (kind === 'street') {
@@ -97,6 +102,8 @@ export class Overworld {
         lockKey: 'Street Crime', ttl: rand(120, 180), color: def.variant === 'fire' ? '#ff7a1a' : def.boss ? '#ff3030' : '#ffd23f',
         glyph: def.variant === 'fire' ? 'F' : '!', risk: def.diff >= 3 ? 'Medium' : 'Low', blurb: def.blurb,
       });
+    } else if (night) {
+      Object.assign(z, nightCaseFields());
     } else if (kind === 'case') {
       Object.assign(z, {
         mode: 'investigate', def, name: def.name, reward: def.reward, lockKey: 'Investigations', ttl: rand(160, 230),
@@ -112,7 +119,8 @@ export class Overworld {
       });
     }
     this.zones.push(z);
-    if (!initial && !this.attract && kind !== 'street') toast(`New ${kind === 'case' ? 'investigation' : 'special zone'}: ${z.name} (${DISTRICTS[z.district].name})`, 'info');
+    if (!initial && !this.attract && kind !== 'street') toast(`New ${z.mode === 'nightcase' ? 'night case' : kind === 'case' ? 'investigation' : 'special zone'}: ${z.name} (${DISTRICTS[z.district].name})`, 'info');
+    return z;
   }
 
   removeZone(z) { this.zones = this.zones.filter((q) => q !== z); }
@@ -188,6 +196,11 @@ export class Overworld {
     if (!this.attract) {
       for (const z of this.zones) {
         z.t += dt;
+        if (z.mode === 'nightcase' && !st.isNight && z !== this.near) {
+          this.removeZone(z);
+          toast(`Closing time: ${z.name} is off until tonight.`, 'info');
+          break;
+        }
         if (z.t > z.ttl) {
           this.removeZone(z);
           if (z.kind === 'street') st.addRep(-2, `${z.name} went unanswered`);
@@ -307,7 +320,7 @@ export class Overworld {
     g.fillStyle = '#fff'; g.strokeStyle = '#d82630'; g.lineWidth = 3;
     g.beginPath(); g.arc(this.hero.x * m, this.hero.y * m, 7, 0, Math.PI * 2); g.fill(); g.stroke();
     const legend = Object.values(DISTRICTS).map((d) => `<span><i style="background:${d.map}"></i>${d.name}</span>`).join('');
-    const kinds = `<span><i style="background:#ffd23f"></i>Street crime</span><span><i style="background:#ff7a1a"></i>Fire</span><span><i style="background:#3fd0ff"></i>Investigation</span><span><i style="background:#ff3fb8"></i>Special zone</span><span><i style="background:#ff3030"></i>Boss</span>`;
+    const kinds = `<span><i style="background:#ffd23f"></i>Street crime</span><span><i style="background:#ff7a1a"></i>Fire</span><span><i style="background:#3fd0ff"></i>Investigation</span><span><i style="background:#b36bff"></i>Night case</span><span><i style="background:#ff3fb8"></i>Special zone</span><span><i style="background:#ff3030"></i>Boss</span>`;
     const el = openModal(`<h2>City Map</h2><div class="mapwrap"></div><div class="legend">${kinds}</div><div class="legend">${legend}</div><div class="opts" style="margin-top:12px"><button class="opt"><span class="k">M</span><span class="l">Close map</span></button></div>`);
     el.querySelector('.mapwrap').appendChild(c);
     const close = () => { removeEventListener('keydown', onKey, true); closeModal(el); };

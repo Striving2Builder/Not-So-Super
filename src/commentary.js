@@ -2,7 +2,7 @@
 // and WHEN, based on where Supergirl is, what's happening, and how the city feels about her.
 // Rendering is done by comic.js.
 import { comic } from './comic.js';
-import { DISTRICTS, THEMES, HERO } from './data.js';
+import { DISTRICTS, THEMES, NIGHT_CASES, HERO } from './data.js';
 import { pick, chance, rand } from './util.js';
 import { sfx } from './sfx.js';
 
@@ -64,6 +64,7 @@ const ZONE_OPEN = {
   brawl: ['Meanwhile, down in {D}… {C}!', 'Danger in {D}! Thugs run wild!', 'Holy havoc! {C} in {D}!'],
   investigate: ['Meanwhile, at the scene of the crime…', 'A mystery in {D}! Who dunnit?', 'The plot thickens in {D}…'],
   special: ['Meanwhile, inside the {V}… a sinister {T} plot unfolds!', 'Behind the velvet rope of the {V}… VILLAINY!', 'Deep inside the {V}… a trap awaits!'],
+  nightcase: ['Meanwhile, after hours at the {V}… the case of {T}!', 'Midnight at the {V}. The music is loud, the secrets louder…', 'The {V} after dark… somebody here knows something!'],
 };
 const THUG_TAUNT = ['Get her, boys!', 'It\'s the cape! Get her!', 'Ha! Just one girl!', 'Nobody messes with our turf!', 'You picked the wrong street, sister!'];
 const THUG_TAUNT_FRAUD = ['Relax boys, it\'s just the FAKE one!', 'Ha! The fraud showed up!', 'This\'ll be easy!'];
@@ -182,7 +183,7 @@ export class Commentary {
   }
 
   onZoneStart(zone) {
-    const v = { D: placeName(zone.district), C: zone.name.toUpperCase(), V: (zone.venue || '').toUpperCase(), T: zone.theme ? THEMES[zone.theme].name.toLowerCase() : '' };
+    const v = { D: placeName(zone.district), C: zone.name.toUpperCase(), V: (zone.venue || '').toUpperCase(), T: ((zone.mode === 'nightcase' ? NIGHT_CASES : THEMES)[zone.theme]?.name || '').toLowerCase() };
     setTimeout(() => comic.caption(fill(pick(ZONE_OPEN[zone.mode]), v)), 1300);
   }
 

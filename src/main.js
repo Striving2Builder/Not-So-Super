@@ -7,6 +7,7 @@ import { Investigate } from './investigate.js';
 import { Special3D } from './special3d.js';
 import { Captured } from './captured.js';
 import { ClubZone } from './clubzone.js';
+import { NightCase } from './nightcase.js';
 import { showNewspaper } from './newspaper.js';
 import { HERO, DISTRICTS, THEMES, DEALS, BOSSES, VENUES } from './data.js';
 import { UI, dialog, toast } from './ui.js';
@@ -28,6 +29,7 @@ game.modes = {
   special: new Special3D(game),
   captured: new Captured(game),
   club: new ClubZone(game),
+  nightcase: new NightCase(game),
 };
 game.overworld = game.modes.overworld;
 game.commentary = new Commentary(game);
@@ -41,6 +43,7 @@ function resize() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   game.modes.special.resize();
   game.modes.club.resize();
+  game.modes.nightcase.resize();
 }
 addEventListener('resize', resize);
 addEventListener('orientationchange', () => setTimeout(resize, 200));
@@ -60,9 +63,14 @@ game.setMode = (name, p) => {
 };
 
 // ---------------------------------------------------------------- zone flow
+/** Which game mode plays a zone. */
+function modeFor(z) {
+  if (z.mode === 'special' && VENUES[z.venue]?.club) return 'club';  // raid inside a premade club
+  return { brawl: 'brawler', investigate: 'investigate', special: 'special', nightcase: 'nightcase' }[z.mode];
+}
+
 game.startZone = (z) => {
-  const premade = z.mode === 'special' && VENUES[z.venue] && VENUES[z.venue].club;
-  game.setMode(premade ? 'club' : { brawl: 'brawler', investigate: 'investigate', special: 'special' }[z.mode], { zone: z });
+  game.setMode(modeFor(z), { zone: z });
   game.commentary.onZoneStart(z);
   if (z.mode === 'brawl' && game.h > game.w) toast('Tip: rotate to landscape for street fights', 'info');
 };
@@ -79,7 +87,7 @@ game.endZone = async (zone, res) => {
   if (res.outcome === 'win') {
     st.addRep(res.rep, 'Saved the day');
     if (zone.mode === 'brawl') st.stats.saves++;
-    if (zone.mode === 'investigate') st.stats.cases++;
+    if (zone.mode === 'investigate' || zone.mode === 'nightcase') st.stats.cases++;
     if (zone.mode === 'special') st.stats.specials++;
     await showNewspaper({ ...victoryPaper(zone, res), rep: res.rep });
   } else if (res.outcome === 'lose') {
@@ -159,7 +167,7 @@ function victoryPaper(zone, res) {
       ],
     };
   }
-  if (zone.mode === 'investigate') {
+  if (zone.mode === 'investigate' || zone.mode === 'nightcase') {
     return {
       photo: 'case',
       headline: chance(0.5) ? `${H} CRACKS THE CASE!` : `MYSTERY SOLVED!`,

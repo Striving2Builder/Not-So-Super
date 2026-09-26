@@ -184,48 +184,69 @@ export class ClubZone extends Special3D {
   // ------------------------------------------------------------------ placement
   onMain(p) { return Math.abs(p.y - this.club.mainY) < 0.3; }
 
+  /** Raid layout: informant, guards, temptations/bait, evidence, captives, boss. */
   placeClubGameplay() {
-    const c = this.club, z = this.zone, th = this.theme;
-    const floor = c.floor;
-    const near = (p, r) => floor.filter((q) => q.distanceToSquared(p) < r * r).length;
-    // Spawn: an open spot at one end of the club (the entrance side of most layouts).
+    const z = this.zone, th = this.theme;
+    this.planLayout();
+    this.placeInformant();
+    this.placeGuards(Math.min(5, 2 + (z.boss ? 1 : 0) + (th.extraGuards || 0) + (chance(0.5) ? 1 : 0)));
+    this.placeItems(4 + (th.extraTraps || 0));
+    th.evidence.forEach((name) => this.placeEvidence(name, th.mind ? 'Smash' : 'Secure'));
+    this.placeCaptives(th.captives || 0);
+    if (z.boss) this.placeBoss();
+  }
+
+  // ---- layout building blocks (shared by raids and night cases)
+
+  /** Spawn at the entrance end, exit ring, and a spot-picker that keeps things apart. */
+  planLayout() {
+    const c = this.club, floor = c.floor;
+    this.near = (p, r) => floor.filter((q) => q.distanceToSquared(p) < r * r).length;
     const cz = (c.box.min.z + c.box.max.z) / 2, cx = (c.box.min.x + c.box.max.x) / 2;
-    const open = floor.filter((p) => this.onMain(p) && near(p, 2.5) >= 14);
+    const open = floor.filter((p) => this.onMain(p) && this.near(p, 2.5) >= 14);
     open.sort((a, b) => Math.abs(b.z - cz) - Math.abs(a.z - cz));
     this.spawn = (open[0] || floor[0]).clone();
     this.spawnHeading = Math.atan2(cx - this.spawn.x, cz - this.spawn.z);
-    const far = (p) => p.distanceTo(this.spawn);
-    const maxD = Math.max(...floor.map(far));
+    this.far = (p) => p.distanceTo(this.spawn);
+    this.maxD = Math.max(...floor.map(this.far));
     const used = [this.spawn];
-    const free = (p, gap) => used.every((u) => u.distanceTo(p) > gap);
-    const choose = (test, gap = 3) => {
-      const cands = shuffle(floor.filter((p) => test(p) && free(p, gap)));
+    /** Random floor spot passing `test`, at least `gap` metres from everything placed so far. */
+    this.choose = (test, gap = 3) => {
+      const cands = shuffle(floor.filter((p) => test(p) && used.every((u) => u.distanceTo(p) > gap)));
       const p = cands[0] || pick(floor);
       used.push(p);
       return p.clone();
     };
-
-    // Exit ring back where she came in.
     this.exitRing = new THREE.Mesh(new THREE.RingGeometry(1.1, 1.5, 32), new THREE.MeshBasicMaterial({ color: 0x3ee08a, transparent: true, opacity: 0.25, side: THREE.DoubleSide }));
     this.exitRing.rotation.x = -Math.PI / 2;
     this.exitRing.position.set(this.spawn.x, this.spawn.y + 0.04, this.spawn.z);
     this.scene.add(this.exitRing);
+  }
 
-    // Informant somewhere in the middle of the room.
-    const infLook = npcLook('civilian');
-    const ip = choose((p) => this.onMain(p) && far(p) > 8 && far(p) < maxD * 0.55 && near(p, 2) >= 8);
-    const inf = (this.informant = { mesh: this.makeNPC(infLook), look: infLook, name: `${pick(FIRST_NAMES)} "${pick(['Whispers', 'Ears', 'Lucky', 'Two-Tone', 'Canary'])}"`, works: pick(['charm', 'press']), burned: false });
-    inf.mesh.position.copy(ip);
-    inf.mesh.rotation.y = Math.atan2(this.spawn.x - ip.x, this.spawn.z - ip.z);
-    this.addInter(inf.mesh.position, 'Talk to the informant', () => true, () => this.talkInformant(), 'informant');
+  faceSpawn(obj) { obj.rotation.y = Math.atan2(this.spawn.x - obj.position.x, this.spawn.z - obj.position.z); }
 
-    // Guards: patrol between two points on the same level with a clear line between them.
-    const nG = Math.min(5, 2 + (z.boss ? 1 : 0) + (th.extraGuards || 0) + (chance(0.5) ? 1 : 0));
-    for (let i = 0; i < nG; i++) {
+  placeNPC(look, test, gap) {
+    const mesh = this.makeNPC(look);
+    mesh.position.copy(this.choose(test, gap));
+    this.faceSpawn(mesh);
+    return mesh;
+  }
+
+  placeInformant(label = 'Talk to the informant') {
+    const look = npcLook('civilian');
+    const mesh = this.placeNPC(look, (p) => this.onMain(p) && this.far(p) > 8 && this.far(p) < this.maxD * 0.55 && this.near(p, 2) >= 8);
+    this.informant = { mesh, look, name: `${pick(FIRST_NAMES)} "${pick(['Whispers', 'Ears', 'Lucky', 'Two-Tone', 'Canary'])}"`, works: pick(['charm', 'press']), burned: false };
+    this.addInter(mesh.position, label, () => true, () => this.talkInformant(), 'informant');
+  }
+
+  /** Patrolling guards between two points on one level with a clear line between them. */
+  placeGuards(n) {
+    const floor = this.club.floor;
+    for (let i = 0; i < n; i++) {
       let route = null;
       for (let tries = 0; tries < 40 && !route; tries++) {
         const a = pick(floor);
-        if (far(a) < 9) continue;
+        if (this.far(a) < 9) continue;
         const bs = floor.filter((b) => Math.abs(b.y - a.y) < 0.2 && a.distanceTo(b) > 6 && a.distanceTo(b) < 14 && this.lineClear(a, b));
         if (bs.length) route = [a.clone(), pick(bs).clone()];
       }
@@ -239,11 +260,16 @@ export class ClubZone extends Special3D {
       mesh.add(cone);
       this.guards.push({ mesh, cone, route, wp: 1, ko: false, look: 0, seeing: false, t: rand(0, 3) });
     }
+  }
 
-    // Tempting items and bait on table tops / the bar.
+  /**
+   * Temptations (intoxicating) and bait (maybe a trap) on table tops / the bar.
+   * `onTake(it)` runs after a temptation is taken (night cases hide notes under drinks).
+   */
+  placeItems(n, { onTake } = {}) {
     const spots = this.surfaceSpots();
-    const nItems = Math.min(spots.length, 4 + (th.extraTraps || 0));
-    for (let i = 0; i < nItems; i++) {
+    const count = Math.min(spots.length, n);
+    for (let i = 0; i < count; i++) {
       const bait = i === 0 || (i === 3 && chance(0.5));
       const def = bait ? pick(BAIT_ITEMS) : pick(INTOX_ITEMS);
       const p = spots[i], trapped = bait ? chance(0.6) : false, col = bait ? 0xffd84d : 0xff7ad0;
@@ -255,43 +281,45 @@ export class ClubZone extends Special3D {
       this.scene.add(aura); this.hidden.push(aura);
       const it = { def, bait, trapped, mesh, aura, taken: false };
       this.anims.push((t) => { mesh.rotation.y = t * 1.5; mesh.position.y = p.y + 0.16 + Math.sin(t * 3 + p.x) * 0.04; });
-      this.addInter(new THREE.Vector3(p.x, 0, p.z), `Examine: ${def.name}`, () => !it.taken, () => this.takeItem(it));
+      this.addInter(new THREE.Vector3(p.x, 0, p.z), `Examine: ${def.name}`, () => !it.taken, async () => {
+        await this.takeItem(it);
+        if (it.taken && !it.bait && onTake) await onTake(it);
+      });
     }
+  }
 
-    // Evidence deep in the club; only pinpointed once the informant talks (X-ray shows it anyway).
-    th.evidence.forEach((name) => {
-      const p = choose((q) => far(q) > maxD * 0.55, 8);
-      const glowMesh = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.45), new THREE.MeshLambertMaterial({ color: 0x39ff6a, emissive: 0x39ff6a, emissiveIntensity: 0.7 }));
-      glowMesh.position.set(p.x, p.y + 0.25, p.z);
-      this.scene.add(glowMesh);
-      const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3, 6), new THREE.MeshBasicMaterial({ color: 0x39ff6a, transparent: true, opacity: 0.6, depthTest: false }));
-      beacon.position.set(p.x, p.y + 1.6, p.z); beacon.renderOrder = 12; beacon.visible = false;
-      this.scene.add(beacon); this.hidden.push(beacon);
-      const e = { name, mesh: glowMesh, done: false, beacon };
-      this.evidence.push(e);
-      this.addInter(new THREE.Vector3(p.x, 0, p.z), `${th.mind ? 'Smash' : 'Secure'}: ${name}`, () => !e.done, () => this.secureEvidence(e), 'evidence');
-    });
+  /** Glowing evidence deep in the club; its beacon shows once the informant talks (X-ray shows it anyway). */
+  placeEvidence(name, verb) {
+    const p = this.choose((q) => this.far(q) > this.maxD * 0.55, 8);
+    const glowMesh = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.45), new THREE.MeshLambertMaterial({ color: 0x39ff6a, emissive: 0x39ff6a, emissiveIntensity: 0.7 }));
+    glowMesh.position.set(p.x, p.y + 0.25, p.z);
+    this.scene.add(glowMesh);
+    const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3, 6), new THREE.MeshBasicMaterial({ color: 0x39ff6a, transparent: true, opacity: 0.6, depthTest: false }));
+    beacon.position.set(p.x, p.y + 1.6, p.z); beacon.renderOrder = 12; beacon.visible = false;
+    this.scene.add(beacon); this.hidden.push(beacon);
+    const e = { name, mesh: glowMesh, done: false, beacon };
+    this.evidence.push(e);
+    this.addInter(new THREE.Vector3(p.x, 0, p.z), `${verb}: ${name}`, () => !e.done, () => this.secureEvidence(e), 'evidence');
+  }
 
-    // Captives held in cages at the far end.
-    for (let i = 0; i < (th.captives || 0); i++) {
-      const p = choose((q) => far(q) > maxD * 0.5 && near(q, 1.5) >= 7, 4);
+  /** People held in cages toward the back. */
+  placeCaptives(n) {
+    for (let i = 0; i < n; i++) {
+      const p = this.choose((q) => this.far(q) > this.maxD * 0.5 && this.near(q, 1.5) >= 7, 4);
       const person = this.makeNPC(npcLook('civilian'));
       person.position.copy(p);
-      person.rotation.y = Math.atan2(this.spawn.x - p.x, this.spawn.z - p.z);
+      this.faceSpawn(person);
       const cage = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.3, 1.4), new THREE.MeshBasicMaterial({ color: 0x999999, wireframe: true }));
       cage.position.set(p.x, p.y + 1.15, p.z); this.scene.add(cage);
       this.colliders.push({ minX: p.x - 0.7, maxX: p.x + 0.7, minZ: p.z - 0.7, maxZ: p.z + 0.7, mesh: cage });
       const cap = { person, cage, freed: false, x: p.x, z: p.z };
       this.captives.push(cap);
-      this.addInter(new THREE.Vector3(p.x, 0, p.z + 1.1), th.mind ? 'Snap them out of the trance' : 'Break open the cage', () => !cap.freed, () => this.freeClubCaptive(cap), 'captive');
+      this.addInter(new THREE.Vector3(p.x, 0, p.z + 1.1), this.theme.mind ? 'Snap them out of the trance' : 'Break open the cage', () => !cap.freed, () => this.freeClubCaptive(cap), 'captive');
     }
+  }
 
-    if (z.boss) {
-      const p = choose((q) => far(q) > maxD * 0.75, 5);
-      this.boss = this.makeNPC(npcLook('boss'));
-      this.boss.position.copy(p);
-      this.boss.rotation.y = Math.atan2(this.spawn.x - p.x, this.spawn.z - p.z);
-    }
+  placeBoss() {
+    this.boss = this.placeNPC(npcLook('boss'), (q) => this.far(q) > this.maxD * 0.75, 5);
   }
 
   /** Table tops / bar counters: upward-facing surfaces 0.55–1.25 m above the local floor. */
@@ -419,15 +447,18 @@ export class ClubZone extends Special3D {
 
   /** Pull the camera in when a booth, wall or pillar (below the slice plane) blocks the view. */
   cameraReach(h, off) {
-    const d = off.length();
-    const from = new THREE.Vector3(h.x, h.y + 1.3, h.z);
+    const d = off.length(), dir = off.clone().normalize();
     const ray = this._cray || (this._cray = new THREE.Raycaster());
-    ray.firstHitOnly = true;
-    ray.set(from, off.clone().normalize()); ray.far = d;
-    const hit = ray.intersectObject(this.club.collider)[0];
-    // ignore anything above the slice plane: it isn't drawn, so it can't block the view
-    if (!hit || hit.point.y > h.y + 2.7) return d;
-    return Math.max(2.2, hit.distance - 0.4);
+    ray.firstHitOnly = true; ray.far = d;
+    let reach = d;
+    // Check from head and hip height: low booths hide her body even when her head is clear.
+    for (const up of [1.3, 0.6]) {
+      ray.set(new THREE.Vector3(h.x, h.y + up, h.z), dir);
+      const hit = ray.intersectObject(this.club.collider)[0];
+      // anything above the slice plane isn't drawn, so it can't block the view
+      if (hit && hit.point.y <= h.y + 2.7) reach = Math.min(reach, hit.distance - 0.4);
+    }
+    return Math.max(1.8, reach);
   }
 
   // ------------------------------------------------------------------ render

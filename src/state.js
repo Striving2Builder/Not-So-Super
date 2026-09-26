@@ -37,6 +37,9 @@ export class GameState {
     return 0;
   }
 
+  /** The single day/night rule the whole game uses (cases, commentary, spawning). */
+  get isNight() { return this.night >= 0.5; }
+
   addRep(n, why) {
     n = Math.round(n);
     if (!n) return;

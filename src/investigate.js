@@ -5,6 +5,7 @@ import { drawHumanoid, pose, npcLook, portrait, drawEmblem } from './art.js';
 import { pick, shuffle, chance, fitScene, shade, $ } from './util.js';
 import { dialog, toast, banner, flash } from './ui.js';
 import { sfx } from './sfx.js';
+import { CaseFile } from './casefile.js';
 import { comic } from './comic.js';
 
 const LW = 1000, LH = 600, FLOOR = 380;
@@ -81,7 +82,6 @@ export class Investigate {
     this.en = 100;
     this.xray = false;
     this.camera = false;
-    this.photos = 0;
     this.setting = SETTINGS[zone.def.setting];
     this.buildCase();
 
@@ -105,26 +105,13 @@ export class Investigate {
 
   exit() { $('objectives').classList.remove('on'); }
 
+  get photos() { return this.case.photos; }
+
   buildCase() {
     const S = this.setting;
-    const keys = shuffle(Object.keys(ATTRS)).slice(0, 4);
-    const mk = () => Object.fromEntries(keys.map((k) => [k, pick(ATTRS[k].values)]));
-    const diff = (a, b) => keys.filter((k) => a[k] !== b[k]).length;
-    const culprit = mk();
-    const suspects = [culprit];
-    let guard = 0;
-    while (suspects.length < 3 && guard++ < 500) {
-      const s = mk();
-      if (diff(s, culprit) >= 2 && suspects.every((o) => diff(o, s) >= 1)) suspects.push(s);
-    }
-    const jobs = shuffle([...JOBS[this.zone.def.setting]]);
-    const names = shuffle([...FIRST_NAMES]), lasts = shuffle([...LAST_NAMES]);
-    this.suspects = shuffle(suspects.map((a, i) => ({ attrs: a, name: `${names[i]} ${lasts[i]}`, job: jobs[i], culprit: a === culprit })));
-    this.keys = keys;
-
+    this.case = new CaseFile(JOBS[this.zone.def.setting]);
+    this.clues = this.case.clues;
     this.props = S.props.map(([type, name, x, y, w, h, desc]) => ({ type, name, x, y, w, h, desc }));
-    const methods = shuffle(['visible', 'visible', 'xray', 'witness']);
-    this.clues = keys.map((k, i) => ({ key: k, value: culprit[k], method: methods[i], found: false, photo: false }));
     const pool = shuffle([...this.props]);
     for (const c of this.clues) {
       if (c.method === 'witness') continue;
@@ -198,7 +185,7 @@ export class Investigate {
     const c = p.clue;
     if (this.camera) {
       if (c && c.found && !c.photo) {
-        c.photo = true; this.photos++; sfx.shutter(); flash('#fff');
+        this.case.photograph(c); sfx.shutter(); flash('#fff');
         this.burst('SNAP!', p, ['#ffffff', '#1e3cff']);
         toast(`📸 Evidence photo #${this.photos} — the Gazette will love this`, 'good');
       } else if (c && c.photo) toast('Already photographed.', 'info');
@@ -273,29 +260,11 @@ export class Investigate {
     }
   }
 
-  async showNotes() {
-    const found = this.clues.filter((c) => c.found);
-    const html = found.length
-      ? found.map((c) => `<div class="item"><b>${ATTRS[c.key].label}:</b> ${ATTRS[c.key].clue[c.value]}${c.photo ? ' 📸' : ''}</div>`).join('')
-      : '<div class="item">No clues yet. Tap objects in the scene to search them.</div>';
-    await dialog({ title: `Notebook — ${this.zone.name}`, text: `<div class="list">${html}</div>Clues: ${found.length}/${this.clues.length} · Photos: ${this.photos}` });
-  }
+  showNotes() { return this.case.notes(this.zone.name, 'No clues yet. Tap objects in the scene to search them.'); }
 
   async showSuspects() {
-    const found = this.clues.filter((c) => c.found);
-    const can = found.length >= 3;
-    const html = this.suspects.map((s) => `<div class="item"><b>${s.name}</b> — ${s.job}<br>${this.keys.map((k) => {
-      const c = found.find((c) => c.key === k);
-      const cls = c ? (c.value === s.attrs[k] ? 'match' : 'miss') : '';
-      return `<span class="chip ${cls}">${s.attrs[k]}</span>`;
-    }).join('')}</div>`).join('');
-    const v = await dialog({
-      title: 'Suspects', text: `<div class="list">${html}</div>${can ? 'Who did it?' : `Find at least 3 clues before you accuse anyone (${found.length}/3).`}`,
-      options: [...(can ? this.suspects.map((s, i) => ({ label: `Accuse ${s.name}`, value: i, cls: 'bad' })) : []), { label: 'Keep investigating', value: null }],
-    });
-    if (v === null || v === undefined) return;
-    const s = this.suspects[v];
-    this.finish(s.culprit, false, s);
+    const s = await this.case.accuse();
+    if (s) this.finish(s.culprit, false, s);
   }
 
   async leave() {
@@ -324,16 +293,15 @@ export class Investigate {
     this.done = true;
     this.setXray(false);
     const z = this.zone;
-    const culprit = this.suspects.find((s) => s.culprit);
     if (win) {
       sfx.win();
       this.g.state.stats.photos += this.photos;
-      this.g.endZone(z, { outcome: 'win', rep: z.reward + this.photos * 4, culprit: culprit.name, job: culprit.job, photos: this.photos, photo: 'case' });
+      this.g.endZone(z, this.case.winResult(z.reward));
     } else if (drunk) {
       this.g.endZone(z, { outcome: 'lose', rep: -6, text: 'The case went cold.' });
     } else {
       sfx.lose();
-      this.g.endZone(z, { outcome: 'lose', rep: -10, text: `Wrong suspect! ${accused.name} had an alibi, and the real culprit, ${culprit.name} (${culprit.job}), slipped away.` });
+      this.g.endZone(z, this.case.loseResult(accused));
     }
   }
 
