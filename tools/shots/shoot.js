@@ -49,7 +49,11 @@ const AREAS = {
     lair: Z3('special', 'Underground Lair', 'Doctor Dollar'),
     asylum: Z3('asylum'),
   },
-  brawler: { street: { type: 'brawl' } },
+  brawler: {
+    street: { type: 'brawl' },
+    downtown: { type: 'brawl', crime: 'gang', clock: 21 * 60, crowd: true },
+    shops: { type: 'brawl', crime: 'robbery', district: 'retail', clock: 13 * 60, crowd: true },
+  },
   investigation: {
     daycase: { type: 'investigate' },
     nightcase: Z3('nightcase', 'Triangle Club'),
@@ -144,8 +148,19 @@ async function shootFly(page, dir, name, plan) {
   return { shots: [`${name}_1.png`, `${name}_2.png`], ...m };
 }
 
-async function shootBrawl(page, dir, name) {
-  await page.evaluate(() => { const g = window.__game; g.setMode('overworld'); const z = g.overworld.spawn('street', true); g.startZone(z); });
+// sc.crime / sc.clock pin the street crime and time of day (repeatable frames); sc.crowd adds a
+// fourth shot mid-brawl (mashing a combo into the pack).
+async function shootBrawl(page, dir, name, sc = {}) {
+  await page.evaluate((sc) => {
+    const g = window.__game; g.setMode('overworld');
+    if (sc.clock != null) g.state.clock = sc.clock;
+    let z = null;
+    for (let i = 0; i < 200 && !(z && (!sc.crime || z.def.id === sc.crime) && (!sc.district || z.district === sc.district)); i++) {
+      if (z) g.overworld.zones = g.overworld.zones.filter((o) => o !== z);
+      z = g.overworld.spawn('street', true);
+    }
+    g.startZone(z);
+  }, sc);
   await page.waitForTimeout(2500);
   await page.screenshot({ path: path.join(dir, `${name}_1_start.png`) });
   const m = await metrics(page);
@@ -156,7 +171,14 @@ async function shootBrawl(page, dir, name) {
   await page.keyboard.press('KeyK');
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(dir, `${name}_3_special.png`) });
-  return { shots: [`${name}_1_start.png`, `${name}_2_fight.png`, `${name}_3_special.png`], ...m };
+  const shots = [`${name}_1_start.png`, `${name}_2_fight.png`, `${name}_3_special.png`];
+  if (sc.crowd) {
+    await page.waitForTimeout(600);
+    for (let i = 0; i < 9; i++) { await page.keyboard.press('KeyJ'); await page.waitForTimeout(i % 3 === 2 ? 180 : 110); }
+    await page.screenshot({ path: path.join(dir, `${name}_4_crowd.png`) });
+    shots.push(`${name}_4_crowd.png`);
+  }
+  return { shots, ...m };
 }
 
 async function shootInvestigate(page, dir, name) {
@@ -202,7 +224,7 @@ async function shootInvestigate(page, dir, name) {
           let r;
           if (sc.type === '3d') r = await shoot3d(page, dir, name, sc.zone);
           else if (sc.type === 'fly') r = await shootFly(page, dir, name, sc.plan);
-          else if (sc.type === 'brawl') r = await shootBrawl(page, dir, name);
+          else if (sc.type === 'brawl') r = await shootBrawl(page, dir, name, sc);
           else if (sc.type === 'investigate') r = await shootInvestigate(page, dir, name);
           report[area][name] = { ...r, errors };
         } catch (e) {

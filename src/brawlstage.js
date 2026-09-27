@@ -79,6 +79,18 @@ export class Stage {
     this.skySeed = r.int(1, 1e6);
   }
 
+  /** World x of a building doorway near x (within r), or null (docks/farm have none). */
+  doorNear(x, r) {
+    let best = null, bd = r;
+    for (const f of this.facades) {
+      const s = f.kind;
+      if (s === 'docks' || s === 'farm') continue;
+      const d = f.x + f.w * (s === 'warehouses' || s === 'factory' ? 0.41 : s === 'houses' ? 0.5 : 0.755);
+      if (Math.abs(d - x) < bd) { bd = Math.abs(d - x); best = d; }
+    }
+    return best;
+  }
+
   // ---------------------------------------------------------------- geometry & caches
   geom(W, H) {
     const dpr = Math.min(devicePixelRatio || 1, quality().dpr2d);
@@ -105,20 +117,34 @@ export class Stage {
   drawBack(ctx, W, H, cam, t, night) {
     const b = this.b, k = b.k, gt = b.gt;
     this.geom(W, H);
-    const nb = Math.round(night * 4) / 4;
-    // sky
-    ctx.drawImage(this.cached(`sky${nb}`, W, Math.ceil(gt) + 4, (g) => this.paintSky(g, W, gt + 4, nb)), 0, 0, W, Math.ceil(gt) + 4);
-    // skyline layers (tiles repeat; parallax 0.18 and 0.42)
-    for (const [layer, par] of [[0, 0.18], [1, 0.42]]) {
-      const tw = Math.ceil(W * 1.6);
-      const tile = this.cached(`sl${layer}${nb}`, tw, Math.ceil(gt) + 2, (g) => this.paintSkyline(g, tw, gt, layer, nb));
-      let off = -(((cam * k * par) % tw) + tw) % tw;
-      for (let x = off; x < W; x += tw) ctx.drawImage(tile, x, 0, tw, Math.ceil(gt) + 2);
-    }
-    if (this.st === 'docks') {
-      const wg = ctx.createLinearGradient(0, gt - 70 * k, 0, gt);
-      wg.addColorStop(0, night > 0.5 ? '#12305a' : '#2f7ab0'); wg.addColorStop(1, night > 0.5 ? '#0a1a33' : '#1d4f7a');
-      ctx.fillStyle = wg; ctx.fillRect(0, gt - 70 * k, W, 70 * k);
+    // night is baked into every cached layer (bucketed), so there's no full-screen tint pass
+    const nb = (this.nb = Math.round(night * 4) / 4);
+    // Sky and skylines only show between/above facades: clip them to the gaps (saves fill on phones).
+    const gaps = [];
+    let cx = 0;
+    const tall = this.facades
+      .map((f) => ({ x0: W / 2 + (f.x - cam) * k, x1: W / 2 + (f.x + f.w - cam) * k, top: gt - (f.h + (f.kind === 'factory' ? 0 : 4)) * k }))
+      .filter((f) => f.top <= 0 && f.x1 > 0 && f.x0 < W)
+      .sort((a, c) => a.x0 - c.x0);
+    for (const f of tall) { if (f.x0 > cx + 1) gaps.push([cx, f.x0 + 1]); cx = Math.max(cx, f.x1 - 1); }
+    if (cx < W) gaps.push([cx, W]);
+    if (gaps.length) {
+      ctx.save();
+      ctx.beginPath(); for (const [x0, x1] of gaps) ctx.rect(x0, -30, x1 - x0, gt + 34); ctx.clip();
+      ctx.drawImage(this.cached(`sky${nb}`, W, Math.ceil(gt) + 4, (g) => { this.paintSky(g, W, gt + 4, nb); this.tint(g, nb); }), 0, 0, W, Math.ceil(gt) + 4);
+      // skyline layers (tiles repeat; parallax 0.18 and 0.42)
+      for (const [layer, par] of [[0, 0.18], [1, 0.42]]) {
+        const tw = Math.ceil(W * 1.6);
+        const tile = this.cached(`sl${layer}${nb}`, tw, Math.ceil(gt) + 2, (g) => { this.paintSkyline(g, tw, gt, layer, nb); this.tint(g, nb); });
+        const off = -(((cam * k * par) % tw) + tw) % tw;
+        for (let x = off; x < W; x += tw) ctx.drawImage(tile, x, 0, tw, Math.ceil(gt) + 2);
+      }
+      if (this.st === 'docks') {
+        const wg = ctx.createLinearGradient(0, gt - 70 * k, 0, gt);
+        wg.addColorStop(0, night > 0.5 ? '#12305a' : '#2f7ab0'); wg.addColorStop(1, night > 0.5 ? '#0a1a33' : '#1d4f7a');
+        ctx.fillStyle = wg; ctx.fillRect(0, gt - 70 * k, W, 70 * k);
+      }
+      ctx.restore();
     }
     // facades
     const lit = night > 0.4;
@@ -126,7 +152,7 @@ export class Stage {
       const x = W / 2 + (f.x - cam) * k;
       if (x > W + 90 * k || x + (f.w + 90) * k < 0) { if (this.facadeCache.has(f)) this.facadeCache.delete(f); continue; }
       let fc = this.facadeCache.get(f);
-      if (!fc || fc.lit !== lit) { fc = this.bakeFacade(f, lit); this.facadeCache.set(f, fc); }
+      if (!fc || fc.lit !== lit || fc.nb !== nb) { fc = this.bakeFacade(f, lit, nb); this.facadeCache.set(f, fc); }
       ctx.drawImage(fc.c, x - fc.padX * k, gt - fc.top * k, fc.c.width / this.dpr, fc.c.height / this.dpr);
       // neon breathes and flickers
       if (fc.neon && lit) {
@@ -138,15 +164,11 @@ export class Stage {
         ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
       }
     }
-    // ground
+    // ground (wall-contact shadow baked in)
     const tileW = Math.ceil(420 * k);
-    const gtile = this.cached('ground', tileW, Math.ceil(H - gt) + 2, (g) => this.paintGround(g, tileW, H - gt, k));
+    const gtile = this.cached(`ground${nb}`, tileW, Math.ceil(H - gt) + 2, (g) => { this.paintGround(g, tileW, H - gt, k); this.tint(g, nb); });
     const goff = -(((cam * k) % tileW) + tileW) % tileW;
     for (let x = goff; x < W; x += tileW) ctx.drawImage(gtile, x, gt, tileW, Math.ceil(H - gt) + 2);
-    // wall-contact shadow along the back of the sidewalk
-    const ao = ctx.createLinearGradient(0, gt, 0, gt + 16 * k);
-    ao.addColorStop(0, 'rgba(10,8,20,.55)'); ao.addColorStop(1, 'rgba(10,8,20,0)');
-    ctx.fillStyle = ao; ctx.fillRect(0, gt, W, 16 * k);
     // props + lamp posts (back edge of the sidewalk)
     for (const p of this.props) {
       const x = W / 2 + (p.x - cam) * k;
@@ -160,8 +182,7 @@ export class Stage {
       const spr = this.propSprite('lamp', k);
       ctx.drawImage(spr, x - spr.cssW / 2, gt + 6 * k - spr.cssH, spr.cssW, spr.cssH);
     }
-    // night: tint the set, then light pools and lamp heads on top of the tint
-    if (night > 0) { ctx.fillStyle = `rgba(14,10,46,${0.42 * night})`; ctx.fillRect(0, 0, W, H); }
+    // night: light pools and lamp heads on top of the (baked) tint
     if (night > 0.3) {
       ctx.globalCompositeOperation = 'lighter';
       for (const lx of this.lamps) {
@@ -170,7 +191,7 @@ export class Stage {
         const hx = x + 26 * k, hy = gt + 6 * k - 196 * k;
         ctx.globalAlpha = 0.85 * night; ctx.drawImage(glow('#ffd070'), hx - 40 * k, hy - 34 * k, 80 * k, 68 * k);
         // cone + pool on the pavement
-        ctx.globalAlpha = 0.16 * night;
+        ctx.globalAlpha = 0.14 * night;
         ctx.fillStyle = '#ffcf70';
         ctx.beginPath(); ctx.moveTo(hx - 8 * k, hy + 6 * k); ctx.lineTo(hx + 8 * k, hy + 6 * k); ctx.lineTo(hx + 95 * k, gt + 95 * k); ctx.lineTo(hx - 95 * k, gt + 95 * k); ctx.fill();
         ctx.globalAlpha = 0.5 * night;
@@ -178,6 +199,17 @@ export class Stage {
       }
       ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     }
+  }
+
+  /** Night grade painted into a cached layer (only where it has pixels). */
+  tint(g, nb, extra = 0) {
+    if (nb <= 0) return;
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = `rgba(14,10,46,${Math.min(0.8, (0.42 + extra) * nb)})`;
+    g.fillRect(0, 0, g.canvas.width, g.canvas.height);
+    g.restore();
   }
 
   /** Dark occluders that pass in front of the fight (parallax 1.4), faded when someone's behind them. */
@@ -310,6 +342,10 @@ export class Stage {
       g.fillStyle = '#6d8a3a'; for (let i = 0; i < 40; i++) { const x = r.range(0, TW), y = r.range(0, walk); g.fillRect(x, y, 2, -r.range(3, 7)); }
     }
     for (let i = 0; i < 120; i++) { g.fillStyle = r.chance(0.5) ? 'rgba(0,0,0,.12)' : 'rgba(255,255,255,.1)'; g.fillRect(r.range(0, TW), r.range(0, walk), 1.5, 1.5); }
+    // wall-contact shadow along the back of the sidewalk
+    const ao = g.createLinearGradient(0, 0, 0, 16 * k);
+    ao.addColorStop(0, 'rgba(10,8,20,.55)'); ao.addColorStop(1, 'rgba(10,8,20,0)');
+    g.fillStyle = ao; g.fillRect(0, 0, TW, 16 * k);
     // curb: lit top face, dark riser, ink line, gutter
     const cy = walk;
     if (!dirt) {
@@ -357,13 +393,14 @@ export class Stage {
 
   /** Small cached sprites for props; size in CSS px on cssW/cssH. */
   propSprite(kind, k) {
-    const key = 'p_' + kind + k.toFixed(3);
+    const nb = kind.startsWith('fg_') ? 0 : this.nb || 0;
+    const key = 'p_' + kind + k.toFixed(3) + '_' + nb;
     const S = {
       lamp: [70, 206], hydrant: [26, 34], newsbox: [26, 40], bags: [44, 26], bench: [70, 30], meter: [12, 46], tree: [70, 150], mailbox: [22, 44], bin: [26, 36], hay: [60, 40], fence: [90, 34], bollard: [22, 24], crate: [40, 40],
       fg_pole: [34, 330], fg_hydrant: [50, 70], fg_cone: [40, 52], fg_sign: [60, 330], fg_post: [26, 120],
     }[kind] || [30, 30];
     const w = S[0] * k, h = S[1] * k;
-    return this.cached(key, w, h, (g) => { g.scale(k, k); g.lineJoin = 'round'; this.paintProp(g, kind, S[0], S[1]); });
+    return this.cached(key, w, h, (g) => { g.save(); g.scale(k, k); g.lineJoin = 'round'; this.paintProp(g, kind, S[0], S[1]); g.restore(); this.tint(g, nb); });
   }
 
   paintProp(g, kind, w, h) {
@@ -438,15 +475,16 @@ export class Stage {
   }
 
   // ---------------------------------------------------------------- facades
-  bakeFacade(f, lit) {
+  bakeFacade(f, lit, nb = 0) {
     const k = this.b.k, dpr = this.dpr, gt = this.b.gt;
     const padX = 70, top = Math.min(f.h + 150, gt / k + 16);
     const c = mk((f.w + padX * 2) * k * dpr, (top + 4) * k * dpr);
     const g = c.getContext('2d');
     g.setTransform(k * dpr, 0, 0, k * dpr, padX * k * dpr, top * k * dpr);
     g.lineJoin = 'round';
-    const out = { c, padX, top, lit, neon: null };
+    const out = { c, padX, top, lit, nb, neon: null };
     this.paintFacade(g, f, lit, out);
+    this.tint(g, nb);
     return out;
   }
 
