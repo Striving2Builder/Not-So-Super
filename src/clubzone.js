@@ -365,23 +365,41 @@ export class ClubZone extends Special3D {
     this.addInter(mesh.position, label, () => true, () => this.talkInformant(), 'informant');
   }
 
-  /** Patrolling guards between two points on one level with a clear line between them. */
+  /**
+   * Patrolling guards between two points on one level with a clear line between them. The WHOLE
+   * route keeps well clear of where she arrives (vision reaches 7.5 m), so nobody walks into the
+   * entrance and spots her before she's taken a step. Small clubs can't manage that, so they
+   * keep the farthest-back route found (with shorter legs) rather than dropping guards.
+   */
   placeGuards(n) {
     const floor = this.club.floor;
+    const seg = new THREE.Line3(), q = new THREE.Vector3();
+    const routeGap = (a, b) => { seg.set(a, b); return seg.closestPointToPoint(this.spawn, true, q).distanceTo(this.spawn); };
+    const SAFE = 13;
+    const minLeg = Math.min(6, this.maxD * 0.35);
     for (let i = 0; i < n; i++) {
-      let route = null;
-      for (let tries = 0; tries < 40 && !route; tries++) {
+      let route = null, best = -1;
+      for (let tries = 0; tries < 40 && best < SAFE; tries++) {
         const a = pick(floor);
-        if (this.far(a) < 9) continue;
+        if (this.far(a) < Math.min(SAFE, this.maxD * 0.5) || this.far(a) <= best) continue;
         // cheap tests first; raycast only until one clear partner turns up (testing every
-        // candidate cost seconds on slow devices)
-        const bs = shuffle(floor.filter((b) => Math.abs(b.y - a.y) < 0.2 && a.distanceTo(b) > 6 && a.distanceTo(b) < 14));
-        const b = bs.find((q) => this.lineClear(a, q));
-        if (b) route = [a.clone(), b.clone()];
+        // candidate cost seconds on slow devices). Farthest-from-her partners are tried first.
+        const bs = floor
+          .filter((b) => Math.abs(b.y - a.y) < 0.2 && a.distanceTo(b) > minLeg && a.distanceTo(b) < 14)
+          .map((b) => ({ b, gap: routeGap(a, b) }))
+          .filter((c) => c.gap > best)
+          .sort((x, y) => y.gap - x.gap || Math.random() - 0.5);
+        const hit = bs.slice(0, 60).find((c) => this.lineClear(a, c.b));
+        if (!hit) continue;
+        best = hit.gap;
+        const b = hit.b;
+        // start at the end nearer her, walking away, so the first look is at the far wall
+        route = this.far(a) <= this.far(b) ? [a.clone(), b.clone()] : [b.clone(), a.clone()];
       }
       if (!route) continue;
       const mesh = this.makeNPC(npcLook('guard'));
       mesh.position.copy(route[0]);
+      mesh.rotation.y = Math.atan2(route[1].x - route[0].x, route[1].z - route[0].z);
       const cone = new THREE.Mesh(
         new THREE.CircleGeometry(7.5, 24, -Math.PI / 2 - 0.525, 1.05).rotateX(-Math.PI / 2),
         new THREE.MeshBasicMaterial({ color: 0xffe040, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }));

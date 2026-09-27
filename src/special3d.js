@@ -101,6 +101,8 @@ export class Special3D {
       this.hero.add(this.heroModel.root);
       this.heroClip('land', 1.4); // she arrives with a superhero landing
     } else this.hero = this.makeHero();
+    // Guards can't spot her until she's had 3 s on her feet (after the landing / getting-up clip).
+    this.grace = this.landT + 3;
     const sp = this.spawnPoint();
     this.hero.position.copy(sp.pos);
     this.hero.rotation.y = sp.heading;
@@ -965,7 +967,7 @@ export class Special3D {
       gd.t += dt;
       const dx = h.x - m.position.x, dz = h.z - m.position.z, d = Math.hypot(dx, dz);
       const fx = Math.sin(m.rotation.y), fz = Math.cos(m.rotation.y);
-      if (this.t > 3 && d < GUARD_RANGE && d > 0.01 && (dx * fx + dz * fz) / d > Math.cos(GUARD_FOV / 2) && this.clearLOS(m.position, h)) {
+      if (this.t > this.grace && d < GUARD_RANGE && d > 0.01 && (dx * fx + dz * fz) / d > Math.cos(GUARD_FOV / 2) && this.clearLOS(m.position, h)) {
         gd.seeing = true;
         if (gd.look <= 0) { const s = this.screenOf(m.position, 2.1); if (s) this.g.commentary.guardShout(s.x, s.y); }
         gd.look = 1.2;
