@@ -2,6 +2,10 @@
 # the web-ready conversions live in assets/clubs/ (see tools/export_club.py).
 assets/models/3D Nightclubs/
 
+# Raw enemy character downloads (~390 MB, zips up to 62 MB). Kept locally only; the web-ready
+# (decimated, compressed) versions live in assets/models/enemies/.
+assets/Enemy Characters/
+
 # Not used by the game
 assets/capture/TV_image.png
 
