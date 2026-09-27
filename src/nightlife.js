@@ -728,7 +728,7 @@ function nightclub(zn, X, h) {
   const ballGlow = X.bulb(0, 3.0, 0.5, 2.2, 0xaaccff);
   // mirror-ball specks sweeping the floor
   const specks = [];
-  for (let i = 0; i < (X.lite ? 70 : 170); i++) {
+  for (let i = 0; i < (X.lite ? 60 : X.rich ? 170 : 110); i++) {
     const a = rnd(0, TAU), r = Math.sqrt(Math.random()) * 10.5 + 0.8;
     specks.push({ p: [Math.cos(a) * r, 0.05, Math.sin(a) * r * 0.95], s: rnd(0.1, 0.18), c: C(pickR([0xffffff, 0xbfe8ff, 0xffd0f0])).multiplyScalar(0.7) });
   }
@@ -737,9 +737,9 @@ function nightclub(zn, X, h) {
   // moving heads: fake beams + their pools, swept across the floor
   const heads = [];
   const cm = coneMat();
-  const hcols = [0xff2fd0, 0x27e0ff, 0x9d4dff, 0xffe14d];
-  const nHeads = X.lite ? 2 : 4;
-  const hpos = [[-4.3, -3.7], [4.3, 4.7], [4.3, -3.7], [-4.3, 4.7]];
+  const hcols = [0xff2fd0, 0x27e0ff, 0xffe14d, 0x9d4dff];
+  const nHeads = X.rich ? 4 : 2; // each beam is a screen-tall additive surface
+  const hpos = [[-4.3, -3.7], [4.3, -3.7], [4.3, 4.7], [-4.3, 4.7]];
   for (let i = 0; i < nHeads; i++) {
     const mat = cm.clone(); mat.uniforms.uC.value = C(hcols[i]); mat.uniforms.uI.value = 0.55;
     const beam = new THREE.Mesh(coneGeo(0.03, 0.42), mat);
