@@ -65,7 +65,9 @@ export class CityArt {
     if (!e) {
       if (this.ground.size >= this.max) this.evict(this.ground, frame);
       e = { c: this.canvas(this.res), f: frame };
+      const t0 = performance.now();
       this.paintGround(e.c, bx, by);
+      const P = (window.__owPaint ||= { n: 0, ms: 0 }); P.n++; P.ms += performance.now() - t0;
       this.ground.set(k, e);
     }
     e.f = frame;
@@ -263,20 +265,27 @@ export class CityArt {
 }
 
 // ---------------------------------------------------------------- screen-space helpers
-let vig = null;
-/** A graded vignette: transparent centre, ink-blue corners. Built once, stretched to the screen. */
-export function vignette() {
-  if (vig) return vig;
-  vig = document.createElement('canvas');
-  vig.width = 256; vig.height = 128;
-  const g = vig.getContext('2d');
+const gradeC = { c: null, key: '' };
+/**
+ * The colour grade, applied with 'multiply' in one full-screen pass: a moonlit tint that deepens
+ * with `night` (colour survives, unlike a flat navy veil) and an ink-blue vignette at the edges.
+ * A tiny canvas, rebuilt only when the (quantised) inputs change, stretched to the screen.
+ */
+export function grade(night, edge) {
+  const n = Math.round(night * 40) / 40, e = Math.round(edge * 20) / 20, key = n + ':' + e;
+  if (gradeC.key === key) return gradeC.c;
+  const c = gradeC.c || (gradeC.c = document.createElement('canvas'));
+  c.width = 128; c.height = 64;
+  const g = c.getContext('2d');
+  const f = 0.66 * n, tint = (m) => `rgb(${(255 - 222 * m) | 0},${(255 - 205 * m) | 0},${(255 - 120 * m) | 0})`;
   g.setTransform(2, 0, 0, 1, 0, 0);
-  const grd = g.createRadialGradient(64, 64, 30, 64, 64, 92);
-  grd.addColorStop(0, 'rgba(8,10,30,0)');
-  grd.addColorStop(0.6, 'rgba(8,10,30,0.25)');
-  grd.addColorStop(1, 'rgba(4,4,18,0.8)');
-  g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
-  return vig;
+  const grd = g.createRadialGradient(32, 32, 14, 32, 32, 46);
+  grd.addColorStop(0, tint(f));
+  grd.addColorStop(0.55, tint(Math.min(1, f + 0.12 * e)));
+  grd.addColorStop(1, tint(Math.min(1, f + 0.55 * e)));
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+  gradeC.key = key;
+  return c;
 }
 
 let beam = null;
@@ -304,36 +313,37 @@ export class InkSprite {
   ensure(w) {
     const S = w + this.pad * 2;
     if (this.out && this.out.width === S) return;
-    const mk = () => { const c = document.createElement('canvas'); c.width = c.height = S; return c; };
-    this.base = mk(); this.shadow = mk(); this.rim = mk(); this.out = mk();
+    const mk = (n) => { const c = document.createElement('canvas'); c.width = c.height = n; return c; };
+    // silhouette work happens at half resolution: an outline doesn't need more, and it's 4x cheaper
+    this.out = mk(S); this.shadow = mk(S >> 1); this.dil = mk(S >> 1); this.rim = mk(S >> 1);
   }
 
   /** lightAng: direction the light comes from, in sprite space (radians). Returns the inked canvas. */
   build(img, lightAng, rich, night) {
     this.ensure(img.width);
-    const p = this.pad, S = this.out.width;
-    const bg = this.base.getContext('2d');
-    bg.clearRect(0, 0, S, S); bg.drawImage(img, p, p);
-    // silhouette (also her shadow)
+    const p = this.pad, S = this.out.width, h = S >> 1, hp = p / 2, hw = img.width / 2;
+    // silhouette (also her ground shadow), half-res
     const sg = this.shadow.getContext('2d');
-    sg.globalCompositeOperation = 'source-over'; sg.clearRect(0, 0, S, S); sg.drawImage(this.base, 0, 0);
-    sg.globalCompositeOperation = 'source-in'; sg.fillStyle = '#05060f'; sg.fillRect(0, 0, S, S);
-    sg.globalCompositeOperation = 'source-over';
+    sg.globalCompositeOperation = 'source-over'; sg.clearRect(0, 0, h, h); sg.drawImage(img, hp, hp, hw, hw);
+    sg.globalCompositeOperation = 'source-in'; sg.fillStyle = '#05060f'; sg.fillRect(0, 0, h, h);
+    // outline: the silhouette dilated by ~3px (full-res pixels)
+    const dg = this.dil.getContext('2d');
+    dg.clearRect(0, 0, h, h);
+    const r = rich ? 1.6 : 1.1, n = rich ? 6 : 4;
+    for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; dg.drawImage(this.shadow, Math.cos(a) * r, Math.sin(a) * r); }
     const og = this.out.getContext('2d');
     og.clearRect(0, 0, S, S);
-    // outline: the silhouette dilated by ~3px
-    const r = rich ? 3 : 2, n = rich ? 8 : 4;
-    for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; og.drawImage(this.shadow, Math.cos(a) * r, Math.sin(a) * r); }
-    og.drawImage(this.base, 0, 0);
+    og.drawImage(this.dil, 0, 0, S, S);
+    og.drawImage(img, p, p);
     if (rich) {
       // rim: silhouette minus itself nudged away from the light = a crescent on the lit edge
       const rg = this.rim.getContext('2d');
-      rg.globalCompositeOperation = 'source-over'; rg.clearRect(0, 0, S, S); rg.drawImage(this.shadow, 0, 0);
-      rg.globalCompositeOperation = 'source-in'; rg.fillStyle = night > 0.5 ? '#bfe6ff' : '#fff1c2'; rg.fillRect(0, 0, S, S);
+      rg.globalCompositeOperation = 'source-over'; rg.clearRect(0, 0, h, h);
+      rg.fillStyle = night > 0.5 ? '#bfe6ff' : '#fff1c2'; rg.fillRect(0, 0, h, h);
+      rg.globalCompositeOperation = 'destination-in'; rg.drawImage(this.shadow, 0, 0);
       rg.globalCompositeOperation = 'destination-out';
-      rg.drawImage(this.shadow, -Math.cos(lightAng) * 3, -Math.sin(lightAng) * 3);
-      rg.globalCompositeOperation = 'source-over';
-      og.globalAlpha = 0.85; og.drawImage(this.rim, 0, 0); og.globalAlpha = 1;
+      rg.drawImage(this.shadow, -Math.cos(lightAng) * 1.6, -Math.sin(lightAng) * 1.6);
+      og.globalAlpha = 0.8; og.drawImage(this.rim, 0, 0, S, S); og.globalAlpha = 1;
     }
     return this.out;
   }

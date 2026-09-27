@@ -15,7 +15,7 @@ import { stepFlight, stepAltitude, speedFraction, cameraZoom, cameraLead, FLIGHT
 import { Airspace } from './airspace.js';
 import { drawAtmosphere, FOG_Z } from './atmosphere.js';
 import { Sky, SpeedFX } from './sky.js';
-import { CityArt, SUN, vignette, headlight, InkSprite } from './cityart.js';
+import { CityArt, SUN, grade, headlight, InkSprite } from './cityart.js';
 import { FlightAudio } from './flightaudio.js';
 import { nightCaseFields } from './nightcase.js';
 import { asylumFields } from './asylum.js';
@@ -867,21 +867,25 @@ export class Overworld {
 
     // Night grade: a moonlit multiply keeps colour (neon roofs stay saturated) instead of greying
     // everything under a flat navy veil; then the baked street-light maps add back warm pools.
-    if (night > 0 && !DBG.noGrade) {
-      const f = 0.66 * night;
+    // (rich) the vignette rides in the same multiply pass; saver gets the flat tint only.
+    if ((night > 0 || rich) && !DBG.noGrade) {
       ctx.globalCompositeOperation = 'multiply';
-      ctx.fillStyle = `rgb(${(255 - 222 * f) | 0},${(255 - 205 * f) | 0},${(255 - 120 * f) | 0})`;
-      ctx.fillRect(-120, -120, W + 240, H + 240);
-      ctx.globalCompositeOperation = 'source-over';
-      if (night > 0.2 && !DBG.noLight) {
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = Math.min(1, (night - 0.2) * 1.4);
-        for (let by = gy0; by <= gy1; by++) for (let bx = gx0; bx <= gx1; bx++) {
-          ctx.drawImage(this.art.lightCell(bx, by, this.frame), SX(bx * BLOCK), SY(by * BLOCK), CS, CS);
-        }
-        ctx.globalAlpha = 1;
-        ctx.globalCompositeOperation = 'source-over';
+      if (rich) ctx.drawImage(grade(night, 0.7 + 0.3 * speedFraction(h)), -130, -130, W + 260, H + 260);
+      else {
+        const f = 0.66 * night;
+        ctx.fillStyle = `rgb(${(255 - 222 * f) | 0},${(255 - 205 * f) | 0},${(255 - 120 * f) | 0})`;
+        ctx.fillRect(-120, -120, W + 240, H + 240);
       }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    if (night > 0.2 && !DBG.noLight) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = Math.min(1, (night - 0.2) * 1.4);
+      for (let by = gy0; by <= gy1; by++) for (let bx = gx0; bx <= gx1; bx++) {
+        ctx.drawImage(this.art.lightCell(bx, by, this.frame), SX(bx * BLOCK), SY(by * BLOCK), CS, CS);
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
     }
     this.drawLights(ctx, V);
 
@@ -970,12 +974,7 @@ export class Overworld {
     for (const [x, y, r, z, locked] of icons) this.drawIcon(ctx, x, y, r, z, locked, z === this.near);
     ctx.restore();
 
-    // Grade: vignette (heavier at night and at speed) and comic speed lines when she really moves.
-    if (rich && !DBG.noVig) {
-      ctx.globalAlpha = Math.min(1, 0.45 + 0.35 * night + 0.3 * speedFraction(h));
-      ctx.drawImage(vignette(), -4, -4, W + 8, H + 8);
-      ctx.globalAlpha = 1;
-    }
+    // comic speed lines when she really moves
     this.fx.drawComic(ctx, hx, hy, W, H, night);
 
     // off-screen zone arrows (screen space, unrolled)
@@ -1181,7 +1180,7 @@ export class Overworld {
         ctx.fillRect(rx0 + rw * 0.12, ry0 + rh * 0.2, rw * 0.12, rh * 0.18);
         ctx.fillRect(rx0 + rw * 0.7, ry0 + rh * 0.55, rw * 0.1, rh * 0.18);
         ctx.fillStyle = '#6b4a2a'; ctx.beginPath(); ctx.arc(rx0 + rw * 0.4, ry0 + rh * 0.5, Math.min(rw, rh) * 0.12, 0, Math.PI * 2); ctx.fill();
-      } else if (V.rich && tall && !b.sign && !b.helipad && !b.vents && b.w > 40 && b.d > 40) this.roofKit(ctx, b, rx0, ry0, rw, rh, u, V);
+      } else if (V.rich && tall && !b.sign && !b.helipad && !b.vents && !b.neon && b.w > 56 && b.d > 56) this.roofKit(ctx, b, rx0, ry0, rw, rh, u, V);
       if (b.skylight) { ctx.fillStyle = 'rgba(160,210,240,.6)'; ctx.fillRect(rx0 + rw * 0.2, ry0 + rh * 0.35, rw * 0.6, rh * 0.3); }
       if (b.helipad) {
         const r = Math.min(rw, rh) * 0.3;
@@ -1246,11 +1245,12 @@ export class Overworld {
     };
     if (b.glass) {
       box(0.3, 0.3, b.w * 0.4, b.d * 0.34, 10, shade(b.col, -0.28));
-      box(0.3 + 0.4 * b.w / b.w * 0.25, 0.36, 7, 7, 5, '#9aa3ad');
+      box(0.4, 0.38, 7, 7, 5, '#9aa3ad');
       V.lights.push({ t: 'blink', x: x + w * 0.5, y: y + h * 0.47, c: '#ff3030' });
     } else {
-      box(0.12 + seed * 0.1, 0.62, 12, 9, 6, '#b9bec6');
-      box(0.55, 0.14 + seed * 0.12, 10, 8, 5, '#aab0b8');
+      // AC units in a row along one side (placement varies per building so roofs don't repeat)
+      const along = seed > 0.5, n = 2 + ((seed * 7) | 0) % 3;
+      for (let i = 0; i < n; i++) box(along ? 0.1 + i * 0.16 : 0.74, along ? 0.74 : 0.1 + i * 0.16, 9, 7, 5, i % 2 ? '#aab0b8' : '#c3c8cf');
       if (seed > 0.35) box(0.14, 0.18, 14, 11, 9, shade(b.col, -0.2)); // stair bulkhead
       if (seed > 0.5 && b.h < 180) {
         // water tower: round wooden tank on legs
