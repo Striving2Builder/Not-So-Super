@@ -20,6 +20,8 @@ import { npcLook, portrait } from './art.js';
 import { sfx } from './sfx.js';
 import { randomPerson } from './casefile.js';
 import { playCutscene } from './cutscene.js';
+import { toon, lightPool } from './look3d.js';
+import { quality } from './settings.js';
 
 // Layout (metres). Wings run outward from a square hub; cells sit on both sides of each wing.
 const HW = 1.6;              // hall half-width
@@ -54,7 +56,6 @@ function canvasTex(w, h, draw, repeat = true) {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.anisotropy = 4;
   return t;
 }
 const grime = (g, w, h, n, a) => { for (let i = 0; i < n; i++) { g.fillStyle = `rgba(40,45,30,${Math.random() * a})`; g.beginPath(); g.arc(Math.random() * w, Math.random() * h, 2 + Math.random() * 14, 0, 7); g.fill(); } };
@@ -110,17 +111,19 @@ function makeMaterials() {
   const side = THREE.DoubleSide;
   return {
     hall, pad, lino,
-    hallWall: new THREE.MeshLambertMaterial({ map: hall, side }),
-    padding: new THREE.MeshLambertMaterial({ map: pad, side }),
-    padFloor: new THREE.MeshLambertMaterial({ map: pad, color: 0xcfc6ae, side }),
-    floor: new THREE.MeshLambertMaterial({ map: lino, side }),
-    mass: new THREE.MeshLambertMaterial({ color: 0x2a302d, side }),
-    bedFrame: new THREE.MeshLambertMaterial({ color: 0x55606a }),
-    mattress: new THREE.MeshLambertMaterial({ color: 0xf1ede2 }),
-    desk: new THREE.MeshLambertMaterial({ color: 0x8a7a62 }),
-    cabinet: new THREE.MeshLambertMaterial({ color: 0xc8cfd0 }),
-    door: new THREE.MeshLambertMaterial({ map: door }),
-    mainDoor: new THREE.MeshLambertMaterial({ map: mainDoor, side }),
+    // cel-shaded with the comic halftone (look3d); the lamps' light is decals, not per-pixel lights
+    hallWall: toon(0xffffff, { map: hall, side }),
+    padding: toon(0xffffff, { map: pad, side }),
+    padFloor: toon(0xcfc6ae, { map: pad, side }),
+    floor: toon(0xffffff, { map: lino, side }, { halftone: 0.4 }),
+    mass: toon(0x2a302d, { side }),
+    cap: toon(0x121614, { side }, { halftone: 0 }),
+    bedFrame: toon(0x55606a),
+    mattress: toon(0xf1ede2),
+    desk: toon(0x8a7a62),
+    cabinet: toon(0xc8cfd0),
+    door: toon(0xffffff, { map: door }),
+    mainDoor: toon(0xffffff, { map: mainDoor, side }),
     window: new THREE.MeshBasicMaterial({ color: 0x1e2a3a, side }),
   };
 }
@@ -140,6 +143,9 @@ function quad(pts, normal, uLen, vLen, tile) {
   g.setIndex([0, 1, 2, 0, 2, 3]);
   return g;
 }
+
+/** Nudge a surface back in depth so ink lines drawn exactly on its edges win (no dashed lines). */
+function pushBack(m) { m.polygonOffset = true; m.polygonOffsetFactor = 1; m.polygonOffsetUnits = 1; }
 
 /** Builds the static asylum: geometry grouped per material, plus cell/route metadata. */
 class Builder {
@@ -172,6 +178,11 @@ class Builder {
       const o = n.clone().multiplyScalar(0.08);
       const pts = [a.clone().add(o).setY(y0), b.clone().add(o).setY(y0), b.clone().add(o).setY(y1), a.clone().add(o).setY(y1)];
       this.add(mat, quad(pts, n, len, y1 - y0, mat === this.M.hallWall ? WALL_H : tile));
+    }
+    if (y1 === WALL_H) { // ink-black cap over the cut-away top (reads as a comic floor plan)
+      const o = left.clone().multiplyScalar(0.1);
+      const pts = [a.clone().add(o), b.clone().add(o), b.clone().sub(o), a.clone().sub(o)].map((p) => p.setY(2.68)); // the zone slices walls at head height + 2.7
+      this.add(this.M.cap, quad(pts, new THREE.Vector3(0, 1, 0), len, 0.2, 1));
     }
   }
 
@@ -251,11 +262,18 @@ class Builder {
   /** Merge per material into a handful of meshes. */
   scene() {
     const root = new THREE.Group();
+    const M = this.M, inked = new Set([M.hallWall, M.padding, M.mass, M.bedFrame, M.mattress, M.desk, M.cabinet, M.mainDoor]);
+    const edges = [];
     for (const [mat, geos] of this.parts) {
       const nonIdx = geos.some((g) => !g.index);
+      if (inked.has(mat)) { for (const g of geos) edges.push(new THREE.EdgesGeometry(g, 35)); pushBack(mat); }
       const merged = mergeGeometries(nonIdx ? geos.map((g) => (g.index ? g.toNonIndexed() : g)) : geos, false);
       root.add(new THREE.Mesh(merged, mat));
     }
+    // ink lines along every wall edge and corner: one draw call (not a mesh, so not a collider)
+    const lines = new THREE.LineSegments(mergeGeometries(edges, false), new THREE.LineBasicMaterial({ color: 0x0e1210 }));
+    lines.raycast = () => {};
+    root.add(lines);
     return root;
   }
 }
@@ -325,19 +343,23 @@ export class AsylumZone extends NightCase {
   buildWorld() {
     const c = this.club, S = this.scene;
     S.add(c.scene);
-    S.background = new THREE.Color(0x07090a);
-    S.fog = new THREE.Fog(0x0b0f0d, 16, 46);
-    S.add(new THREE.HemisphereLight(0xdfeee6, 0x303a34, 0.9));
-    S.add(new THREE.AmbientLight(0xffffff, 0.22));
-    // Fluorescent tubes: one per wing and the hub. A couple buzz and flicker.
-    const spots = [new THREE.Vector3(0, 2.9, 0), ...c.routes.map((r) => r.from.clone().lerp(r.to, 0.55).setY(2.9))];
-    this.plights = spots.map((p, i) => {
-      const l = new THREE.PointLight(i ? 0xd8f5e6 : 0xfff2d8, 16, 17, 1.4);
-      l.position.copy(p); S.add(l);
-      return l;
+    S.background = new THREE.Color(0x050706);
+    S.fog = new THREE.Fog(0x08100c, 14, 40);
+    S.add(new THREE.HemisphereLight(0xcfe8dc, 0x1a2420, 0.7));
+    S.add(new THREE.AmbientLight(0xffffff, 0.1));
+    this.key.color.set(0xe0fff0); this.key.intensity = 0.9;
+    // Fluorescent tubes: pools of sickly light down each wing and over the hub (floor decals:
+    // per-pixel point lights cost too much on phones). A couple buzz and flicker.
+    const spots = [new THREE.Vector3(0, 0, 0)];
+    for (const r of c.routes) for (const k of [0.3, 0.75]) spots.push(r.from.clone().lerp(r.to, k));
+    const pools = spots.map((p, i) => {
+      const m = lightPool(i ? 0xbfffe0 : 0xfff0c8, i ? 3.4 : 4.4, 0.42);
+      m.position.set(p.x, 0.02, p.z); S.add(m);
+      return m;
     });
-    const flicker = shuffle([...this.plights]).slice(0, 2);
-    this.anims.push((t) => flicker.forEach((l, i) => { l.intensity = Math.sin(t * 23 + i * 7) > 0.93 || Math.sin(t * 3.1 + i) > 0.97 ? 3 : 16; }));
+    this.plights = [];
+    const flicker = shuffle([...pools]).slice(0, 3);
+    this.anims.push((t) => flicker.forEach((l, i) => { l.material.opacity = Math.sin(t * 23 + i * 7) > 0.93 || Math.sin(t * 3.1 + i) > 0.97 ? 0.05 : 0.42; }));
     this.buildDoors();
     this.wallMat = this.doorMat; // X-ray fades the doors so she can look into the cells
     this.wallBaseOpacity = 1;
