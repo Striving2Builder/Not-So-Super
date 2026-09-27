@@ -20,6 +20,7 @@ Open http://localhost:8080. The server also prints a LAN address for playing on 
 - **Special zones** — third-person 3D infiltrations with guards, informants, tempting "gifts" and bosses. You can be captured.
 - **Club raids** — the same, inside premade 3D clubs (`assets/clubs/`).
 - **Capture** — an escape puzzle in a villain's room, or an ultimatum: public humiliation or an embarrassing deal.
+- **Flight** — altitude bands, rooftop perching with super-hearing, district haze, clouds and air traffic; airborne rescues (falling window-washers, runaway and getaway cars, crashing helicopters), stunt hoops and stranded kittens; tabloid drones at night in vice districts; waypoints with autopilot.
 - **Reputation** — front-page newspapers for victories and tabloids for humiliations; tabloid heat and intoxication drag it down.
 
 ## Controls
@@ -45,6 +46,7 @@ Drag the screen to turn the camera in 3D zones. Add `?touch=1` to the URL to tes
   - `hero3d.js` rigged Supergirl model + animations · `cape.js` cloth-simulated cape
   - `comic.js` / `commentary.js` comic overlay and commentary engine · `data.js` all tunable content
   - `settings.js` graphics profiles (Auto / High / Battery saver) · `clubgeo.js` club collision + walkable-floor scan
+  - `flight.js` flight physics · `sky.js` / `atmosphere.js` / `airspace.js` clouds, haze, air traffic · `airevents.js` airborne events · `paparazzi.js` tabloid drones · `nav.js` waypoint + autopilot
 - `assets/` — models, animations, fonts, capture-room art, converted clubs
 - `vendor/` — three.js, its loaders/Draco decoder, three-mesh-bvh
 - `tools/` — `export_club.py` (Blender → web GLB for clubs), `repair_glb.js`, `bake_clubs.js` (lite club copies + baked floors)

@@ -26,13 +26,14 @@ function read() {
   try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
 }
 function write() {
-  try { localStorage.setItem(KEY, JSON.stringify({ graphics: state.graphics, autoSlow: state.autoSlow })); } catch (e) { /* private mode */ }
+  try { localStorage.setItem(KEY, JSON.stringify({ graphics: state.graphics, autoSlow: state.autoSlow, autopilot: state.autopilot })); } catch (e) { /* private mode */ }
 }
 
 const saved = read();
 const state = {
   graphics: GRAPHICS_MODES.includes(saved.graphics) ? saved.graphics : 'auto',
   autoSlow: !!saved.autoSlow, // Auto measured this device as too slow once → stay on Battery saver
+  autopilot: saved.autopilot !== false, // fly toward the waypoint while the stick is idle
 };
 const listeners = [];
 
@@ -53,6 +54,8 @@ export const settings = {
     if (state.graphics === 'auto') { state.autoSlow = false; autoTune.restart(); }
     write(); changed();
   },
+  get autopilot() { return state.autopilot; },
+  toggleAutopilot() { state.autopilot = !state.autopilot; write(); return state.autopilot; },
   onChange(fn) { listeners.push(fn); },
 };
 

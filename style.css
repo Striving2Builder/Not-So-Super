@@ -168,7 +168,7 @@ body:not(.touch) #btns { transform: scale(.8); transform-origin: bottom right; }
 
 /* map */
 .mapwrap { position: relative; }
-.mapwrap canvas { width: 100%; height: auto; border-radius: 10px; display: block; image-rendering: pixelated; }
+.mapwrap canvas { width: 100%; height: auto; border-radius: 10px; display: block; image-rendering: pixelated; cursor: crosshair; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; margin-top: 10px; }
 .legend span { display: inline-flex; align-items: center; gap: 4px; }
 .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }

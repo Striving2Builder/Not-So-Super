@@ -89,9 +89,15 @@ export class Sky {
 
 /** Screen-space speed effects around the hero. */
 export class SpeedFX {
-  constructor() { this.streaks = []; this.rings = []; }
+  constructor() { this.streaks = []; this.rings = []; this.bursts = []; this.rush = 0; }
 
   sonicBoom() { this.rings.push({ t: 0 }); }
+
+  /** Super-jump launch: speed lines bursting outward from her. */
+  launch() { this.bursts.push({ t: 0, seed: Math.random() * 100 }); }
+
+  /** Dive: the ground rushing up (0..1), drawn as lines streaming in from the screen edges. */
+  setRush(v) { this.rush = v; }
 
   update(dt, speedFrac, ang, W, H) {
     // Wind streaks: more and longer the faster she goes, flowing against her heading.
@@ -104,6 +110,9 @@ export class SpeedFX {
     this.streaks = this.streaks.filter((s) => s.t < s.life).slice(0, Math.max(want, 0) + 20);
     for (const r of this.rings) r.t += dt;
     this.rings = this.rings.filter((r) => r.t < 0.9);
+    for (const b of this.bursts) b.t += dt;
+    this.bursts = this.bursts.filter((b) => b.t < 0.7);
+    this.W = W; this.H = H;
     this.ang = ang; this.frac = speedFrac;
   }
 
@@ -117,6 +126,34 @@ export class SpeedFX {
         const a = Math.sin((s.t / s.life) * Math.PI);
         const l = s.len * a * (0.6 + this.frac);
         ctx.moveTo(s.x, s.y); ctx.lineTo(s.x + dx * l, s.y + dy * l);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+    for (const b of this.bursts) {
+      const e = b.t / 0.7;
+      ctx.save();
+      ctx.strokeStyle = `rgba(255,255,255,${0.75 * (1 - e)})`; ctx.lineWidth = 3 * (1 - e) + 1; ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (let i = 0; i < 28; i++) {
+        const a = (i / 28) * Math.PI * 2 + Math.sin(b.seed + i) * 0.1;
+        const r0 = (30 + e * 260 + (i % 3) * 20) * scale, r1 = r0 + (70 + (i % 4) * 25) * scale * (1 - e * 0.5);
+        ctx.moveTo(hx + Math.cos(a) * r0, hy + Math.sin(a) * r0); ctx.lineTo(hx + Math.cos(a) * r1, hy + Math.sin(a) * r1);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+    if (this.rush > 0.05 && this.W) {
+      // lines converging on her from the screen edges, faster as the ground gets close
+      ctx.save();
+      ctx.strokeStyle = `rgba(255,255,255,${0.45 * this.rush})`; ctx.lineWidth = 2; ctx.lineCap = 'round';
+      const R = Math.hypot(this.W, this.H) / 2, t = performance.now() / 1000;
+      ctx.beginPath();
+      for (let i = 0; i < 36; i++) {
+        const a = (i / 36) * Math.PI * 2 + i * 0.37;
+        const f = (t * (1.5 + this.rush * 3) + i * 0.13) % 1;
+        const r0 = R * (1 - f), r1 = r0 + R * 0.18 * this.rush;
+        ctx.moveTo(hx + Math.cos(a) * r0, hy + Math.sin(a) * r0); ctx.lineTo(hx + Math.cos(a) * r1, hy + Math.sin(a) * r1);
       }
       ctx.stroke();
       ctx.restore();

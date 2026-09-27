@@ -6,7 +6,10 @@ import { drawHeroTop, glow } from './art.js';
 import { clamp, lerp, pick, chance, rand, dist, shade, rgba, easeOut, easeInOut, fmtClock, fmtTime, wobble, $ } from './util.js';
 import { heroReady, HeroSprite } from './hero3d.js';
 import { loadClub, preloadClub } from './clubzone.js';
-import { quality } from './settings.js';
+import { quality, settings } from './settings.js';
+import { AirEvents } from './airevents.js';
+import { Paparazzi } from './paparazzi.js';
+import { Navigator } from './nav.js';
 import { stepFlight, stepAltitude, speedFraction, cameraZoom, cameraLead, FLIGHT, BANDS, CRUISE_BAND, CAM_ABOVE } from './flight.js';
 import { Airspace } from './airspace.js';
 import { drawAtmosphere, FOG_Z } from './atmosphere.js';
@@ -46,6 +49,9 @@ export class Overworld {
     this.inCloud = 0;
     this.fx = new SpeedFX();
     this.audio = new FlightAudio();
+    this.events = new AirEvents(this);   // airborne rescues and stunts
+    this.paps = new Paparazzi(this);     // tabloid drones in vice districts at night
+    this.nav = new Navigator();          // waypoint + autopilot
   }
 
   reset() {
@@ -63,6 +69,11 @@ export class Overworld {
     this.zones = [];
     this.parts = [];
     this.district = null;
+    this.events.reset();
+    this.paps.reset();
+    this.nav.clear();
+    this.shock = null;
+    this.crowdT = rand(10, 20);
     for (let i = 0; i < 12; i++) this.maintainZones(true);
   }
 
@@ -79,7 +90,10 @@ export class Overworld {
     ]);
     this.diving = null;
     this.rising = null;
-    if (p.returnFrom) { this.rising = 0; this.zoom = 1.6; Object.assign(this.hero, { z: 40, speed: 0, band: CRUISE_BAND, perch: null }); }
+    if (p.returnFrom) {
+      this.rising = 0; this.zoom = 1.6; Object.assign(this.hero, { z: 40, speed: 0, band: CRUISE_BAND, perch: null });
+      this.superJump();
+    }
     if (!this.attract) this.audio.start();
     $('hud-extra').innerHTML = '';
     $('objectives').classList.remove('on');
@@ -88,6 +102,20 @@ export class Overworld {
   exit() {
     $('prompt').classList.remove('on');
     this.audio.stop();
+  }
+
+  // ------------------------------------------------------------------ launch & landing
+  /** Leaving a zone: a super-jump off the street, cracking the pavement. */
+  superJump() {
+    const h = this.hero;
+    this.shock = { x: h.x, y: h.y, t: 0 };
+    for (let i = 0; i < 26; i++) {
+      const a = rand(0, Math.PI * 2), v = rand(60, 200);
+      this.parts.push({ x: h.x, y: h.y, z: 4, vx: Math.cos(a) * v, vy: Math.sin(a) * v, vz: rand(20, 90), life: 1.1, max: 1.1, size: rand(5, 10), col: '#b8b0a0' });
+    }
+    this.shake = Math.max(this.shake, 10);
+    this.fx.launch();
+    if (!this.attract) sfx.boost();
   }
 
   // ------------------------------------------------------------------ altitude, perching, hearing
@@ -224,7 +252,15 @@ export class Overworld {
         const x = b.x0 + 3 + (e === 0 ? f : e === 1 ? side : e === 2 ? side - f : 0);
         const y = b.y0 + 3 + (e === 0 ? 0 : e === 1 ? f : e === 2 ? side : side - f);
         ctx.fillStyle = cols[i % cols.length];
-        ctx.beginPath(); ctx.arc(V.SX(x), V.SY(y), r, 0, Math.PI * 2); ctx.fill();
+        const px = V.SX(x), py = V.SY(y);
+        ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+        // close to her: an arm raised, pointing up at her
+        const dx = this.hero.x - x, dy = this.hero.y - y, d2 = dx * dx + dy * dy;
+        if (d2 < 220 * 220) {
+          const d = Math.sqrt(d2) || 1, len = r * 2.4;
+          ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = Math.max(1, r * 0.6);
+          ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + (dx / d) * len, py + (dy / d) * len - len * 0.5); ctx.stroke();
+        }
       }
     }
     ctx.restore();
@@ -312,17 +348,29 @@ export class Overworld {
     this.updateParticles(dt);
 
     if (this.diving) {
+      // Steerable dive: she homes in on the incident but the stick nudges where she hits;
+      // she accelerates toward the ground (ease-in height) while the view rushes in.
       const d = this.diving;
       d.t += dt;
-      const e = easeInOut(Math.min(1, d.t / DIVE_T));
-      h.x = lerp(d.sx, d.z.x, e); h.y = lerp(d.sy, d.z.y, e);
-      h.z = lerp(d.z0, 30, e);
+      const f = Math.min(1, d.t / DIVE_T), e = easeInOut(f);
+      const a = inp.axis();
+      d.ox = clamp((d.ox || 0) + a.x * 160 * dt, -80, 80); d.oy = clamp((d.oy || 0) + a.y * 160 * dt, -80, 80);
+      h.x = lerp(d.sx, d.z.x + d.ox * (1 - f * 0.3), e); h.y = lerp(d.sy, d.z.y + d.oy * (1 - f * 0.3), e);
+      h.z = lerp(d.z0, 30, f * f);
       this.zoom = lerp(d.zoom0, 1.6, e);
       this.camH = h.z + CAM_ABOVE;
       this.cam.x = h.x; this.cam.y = h.y - this.tiltOffset();
-      if (d.t >= DIVE_T && !d.fired) { d.fired = true; flash(); g.startZone(d.z); }
+      this.fx.setRush(f);
+      if (f > 0.88 && !d.impact) {
+        d.impact = true;
+        this.shock = { x: h.x, y: h.y, t: 0 };
+        this.shake = Math.max(this.shake, 14);
+        sfx.hit();
+      }
+      if (d.t >= DIVE_T && !d.fired) { d.fired = true; this.fx.setRush(0); flash(); g.startZone(d.z); }
       return;
     }
+    if (this.shock) { this.shock.t += dt; if (this.shock.t > 0.8) this.shock = null; }
     if (this.rising !== null) {
       this.rising += dt;
       const e = easeOut(Math.min(1, this.rising / 1.1));
@@ -339,7 +387,11 @@ export class Overworld {
       const tx = cx + Math.cos(this.t * 0.12) * R, ty = cy + Math.sin(this.t * 0.12) * R;
       const m = Math.hypot(tx - h.x, ty - h.y) || 1;
       a = { x: (tx - h.x) / m, y: (ty - h.y) / m };
-    } else a = wobble(inp.axis(), st ? st.intox : 0, this.t);
+    } else {
+      a = wobble(inp.axis(), st ? st.intox : 0, this.t);
+      // Autopilot: steer to the waypoint while the stick is idle; any input takes over.
+      if (this.nav.autopilot && this.nav.target && !h.perch && Math.hypot(a.x, a.y) < 0.12) a = this.nav.steer(h);
+    }
     const boost = !this.attract && inp.down('boost');
     if (!this.attract) this.altitudeInput(inp, a);
     const ev = stepFlight(h, h.perch ? { x: 0, y: 0 } : a, boost && !h.perch, dt, BANDS[h.band].speedMul);
@@ -387,6 +439,8 @@ export class Overworld {
     const exposure = h.perch ? BANDS[h.z < BANDS[CRUISE_BAND].z - 60 ? 0 : CRUISE_BAND].vice : BANDS[h.band].vice;
     g.vice = { active: !!(D && D.vice), where: D && D.name, rate: 1.1 * exposure };
 
+    if (!this.attract && st) this.updateCity(dt);
+
     // --- zones
     if (!this.attract) {
       for (const z of this.zones) {
@@ -433,6 +487,25 @@ export class Overworld {
     }
   }
 
+  /** The living city: airborne events, tabloid drones, news choppers, crowds, the waypoint. */
+  updateCity(dt) {
+    const h = this.hero, st = this.g.state;
+    if (this.rising === null) this.events.update(dt);
+    this.paps.update(dt);
+    if (this.airspace.follow(h, st.rep >= 300 ? 2 : st.rep >= 150 ? 1 : 0)) toast('📺 A news chopper is following you. The city is watching!', 'good');
+    // crowds below shout when she skims past
+    this.crowdT -= dt;
+    if (this.crowdT <= 0 && h.z < 260 && h.speed > 200 && this.heroScreen && DISTRICTS[this.district] && this.district !== 'farm') {
+      this.crowdT = rand(16, 28);
+      const side = chance(0.5) ? -1 : 1;
+      const lines = st.rep < 0 ? ['Hey! Watch it!', 'Show-off!', 'There goes trouble…'] : ['Look! Up in the sky!', "It's Supergirl!", "Mommy, look, she's flying!", "Go get 'em!"];
+      this.g.commentary.talk(pick(lines), this.heroScreen.x + side * rand(120, 220), this.heroScreen.y + rand(60, 140), { kind: 'shout', speaker: 'CROWD' });
+    }
+    const res = this.nav.update(h, (ref) => this.zones.includes(ref) || this.events.list.includes(ref));
+    if (res === 'arrived') toast(this.near ? "You're over the incident: DIVE!" : '🧭 Arrived at your waypoint', 'info');
+    else if (res === 'gone') toast('🧭 Waypoint cleared: that incident is over', 'info');
+  }
+
   updateParticles(dt) {
     for (const p of this.parts) {
       p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
@@ -466,6 +539,7 @@ export class Overworld {
     const lock = st.locked(z.lockKey);
     if (lock) { toast(`You promised to stay out of ${z.lockKey} zones for ${fmtTime(lock)}`, 'bad'); sfx.lose(); return; }
     this.diving = { z, t: 0, sx: this.hero.x, sy: this.hero.y, z0: this.hero.z, zoom0: this.zoom };
+    this.events.abandon(); // someone else handles the airborne stuff while she's busy
     this.hero.perch = null;
     this.g.commentary.onDive(z); // spinning-emblem transition + sting
     if (VENUES[z.venue]?.club) loadClub(VENUES[z.venue].club); // start loading the building during the dive
@@ -491,7 +565,9 @@ export class Overworld {
     const D = DISTRICTS[this.district];
     $('hud-title').textContent = D ? D.name : 'Harbor';
     const alt = this.hero.perch ? 'Perched' : BANDS[this.hero.band].label;
-    $('hud-sub').textContent = `${fmtClock(st.clock)} · ${alt} · ${this.zones.length} incidents${D && D.vice ? ' · ⚠ vice' : ''}`;
+    const nav = this.nav.target ? ` · 🧭 ${Math.round(this.nav.distance(this.hero) / 10)}m${this.nav.autopilot ? ' (auto)' : ''}` : '';
+    const drones = this.paps.drones.some((d) => !d.leaving) ? ' · 📸 drones!' : '';
+    $('hud-sub').textContent = `${fmtClock(st.clock)} · ${alt} · ${this.zones.length} incidents${D && D.vice ? ' · ⚠ vice' : ''}${drones}${nav}`;
     this.g.input.setButton('perch', { lit: !this.hero.perch && !!this.perchTarget() });
     this.drawMinimap();
   }
@@ -511,6 +587,13 @@ export class Overworld {
       const r = z.kind === 'special' ? 4.5 : 3.5;
       g.beginPath(); g.arc(ox + z.x * m, oy + z.y * m, blink ? r : r - 1, 0, Math.PI * 2); g.fill();
       g.strokeStyle = '#000'; g.lineWidth = 1; g.stroke();
+    }
+    for (const e of this.events.markers()) {
+      g.fillStyle = e.color; g.fillRect(ox + e.x * m - 2.5, oy + e.y * m - 2.5, 5, 5);
+    }
+    if (this.nav.target) {
+      const t = this.nav.target; g.strokeStyle = '#78ffc8'; g.lineWidth = 2;
+      g.beginPath(); g.arc(ox + t.x * m, oy + t.y * m, 5, 0, Math.PI * 2); g.stroke();
     }
     const h = this.hero;
     g.save(); g.translate(ox + h.x * m, oy + h.y * m); g.rotate(h.ang);
@@ -538,12 +621,42 @@ export class Overworld {
     g.beginPath(); g.arc(this.hero.x * m, this.hero.y * m, 7, 0, Math.PI * 2); g.fill(); g.stroke();
     const legend = Object.values(DISTRICTS).map((d) => `<span><i style="background:${d.map}"></i>${d.name}</span>`).join('');
     const kinds = `<span><i style="background:#ffd23f"></i>Street crime</span><span><i style="background:#ff7a1a"></i>Fire</span><span><i style="background:#3fd0ff"></i>Investigation</span><span><i style="background:#b36bff"></i>Night case</span><span><i style="background:#ff3fb8"></i>Special zone</span><span><i style="background:#ff3030"></i>Boss</span>`;
-    const el = openModal(`<h2>City Map</h2><div class="mapwrap"></div><div class="legend">${kinds}</div><div class="legend">${legend}</div><div class="opts" style="margin-top:12px"><button class="opt"><span class="k">M</span><span class="l">Close map</span></button></div>`);
+    for (const e of this.events.markers()) {
+      g.fillStyle = e.color; g.strokeStyle = '#000'; g.lineWidth = 2;
+      g.fillRect(e.x * m - 6, e.y * m - 6, 12, 12); g.strokeRect(e.x * m - 6, e.y * m - 6, 12, 12);
+    }
+    if (this.nav.target) {
+      const t = this.nav.target; g.strokeStyle = '#78ffc8'; g.lineWidth = 3;
+      g.beginPath(); g.arc(t.x * m, t.y * m, 11, 0, Math.PI * 2); g.stroke();
+    }
+    // Everything worth flying to, nearest first.
+    const h = this.hero;
+    const targets = [
+      ...this.zones.map((z) => ({ x: z.x, y: z.y, color: z.color, name: z.name, where: DISTRICTS[z.district].name, left: z.ttl - z.t, ref: z })),
+      ...this.events.markers().map((e) => ({ ...e, where: 'In the air', left: e.t })),
+    ].map((t) => ({ ...t, d: dist(t.x, t.y, h.x, h.y) })).sort((a, b) => a.d - b.d);
+    const rows = targets.slice(0, 8).map((t, i) => `<button class="opt navto" data-i="${i}"><span class="k" style="background:${t.color}"></span><span class="l">${t.name}<small>${t.where} · ${Math.round(t.d / 10)}m${t.left > 0 && t.left < 9999 ? ` · ${fmtTime(t.left)} left` : ''}</small></span></button>`).join('');
+    const auto = () => `Autopilot: ${settings.autopilot ? 'ON' : 'OFF'}`;
+    const el = openModal(`<h2>City Map</h2><p class="hint" style="margin:0 0 6px;opacity:.75;font-size:12px">Tap the map or an incident to set a waypoint. With autopilot on, she flies there whenever you let go of the stick.</p><div class="mapwrap"></div><div class="legend">${kinds}<span><i style="background:#6ff7ff"></i>In the air</span></div><h3 style="margin:12px 0 6px;font-size:13px">Nearest incidents</h3><div class="opts">${rows || '<small>Quiet night.</small>'}</div><div class="legend">${legend}</div><div class="opts" style="margin-top:12px"><button class="opt autop"><span class="k">A</span><span class="l">${auto()}</span></button>${this.nav.target ? '<button class="opt clearwp"><span class="k">X</span><span class="l">Clear waypoint</span></button>' : ''}<button class="opt closemap"><span class="k">M</span><span class="l">Close map</span></button></div>`);
     el.querySelector('.mapwrap').appendChild(c);
     const close = () => { removeEventListener('keydown', onKey, true); closeModal(el); };
-    const onKey = (e) => { if (['KeyM', 'Escape', 'Enter', 'Space'].includes(e.code)) { e.preventDefault(); e.stopPropagation(); close(); } };
+    const setWaypoint = (t) => { this.nav.set(t); sfx.click(); toast(`🧭 Waypoint: ${t.name}${settings.autopilot ? ' (let go of the stick to fly there)' : ''}`, 'info'); close(); };
+    const onKey = (e) => {
+      if (['KeyM', 'Escape', 'Enter', 'Space'].includes(e.code)) { e.preventDefault(); e.stopPropagation(); close(); }
+      if (e.code === 'KeyA') { e.preventDefault(); e.stopPropagation(); settings.toggleAutopilot(); el.querySelector('.autop .l').textContent = auto(); }
+    };
     addEventListener('keydown', onKey, true);
-    el.querySelector('.opt').addEventListener('click', close);
+    c.addEventListener('click', (e) => {
+      const r = c.getBoundingClientRect();
+      const x = ((e.clientX - r.left) / r.width) * c.width / m, y = ((e.clientY - r.top) / r.height) * c.height / m;
+      // snap onto an incident if the tap was close to one
+      const hit = targets.find((t) => dist(t.x, t.y, x, y) < 90);
+      setWaypoint(hit ? { x: hit.x, y: hit.y, name: hit.name, ref: hit.ref } : { x, y, name: 'Map waypoint' });
+    });
+    el.querySelectorAll('.navto').forEach((b) => b.addEventListener('click', () => { const t = targets[+b.dataset.i]; setWaypoint({ x: t.x, y: t.y, name: t.name, ref: t.ref }); }));
+    el.querySelector('.autop').addEventListener('click', () => { settings.toggleAutopilot(); el.querySelector('.autop .l').textContent = auto(); });
+    el.querySelector('.clearwp')?.addEventListener('click', () => { this.nav.clear(); close(); });
+    el.querySelector('.closemap').addEventListener('click', close);
     el.addEventListener('click', (e) => { if (e.target === el) close(); });
   }
 
@@ -562,6 +675,7 @@ export class Overworld {
     const SX = (x, z = 0) => cx + (x - camX) * k * P(z);
     const SY = (y, z = 0) => scy + (y - camY) * k * P(z) - (P(z) - 1) * T;
     const V = { cx, cy, scy, k, P, SX, SY, night, lights: [], t: this.t, W, H, camH };
+    this.V = V; // for things that place speech bubbles in world space
 
     ctx.save();
     if (this.shake > 0) ctx.translate(rand(-this.shake, this.shake), rand(-this.shake, this.shake));
@@ -640,6 +754,8 @@ export class Overworld {
       }
     }
 
+    if (!this.attract) this.events.drawGround(ctx, V);
+
     // street life, visible when she's low
     const h = this.hero;
     if (h.z < 260) this.drawPedestrians(ctx, V, city, bx0, bx1, by0, by1);
@@ -652,6 +768,21 @@ export class Overworld {
       ctx.beginPath(); ctx.arc(SX(z.x), SY(z.y), (30 + pulse * 70) * k, 0, Math.PI * 2); ctx.stroke();
       ctx.fillStyle = rgba(z.color, 0.18);
       ctx.beginPath(); ctx.arc(SX(z.x), SY(z.y), 34 * k, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // shockwave from a landing or a super-jump launch
+    if (this.shock) {
+      const e = this.shock.t / 0.8, x = SX(this.shock.x), y = SY(this.shock.y);
+      ctx.strokeStyle = `rgba(255,255,255,${0.85 * (1 - e)})`; ctx.lineWidth = 6 * (1 - e) + 1;
+      ctx.beginPath(); ctx.ellipse(x, y, (20 + e * 170) * k, (14 + e * 120) * k, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = `rgba(60,50,40,${0.35 * (1 - e)})`;
+      ctx.beginPath(); ctx.ellipse(x, y, 34 * k, 22 * k, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    // waypoint on the ground
+    if (this.nav.target && !this.attract) {
+      const t = this.nav.target, x = SX(t.x), y = SY(t.y), r = (20 + ((this.t * 1.5) % 1) * 30) * k;
+      ctx.strokeStyle = `rgba(120,255,200,${0.9 * (1 - ((this.t * 1.5) % 1))})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.stroke();
     }
 
     // hero shadow (sun from the north-west)
@@ -714,6 +845,9 @@ export class Overworld {
       icons.push([tx, ty, 15 * k * P(top), z, st && st.locked(z.lockKey)]);
     }
 
+    // airborne events and tabloid drones
+    if (!this.attract) { this.events.drawAir(ctx, V); this.paps.draw(ctx, V); }
+
     // heroine
     const hs = k * P(h.z) * 1.3;
     this.fx.draw(ctx, SX(h.x, h.z), SY(h.y, h.z), hs);
@@ -767,6 +901,8 @@ export class Overworld {
       ctx.fillRect(0, 0, W, H);
     }
 
+    this.paps.drawFlash(ctx, W, H);
+
     if (this.diving) {
       const e = Math.min(1, this.diving.t / DIVE_T);
       const grd = ctx.createRadialGradient(cx, scy, Math.min(W, H) * 0.2 * (1 - e * 0.6), cx, scy, Math.max(W, H) * 0.7);
@@ -785,7 +921,9 @@ export class Overworld {
 
   drawArrows(ctx, V) {
     const W = this.g.w, H = this.g.h, m = 34;
-    for (const z of this.zones) {
+    const marks = [...this.zones, ...this.events.markers()];
+    if (this.nav.target) marks.push({ ...this.nav.target, color: '#78ffc8', waypoint: true });
+    for (const z of marks) {
       const sx = V.SX(z.x), sy = V.SY(z.y);
       if (sx > m && sx < W - m && sy > m + 50 && sy < H - m) continue;
       const a = Math.atan2(sy - V.scy, sx - V.cx);
@@ -793,8 +931,9 @@ export class Overworld {
       const s = Math.min((W / 2 - m) / Math.abs(tx || 1e-6), (H / 2 - m - 20) / Math.abs(ty || 1e-6));
       const ax = V.cx + tx * s, ay = V.scy + ty * s;
       ctx.save(); ctx.translate(ax, ay); ctx.rotate(a);
-      ctx.fillStyle = z.color; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-4, -9); ctx.lineTo(-4, 9); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = z.color; ctx.strokeStyle = z.waypoint ? '#fff' : 'rgba(0,0,0,.6)'; ctx.lineWidth = z.waypoint ? 3 : 2;
+      const sc = z.waypoint ? 1.4 : 1;
+      ctx.beginPath(); ctx.moveTo(14 * sc, 0); ctx.lineTo(-4 * sc, -9 * sc); ctx.lineTo(-4 * sc, 9 * sc); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.restore();
       ctx.fillStyle = '#fff'; ctx.font = '700 10px system-ui'; ctx.textAlign = 'center';
       ctx.fillText(`${Math.round(dist(z.x, z.y, this.hero.x, this.hero.y) / 10)}m`, ax - tx * 18, ay - ty * 18 + 3);

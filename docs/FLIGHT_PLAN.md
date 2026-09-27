@@ -29,14 +29,20 @@ Touches only the flight code; biggest payoff per change.
     night cases nearby (feeds the lead network).
 11. **Camera tilt**: slight oblique view so buildings read more 3D.
 
-## Phase 3 — Flight is gameplay
-12. **Airborne events**: catch a falling window-washer, stop a runaway car / crashing helicopter,
-    getaway chases from above, optional speed rings and rooftop collectibles.
-13. **The city reacts**: news helicopters follow a popular hero, tabloid drones tail her in vice
-    districts at night (tabloid heat), crowds point up.
-14. **Navigation**: tap the map to set a waypoint, incident list by distance, optional steering
-    assist toward the chosen target.
-15. **Launch & landing**: super-jump launch out of zones, steerable dives with the ground rushing up.
+## Phase 3 — Flight is gameplay ✅ done
+12. **Airborne events** (`src/airevents.js`): a window-washer dangling then falling (catch them at
+    their height), runaway and getaway cars (the getaway car turns away from her; both can only be
+    grabbed from rooftop height), a news helicopter spiralling down (catch it at its height), a
+    stunt course of six hoops at different heights against the clock (record kept), and kittens
+    stranded on rooftops (perch on the roof to rescue). Rewards, small penalties for misses, stats.
+13. **The city reacts**: news choppers tail her at 150+ / 300+ rep (`airspace.follow`); tabloid
+    drones (`src/paparazzi.js`) swarm her in vice districts at night, every flash adds tabloid heat,
+    shaken by boosting or climbing to high patrol; pedestrians point up and crowds shout as she skims.
+14. **Navigation** (`src/nav.js`): tap the map (or an incident in the nearest-first list) to set a
+    waypoint that follows moving targets; autopilot flies there while the stick is idle, any input
+    takes over. Waypoint shown on the ground, the minimap, the HUD and as an edge arrow.
+15. **Launch & landing**: super-jump out of zones (shockwave, debris, burst lines, shake); dives are
+    steerable, accelerate toward the ground with speed lines rushing in, and end in an impact.
 
 ## Guardrails
 - Crime beacons and markers stay readable over every atmosphere/cloud layer.

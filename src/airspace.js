@@ -23,12 +23,51 @@ export class Airspace {
     for (let i = 0; i < 6; i++) this.lights.push({ x: r.range(W * 0.2, W * 0.8), y: r.range(H * 0.2, H * 0.8), phase: r.range(0, TAU), speed: r.range(0.3, 0.6) });
   }
 
+  /**
+   * News helicopters that tail a popular hero (`n` of them), keeping station behind and to one
+   * side of her. They can't keep up with a boost; they just catch up again afterwards.
+   * Returns true when a new one starts following.
+   */
+  follow(hero, n) {
+    let started = false, i = 0;
+    for (const c of this.helis) {
+      if (c.kind !== 'news' || c.ctl) { c.follow = false; continue; }
+      const want = i++ < n;
+      if (want && !c.follow) started = true;
+      c.follow = want;
+    }
+    this.hero = hero;
+    return started;
+  }
+
   update(dt) {
     const wrap = (o) => { if (o.x < -500) o.x = this.W + 400; if (o.x > this.W + 500) o.x = -400; if (o.y < -500) o.y = this.H + 400; if (o.y > this.H + 500) o.y = -400; };
     for (const b of this.birds) { b.ang += Math.sin(b.flap * 0.1) * 0.2 * dt; b.flap += dt * 10; b.x += Math.cos(b.ang) * b.spd * dt; b.y += Math.sin(b.ang) * b.spd * dt; wrap(b); }
-    for (const h of this.helis) { h.ang += h.turn * dt; if (Math.random() < dt * 0.1) h.turn = rand(-0.2, 0.2); h.rotor += dt * 30; h.x += Math.cos(h.ang) * h.spd * dt; h.y += Math.sin(h.ang) * h.spd * dt; wrap(h); }
+    for (const h of this.helis) {
+      if (h.ctl) continue; // driven by an airborne event (engine failure)
+      h.rotor += dt * 30;
+      if (h.follow && this.hero) { this.chase(h, dt); continue; }
+      h.ang += h.turn * dt; if (Math.random() < dt * 0.1) h.turn = rand(-0.2, 0.2);
+      h.x += Math.cos(h.ang) * h.spd * dt; h.y += Math.sin(h.ang) * h.spd * dt; wrap(h);
+    }
     for (const p of this.planes) { p.x += Math.cos(p.ang) * p.spd * dt; p.y += Math.sin(p.ang) * p.spd * dt; wrap(p); }
     for (const l of this.lights) l.phase += l.speed * dt;
+  }
+
+  /** A following news chopper: station-keeping behind her, filming. */
+  chase(c, dt) {
+    const hero = this.hero, side = c === this.helis.find((q) => q.follow) ? 1 : -1;
+    const tx = hero.x - Math.cos(hero.ang) * 260 - Math.sin(hero.ang) * 140 * side;
+    const ty = hero.y - Math.sin(hero.ang) * 260 + Math.cos(hero.ang) * 140 * side;
+    const dx = tx - c.x, dy = ty - c.y, d = Math.hypot(dx, dy);
+    const spd = Math.min(560, d * 1.5);
+    if (d > 1) {
+      const want = Math.atan2(dy, dx);
+      let da = want - c.ang; while (da > Math.PI) da -= TAU; while (da < -Math.PI) da += TAU;
+      c.ang += Math.max(-2.5 * dt, Math.min(2.5 * dt, da));
+      c.x += (dx / d) * spd * dt; c.y += (dy / d) * spd * dt;
+    }
+    c.z += Math.max(-60 * dt, Math.min(60 * dt, hero.z + 110 - c.z));
   }
 
   /** Night searchlights: additive beams from the ground, drawn before the flyers. */
