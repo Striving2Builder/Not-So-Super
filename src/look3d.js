@@ -206,6 +206,9 @@ export function bakeStatic(scene, meshes, { ink = true, inkColor = INK, inkAngle
     if (!groups.has(key)) groups.set(key, { mat, geos: [] });
     groups.get(key).geos.push(geo);
     // ink only hard-edged shapes (round ones would come out as wireframe)
+    if (ink && !m.userData.noInk && !mat.transparent && INKED.has(m.geometry.type)) {
+      mat.polygonOffset = true; mat.polygonOffsetFactor = 1; mat.polygonOffsetUnits = 1; // lines win the depth test
+    }
     if (ink && !m.userData.noInk && !mat.transparent && INKED.has(m.geometry.type)) edges.push(new THREE.EdgesGeometry(geo, m.geometry.type === 'CylinderGeometry' ? 40 : inkAngle));
     m.parent.remove(m);
     if (m.geometry) m.geometry.dispose();

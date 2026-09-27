@@ -144,6 +144,9 @@ function quad(pts, normal, uLen, vLen, tile) {
   return g;
 }
 
+/** Nudge a surface back in depth so ink lines drawn exactly on its edges win (no dashed lines). */
+function pushBack(m) { m.polygonOffset = true; m.polygonOffsetFactor = 1; m.polygonOffsetUnits = 1; }
+
 /** Builds the static asylum: geometry grouped per material, plus cell/route metadata. */
 class Builder {
   constructor(M) { this.M = M; this.parts = new Map(); this.cells = []; this.routes = []; }
@@ -263,7 +266,7 @@ class Builder {
     const edges = [];
     for (const [mat, geos] of this.parts) {
       const nonIdx = geos.some((g) => !g.index);
-      if (inked.has(mat)) for (const g of geos) edges.push(new THREE.EdgesGeometry(g, 35));
+      if (inked.has(mat)) { for (const g of geos) edges.push(new THREE.EdgesGeometry(g, 35)); pushBack(mat); }
       const merged = mergeGeometries(nonIdx ? geos.map((g) => (g.index ? g.toNonIndexed() : g)) : geos, false);
       root.add(new THREE.Mesh(merged, mat));
     }
@@ -342,7 +345,7 @@ export class AsylumZone extends NightCase {
     S.add(c.scene);
     S.background = new THREE.Color(0x050706);
     S.fog = new THREE.Fog(0x08100c, 14, 40);
-    S.add(new THREE.HemisphereLight(0xcfe8dc, 0x1a2420, 0.95));
+    S.add(new THREE.HemisphereLight(0xcfe8dc, 0x1a2420, 0.7));
     S.add(new THREE.AmbientLight(0xffffff, 0.1));
     this.key.color.set(0xe0fff0); this.key.intensity = 0.9;
     // Fluorescent tubes: pools of sickly light down each wing and over the hub (floor decals:
@@ -350,13 +353,13 @@ export class AsylumZone extends NightCase {
     const spots = [new THREE.Vector3(0, 0, 0)];
     for (const r of c.routes) for (const k of [0.3, 0.75]) spots.push(r.from.clone().lerp(r.to, k));
     const pools = spots.map((p, i) => {
-      const m = lightPool(i ? 0xbfffe0 : 0xfff0c8, i ? 3.2 : 4.2, 0.3);
+      const m = lightPool(i ? 0xbfffe0 : 0xfff0c8, i ? 3.4 : 4.4, 0.42);
       m.position.set(p.x, 0.02, p.z); S.add(m);
       return m;
     });
     this.plights = [];
     const flicker = shuffle([...pools]).slice(0, 3);
-    this.anims.push((t) => flicker.forEach((l, i) => { l.material.opacity = Math.sin(t * 23 + i * 7) > 0.93 || Math.sin(t * 3.1 + i) > 0.97 ? 0.04 : 0.3; }));
+    this.anims.push((t) => flicker.forEach((l, i) => { l.material.opacity = Math.sin(t * 23 + i * 7) > 0.93 || Math.sin(t * 3.1 + i) > 0.97 ? 0.05 : 0.42; }));
     this.buildDoors();
     this.wallMat = this.doorMat; // X-ray fades the doors so she can look into the cells
     this.wallBaseOpacity = 1;
