@@ -540,6 +540,7 @@ export class Overworld {
     if (lock) { toast(`You promised to stay out of ${z.lockKey} zones for ${fmtTime(lock)}`, 'bad'); sfx.lose(); return; }
     this.diving = { z, t: 0, sx: this.hero.x, sy: this.hero.y, z0: this.hero.z, zoom0: this.zoom };
     this.events.abandon(); // someone else handles the airborne stuff while she's busy
+    if (this.nav.target && this.nav.target.ref === z) this.nav.clear(); // reached it
     this.hero.perch = null;
     this.g.commentary.onDive(z); // spinning-emblem transition + sting
     if (VENUES[z.venue]?.club) loadClub(VENUES[z.venue].club); // start loading the building during the dive
