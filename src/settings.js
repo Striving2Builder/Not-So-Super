@@ -20,7 +20,8 @@ export const PROFILES = {
 
 export const GRAPHICS_MODES = ['auto', 'high', 'saver'];
 
-const isTouch = () => typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+let touch = null; // a phone doesn't stop being a phone: read the media query once
+const isTouch = () => { if (touch === null) touch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches; return touch; };
 
 function read() {
   try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }

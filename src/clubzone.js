@@ -260,6 +260,9 @@ export class ClubZone extends Special3D {
     super.update(dt);
   }
 
+  // the camera isn't placed until the first real frame, so markers would land in the wrong spot
+  hud() { if (!this.warming) super.hud(); }
+
   // ------------------------------------------------------------------ world
   buildWorld() {
     const c = this.club, S = this.scene;

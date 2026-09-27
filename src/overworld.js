@@ -73,6 +73,7 @@ export class Overworld {
     this.paps.reset();
     this.nav.clear();
     this.shock = null;
+    this.choppersAnnounced = false;
     this.crowdT = rand(10, 20);
     for (let i = 0; i < 12; i++) this.maintainZones(true);
   }
@@ -390,7 +391,8 @@ export class Overworld {
     } else {
       a = wobble(inp.axis(), st ? st.intox : 0, this.t);
       // Autopilot: steer to the waypoint while the stick is idle; any input takes over.
-      if (this.nav.autopilot && this.nav.target && !h.perch && Math.hypot(a.x, a.y) < 0.12) a = this.nav.steer(h);
+      // (Still subject to the drunk wobble: autopilot is not a way around intoxication.)
+      if (this.nav.autopilot && this.nav.target && !h.perch && Math.hypot(a.x, a.y) < 0.12) a = wobble(this.nav.steer(h), st ? st.intox : 0, this.t);
     }
     const boost = !this.attract && inp.down('boost');
     if (!this.attract) this.altitudeInput(inp, a);
@@ -492,7 +494,11 @@ export class Overworld {
     const h = this.hero, st = this.g.state;
     if (this.rising === null) this.events.update(dt);
     this.paps.update(dt);
-    if (this.airspace.follow(h, st.rep >= 300 ? 2 : st.rep >= 150 ? 1 : 0)) toast('📺 A news chopper is following you. The city is watching!', 'good');
+    // (announced once per session: helicopter emergencies borrow and return choppers)
+    if (this.airspace.follow(h, st.rep >= 300 ? 2 : st.rep >= 150 ? 1 : 0) && !this.choppersAnnounced) {
+      this.choppersAnnounced = true;
+      toast('📺 A news chopper is following you. The city is watching!', 'good');
+    }
     // crowds below shout when she skims past
     this.crowdT -= dt;
     if (this.crowdT <= 0 && h.z < 260 && h.speed > 200 && this.heroScreen && DISTRICTS[this.district] && this.district !== 'farm') {

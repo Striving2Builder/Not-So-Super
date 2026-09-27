@@ -204,11 +204,12 @@ export class AirEvents {
     return null;
   }
 
-  releaseHeli(e) {
+  /** Hand the chopper back to normal air traffic. `away`: it landed/crashed, so it re-enters far off. */
+  releaseHeli(e, away = false) {
     const c = e.heli, h = this.hero;
     c.ctl = false;
     c.z = 420 + rand(0, 90);
-    if (e.crashed) { const a = rand(0, TAU); c.x = h.x + Math.cos(a) * 4000; c.y = h.y + Math.sin(a) * 4000; }
+    if (away) { const a = rand(0, TAU); c.x = h.x + Math.cos(a) * 4000; c.y = h.y + Math.sin(a) * 4000; }
   }
 
   // ------------------------------------------------------------------ stunt rings
@@ -279,7 +280,7 @@ export class AirEvents {
         break;
       case 'heli':
         comic.pow('CAUGHT IT!', hs.x, hs.y - 30, { size: 1.2 });
-        this.releaseHeli(e);
+        this.releaseHeli(e, true);
         this.carry = { kind: 'heli', t: 0, done: 'Helicopter set down on a rooftop. Crew safe.' };
         st.addRep(K.reward, 'Saved a falling helicopter');
         break;
@@ -304,7 +305,7 @@ export class AirEvents {
   lose(e, failed) {
     const st = this.g.state, K = KINDS[e.kind];
     this.list = this.list.filter((q) => q !== e);
-    if (e.kind === 'heli') { e.crashed = true; this.releaseHeli(e); }
+    if (e.kind === 'heli') this.releaseHeli(e, true);
     if (!failed) {
       if (e.kind === 'car' || e.kind === 'getaway') st.addRep(K.fail, e.getaway ? 'The getaway car escaped' : 'The runaway car crashed');
       return; // hoops and kittens just wander off
