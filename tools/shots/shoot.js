@@ -51,7 +51,9 @@ const AREAS = {
   },
   brawler: { street: { type: 'brawl' } },
   investigation: {
-    daycase: { type: 'investigate' },
+    daycase: { type: 'investigate', setting: 'casino' },
+    dayoffice: { type: 'investigate', setting: 'office', moments: true },
+    dayalley: { type: 'investigate', setting: 'alley' },
     nightcase: Z3('nightcase', 'Triangle Club'),
   },
   nightlife: {
@@ -159,21 +161,51 @@ async function shootBrawl(page, dir, name) {
   return { shots: [`${name}_1_start.png`, `${name}_2_fight.png`, `${name}_3_special.png`], ...m };
 }
 
-async function shootInvestigate(page, dir, name) {
-  await page.evaluate(() => {
+async function shootInvestigate(page, dir, name, setting, moments) {
+  await page.evaluate((setting) => {
     const g = window.__game; g.setMode('overworld');
     let z = null;
     for (let i = 0; i < 40 && !(z && z.mode === 'investigate'); i++) { g.state.clock = 12 * 60; z = g.overworld.spawn('case', true); }
+    if (setting) z.def = { ...z.def, setting };
     g.startZone(z);
-  });
+  }, setting);
   await page.waitForTimeout(2500);
-  await page.screenshot({ path: path.join(dir, `${name}_1_scene.png`) });
+  const shots = [];
+  const snap = async (n) => { const f = `${name}_${n}.png`; await page.screenshot({ path: path.join(dir, f) }); shots.push(f); };
+  await snap('1_scene');
   const m = await metrics(page);
   await page.keyboard.press('KeyX'); await page.waitForTimeout(900);
-  await page.screenshot({ path: path.join(dir, `${name}_2_xray.png`) });
+  await snap('2_xray');
   await page.keyboard.press('KeyX'); await page.keyboard.press('KeyC'); await page.waitForTimeout(900);
-  await page.screenshot({ path: path.join(dir, `${name}_3_camera.png`) });
-  return { shots: [`${name}_1_scene.png`, `${name}_2_xray.png`, `${name}_3_camera.png`], ...m };
+  await snap('3_camera');
+  await page.keyboard.press('KeyC');
+  if (moments) {
+    const closeDlg = async () => { const o = page.locator('#modal-root .opt, #modal-root .cb-close').first(); if (await o.count()) await o.click(); await page.waitForTimeout(500); };
+    // a clue found: punch-in + evidence card
+    await page.evaluate(() => { const m = window.__game.mode; const c = m.clues.find((c) => c.method === 'visible'); m.search(c.host); });
+    await page.waitForTimeout(1100);
+    await snap('4_clue');
+    await closeDlg(); await page.waitForTimeout(500);
+    // photograph it
+    await page.evaluate(() => { const m = window.__game.mode; m.camera = true; const c = m.clues.find((c) => c.found && c.host); m.search(c.host); });
+    await page.waitForTimeout(450);
+    await snap('5_snap');
+    await page.waitForTimeout(2200);
+    await page.evaluate(() => { const m = window.__game.mode; m.camera = false; for (const c of m.clues) if (!c.found && c.method !== 'witness') m.case.find(c); });
+    await page.waitForTimeout(300);
+    await snap('6_markers');
+    await page.evaluate(() => { window.__game.mode.showNotes(); });
+    await page.waitForTimeout(900);
+    await snap('7_board');
+    await closeDlg();
+    await page.evaluate(() => { window.__game.mode.showSuspects(); });
+    await page.waitForTimeout(900);
+    await snap('8_suspects');
+    await page.evaluate(() => { const m = window.__game.mode; const i = m.case.suspects.findIndex((s) => s.culprit); document.querySelectorAll('.cb-acc')[i].click(); });
+    await page.waitForTimeout(1200);
+    await snap('9_reveal');
+  }
+  return { shots, ...m };
 }
 
 // ------------------------------------------------------------------ main
@@ -203,7 +235,7 @@ async function shootInvestigate(page, dir, name) {
           if (sc.type === '3d') r = await shoot3d(page, dir, name, sc.zone);
           else if (sc.type === 'fly') r = await shootFly(page, dir, name, sc.plan);
           else if (sc.type === 'brawl') r = await shootBrawl(page, dir, name);
-          else if (sc.type === 'investigate') r = await shootInvestigate(page, dir, name);
+          else if (sc.type === 'investigate') r = await shootInvestigate(page, dir, name, sc.setting, sc.moments);
           report[area][name] = { ...r, errors };
         } catch (e) {
           report[area][name] = { failed: e.message.split('\n')[0], errors };

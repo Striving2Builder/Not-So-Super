@@ -369,3 +369,98 @@ body.title-on #comic-layer { display: none; }
 @keyframes shield-spin { 0% { transform: rotate(0) scale(.05); } 45% { transform: rotate(900deg) scale(1.1); } 70% { transform: rotate(1080deg) scale(1); } 100% { transform: rotate(1440deg) scale(6); opacity: 0; } }
 @keyframes spin-fade { 0% { opacity: 0; } 8% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .spinner, .spinner * { animation-duration: .01s !important; } }
+
+/* === investigation === */
+/* Evidence card: the "CLUE FOUND" moment as an inked comic panel on cream stock. */
+.dlg.evidence { background: radial-gradient(ellipse at center, rgba(10, 4, 20, .25), rgba(4, 2, 10, .7)); }
+.dlg.evidence .modal { width: min(500px, 100%); background: #f6eed8; color: #16111c; border: 4px solid #120a16; border-radius: 4px; box-shadow: 8px 8px 0 #120a16, 0 24px 60px rgba(0, 0, 0, .6); padding: 0 16px 12px; transform: rotate(-1.2deg); animation: ev-pop .42s cubic-bezier(.2, 1.6, .4, 1); background-image: radial-gradient(rgba(0, 0, 0, .07) 1px, transparent 1.4px); background-size: 6px 6px; position: relative; overflow: visible; }
+.dlg.evidence .modal h2 { display: inline-block; margin: -16px 0 8px -24px; padding: 4px 16px 2px; background: #ffd21a; color: #120a16; border: 3px solid #120a16; box-shadow: 4px 4px 0 #120a16; font: 30px/1 "Bangers", Impact, sans-serif; letter-spacing: .06em; transform: rotate(-3deg); }
+.dlg.evidence .speaker { color: #b3122e; font-size: 12px; letter-spacing: .16em; margin-bottom: 4px; }
+.dlg.evidence .dtext { font-size: 15px; margin-bottom: 10px; }
+.ev { display: flex; gap: 14px; align-items: center; }
+.ev-glyph { flex: none; width: 84px; height: 84px; background: #fffaf0; border: 3px solid #120a16; box-shadow: 3px 3px 0 #120a16; transform: rotate(3deg); padding: 4px; animation: ev-glyph .5s .15s cubic-bezier(.2, 1.8, .4, 1) both; }
+.ev-txt i { display: block; font-size: 12.5px; opacity: .75; margin-bottom: 4px; }
+.ev-txt p { font-size: 16px; line-height: 1.35; font-weight: 600; }
+.ev-txt b, .dlg.evidence .dtext b { color: #b3122e; background: linear-gradient(transparent 58%, rgba(255, 210, 26, .7) 58%); padding: 0 2px; }
+.dlg.evidence .dtext .hint { color: #4a3a2a; opacity: .85; }
+.dlg.evidence .opt { background: #120a16; color: #fff; border: 2px solid #120a16; font: 20px/1 "Bangers", Impact, sans-serif; letter-spacing: .08em; justify-content: center; min-height: 42px; }
+.dlg.evidence .opt .k { display: none; }
+.dlg.evidence .opt:hover:not(:disabled) { background: #b3122e; border-color: #120a16; }
+@keyframes ev-pop { 0% { transform: scale(.4) rotate(-9deg); opacity: 0; } 100% { transform: scale(1) rotate(-1.2deg); opacity: 1; } }
+@keyframes ev-glyph { from { transform: scale(0) rotate(-40deg); } to { transform: scale(1) rotate(3deg); } }
+
+/* Case board: evidence pinned to cork, suspects' mugshots, red string between them. */
+.caseboard .modal { width: min(820px, 100%); padding: 0; background: #1a1210; border: 4px solid #120a16; border-radius: 6px; box-shadow: 0 20px 60px rgba(0, 0, 0, .7); overflow: hidden; animation: cb-pop .32s cubic-bezier(.2, 1.4, .4, 1); }
+@keyframes cb-pop { from { transform: scale(.6) rotate(-3deg); opacity: 0; } }
+.cb { position: relative; padding: 8px 12px 8px; max-height: calc(100vh - 36px); overflow: auto; background: #a8764a; background-image: radial-gradient(rgba(60, 30, 10, .35) 1px, transparent 1.6px), radial-gradient(rgba(255, 220, 170, .18) 1px, transparent 1.8px), linear-gradient(180deg, #b8845a, #976640); background-size: 7px 7px, 11px 11px, 100% 100%; background-position: 0 0, 3px 5px, 0 0; box-shadow: inset 0 0 40px rgba(40, 20, 5, .6); color: #16111c; }
+.cb-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+.cb-head b { font: 26px/1 "Bangers", Impact, sans-serif; letter-spacing: .06em; color: #fff; background: #120a16; padding: 3px 12px 1px; transform: rotate(-2deg); box-shadow: 3px 3px 0 #b3122e; }
+.cb-head span { font: 700 12px system-ui; color: #2a1608; text-transform: uppercase; letter-spacing: .1em; opacity: .8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cb-ev { display: flex; gap: 10px; justify-content: center; margin-bottom: 22px; position: relative; z-index: 2; }
+.cb-card { position: relative; width: 112px; min-height: 76px; padding: 5px 5px 4px; background: #fbf7ea; border: 2px solid #120a16; box-shadow: 3px 3px 0 rgba(18, 10, 22, .8); transform: rotate(var(--r, 0deg)); text-align: center; display: flex; flex-direction: column; align-items: center; }
+.cb-card img { width: 40px; height: 40px; }
+.cb-card b { font: 16px/1 "Bangers", Impact, sans-serif; letter-spacing: .05em; color: #b3122e; margin-top: 1px; }
+.cb-card small { font-size: 10.5px; font-weight: 700; line-height: 1.1; }
+.cb-card.unk { background: rgba(30, 20, 14, .55); border-style: dashed; border-color: rgba(255, 240, 220, .5); box-shadow: none; color: #f2e6d0; }
+.cb-card.unk b { color: #f2e6d0; }
+.cb-q { font: 34px/40px "Bangers", Impact, sans-serif; color: rgba(255, 240, 220, .7); }
+.cb-pin { position: absolute; top: -6px; left: 50%; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ff8a8a, #c01020 60%, #600); box-shadow: 1px 2px 2px rgba(0, 0, 0, .5); }
+.cb-no { position: absolute; top: -8px; left: -8px; width: 22px; height: 22px; background: #ffd21a; border: 2px solid #120a16; font: 15px/19px "Bangers", Impact, sans-serif; text-align: center; transform: rotate(-8deg); }
+.cb-ph { position: absolute; bottom: 4px; right: -8px; font: normal 11px/1 "Bangers", Impact, sans-serif; letter-spacing: .08em; background: #3ee08a; color: #120a16; border: 2px solid #120a16; padding: 2px 4px 1px; transform: rotate(8deg); }
+.cb-sus { display: flex; gap: 10px; position: relative; z-index: 2; }
+.cb-mug { position: relative; flex: 1 1 0; min-width: 0; display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; padding: 6px; background: #f3ecdc; border: 2px solid #120a16; box-shadow: 4px 4px 0 rgba(18, 10, 22, .8); }
+.cb-mug:nth-child(2) { transform: rotate(.8deg); }
+.cb-mug:nth-child(3) { transform: rotate(-.7deg); }
+.cb-photo { flex: none; width: 60px; height: 76px; overflow: hidden; border: 2px solid #120a16; background: #6a7480; background-image: repeating-linear-gradient(180deg, transparent 0 11px, rgba(255, 255, 255, .35) 11px 12px); }
+.cb-photo canvas { width: 60px; height: 78px; display: block; }
+.cb-info { flex: 1; min-width: 0; }
+.cb-info b { display: block; font: 17px/1.05 "Bangers", Impact, sans-serif; letter-spacing: .04em; }
+.cb-info small { display: block; font-size: 11px; font-weight: 600; opacity: .7; margin-bottom: 2px; }
+.cb-chips .chip { font-size: 10.5px; font-weight: 700; background: rgba(18, 10, 22, .1); color: #16111c; border: 1px solid rgba(18, 10, 22, .25); padding: 0 5px; margin: 2px 2px 0 0; border-radius: 3px; }
+.cb-chips .chip.match { background: #ffd21a; border-color: #b3122e; color: #120a16; box-shadow: 0 0 0 1px #b3122e; }
+.cb-chips .chip.miss { background: transparent; color: rgba(18, 10, 22, .45); text-decoration: line-through; }
+.cb-acc { flex: 1 0 100%; min-height: 36px; margin-top: 2px; background: #b3122e; color: #fff; border: 2px solid #120a16; box-shadow: 2px 2px 0 #120a16; font: 19px/1 "Bangers", Impact, sans-serif; letter-spacing: .1em; cursor: pointer; }
+.cb-acc:disabled { background: #7a6a60; opacity: .6; cursor: default; }
+.cb-acc:not(:disabled):hover { background: #d8122e; }
+.cb-mug.out .cb-photo, .cb-mug.out .cb-info { opacity: .55; filter: grayscale(.8); }
+.cb-stamp { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%) rotate(-14deg); font: 24px/1 "Bangers", Impact, sans-serif; letter-spacing: .08em; color: rgba(179, 18, 46, .85); border: 3px solid rgba(179, 18, 46, .85); padding: 2px 8px 0; pointer-events: none; white-space: nowrap; mix-blend-mode: multiply; }
+.cb-strings { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; overflow: visible; }
+.cb-strings path { fill: none; stroke: #c8102e; stroke-width: 2.4; stroke-linecap: round; filter: drop-shadow(1px 2px 1px rgba(0, 0, 0, .45)); }
+.cb-strings circle { fill: #c8102e; stroke: #600; stroke-width: 1; }
+.cb-foot { display: flex; align-items: center; gap: 10px; margin-top: 8px; position: relative; z-index: 2; }
+.cb-foot span { flex: 1; font-size: 12.5px; font-weight: 700; color: #1a0e06; background: rgba(251, 247, 234, .85); padding: 5px 9px; border: 2px solid #120a16; }
+.cb-close { min-height: 38px; padding: 0 14px; background: #120a16; color: #fff; border: 2px solid #120a16; font: 18px/1 "Bangers", Impact, sans-serif; letter-spacing: .08em; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.cb-close .k { font: 800 11px system-ui; background: rgba(255, 255, 255, .18); width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; }
+@media (max-height: 460px) {
+  .cb-ev { margin-bottom: 16px; }
+  .cb-card { width: 104px; min-height: 68px; }
+  .cb-card img { width: 34px; height: 34px; }
+}
+
+/* Accusation reveal: mugshot, then the verdict stamp slams down. */
+.reveal { background: radial-gradient(ellipse at center, rgba(20, 6, 30, .6), rgba(2, 1, 6, .92)); }
+.reveal .modal { width: auto; background: none; border: 0; box-shadow: none; overflow: visible; }
+.rv { position: relative; text-align: center; color: #fff; padding: 6px 30px; }
+.rv-kick { font: 26px/1 "Bangers", Impact, sans-serif; letter-spacing: .1em; color: #ffd21a; text-shadow: 3px 3px 0 #120a16; margin-bottom: 6px; animation: rv-in .3s both; }
+.rv-photo { width: 120px; height: 150px; margin: 0 auto; border: 4px solid #120a16; background: #6a7480; background-image: repeating-linear-gradient(180deg, transparent 0 17px, rgba(255, 255, 255, .35) 17px 18px); box-shadow: 6px 6px 0 #120a16; overflow: hidden; animation: rv-in .35s .08s both; }
+.rv-photo canvas { width: 120px; height: 157px; display: block; }
+.rv-name { font: 30px/1 "Bangers", Impact, sans-serif; letter-spacing: .05em; margin-top: 8px; text-shadow: 3px 3px 0 #120a16; }
+.rv-job { font-size: 12px; text-transform: uppercase; letter-spacing: .14em; opacity: .8; }
+.rv-stamp { position: absolute; left: 50%; top: 42%; font: 64px/1 "Bangers", Impact, sans-serif; letter-spacing: .06em; padding: 6px 18px 0; border: 6px solid currentColor; transform: translate(-50%, -50%) rotate(-12deg); animation: rv-stamp .32s .6s cubic-bezier(.3, 1.6, .5, 1) both; background: rgba(255, 255, 255, .08); white-space: nowrap; }
+.rv.good .rv-stamp { color: #ff2d4a; text-shadow: 0 0 20px rgba(255, 45, 74, .6); }
+.rv.bad .rv-stamp { color: #9aa0aa; }
+.rv-sub { margin-top: 10px; font-weight: 700; font-size: 14px; opacity: 0; animation: rv-in .3s 1s both; }
+@keyframes rv-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; } }
+@keyframes rv-stamp { from { opacity: 0; transform: translate(-50%, -50%) rotate(-30deg) scale(3); } to { opacity: 1; transform: translate(-50%, -50%) rotate(-12deg) scale(1); } }
+
+/* Camera: the snapped frame pops out as a polaroid and slides off toward the case notes. */
+.snap-polaroid { position: absolute; width: 132px; margin: -60px 0 0 -66px; padding: 6px 6px 18px; background: #fbfaf5; border: 2px solid #120a16; box-shadow: 5px 6px 0 rgba(18, 10, 22, .85); animation: snap-fly 2.4s cubic-bezier(.3, .8, .4, 1) forwards; z-index: 5; }
+.snap-polaroid canvas { display: block; width: 100%; height: auto; border: 1px solid #120a16; animation: snap-dev 1s ease-out both; }
+.snap-polaroid span { position: absolute; left: 0; right: 0; bottom: 2px; text-align: center; font: 14px/1 "Bangers", Impact, sans-serif; letter-spacing: .08em; color: #b3122e; }
+@keyframes snap-fly {
+  0% { transform: scale(.3) rotate(0); opacity: 0; }
+  12% { transform: scale(1.12) rotate(var(--rot)); opacity: 1; }
+  20%, 62% { transform: scale(1) rotate(var(--rot)); opacity: 1; }
+  100% { transform: translate(38vw, 30vh) scale(.25) rotate(20deg); opacity: 0; }
+}
+@keyframes snap-dev { from { filter: brightness(3) saturate(0); } to { filter: none; } }
