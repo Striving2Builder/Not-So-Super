@@ -252,7 +252,7 @@ export function paintFixture(g, key) {
 }
 
 /** Additive light: lamp cone, window shaft/blind stripes, barn-plank slits, drifting dust. */
-export function paintLight(g, key, S, night, v, t, dust) {
+export function paintLight(g, key, S, night, v, t) {
   const L = LOOKS[key] || LOOKS.office;
   g.save();
   g.globalCompositeOperation = 'lighter';
@@ -271,13 +271,13 @@ export function paintLight(g, key, S, night, v, t, dust) {
   // window: a slanted shaft onto the floor (striped through blinds)
   if (S.window) {
     const [x, y, w, h] = S.window, day = night <= 0.5;
-    const col = day ? '255,246,210' : '150,180,255', a = day ? 0.14 : 0.07;
+    const col = day ? '255,246,210' : '150,180,255', a = day ? 0.08 : 0.05;
     const dx = -170, fy = 520;
     const shaft = (ya, yb, alpha) => {
       g.fillStyle = `rgba(${col},${alpha})`; g.beginPath();
       g.moveTo(x, ya); g.lineTo(x + w, ya); g.lineTo(x + w + dx, fy + (yb - y) * 0.15); g.lineTo(x + dx, fy + (yb - y) * 0.15); g.closePath(); g.fill();
     };
-    if (L.blinds) { for (let yy = y + h * 0.55; yy < y + h; yy += 16) shaft(yy, yy + 8, a * 0.8); shaft(y + h * 0.55, y + h, a * 0.35); }
+    if (L.blinds) { for (let yy = y + h * 0.55; yy < y + h; yy += 16) shaft(yy, yy + 8, a); }
     else shaft(y, y + h, a);
   }
   if (L.slits) { // light knifing through gaps between barn planks
@@ -286,7 +286,14 @@ export function paintLight(g, key, S, night, v, t, dust) {
       g.fillStyle = gr; g.beginPath(); g.moveTo(sx, CEIL); g.lineTo(sx + 5, CEIL); g.lineTo(sx + 150, 560); g.lineTo(sx + 110, 560); g.fill();
     }
   }
-  // dust motes drifting through the light
+  g.restore();
+}
+
+/** Dust motes drifting through the lamp light (live, every frame). */
+export function paintDust(g, t, dust) {
+  const top = CEIL + 30;
+  g.save();
+  g.globalCompositeOperation = 'lighter';
   for (const d of dust) {
     const px = d.x + Math.sin(t * d.s + d.p) * 22, py = ((d.y + t * d.v * 18) % 470) + 60;
     const inCone = Math.abs(px - 500) < 30 + (py - top) * 0.55;

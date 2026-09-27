@@ -406,13 +406,13 @@ body.title-on #comic-layer { display: none; }
 .cb-q { font: 34px/40px "Bangers", Impact, sans-serif; color: rgba(255, 240, 220, .7); }
 .cb-pin { position: absolute; top: -6px; left: 50%; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ff8a8a, #c01020 60%, #600); box-shadow: 1px 2px 2px rgba(0, 0, 0, .5); }
 .cb-no { position: absolute; top: -8px; left: -8px; width: 22px; height: 22px; background: #ffd21a; border: 2px solid #120a16; font: 15px/19px "Bangers", Impact, sans-serif; text-align: center; transform: rotate(-8deg); }
-.cb-ph { position: absolute; bottom: 4px; right: -8px; font: normal 11px/1 "Bangers", Impact, sans-serif; letter-spacing: .08em; background: #3ee08a; color: #120a16; border: 2px solid #120a16; padding: 2px 4px 1px; transform: rotate(8deg); }
+.cb-ph { position: absolute; top: -9px; right: -10px; font: normal 11px/1 "Bangers", Impact, sans-serif; letter-spacing: .08em; background: #3ee08a; color: #120a16; border: 2px solid #120a16; padding: 2px 4px 1px; transform: rotate(8deg); }
 .cb-sus { display: flex; gap: 10px; position: relative; z-index: 2; }
 .cb-mug { position: relative; flex: 1 1 0; min-width: 0; display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; padding: 6px; background: #f3ecdc; border: 2px solid #120a16; box-shadow: 4px 4px 0 rgba(18, 10, 22, .8); }
 .cb-mug:nth-child(2) { transform: rotate(.8deg); }
 .cb-mug:nth-child(3) { transform: rotate(-.7deg); }
 .cb-photo { flex: none; width: 60px; height: 76px; overflow: hidden; border: 2px solid #120a16; background: #6a7480; background-image: repeating-linear-gradient(180deg, transparent 0 11px, rgba(255, 255, 255, .35) 11px 12px); }
-.cb-photo canvas { width: 60px; height: 78px; display: block; }
+.cb-photo canvas { width: 120px; height: 157px; display: block; margin: -2px 0 0 -30px; }
 .cb-info { flex: 1; min-width: 0; }
 .cb-info b { display: block; font: 17px/1.05 "Bangers", Impact, sans-serif; letter-spacing: .04em; }
 .cb-info small { display: block; font-size: 11px; font-weight: 600; opacity: .7; margin-bottom: 2px; }
@@ -430,7 +430,8 @@ body.title-on #comic-layer { display: none; }
 .cb-foot { display: flex; align-items: center; gap: 10px; margin-top: 8px; position: relative; z-index: 2; }
 .cb-foot span { flex: 1; font-size: 12.5px; font-weight: 700; color: #1a0e06; background: rgba(251, 247, 234, .85); padding: 5px 9px; border: 2px solid #120a16; }
 .cb-close { min-height: 38px; padding: 0 14px; background: #120a16; color: #fff; border: 2px solid #120a16; font: 18px/1 "Bangers", Impact, sans-serif; letter-spacing: .08em; display: flex; align-items: center; gap: 8px; cursor: pointer; }
-.cb-close .k { font: 800 11px system-ui; background: rgba(255, 255, 255, .18); width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; }
+.cb-close .k { display: none; }
+.cb-close .k-unused { font: 800 11px system-ui; background: rgba(255, 255, 255, .18); width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; }
 @media (max-height: 460px) {
   .cb-ev { margin-bottom: 16px; }
   .cb-card { width: 104px; min-height: 68px; }
@@ -443,7 +444,7 @@ body.title-on #comic-layer { display: none; }
 .rv { position: relative; text-align: center; color: #fff; padding: 6px 30px; }
 .rv-kick { font: 26px/1 "Bangers", Impact, sans-serif; letter-spacing: .1em; color: #ffd21a; text-shadow: 3px 3px 0 #120a16; margin-bottom: 6px; animation: rv-in .3s both; }
 .rv-photo { width: 120px; height: 150px; margin: 0 auto; border: 4px solid #120a16; background: #6a7480; background-image: repeating-linear-gradient(180deg, transparent 0 17px, rgba(255, 255, 255, .35) 17px 18px); box-shadow: 6px 6px 0 #120a16; overflow: hidden; animation: rv-in .35s .08s both; }
-.rv-photo canvas { width: 120px; height: 157px; display: block; }
+.rv-photo canvas { width: 240px; height: 314px; display: block; margin: -4px 0 0 -60px; }
 .rv-name { font: 30px/1 "Bangers", Impact, sans-serif; letter-spacing: .05em; margin-top: 8px; text-shadow: 3px 3px 0 #120a16; }
 .rv-job { font-size: 12px; text-transform: uppercase; letter-spacing: .14em; opacity: .8; }
 .rv-stamp { position: absolute; left: 50%; top: 42%; font: 64px/1 "Bangers", Impact, sans-serif; letter-spacing: .06em; padding: 6px 18px 0; border: 6px solid currentColor; transform: translate(-50%, -50%) rotate(-12deg); animation: rv-stamp .32s .6s cubic-bezier(.3, 1.6, .5, 1) both; background: rgba(255, 255, 255, .08); white-space: nowrap; }

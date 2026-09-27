@@ -10,7 +10,7 @@ import { sfx } from './sfx.js';
 import { CaseFile } from './casefile.js';
 import { comic } from './comic.js';
 import { quality } from './settings.js';
-import { LW, LH, FLOOR, paintRoom, paintFixture, paintLight, makeDust, makeGrade, scanPattern, paintXrayStructure, paintSkeleton } from './crimescene.js';
+import { LW, LH, FLOOR, paintRoom, paintFixture, paintLight, paintDust, makeDust, makeGrade, scanPattern, paintXrayStructure, paintSkeleton } from './crimescene.js';
 import { drawClueGlyph } from './evidenceart.js';
 
 const SETTINGS = {
@@ -74,6 +74,7 @@ const SETTINGS = {
 const CONTAINERS = ['cabinet', 'painting', 'crate', 'barrel', 'dumpster', 'fridge', 'sofa', 'machine', 'hay', 'slot', 'desk', 'tv', 'door', 'tractor'];
 const SURFACES = ['desk', 'bar', 'pokertable', 'crate', 'sofa', 'trough', 'hay', 'dumpster'];
 const INK = '#120a16';
+const ANIM = ['computer', 'tv', 'slot', 'pokertable', 'machine']; // props with moving parts (see drawPropAnim)
 const CAPTION = '"Bangers", Impact, "Arial Black", sans-serif';
 const ease = (k) => 1 - Math.pow(1 - Math.min(1, Math.max(0, k)), 3);
 
@@ -94,6 +95,7 @@ export class Investigate {
     this.setting = SETTINGS[zone.def.setting];
     this.settingKey = zone.def.setting;
     this.buildCase();
+    if (this.lay) this.lay.baseKey = ''; // new case, new room
     if (document.fonts && document.fonts.load) document.fonts.load('20px Bangers').catch(() => {});
 
     g.input.setStick(false);
@@ -167,7 +169,7 @@ export class Investigate {
 
   setXray(on) {
     if (on && this.en < 10) { toast('Not enough X-ray power', 'bad'); return; }
-    if (on && !this.xray) this.xrayAt = performance.now();
+    if (on && !this.xray) { this.xrayAt = performance.now(); if (this.lay) this.lay.xrOk = false; }
     this.xray = on;
     this.g.input.setButton('xray', { toggled: on });
     $('xray-tint').classList.remove('on'); // detective vision is painted by the scene itself
@@ -348,7 +350,7 @@ export class Investigate {
     const L = this.lay;
     if (L && L.w === w && L.h === h) return L;
     const mk = () => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
-    this.lay = { w, h, props: mk(), ink: mk(), edge: null, grade: null, gradeKey: '' };
+    this.lay = { w, h, props: mk(), ink: mk(), base: mk(), baseKey: '', xrOk: false, edge: null, grade: null, gradeKey: '' };
     return this.lay;
   }
 
@@ -365,9 +367,10 @@ export class Investigate {
   }
 
   /** The scene transform (fit + drunk sway + focus punch) on any context at device scale. */
-  view(c, f, dpr, zk) {
+  view(c, f, dpr, zk, still = false) {
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.translate(f.ox, f.oy); c.scale(f.s, f.s);
+    if (still) return;
     const st = this.g.state;
     if (st.intox > 30) { const a = Math.sin(this.t * 1.3) * (st.intox - 30) * 0.12; c.translate(a, Math.cos(this.t) * a * 0.3); }
     if (zk > 0) {
@@ -386,62 +389,62 @@ export class Investigate {
     const night = g.state.night, key = this.settingKey, t = this.t;
     const lite = quality().id === 'saver';
 
-    // 1) the room
-    ctx.save();
-    this.view(ctx, f, dpr, zk);
-    paintRoom(ctx, key, this.setting, night, v, t);
-    paintFixture(ctx, key);
-    this.drawFloorDressing(ctx);
-    for (const p of this.props) contactShadow(ctx, p);
-    contactShadow(ctx, { x: this.witness.x - 30, y: this.witness.y - 10, w: 60, h: 10 });
-    ctx.restore();
-
-    // 2) props + witness into their own layer, then ink them: silhouette dilated = outline
-    const P = L.props.getContext('2d');
-    P.setTransform(1, 0, 0, 1, 0, 0); P.clearRect(0, 0, L.w, L.h);
-    this.view(P, f, dpr, zk);
+    // The painted room and the inked static props are expensive (gradients, a dilation pass over a
+    // full-screen layer), so they're baked once per case into a "base" image. Animated things
+    // (slot reels, screens, the roulette wheel, the witness, the bait) are inked per frame in small
+    // sprite-sized canvases. The punch-in zoom and tipsy sway just transform the baked image.
+    const baseKey = `${L.w}x${L.h}|${key}|${night > 0.5}|${this.trap.taken}|${this.witness.talked}`;
     const props = [...this.props].sort((a, b) => (a.y + a.h) - (b.y + b.h));
     const w = this.witness;
-    let witnessDrawn = false;
-    for (const p of props) {
-      if (!witnessDrawn && p.y + p.h > w.y) { this.drawWitness(P); witnessDrawn = true; }
-      drawProp(P, p, t);
-      shadeProp(P, p);
+    if (L.baseKey !== baseKey) {
+      const B = L.base.getContext('2d');
+      B.setTransform(1, 0, 0, 1, 0, 0); B.clearRect(0, 0, L.w, L.h);
+      this.paintRoomTo(B, f, dpr, 0, v, key, night, t);
+      const P = L.props.getContext('2d');
+      P.setTransform(1, 0, 0, 1, 0, 0); P.clearRect(0, 0, L.w, L.h);
+      this.view(P, f, dpr, 0, true);
+      let witnessDrawn = false;
+      for (const p of props) {
+        if (!witnessDrawn && p.y + p.h > w.y) { this.drawWitness(P); witnessDrawn = true; }
+        drawProp(P, p, 0); shadeProp(P, p);
+      }
+      if (!witnessDrawn) this.drawWitness(P);
+      this.drawTrap(P);
+      this.inkLayer(L, f, dpr, lite);
+      const sh = 9 * f.s * dpr;
+      B.globalAlpha = 0.4; B.drawImage(L.ink, sh, sh * 0.7); // comic drop shadow away from the lamp
+      B.globalAlpha = 1; B.drawImage(L.ink, 0, 0); B.drawImage(L.props, 0, 0);
+      // static light, the witness's bubble, the tape, then the print grade: all baked
+      B.save(); this.view(B, f, dpr, 0, true);
+      paintLight(B, key, this.setting, night, v, t);
+      if (!w.talked) this.bubble(B, w.x + 30, w.y - 250, '…?');
+      this.drawTape(B, v);
+      B.restore();
+      const c = this.toScreen(LW / 2, LH * 0.55);
+      B.setTransform(1, 0, 0, 1, 0, 0);
+      B.drawImage(makeGrade(L.w, L.h, c.x * dpr, c.y * dpr, Math.hypot(L.w, L.h) * 0.5), 0, 0);
+      L.baseKey = baseKey; L.xrOk = false;
     }
-    if (!witnessDrawn) this.drawWitness(P);
-    this.drawTrap(P);
-    const I = L.ink.getContext('2d');
-    I.setTransform(1, 0, 0, 1, 0, 0); I.globalCompositeOperation = 'source-over'; I.clearRect(0, 0, L.w, L.h);
-    const r = Math.max(1.5, 2.4 * f.s * dpr * (1 + 0.3 * zk));
-    const dirs = lite ? 4 : 8;
-    for (let i = 0; i < dirs; i++) { const a = (i / dirs) * Math.PI * 2 + 0.3; I.drawImage(L.props, Math.cos(a) * r, Math.sin(a) * r); }
-    I.globalCompositeOperation = 'source-in'; I.fillStyle = INK; I.fillRect(0, 0, L.w, L.h);
-    I.globalCompositeOperation = 'source-over';
-
+    // device-space matrix taking the still view to the current (zoomed/swaying) one
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    const sh = 9 * f.s * dpr;
-    ctx.globalAlpha = 0.4; ctx.drawImage(L.ink, sh, sh * 0.7); // comic drop shadow away from the lamp
-    ctx.globalAlpha = 1; ctx.drawImage(L.ink, 0, 0); ctx.drawImage(L.props, 0, 0);
+    this.view(ctx, f, dpr, 0, true); const M0 = ctx.getTransform();
+    this.view(ctx, f, dpr, zk); const M = ctx.getTransform();
+    const K = M.multiply(M0.inverse());
+    ctx.setTransform(K); ctx.drawImage(L.base, 0, 0);
     ctx.restore();
-
-    // 3) light, markers, bubbles in scene space
+    // moving parts (reels, screens, the roulette wheel, the bait's glow) are drawn live on top
     ctx.save();
     this.view(ctx, f, dpr, zk);
-    paintLight(ctx, key, this.setting, night, v, t, lite ? this.dust.slice(0, 18) : this.dust);
-    this.drawMarkers(ctx);
-    if (!w.talked) this.bubble(ctx, w.x + 30, w.y - 250, '…?');
-    this.drawTape(ctx, v);
+    for (const p of props) if (ANIM.includes(p.type)) drawPropAnim(ctx, p, t);
+    this.drawTrapGlow(ctx);
     ctx.restore();
 
-    // 4) print grading: vignette + halftone shadows (cached)
-    const gk = `${L.w}x${L.h}`;
-    if (L.gradeKey !== gk) {
-      const c = this.toScreen(LW / 2, LH * 0.55);
-      L.grade = makeGrade(L.w, L.h, c.x * dpr, c.y * dpr, Math.hypot(L.w, L.h) * 0.5);
-      L.gradeKey = gk;
-    }
-    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(L.grade, 0, 0); ctx.restore();
+    // 3) live bits: dust in the light, evidence markers
+    ctx.save();
+    this.view(ctx, f, dpr, zk);
+    paintDust(ctx, t, lite ? this.dust.slice(0, 18) : this.dust);
+    this.drawMarkers(ctx);
+    ctx.restore();
 
     if (this.snapReq) this.takeSnapshot(ctx, dpr);
     if (this.xray) this.drawXray(ctx, f, dpr, zk, v, L, props);
@@ -461,6 +464,28 @@ export class Investigate {
         ctx.restore();
       }
     }
+  }
+
+  /** Ink the full-screen props layer: its silhouette, dilated, becomes the outline. */
+  inkLayer(L, f, dpr, lite) {
+    const I = L.ink.getContext('2d');
+    I.setTransform(1, 0, 0, 1, 0, 0); I.globalCompositeOperation = 'source-over'; I.clearRect(0, 0, L.w, L.h);
+    const r = Math.max(1.5, 2.4 * f.s * dpr), dirs = lite ? 4 : 8;
+    for (let i = 0; i < dirs; i++) { const a = (i / dirs) * Math.PI * 2 + 0.3; I.drawImage(L.props, Math.cos(a) * r, Math.sin(a) * r); }
+    I.globalCompositeOperation = 'source-in'; I.fillStyle = INK; I.fillRect(0, 0, L.w, L.h);
+    I.globalCompositeOperation = 'source-over';
+  }
+
+  /** Room, fixture, floor dressing and contact shadows onto a device-pixel canvas. */
+  paintRoomTo(c, f, dpr, zk, v, key, night, t) {
+    c.save();
+    this.view(c, f, dpr, zk);
+    paintRoom(c, key, this.setting, night, v, t);
+    paintFixture(c, key);
+    this.drawFloorDressing(c);
+    for (const p of this.props) contactShadow(c, p);
+    contactShadow(c, { x: this.witness.x - 30, y: this.witness.y - 10, w: 60, h: 10 });
+    c.restore();
   }
 
   drawWitness(c) {
@@ -524,6 +549,13 @@ export class Investigate {
     strip(v.x1 + 10, LH - 120, LW - 190, LH + 20, 110);
   }
 
+  drawTrapGlow(ctx) {
+    const tr = this.trap;
+    if (tr.taken) return;
+    const a = 0.4 + 0.4 * Math.sin(this.t * 4);
+    ctx.strokeStyle = `rgba(255,140,220,${a})`; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(tr.x + 18, tr.y + 20, 26, 0, Math.PI * 2); ctx.stroke();
+  }
+
   drawTrap(ctx) {
     const tr = this.trap;
     if (tr.taken) return;
@@ -542,8 +574,6 @@ export class Investigate {
       ctx.fillStyle = '#ddd'; ctx.beginPath(); ctx.ellipse(x, y - 4, 16, 6, 0, 0, Math.PI * 2); ctx.fill();
       for (let i = 0; i < 4; i++) { ctx.fillStyle = '#f4f'; ctx.beginPath(); ctx.arc(x - 6 + i * 4, y - 7, 2.5, 0, Math.PI * 2); ctx.fill(); }
     }
-    const a = 0.4 + 0.4 * Math.sin(this.t * 4);
-    ctx.strokeStyle = `rgba(255,140,220,${a})`; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y - 16, 26, 0, Math.PI * 2); ctx.stroke();
   }
 
   /** Detective vision: the room goes dark and cyan, walls turn to studs and wiring, and anything
@@ -557,21 +587,30 @@ export class Investigate {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (open < 1) { ctx.beginPath(); ctx.arc(cx, cy, open * maxR, 0, Math.PI * 2); ctx.clip(); }
     ctx.fillStyle = 'rgba(1,6,16,.86)'; ctx.fillRect(0, 0, Wd, Hd);
+    if (!L.xrOk) { // the baked props' ink ring minus the props = their outline, recoloured as the scan edge
+      if (!L.edge) L.edge = document.createElement('canvas');
+      L.edge.width = Wd; L.edge.height = Hd;
+      const E = L.edge.getContext('2d');
+      E.drawImage(L.ink, 0, 0);
+      E.globalCompositeOperation = 'destination-out'; E.drawImage(L.props, 0, 0);
+      E.globalCompositeOperation = 'source-in'; E.fillStyle = '#8ff4ff'; E.fillRect(0, 0, Wd, Hd);
+      E.globalCompositeOperation = 'source-over';
+      L.xrOk = true;
+    }
+    ctx.save();
+    this.view(ctx, f, dpr, 0, true); const M0 = ctx.getTransform();
+    this.view(ctx, f, dpr, zk); const K = ctx.getTransform().multiply(M0.inverse());
+    ctx.setTransform(K);
     ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = 0.42; ctx.drawImage(L.props, 0, 0);
-    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'color'; ctx.fillStyle = '#1aa8ff'; ctx.fillRect(0, 0, Wd, Hd);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
+    ctx.globalCompositeOperation = 'color'; ctx.fillStyle = '#1aa8ff'; ctx.fillRect(0, 0, Wd, Hd);
     ctx.globalCompositeOperation = 'source-over';
     // the building's bones
     ctx.save(); this.view(ctx, f, dpr, zk); paintXrayStructure(ctx, this.settingKey, v, t); ctx.restore();
-    // prop outlines = ink ring minus the prop itself, re-coloured cyan and added
-    if (!L.edge) { L.edge = document.createElement('canvas'); L.edge.width = Wd; L.edge.height = Hd; }
-    if (L.edge.width !== Wd || L.edge.height !== Hd) { L.edge.width = Wd; L.edge.height = Hd; }
-    const E = L.edge.getContext('2d');
-    E.globalCompositeOperation = 'source-over'; E.clearRect(0, 0, Wd, Hd); E.drawImage(L.ink, 0, 0);
-    E.globalCompositeOperation = 'destination-out'; E.drawImage(L.props, 0, 0);
-    E.globalCompositeOperation = 'source-in'; E.fillStyle = '#8ff4ff'; E.fillRect(0, 0, Wd, Hd);
-    E.globalCompositeOperation = 'source-over';
-    ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(L.edge, 0, 0); ctx.globalAlpha = 0.5; ctx.drawImage(L.edge, 0, 0); ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
+    ctx.save(); ctx.setTransform(K);
+    ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(L.edge, 0, 0); ctx.globalAlpha = 0.5; ctx.drawImage(L.edge, 0, 0);
+    ctx.restore();
 
     // scene-space highlights
     ctx.save(); this.view(ctx, f, dpr, zk);
@@ -866,6 +905,30 @@ function drawProp(ctx, p, t) {
       box(x + w - 60, y + 80, 30, 30, '#f2d21a'); break;
     default:
       box(x, y, w, h, '#777');
+  }
+}
+
+/** Just the moving parts of a prop, drawn over its baked image every frame. */
+function drawPropAnim(ctx, p, t) {
+  const { x, y, w, h } = p;
+  const box = (xx, yy, ww, hh, c) => { ctx.fillStyle = c; ctx.fillRect(xx, yy, ww, hh); ctx.strokeStyle = 'rgba(14,6,18,.6)'; ctx.lineWidth = 1.6; ctx.strokeRect(xx, yy, ww, hh); };
+  switch (p.type) {
+    case 'computer': box(x + 5, y + 5, w - 10, h - 24, `hsl(${(t * 40) % 360},60%,40%)`); break;
+    case 'tv':
+      box(x + 6, y + 6, w - 12, h * 0.7 - 12, '#3a5a8a');
+      ctx.fillStyle = 'rgba(255,255,255,.2)'; for (let i = 0; i < 6; i++) ctx.fillRect(x + 6, y + 6 + ((t * 30 + i * 12) % (h * 0.7 - 12)), w - 12, 2);
+      break;
+    case 'slot':
+      box(x + 12, y + 60, w - 24, 50, '#eee');
+      ctx.font = '900 22px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = '#a22';
+      ctx.fillText(['7', '$', '♦'][Math.floor(t * 8) % 3] + ' 7 ' + ['♦', '7', '$'][Math.floor(t * 6) % 3], x + w / 2, y + 94);
+      break;
+    case 'pokertable':
+      ctx.save(); ctx.translate(x + w / 2, y + 26); ctx.rotate(t * 2); ctx.fillStyle = '#c9a24a'; ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#120a16'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = '#a22'; for (let i = 0; i < 8; i += 2) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 16, (i * Math.PI) / 4, ((i + 1) * Math.PI) / 4); ctx.fill(); } ctx.restore();
+      break;
+    case 'machine': box(x + 20, y + h - 60, 40, 20, (Math.sin(t * 5) > 0 ? '#ff4040' : '#401010')); break;
   }
 }
 
