@@ -1,6 +1,6 @@
 # Blind A/B pairs for the polish critics: each pair = one of our screenshots + one AAA reference,
 # centre-cropped to the same phone aspect and size, randomly assigned to A/B. The answer key goes to
-# a separate file the critic never sees.
+# shots/keys/, which the critic never sees.
 #
 #   python tools/shots/blind.py <area> <shots-label> [--pairs 6] [--refs docs/references]
 #   → shots/blind/<area>-<label>/pair1_A.png, pair1_B.png, ...  and  shots/blind/<area>-<label>.key.json
@@ -32,6 +32,7 @@ def fit(path):
 
 
 out = os.path.join(ROOT, 'shots', 'blind', f'{area}-{label}')
+os.makedirs(os.path.join(ROOT, 'shots', 'keys'), exist_ok=True)
 os.makedirs(out, exist_ok=True)
 for f in os.listdir(out): os.remove(os.path.join(out, f))
 rng = random.Random()
@@ -44,5 +45,5 @@ for i, (o, r) in enumerate(zip(our_pick, ref_pick), 1):
     fit(a).save(os.path.join(out, f'pair{i}_A.png'))
     fit(b).save(os.path.join(out, f'pair{i}_B.png'))
     key[f'pair{i}'] = {'ours': 'A' if ours_is_a else 'B', 'our_shot': os.path.relpath(o, ROOT), 'reference': os.path.relpath(r, ROOT)}
-with open(os.path.join(ROOT, 'shots', 'blind', f'{area}-{label}.key.json'), 'w') as fh: json.dump(key, fh, indent=2)
-print(f'{len(key)} pairs → {out}')
+with open(os.path.join(ROOT, 'shots', 'keys', f'{area}-{label}.key.json'), 'w') as fh: json.dump(key, fh, indent=2)
+print(f'{len(key)} pairs -> {out}')
