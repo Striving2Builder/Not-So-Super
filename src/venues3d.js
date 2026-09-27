@@ -580,7 +580,6 @@ function lair(zn, { add, spot }, h) {
   const skull = tex(256, 128, (g, w, hh) => { g.fillStyle = '#021'; g.fillRect(0, 0, w, hh); g.strokeStyle = 'rgba(57,255,106,.2)'; for (let y = 0; y < hh; y += 4) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); } g.fillStyle = '#39ff6a'; g.font = '900 86px Georgia'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('☠', w / 2, hh / 2 + 4); });
   const sm = new THREE.Mesh(new THREE.PlaneGeometry(6, 3), new THREE.MeshBasicMaterial({ map: skull }));
   sm.position.set(0, 2.2, 11.72); sm.rotation.y = Math.PI; zn.scene.add(sm);
-  add(new THREE.BoxGeometry(6.3, 3.3, 0.15), dark, 0, 2.2, 11.82);
   // lab tables with flasks
   for (let i = 0; i < 3; i++) table(-2 + i * 4, 4, 0x2a322c);
   for (let i = 0; i < 6; i++) add(new THREE.SphereGeometry(0.1, 8, 6), goo, -2 + Math.floor(i / 2) * 4 + (i % 2 ? 0.25 : -0.25), 0.95, 4 + rand(-0.2, 0.2));
