@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { quality } from './settings.js';
 import { HeroModel, heroReady } from './hero3d.js';
 import { Enemy, enemyReady, GUARD_KINDS, bossKind } from './enemies.js';
+import { NIGHTLIFE_KINDS, decorateNightlife, updateNightlife } from './nightlife.js';
 import { VENUES, THEMES, INTOX_ITEMS, BAIT_ITEMS, HERO, FIRST_NAMES, LAST_NAMES } from './data.js';
 import { pick, shuffle, chance, clamp, rand, wobble, $ } from './util.js';
 import { dialog, toast, banner, qte, keypad, flash } from './ui.js';
@@ -85,7 +86,7 @@ export class Special3D {
       code: String(1000 + Math.floor(Math.random() * 9000)),
       colliders: [], inter: [], guards: [], anims: [], hidden: [], itemSpots: [], evidence: [], captives: [], cast: [],
       // per-zone references: this object is reused for every zone, so nothing may carry over
-      boss: null, informant: null, near: null, _lastGood: null,
+      boss: null, informant: null, near: null, _lastGood: null, nl: null,
     });
     const S = (this.scene = new THREE.Scene());
     S.background = new THREE.Color(this.V.bg);
@@ -319,40 +320,8 @@ export class Special3D {
       for (let i = 0; i < 3; i++) spot(vertical ? x : x + (i - 1) * len * 0.3, 1.2, vertical ? z + (i - 1) * len * 0.3 : z);
     };
 
-    if (k === 'club' || k === 'gentlemens' || k === 'redlight') {
-      bar(-13, -1, 11, true);
-      if (k === 'club') {
-        this.tiles = [];
-        for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) {
-          const m = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 1.15), basic(0xffffff));
-          m.rotation.x = -Math.PI / 2; m.position.set(-3 + i * 1.2 + 0.6 - 0.6, 0.02, -2.5 + j * 1.2);
-          this.scene.add(m); this.tiles.push(m);
-        }
-        this.ball = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 10), lam(0xdddddd, { emissive: 0x555555 }));
-        this.ball.position.set(0, 3.1, 0.5); this.scene.add(this.ball);
-        this.box(3.5, 1.2, 1.4, -8, 0.6, -10.2, lam(0x222233));
-        this.box(3.3, 0.1, 1.2, -8, 1.25, -10.2, basic(0x27e0ff), { collide: false });
-        for (const x of [-10.5, -5.5]) this.box(0.9, 2, 0.9, x, 1, -10.8, lam(0x111111));
-      }
-      if (k === 'gentlemens') {
-        this.box(4, 0.5, 8, 11.5, 0.25, -3, lam(0x3a1a2a));
-        for (const z of [-7.2, 1.2]) this.box(0.3, 3.2, 1.2, 13.2, 1.6, z, lam(0xa0204a), { collide: false });
-        this.cyl(0.06, 0.06, 3, 11.5, 1.5, -3, lam(0xdddddd));
-        for (let i = 0; i < 4; i++) table(3 + (i % 2) * 3.5, -6 + Math.floor(i / 2) * 5, 0x1a1a1a);
-      }
-      if (k === 'redlight') {
-        for (let i = 0; i < 6; i++) {
-          const x = -12 + i * 4.8;
-          this.box(1.6, 3.2, 0.2, x, 1.6, 11.7, lam(0xb01030), { collide: false });
-          const lan = new THREE.Mesh(new THREE.SphereGeometry(0.25, 10, 8), basic(0xff3355));
-          lan.position.set(x, 2.8, 10.5); this.scene.add(lan);
-        }
-        for (let i = 0; i < 3; i++) table(4 + i * 3.2, -6, 0x5a0a1a);
-      }
-      sofa(12, 7, 5, -1, k === 'redlight' ? 0x8a1a2a : 0x4a2a6a);
-      sofa(12, -7, 4, -1, k === 'redlight' ? 0x8a1a2a : 0x4a2a6a);
-      for (let i = 0; i < 3; i++) table(-5 + i * 5, 7);
-    } else if (k === 'warehouse') {
+    if (NIGHTLIFE_KINDS.has(k)) decorateNightlife(this, k, { table, sofa, bar, spot, lam, basic });
+    else if (k === 'warehouse') {
       const r = () => rand(-0.3, 0.3);
       const crates = [[-11, -8], [-11, -5], [-8, -8], [10, 8], [10, 5], [7, 9], [-10, 7], [-7, 8], [11, -8], [8, -6], [4, 7], [-4, -7]];
       for (const [x, z] of crates) {
@@ -399,21 +368,6 @@ export class Special3D {
       const sm = new THREE.Mesh(new THREE.PlaneGeometry(6, 3), new THREE.MeshBasicMaterial({ map: screen }));
       sm.position.set(0, 2.4, 11.75); sm.rotation.y = Math.PI; this.scene.add(sm);
       for (let i = 0; i < 3; i++) table(-2 + i * 4, 4, 0x2a322c);
-    } else if (k === 'casino') {
-      for (let i = 0; i < 4; i++) {
-        const x = -7 + (i % 2) * 8, z = -5 + Math.floor(i / 2) * 8;
-        this.cyl(1.5, 1.5, 0.1, x, 0.85, z, lam(0x1a6a3a));
-        this.cyl(0.25, 0.3, 0.85, x, 0.42, z, lam(0x3a2410), true);
-        this.colliders.push({ minX: x - 1.5, maxX: x + 1.5, minZ: z - 1.5, maxZ: z + 1.5 });
-        spot(x + 0.6, 0.92, z);
-      }
-      for (let i = 0; i < 6; i++) {
-        this.box(0.9, 1.9, 0.8, -13.6, 0.95, -8 + i * 2, lam(0x8a1a2a));
-        this.box(0.05, 0.6, 0.6, -13.1, 1.3, -8 + i * 2, basic(0xffd84d), { collide: false });
-      }
-      const ch = new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 8), basic(0xfff1c0));
-      ch.position.set(0, 3.1, 0); this.scene.add(ch);
-      bar(11, 4, 7, true);
     }
     // everywhere: some plants/columns for cover
     for (const [x, z] of [[-14, 11], [14, 11], [-14, -11], [14, -11]]) this.cyl(0.35, 0.35, WALL_H, x, WALL_H / 2, z, lam(0x333333), true);
@@ -943,9 +897,7 @@ export class Special3D {
     if (done && Math.hypot(h.position.x - ex.x, h.position.z - ex.z) < 1.4) this.win();
 
     for (const f of this.anims) f(this.t, dt);
-    if (this.tiles) this.tiles.forEach((m, i) => m.material.color.setHSL(((i * 0.13 + this.t * 0.3) % 1), 0.9, 0.5 + 0.2 * Math.sin(this.t * 6 + i)));
-    if (this.ball) this.ball.rotation.y += dt;
-    this.plights.forEach((l, i) => { if (this.V.kind === 'club' || this.V.kind === 'redlight') l.intensity = 22 + Math.sin(this.t * 4 + i * 2) * 10; });
+    updateNightlife(this, dt);
   }
 
   punch() {
