@@ -12,6 +12,7 @@ import { pick, chance, $ } from './util.js';
 import { dialog, toast, banner, flash } from './ui.js';
 import { npcLook, portrait } from './art.js';
 import { sfx } from './sfx.js';
+import { quality } from './settings.js';
 import { randomPerson } from './casefile.js';
 
 const CONTAINERS = ['Locked Cash Box', 'Staff Locker', 'Sealed Crate', 'Floor Safe', 'DJ Flight Case'];
@@ -80,7 +81,7 @@ export class NightCase extends ClubZone {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.1, 0.26), new THREE.MeshLambertMaterial({ color: 0xd8c8a0, emissive: 0x3a2a08 }));
     mesh.position.set(p.x - 0.15, p.y + 0.05, p.z); mesh.rotation.y = 0.5;
     this.scene.add(mesh);
-    const tent = evidenceTent(); tent.position.set(p.x + 0.25, p.y, p.z + 0.1); tent.rotation.y = -0.4;
+    const tent = evidenceTent(); tent.position.set(p.x + 0.3, p.y, p.z + 0.1); tent.rotation.y = -0.4; tent.scale.setScalar(1.8);
     this.scene.add(tent);
     // a soft column of light marks unsearched evidence from across the room
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.5, 3.2, 16, 1, true), new THREE.MeshBasicMaterial({ map: beamTex(), color: 0xffc040, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
@@ -90,9 +91,10 @@ export class NightCase extends ClubZone {
     ring.rotation.x = -Math.PI / 2; ring.position.set(p.x, p.y + 0.03, p.z);
     this.scene.add(ring);
     let shown = 0;
+    const saver = quality().id === 'saver'; // additive column = overdraw; skip it on low-end
     this.anims.push((t) => {
       ring.material.opacity = clue.found ? 0.12 : 0.35 + Math.sin(t * 4) * 0.2;
-      beam.visible = !clue.found;
+      beam.visible = !clue.found && !saver;
       beam.material.opacity = 0.32 + Math.sin(t * 2.2) * 0.1;
       const n = clue.found ? this.case.num(clue) : 0;
       if (n !== shown) { shown = n; tent.userData.paint(n); }

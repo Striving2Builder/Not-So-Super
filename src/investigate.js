@@ -690,10 +690,10 @@ export class Investigate {
       ctx.beginPath(); ctx.moveTo(x, y + dy * l); ctx.lineTo(x, y); ctx.lineTo(x + dx * l, y); ctx.stroke();
     }
     ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(LW / 2, LH / 2, 22, 0, Math.PI * 2); ctx.moveTo(LW / 2 - 34, LH / 2); ctx.lineTo(LW / 2 - 12, LH / 2); ctx.moveTo(LW / 2 + 12, LH / 2); ctx.lineTo(LW / 2 + 34, LH / 2); ctx.stroke();
-    ctx.fillStyle = '#ff3030'; ctx.beginPath(); ctx.arc(LW - 150, LH - 60, 8 + Math.sin(t * 6) * 2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ff3030'; ctx.beginPath(); ctx.arc(72, LH - 60, 8 + Math.sin(t * 6) * 2, 0, Math.PI * 2); ctx.fill();
     ctx.font = `22px ${CAPTION}`; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.fillText('REC', LW - 136, LH - 59);
-    ctx.fillText(`ISO 800  1/125  F2.8   ▮▮▮▯   ${this.photos} SHOTS`, 60, LH - 59);
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.fillText('REC', 88, LH - 59);
+    ctx.fillText(`ISO 800  1/125  F2.8   ▮▮▮▯   ${this.photos} SHOTS`, 140, LH - 59);
     // focus boxes on evidence found but not yet photographed
     for (const c of this.clues) {
       if (!c.found || !c.host) continue;
