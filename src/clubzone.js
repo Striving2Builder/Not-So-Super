@@ -7,128 +7,170 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { MeshBVH, acceleratedRaycast } from '../vendor/three-mesh-bvh/index.module.js';
 import { Special3D } from './special3d.js';
 import { VENUES, THEMES, INTOX_ITEMS, BAIT_ITEMS, FIRST_NAMES, HERO } from './data.js';
 import { pick, shuffle, chance, rand, $ } from './util.js';
 import { dialog, toast, banner } from './ui.js';
 import { npcLook, portrait } from './art.js';
 import { sfx } from './sfx.js';
+import { quality } from './settings.js';
+import { STEP, DOWN, capsulePush, buildCollider, scanFloor, unpackFloor } from './clubgeo.js';
 
-// Premade clubs. Add more by exporting another .blend with tools/export_club.py.
+// Premade clubs. Add more by exporting another .blend with tools/export_club.py, then run
+// tools/bake_clubs.js to make the lite (512 px textures) copy and bake the walkable floor.
 export const CLUBS = {
-  triangle: { file: 'assets/clubs/triangle.glb', meta: 'assets/clubs/triangle.json' },
-  clubhouse: { file: 'assets/clubs/clubhouse.glb', meta: 'assets/clubs/clubhouse.json' },
-  stripclub: { file: 'assets/clubs/stripclub.glb', meta: 'assets/clubs/stripclub.json' },
+  triangle: { file: 'assets/clubs/triangle.glb', lite: 'assets/clubs/triangle.lite.glb', meta: 'assets/clubs/triangle.json' },
+  clubhouse: { file: 'assets/clubs/clubhouse.glb', lite: 'assets/clubs/clubhouse.lite.glb', meta: 'assets/clubs/clubhouse.json' },
+  stripclub: { file: 'assets/clubs/stripclub.glb', lite: 'assets/clubs/stripclub.lite.glb', meta: 'assets/clubs/stripclub.json' },
 };
 
-const RADIUS = 0.35, STEP = 0.45, HEADROOM = 1.9;
-const cache = {};
-const loader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('vendor/three/addons/libs/draco/gltf/'));
+const draco = new DRACOLoader().setDecoderPath('vendor/three/addons/libs/draco/gltf/');
 
-const _box = new THREE.Box3(), _seg = new THREE.Line3(), _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3();
-const DOWN = new THREE.Vector3(0, -1, 0), UP = new THREE.Vector3(0, 1, 0);
-
-/** Push a capsule (feet at p) out of the geometry. Returns how far it was pushed (x/z only). */
-function capsulePush(collider, p, radius = RADIUS) {
-  _seg.start.set(p.x, p.y + STEP + radius, p.z);
-  _seg.end.set(p.x, p.y + HEADROOM - radius, p.z);
-  _box.makeEmpty().expandByPoint(_seg.start).expandByPoint(_seg.end);
-  _box.min.addScalar(-radius); _box.max.addScalar(radius);
-  const sx = _seg.start.x, sz = _seg.start.z;
-  collider.geometry.boundsTree.shapecast({
-    intersectsBounds: (box) => box.intersectsBox(_box),
-    intersectsTriangle: (tri) => {
-      const d = tri.closestPointToSegment(_seg, _v1, _v2);
-      if (d < radius) {
-        const dir = _v2.sub(_v1).normalize();
-        dir.y = 0; // horizontal push only; the floor is handled by grounding
-        if (dir.lengthSq() < 1e-6) return;
-        dir.normalize();
-        _seg.start.addScaledVector(dir, radius - d);
-        _seg.end.addScaledVector(dir, radius - d);
-      }
-    },
-  });
-  const dx = _seg.start.x - sx, dz = _seg.start.z - sz;
-  p.x += dx; p.z += dz;
-  return Math.hypot(dx, dz);
+// A club embeds up to ~360 images. GLTFLoader starts decoding them all in one go, which freezes
+// the page for up to a second on slow devices, fatal to a background preload mid-flight. So image
+// decodes go through a queue: background loads a few at a time, yielding to the frame loop between
+// them; the club the player is waiting on (loadClub) at full speed; evicted clubs not at all.
+const BACKGROUND_DECODES = 4;
+let urgentId = null;
+let decoding = 0;
+const decodeQueue = []; // { e: entry, run(), skip() }
+function pumpDecodes() {
+  for (let i = 0; i < decodeQueue.length;) {
+    const job = decodeQueue[i];
+    if (job.e.cancelled) { decodeQueue.splice(i, 1); job.skip(); continue; }
+    if (job.e.id !== urgentId && decoding >= BACKGROUND_DECODES) { i++; continue; }
+    decodeQueue.splice(i, 1);
+    decoding++;
+    job.run().finally(() => { decoding--; setTimeout(pumpDecodes, 0); });
+  }
 }
 
-/** Load (once) a club: scene, metadata, BVH collider and walkable floor samples. */
-export function loadClub(key) {
-  if (cache[key]) return cache[key];
-  const def = CLUBS[key];
-  cache[key] = Promise.all([loader.loadAsync(def.file), fetch(def.meta).then((r) => r.json())]).then(([gltf, meta]) => {
-    const scene = gltf.scene;
-    scene.updateMatrixWorld(true);
-    const parts = [];
-    scene.traverse((o) => {
-      if (!o.isMesh) return;
-      o.frustumCulled = true;
-      const m = o.material;
-      if (m && m.transparent && m.opacity < 0.35) return; // light beams / glass don't block movement
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', o.geometry.attributes.position.clone());
-      if (o.geometry.index) geo.setIndex(o.geometry.index.clone());
-      geo.applyMatrix4(o.matrixWorld);
-      parts.push(geo.index ? geo : geo.toNonIndexed());
+/** A GLTFLoader for one club load, with its image decodes routed through the queue. */
+function loaderFor(e) {
+  return new GLTFLoader().setDRACOLoader(draco).register((parser) => {
+    const load = parser.loadImageSource.bind(parser);
+    parser.loadImageSource = (index, imgLoader) => new Promise((resolve, reject) => {
+      decodeQueue.push({
+        e,
+        run: () => load(index, imgLoader).then(resolve, reject),
+        skip: () => resolve(new THREE.Texture()), // evicted: the scene is about to be disposed anyway
+      });
+      pumpDecodes();
     });
-    const merged = mergeGeometries(parts.map((g) => (g.index ? g : (() => { const n = g.attributes.position.count; g.setIndex([...Array(n).keys()]); return g; })())), false);
-    merged.boundsTree = new MeshBVH(merged);
-    const collider = new THREE.Mesh(merged);
-    collider.raycast = acceleratedRaycast; // use the BVH for rays (otherwise it's a brute-force scan)
-    collider.updateMatrixWorld(true);
-
-    // Walkable floor scan on a 1 m grid.
-    const box = new THREE.Box3().setFromObject(scene);
-    const ray = new THREE.Raycaster(); ray.firstHitOnly = true;
-    const floor = [];
-    const hits = {};
-    // Walk down each column through every surface (models sit at any height, some have
-    // several storeys), keeping upward-facing spots with standing room above.
-    const cand = [];
-    for (let x = box.min.x + 0.5; x < box.max.x; x += 1) {
-      for (let z = box.min.z + 0.5; z < box.max.z; z += 1) {
-        let y0 = box.max.y + 0.5;
-        for (let n = 0; n < 12; n++) {
-          ray.set(new THREE.Vector3(x, y0, z), DOWN); ray.far = y0 - box.min.y + 0.1;
-          const h = ray.intersectObject(collider)[0];
-          if (!h) break;
-          y0 = h.point.y - 0.05;
-          if (h.face.normal.y < 0.85) continue;
-          ray.set(new THREE.Vector3(x, h.point.y + 0.05, z), UP); ray.far = HEADROOM;
-          if (ray.intersectObject(collider)[0]) continue;
-          cand.push(h.point.clone());
-        }
-      }
-    }
-    // Main floor = the most common walkable height; play within a storey of it.
-    const lv = {};
-    for (const p of cand) { const k = p.y.toFixed(1); lv[k] = (lv[k] || 0) + 1; }
-    const baseY = cand.length ? +Object.entries(lv).sort((a, b) => b[1] - a[1])[0][0] : 0;
-    for (const p of cand) {
-      if (p.y < baseY - 0.5 || p.y > baseY + 1.6) continue;
-      if (capsulePush(collider, p.clone()) > 0.04) continue; // not enough room to stand
-      // Enclosed = walls in at least 3 of 4 directions (floor/roof slabs can overhang the walls,
-      // so "is there a roof" isn't enough to tell inside from outside).
-      let walls = 0;
-      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        ray.set(new THREE.Vector3(p.x, p.y + 1.2, p.z), new THREE.Vector3(dx, 0, dz)); ray.far = 25;
-        if (ray.intersectObject(collider)[0]) walls++;
-      }
-      p.indoor = walls >= 3;
-      floor.push(p);
-    }
-    // Some models have floor slabs extending outside the walls; keep play indoors when possible.
-    const indoor = floor.filter((p) => p.indoor);
-    if (indoor.length >= 60) floor.splice(0, floor.length, ...indoor);
-    for (const p of floor) { const k = p.y.toFixed(1); hits[k] = (hits[k] || 0) + 1; }
-    const mainY = +Object.entries(hits).sort((a, b) => b[1] - a[1])[0][0];
-    return { scene, meta, collider, floor, box, mainY };
+    return { name: 'queued_image_decode' };
   });
-  return cache[key];
+}
+
+// Loading happens in two stages so the slow parts can overlap with flying:
+//   fetch  — download + decode the model (async; safe to start mid-flight)   → preloadClub()
+//   ready  — build the BVH collider and floor (synchronous; done on entry)     → loadClub()
+// Entries are keyed by club + texture variant and evicted (GPU memory freed) beyond the
+// profile's clubCache limit, oldest first, never the club being played.
+const entries = new Map(); // id → { key, fetch: Promise, ready: Promise|null, used, cancelled, stage, progress }
+let activeId = null;
+
+function variantId(key) {
+  const q = quality();
+  return `${key}:${q.clubTex}:${q.clubMaterials}`;
+}
+
+function entryFor(key) {
+  const id = variantId(key);
+  let e = entries.get(id);
+  if (!e) {
+    const q = quality(), def = CLUBS[key];
+    const file = q.clubTex === 'lite' && def.lite ? def.lite : def.file;
+    e = { id, key, ready: null, used: 0, cancelled: false, stage: 'Downloading', progress: 0 };
+    const onProgress = (ev) => { if (ev.total) e.progress = ev.loaded / ev.total; };
+    e.fetch = Promise.all([loaderFor(e).loadAsync(file, onProgress), fetch(def.meta).then((r) => r.json())]).then(([gltf, meta]) => {
+      const scene = gltf.scene;
+      const swapped = new Map(); // materials are shared between meshes: simplify each one once
+      const simple = (m) => { if (!swapped.has(m)) swapped.set(m, simplify(m, q.clubMaterials)); return swapped.get(m); };
+      scene.traverse((o) => {
+        if (!o.isMesh) return;
+        o.frustumCulled = true;
+        if (q.clubMaterials !== 'full') o.material = Array.isArray(o.material) ? o.material.map(simple) : simple(o.material);
+      });
+      e.stage = 'Building the club';
+      return { scene, meta };
+    });
+    e.fetch.catch(() => entries.delete(id)); // let a failed download be retried
+    entries.set(id, e);
+    evict();
+  }
+  e.used = performance.now();
+  return e;
+}
+
+/** Loading stage/progress of a club, for the loading bar. */
+export function clubProgress(key) { const e = entries.get(variantId(key)); return e ? { stage: e.stage, progress: e.progress } : null; }
+
+/** Start downloading/decoding a club in the background (no-op if it's already on its way). */
+export function preloadClub(key) { if (CLUBS[key]) entryFor(key); }
+
+/** A club ready to play: scene, metadata, BVH collider and walkable floor. */
+export function loadClub(key) {
+  const e = entryFor(key);
+  urgentId = e.id; // the player is waiting: decode this club at full speed
+  pumpDecodes();
+  if (!e.ready) {
+    e.ready = e.fetch.then(({ scene, meta }) => {
+      const collider = buildCollider(scene);
+      // floor baked offline by tools/bake_clubs.js; scan at runtime for clubs that weren't baked
+      const { floor, mainY } = meta.floor ? unpackFloor(meta) : scanFloor(scene, collider);
+      return { scene, meta, collider, floor, mainY, box: new THREE.Box3().setFromObject(scene) };
+    });
+    e.ready.catch(() => entries.delete(e.id));
+  }
+  return e.ready;
+}
+
+/**
+ * Cheaper stand-in for an exported material. 'standard': physical extras (glass transmission,
+ * clearcoat, sheen) go, which also removes the extra transmission render pass. 'lambert': simple
+ * diffuse lighting without normal/roughness maps: far fewer and cheaper shaders.
+ */
+function simplify(m, level) {
+  if (!m || !m.isMeshStandardMaterial || (level === 'standard' && !m.isMeshPhysicalMaterial)) return m;
+  const glass = m.transmission > 0;
+  const common = {
+    name: m.name, color: m.color, map: m.map, emissive: m.emissive, emissiveMap: m.emissiveMap,
+    emissiveIntensity: m.emissiveIntensity, alphaMap: m.alphaMap, aoMap: m.aoMap,
+    side: m.side, alphaTest: m.alphaTest, vertexColors: m.vertexColors,
+    transparent: m.transparent || glass, opacity: glass ? Math.min(m.opacity, 0.3) : m.opacity,
+    depthWrite: glass ? false : m.depthWrite,
+  };
+  const s = level === 'lambert'
+    ? new THREE.MeshLambertMaterial(common)
+    : new THREE.MeshStandardMaterial({ ...common, roughness: m.roughness, metalness: m.metalness, roughnessMap: m.roughnessMap, metalnessMap: m.metalnessMap, normalMap: m.normalMap, normalScale: m.normalScale });
+  s.userData.solid = !(m.transparent && m.opacity < 0.35); // collision follows the original material
+  m.dispose();
+  return s;
+}
+
+function evict() {
+  const limit = quality().clubCache;
+  const loaded = [...entries.values()].sort((a, b) => a.used - b.used);
+  for (const e of loaded) {
+    if (entries.size <= limit) break;
+    if (e.id === activeId) continue;
+    entries.delete(e.id);
+    e.cancelled = true;
+    pumpDecodes(); // drop its queued decodes
+    e.fetch.then(({ scene }) => disposeScene(scene)).catch(() => {});
+    if (e.ready) e.ready.then(({ collider }) => collider.geometry.dispose()).catch(() => {});
+  }
+}
+
+function disposeScene(scene) {
+  scene.traverse((o) => {
+    if (!o.isMesh) return;
+    o.geometry.dispose();
+    for (const m of [].concat(o.material)) {
+      for (const v of Object.values(m)) if (v && v.isTexture) v.dispose();
+      m.dispose();
+    }
+  });
 }
 
 export class ClubZone extends Special3D {
@@ -142,16 +184,80 @@ export class ClubZone extends Special3D {
     $('hud-title').textContent = zone.name;
     $('hud-sub').textContent = 'Loading the club…';
     const key = VENUES[zone.venue].club;
+    activeId = variantId(key);
+    this.warming = true;
+    this.showLoading(key);
     loadClub(key).then((club) => {
       if (this.g.mode !== this || this.done) return;
       this.club = club;
       super.enter(p);
+      return this.warmShaders().then(() => { this.warming = false; this.busy = false; });
     }).catch((e) => {
       console.error(e);
       toast('Could not load this club', 'bad');
       this.done = true;
       this.g.endZone(zone, { outcome: 'abort', rep: 0 });
+    }).finally(() => this.hideLoading());
+  }
+
+  /**
+   * Compile every shader the club needs before the first frame. Done lazily, the first frame
+   * compiles hundreds of programs one after another and freezes for seconds on a slow device;
+   * compileAsync lets the driver build them in parallel while the loading bar stays up.
+   */
+  warmShaders() {
+    this.busy = true; // no input while the club is still invisible
+    this.setClip(); // clipping planes are part of each shader: compile with the same set
+    if (this._loading) this._loading.warming = true;
+    const r = this.renderer;
+    const compiled = r.compileAsync ? r.compileAsync(this.scene, this.cam) : Promise.resolve();
+    return compiled.then(() => this.uploadTextures());
+  }
+
+  /** Push the club's textures to the GPU a few at a time (else the first frame uploads them all). */
+  uploadTextures() {
+    const r = this.renderer, todo = new Set();
+    this.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      for (const m of [].concat(o.material)) for (const v of Object.values(m)) if (v && v.isTexture) todo.add(v);
     });
+    const list = [...todo];
+    return new Promise((resolve) => {
+      const step = () => {
+        if (this.g.mode !== this || this.done) return resolve();
+        const t0 = performance.now();
+        while (list.length && performance.now() - t0 < 12) r.initTexture(list.pop());
+        if (list.length) requestAnimationFrame(step); else resolve();
+      };
+      step();
+    });
+  }
+
+  showLoading(key) {
+    const el = $('club-loading');
+    if (!el) return;
+    el.classList.add('on');
+    const L = (this._loading = { warming: false });
+    const tick = () => {
+      if (this._loading !== L) return;
+      const p = L.warming ? { stage: 'Warming up', progress: 1 } : clubProgress(key) || { stage: 'Downloading', progress: 0 };
+      const frac = p.stage === 'Downloading' ? 0.6 * p.progress : p.stage === 'Warming up' ? 0.9 : 0.75;
+      el.querySelector('.lbl').textContent = p.stage + '…';
+      el.querySelector('i').style.width = Math.round(frac * 100) + '%';
+      requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  hideLoading() {
+    this._loading = null;
+    const el = $('club-loading');
+    if (el) el.classList.remove('on');
+  }
+
+  update(dt) {
+    if (this.warming) return;
+    super.update(dt);
   }
 
   // ------------------------------------------------------------------ world
@@ -173,6 +279,8 @@ export class ClubZone extends Special3D {
   }
 
   detachShared() {
+    activeId = null;
+    urgentId = null; // back to flying: further loads are background preloads
     if (this.club && this.scene) this.scene.remove(this.club.scene); // keep the cached building alive
     if (this.renderer) this.renderer.clippingPlanes = [];
   }
@@ -247,8 +355,11 @@ export class ClubZone extends Special3D {
       for (let tries = 0; tries < 40 && !route; tries++) {
         const a = pick(floor);
         if (this.far(a) < 9) continue;
-        const bs = floor.filter((b) => Math.abs(b.y - a.y) < 0.2 && a.distanceTo(b) > 6 && a.distanceTo(b) < 14 && this.lineClear(a, b));
-        if (bs.length) route = [a.clone(), pick(bs).clone()];
+        // cheap tests first; raycast only until one clear partner turns up (testing every
+        // candidate cost seconds on slow devices)
+        const bs = shuffle(floor.filter((b) => Math.abs(b.y - a.y) < 0.2 && a.distanceTo(b) > 6 && a.distanceTo(b) < 14));
+        const b = bs.find((q) => this.lineClear(a, q));
+        if (b) route = [a.clone(), b.clone()];
       }
       if (!route) continue;
       const mesh = this.makeNPC(npcLook('guard'));
@@ -462,13 +573,17 @@ export class ClubZone extends Special3D {
   }
 
   // ------------------------------------------------------------------ render
-  render() {
-    if (!this.scene) return;
-    // Slice the building just above her head so the overhead camera looks into the room.
+  /** Slice the building just above her head so the overhead camera looks into the room. */
+  setClip() {
     const y = this.hero.position.y + 2.7;
     if (!this._clip) this._clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), y);
     this._clip.constant = y;
     this.renderer.clippingPlanes = [this._clip];
+  }
+
+  render() {
+    if (!this.scene || this.warming) return;
+    this.setClip();
     super.render();
   }
 }

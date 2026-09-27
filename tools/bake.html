@@ -1,0 +1,34 @@
+<!doctype html>
+<!-- Helper page for tools/bake_clubs.js (driven by headless Chrome; not part of the game). -->
+<meta charset="utf-8">
+<title>Club bake</title>
+<script type="importmap">{ "imports": { "three": "/vendor/three/three.module.js", "three/addons/": "/vendor/three/addons/" } }</script>
+<script type="module">
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { buildCollider, scanFloor, packFloor } from '/src/clubgeo.js';
+
+const loader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('/vendor/three/addons/libs/draco/gltf/'));
+
+/** The exact floor scan the game runs, in its compact JSON form. */
+window.bakeFloor = async (url) => {
+  const gltf = await loader.loadAsync(url);
+  return packFloor(scanFloor(gltf.scene, buildCollider(gltf.scene)));
+};
+
+const toB64 = async (blob) => { const b = new Uint8Array(await blob.arrayBuffer()); let s = ''; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000)); return btoa(s); };
+const fromB64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
+/** Downscale an image to fit `max` px (WebP out). null when it's already small enough. */
+window.shrinkImage = async (b64, mime, max, q) => {
+  const bmp = await createImageBitmap(new Blob([fromB64(b64)], { type: mime }));
+  const s = max / Math.max(bmp.width, bmp.height);
+  if (s >= 1) return null;
+  const w = Math.max(1, Math.round(bmp.width * s)), h = Math.max(1, Math.round(bmp.height * s));
+  const small = await createImageBitmap(bmp, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high', premultiplyAlpha: 'none' });
+  const c = new OffscreenCanvas(w, h);
+  c.getContext('2d').drawImage(small, 0, 0);
+  return toB64(await c.convertToBlob({ type: 'image/webp', quality: q }));
+};
+window.bakeReady = true;
+</script>

@@ -25,6 +25,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #c2d, #three-host, #three-host canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #three-host { display: none; }
 body.three #three-host { display: block; }
+#club-loading { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); width: min(320px, 70vw); display: none; z-index: 5; text-align: center; font-weight: 700; letter-spacing: .04em; color: #fff; text-shadow: 0 2px 6px #000a; }
+#club-loading.on { display: block; }
+#club-loading .lbl { font-size: 13px; margin-bottom: 6px; }
+#club-loading .bar { height: 8px; border-radius: 4px; background: #ffffff26; overflow: hidden; }
+#club-loading .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #3fa9ff, #ff3f6c); transition: width .25s; }
 body.three #c2d { display: none; }
 #xray-tint, #intox-tint { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .25s; }
 #xray-tint { background: radial-gradient(ellipse at center, rgba(40, 200, 255, .10), rgba(0, 60, 140, .45)); mix-blend-mode: screen; }

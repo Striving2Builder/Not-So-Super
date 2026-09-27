@@ -1,0 +1,8 @@
+{
+  "name": "supergirl-city-patrol-tools",
+  "private": true,
+  "description": "Dev-only asset tools (not needed to run or deploy the game)",
+  "devDependencies": {
+    "puppeteer-core": "^24.0.0"
+  }
+}

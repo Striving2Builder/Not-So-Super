@@ -35,6 +35,8 @@ Open http://localhost:8080. The server also prints a LAN address for playing on 
 
 Drag the screen to turn the camera in 3D zones. Add `?touch=1` to the URL to test touch controls on desktop.
 
+**Graphics** (pause menu): *Auto* picks a profile for the device and drops to *Battery saver* by itself if flying can't hold ~45 fps. *Battery saver* caps at 30 fps, renders at 1× resolution and loads lighter clubs (512 px textures, simple materials). Gameplay runs on real time, so it plays the same at any frame rate.
+
 ## Project layout
 
 - `index.html`, `style.css`, `server.js` — page, styles, zero-dependency static server
@@ -42,12 +44,13 @@ Drag the screen to turn the camera in 3D zones. Add `?touch=1` to the URL to tes
   - `main.js` game loop and flow · `overworld.js` / `city.js` flight and city · `brawler.js` street fights · `investigate.js` crime scenes · `special3d.js` / `clubzone.js` 3D zones · `captured.js` capture scene
   - `hero3d.js` rigged Supergirl model + animations · `cape.js` cloth-simulated cape
   - `comic.js` / `commentary.js` comic overlay and commentary engine · `data.js` all tunable content
+  - `settings.js` graphics profiles (Auto / High / Battery saver) · `clubgeo.js` club collision + walkable-floor scan
 - `assets/` — models, animations, fonts, capture-room art, converted clubs
 - `vendor/` — three.js, its loaders/Draco decoder, three-mesh-bvh
-- `tools/` — `export_club.py` (Blender → web GLB for clubs), `repair_glb.js`
+- `tools/` — `export_club.py` (Blender → web GLB for clubs), `repair_glb.js`, `bake_clubs.js` (lite club copies + baked floors)
 
 ## Adding content
 
 - **Villain videos for the capture-room TV:** put MP4s in `assets/video/` and list them in `CAPTURE_VIDEOS` in `src/data.js`.
-- **New clubs:** `blender -b club.blend --python tools/export_club.py -- assets/clubs/name.glb --replace assets/clubs/replacements`, then `node tools/repair_glb.js assets/clubs/name.glb`, add it to `CLUBS` in `src/clubzone.js` and a venue in `VENUES` in `src/data.js`.
+- **New clubs:** `blender -b club.blend --python tools/export_club.py -- assets/clubs/name.glb --replace assets/clubs/replacements`, then `node tools/repair_glb.js assets/clubs/name.glb` and `node tools/bake_clubs.js name` (makes `name.lite.glb` for phones and bakes the walkable floor into `name.json`; run `npm install --prefix tools` once first), add it to `CLUBS` in `src/clubzone.js` and a venue in `VENUES` in `src/data.js`.
 - **Animations:** Mixamo-rigged FBX clips go in `assets/models/source_anims/` and are converted into `assets/models/supergirl_anims.glb`.

@@ -2,6 +2,7 @@
 // informant → keycard → security door → evidence/captives (→ boss) → exit, with guards,
 // intoxicating temptations and bait items that can get the heroine captured.
 import * as THREE from 'three';
+import { quality } from './settings.js';
 import { HeroModel, heroReady } from './hero3d.js';
 import { VENUES, THEMES, INTOX_ITEMS, BAIT_ITEMS, HERO, FIRST_NAMES, LAST_NAMES } from './data.js';
 import { pick, shuffle, chance, clamp, rand, wobble, $ } from './util.js';
@@ -49,8 +50,8 @@ export class Special3D {
     if (this.renderer) return;
     // One WebGL renderer shared by every 3D mode (special zones and club raids).
     if (!Special3D.sharedRenderer) {
-      const r = new THREE.WebGLRenderer({ antialias: devicePixelRatio < 2, powerPreference: 'high-performance' });
-      r.setPixelRatio(Math.min(devicePixelRatio, 1.6));
+      // antialiasing is fixed at creation: on for 1× screens, except in Battery saver
+      const r = new THREE.WebGLRenderer({ antialias: devicePixelRatio < 2 && !quality().fpsCap, powerPreference: 'high-performance' });
       r.outputColorSpace = THREE.SRGBColorSpace;
       $('three-host').appendChild(r.domElement);
       Special3D.sharedRenderer = r;
@@ -61,6 +62,7 @@ export class Special3D {
 
   resize() {
     if (!this.renderer) return;
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, quality().dpr3d));
     this.renderer.setSize(this.g.w, this.g.h, false);
     if (this.cam) { this.cam.aspect = this.g.w / this.g.h; this.cam.updateProjectionMatrix(); }
   }

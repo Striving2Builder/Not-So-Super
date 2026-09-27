@@ -16,6 +16,7 @@ import { $, pick, chance, fmtTime } from './util.js';
 import { loadHero } from './hero3d.js';
 import { comic } from './comic.js';
 import { Commentary } from './commentary.js';
+import { settings, quality, autoTune } from './settings.js';
 
 loadHero();
 
@@ -37,7 +38,7 @@ window.__game = game; // handy for debugging from the console
 
 function resize() {
   game.w = innerWidth; game.h = innerHeight;
-  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const dpr = Math.min(devicePixelRatio || 1, quality().dpr2d);
   canvas.width = Math.round(game.w * dpr);
   canvas.height = Math.round(game.h * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -46,6 +47,7 @@ function resize() {
   game.modes.nightcase.resize();
 }
 addEventListener('resize', resize);
+settings.onChange(() => resize()); // resolution follows the graphics profile
 addEventListener('orientationchange', () => setTimeout(resize, 200));
 resize();
 
@@ -210,6 +212,7 @@ async function pauseMenu() {
       { label: 'Resume', value: 'r' },
       { label: `Sound: ${sfx.enabled ? 'ON' : 'OFF'}`, value: 's' },
       { label: `Comic commentary: ${comic.enabled ? 'ON' : 'OFF'}`, value: 'c' },
+      { label: `Graphics: ${settings.graphicsLabel}`, note: 'Battery saver: 30 fps, lighter clubs', value: 'g' },
       { label: 'How to play', value: 'h' },
       ...(inMission ? [{ label: 'Abort mission', note: '−3 reputation', value: 'a', cls: 'bad' }] : []),
       ...(game.modeName === 'overworld' ? [{ label: 'Save & quit to title', value: 'q' }] : []),
@@ -217,6 +220,7 @@ async function pauseMenu() {
   });
   if (v === 's') { sfx.toggle(); return pauseMenu(); }
   if (v === 'c') { comic.toggle(); return pauseMenu(); }
+  if (v === 'g') { settings.cycleGraphics(); return pauseMenu(); }
   if (v === 'h') { await dialog({ title: 'How to play', text: HOWTO }); return pauseMenu(); }
   if (v === 'a' && game.mode.abort) game.mode.abort();
   if (v === 'q') { st.save(); showTitle(); }
@@ -286,9 +290,18 @@ function updateHUD() {
 
 let last = performance.now();
 function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000);
+  // Battery saver caps the frame rate: skip display refreshes until a frame is due. Input edges
+  // stay queued (endFrame isn't called), so no key presses are lost on skipped refreshes.
+  const cap = quality().fpsCap;
+  if (cap && now - last < 1000 / cap - 4) { requestAnimationFrame(frame); return; }
+  const realDt = (now - last) / 1000;
+  const dt = Math.min(0.05, realDt);
   last = now;
   const m = game.mode;
+  // Auto graphics: measure while flying (the overworld is the steady, representative scene)
+  if (game.modeName === 'overworld' && !UI.open && autoTune.sample(realDt)) {
+    toast('Switched graphics to Battery saver for smoother play (change it in the pause menu)', 'info');
+  }
   if (m) {
     try {
       if (UI.open) { if (m.onPaused) m.onPaused(); }

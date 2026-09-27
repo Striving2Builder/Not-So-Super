@@ -5,7 +5,8 @@ import { DISTRICTS, STREET_CRIMES, CASES, VENUES, THEMES, BOSSES, HERO, NIGHT_DI
 import { drawHeroTop, glow } from './art.js';
 import { clamp, lerp, pick, chance, rand, dist, shade, rgba, easeOut, easeInOut, fmtClock, fmtTime, wobble, $ } from './util.js';
 import { heroReady, HeroSprite } from './hero3d.js';
-import { loadClub } from './clubzone.js';
+import { loadClub, preloadClub } from './clubzone.js';
+import { quality } from './settings.js';
 import { stepFlight, stepAltitude, speedFraction, cameraZoom, cameraLead, FLIGHT, BANDS, CRUISE_BAND, CAM_ABOVE } from './flight.js';
 import { Airspace } from './airspace.js';
 import { drawAtmosphere, FOG_Z } from './atmosphere.js';
@@ -21,6 +22,7 @@ const PERCH_EVERY = 40; // seconds between super-hearing reveals
 const ALT = BANDS[CRUISE_BAND].z; // cruising altitude (single source: flight.js)
 const DIVE_T = 1.1;
 const NEAR_R = 130;
+const PRELOAD_R = 1600; // start downloading a club's building when she's this close to its zone
 const TARGET = { street: 5, case: 2, special: 2 };
 
 export class Overworld {
@@ -407,6 +409,7 @@ export class Overworld {
     let near = null, nd = NEAR_R;
     for (const z of this.zones) { const dd = dist(z.x, z.y, h.x, h.y); if (dd < nd) { nd = dd; near = z; } }
     this.near = this.attract ? null : near;
+    if (!this.attract) this.preloadNearbyClub(h);
     this.updatePrompt();
     if (!this.attract) {
       if (inp.pressed('dive')) this.tryDive();
@@ -437,6 +440,24 @@ export class Overworld {
     }
     if (this.parts.length > 400) this.parts.splice(0, this.parts.length - 400);
     this.parts = this.parts.filter((p) => p.life > 0);
+  }
+
+  /**
+   * Load the nearest club building in the background, so diving in is quick. Sticks with its
+   * choice while she stays in range: phones keep one club in memory, so hopping between two
+   * nearby clubs would evict and reload them over and over.
+   */
+  preloadNearbyClub(h) {
+    const range = (key) => Math.min(...this.zones.filter((z) => VENUES[z.venue]?.club === key).map((z) => dist(z.x, z.y, h.x, h.y)));
+    if (this.preloadKey && range(this.preloadKey) < PRELOAD_R * 1.3) return;
+    this.preloadKey = null;
+    let best = PRELOAD_R;
+    for (const z of this.zones) {
+      const club = VENUES[z.venue]?.club;
+      const d = club ? dist(z.x, z.y, h.x, h.y) : Infinity;
+      if (d < best) { best = d; this.preloadKey = club; }
+    }
+    if (this.preloadKey) preloadClub(this.preloadKey);
   }
 
   tryDive() {
@@ -700,8 +721,10 @@ export class Overworld {
     this.heroScreen = { x: hx, y: hy };
     if (heroReady()) {
       // Real rigged model rendered top-down with the Flying clip; heading is +x on the sprite.
-      if (!this.sprite) this.sprite = new HeroSprite(192, 192);
+      const px = quality().heroSprite;
+      if (!this.sprite) this.sprite = new HeroSprite(px, px);
       const sp = this.sprite;
+      sp.setSize(px, px);
       if (h.perch) sp.hero.pose('idle', this.t); // standing on the roof (seen from above)
       else {
         sp.hero.pose(this.diving ? 'jump' : 'fly', this.diving ? 0.9 : this.t);
