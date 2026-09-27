@@ -1,4 +1,4 @@
-# Raw club source files (1.8 GB, several files over GitHub's 100 MB limit). Kept locally only;
+﻿# Raw club source files (1.8 GB, several files over GitHub's 100 MB limit). Kept locally only;
 # the web-ready conversions live in assets/clubs/ (see tools/export_club.py).
 assets/models/3D Nightclubs/
 
@@ -17,4 +17,4 @@ Thumbs.db
 # AAA reference screenshots for the polish critics (copyrighted: local only)
 docs/references/*/
 # Screenshot harness output
-shots/
+/shots/

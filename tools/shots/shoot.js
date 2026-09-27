@@ -1,0 +1,222 @@
+// Screenshot + performance harness for the polish passes. Stages each game area in headless
+// Chromium emulating a phone (844x390 landscape, 2x DPR, touch → the "Balanced" profile) and saves
+// PNGs plus metrics (fps over 3 s, WebGL draw calls/triangles for 3D) to shots/<label>/<area>/.
+//
+//   node tools/shots/shoot.js <area|all> [--label NAME] [--port 8120] [--only SCENARIO]
+//   areas: flying premade3d selfbuilt3d brawler investigation nightlife
+//
+// FPS comes from software rendering (SwiftShader): compare runs against each other, not phones.
+const path = require('path');
+const fs = require('fs');
+const { spawn } = require('child_process');
+
+function loadPlaywright() {
+  try { return require('playwright'); } catch (e) { /* fall through to the npx cache */ }
+  const cache = path.join(process.env.LOCALAPPDATA || '', 'npm-cache', '_npx');
+  for (const d of fs.existsSync(cache) ? fs.readdirSync(cache) : []) {
+    const p = path.join(cache, d, 'node_modules', 'playwright');
+    if (fs.existsSync(p)) return require(p);
+  }
+  throw new Error('playwright not found: run `npx playwright --version` once to install it');
+}
+
+const ROOT = path.resolve(__dirname, '..', '..');
+const argv = process.argv.slice(2);
+const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
+const AREA = argv[0] || 'all';
+const LABEL = arg('--label', new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-'));
+const PORT = +arg('--port', 8120);
+const ONLY = arg('--only', null);
+const OUT = path.join(ROOT, 'shots', LABEL);
+
+// ------------------------------------------------------------------ scenarios
+// 3D zone: { zone: {kind, venue?, boss?, mode?} } → 3 shots: arrival, camera swung round, a guard up close.
+const Z3 = (kind, venue, boss = null, extra = {}) => ({ type: '3d', zone: { kind, venue, boss, ...extra } });
+const AREAS = {
+  flying: {
+    cruise: { type: 'fly', plan: 'cruise' },
+    low: { type: 'fly', plan: 'low' },
+    high: { type: 'fly', plan: 'high' },
+  },
+  premade3d: {
+    triangle: Z3('special', 'Triangle Club', 'Madame Mesmer'),
+    clubhouse: Z3('special', 'The Clubhouse', 'Mister Midas'),
+    velvet: Z3('special', 'Velvet Lounge'),
+  },
+  selfbuilt3d: {
+    warehouse: Z3('special', 'Warehouse', 'Count Cashflow'),
+    penthouse: Z3('special', 'Penthouse'),
+    lair: Z3('special', 'Underground Lair', 'Doctor Dollar'),
+    asylum: Z3('asylum'),
+  },
+  brawler: { street: { type: 'brawl' } },
+  investigation: {
+    daycase: { type: 'investigate' },
+    nightcase: Z3('nightcase', 'Triangle Club'),
+  },
+  nightlife: {
+    nightclub: Z3('special', 'Nightclub'),
+    redlight: Z3('special', 'Red Light Den'),
+    gentlemens: Z3('special', "Gentlemen's Club"),
+    casino: Z3('special', 'High-Roller Suite'),
+    velvet: Z3('special', 'Velvet Lounge', 'The Velvet Viper'),
+  },
+};
+
+// ------------------------------------------------------------------ page helpers
+async function newGame(page) {
+  await page.goto(`http://localhost:${PORT}/`);
+  await page.waitForFunction(() => window.__game && document.querySelector('#btn-new'), null, { timeout: 30000 });
+  await page.evaluate(async () => { (await import('/src/settings.js')).autoTune.done = true; }); // SwiftShader is "slow"
+  await page.waitForTimeout(800);
+  await page.click('#btn-new');
+  await page.waitForTimeout(600);
+  const opt = page.locator('#modal-root .opt').first();
+  if (await opt.count()) await opt.click();
+  await page.evaluate(async () => { await (await import('/src/enemies.js')).loadEnemies(); });
+  await page.waitForTimeout(500);
+}
+
+async function metrics(page) {
+  return page.evaluate(() => new Promise((res) => {
+    let n = 0; const t0 = performance.now();
+    const tick = () => { n++; if (performance.now() - t0 < 3000) requestAnimationFrame(tick); else done(); };
+    const done = () => {
+      const m = window.__game.mode, info = m && m.renderer && m.renderer.info;
+      res({ fps: +(n / ((performance.now() - t0) / 1000)).toFixed(1), mode: window.__game.modeName, calls: info ? info.render.calls : null, triangles: info ? info.render.triangles : null });
+    };
+    requestAnimationFrame(tick);
+  }));
+}
+
+async function hold(page, key, ms) { await page.keyboard.down(key); await page.waitForTimeout(ms); await page.keyboard.up(key); }
+
+async function start3d(page, z) {
+  await page.evaluate((z) => {
+    const g = window.__game, ow = g.overworld;
+    g.setMode('overworld');
+    let zone = null;
+    if (z.kind === 'asylum') zone = ow.spawn('asylum', true);
+    else if (z.kind === 'nightcase') {
+      for (let i = 0; i < 40 && !(zone && zone.mode === 'nightcase'); i++) { g.state.clock = 23 * 60; zone = ow.spawn('case', true); }
+      if (zone) zone.venue = z.venue || zone.venue;
+    } else zone = ow.spawn('special', true, z.venue);
+    if (!zone) throw new Error('could not spawn ' + JSON.stringify(z));
+    if ('boss' in z && z.kind === 'special') { zone.boss = z.boss; }
+    g.startZone(zone);
+  }, z);
+  await page.waitForFunction(() => { const m = window.__game.mode; return m && m.hero && m.scene && !m.warming; }, null, { timeout: 120000 });
+  await page.evaluate(() => { const m = window.__game.mode; m.grace = 1e9; m.bossMet = true; });
+  await page.waitForTimeout(2500);
+}
+
+async function shoot3d(page, dir, name, z) {
+  await start3d(page, z);
+  const out = [];
+  await page.screenshot({ path: path.join(dir, `${name}_1_arrival.png`) }); out.push(`${name}_1_arrival.png`);
+  const m = await metrics(page);
+  await page.evaluate(() => { const m = window.__game.mode; m.yaw += Math.PI * 0.75; });
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: path.join(dir, `${name}_2_turned.png`) }); out.push(`${name}_2_turned.png`);
+  const gotGuard = await page.evaluate(() => {
+    const m = window.__game.mode, t = (m.guards.find((g) => !g.ko) || {}).mesh || m.boss;
+    if (!t) return false;
+    const f = { x: Math.sin(t.rotation.y), z: Math.cos(t.rotation.y) };
+    m.hero.position.set(t.position.x + f.x * 3, t.position.y, t.position.z + f.z * 3);
+    m.hero.rotation.y = Math.atan2(-f.x, -f.z); m.yaw = m.hero.rotation.y - Math.PI;
+    return true;
+  });
+  if (gotGuard) { await page.waitForTimeout(1200); await page.screenshot({ path: path.join(dir, `${name}_3_closeup.png`) }); out.push(`${name}_3_closeup.png`); }
+  return { shots: out, ...m };
+}
+
+async function shootFly(page, dir, name, plan) {
+  await page.evaluate(() => window.__game.setMode('overworld'));
+  if (plan === 'low') { await hold(page, 'KeyF', 4000); }
+  if (plan === 'high') { await hold(page, 'KeyR', 4000); }
+  await page.keyboard.down('KeyD');
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: path.join(dir, `${name}_1.png`) });
+  const m = await metrics(page);
+  await page.keyboard.up('KeyD');
+  await hold(page, 'KeyW', 1500);
+  await page.screenshot({ path: path.join(dir, `${name}_2.png`) });
+  return { shots: [`${name}_1.png`, `${name}_2.png`], ...m };
+}
+
+async function shootBrawl(page, dir, name) {
+  await page.evaluate(() => { const g = window.__game; g.setMode('overworld'); const z = g.overworld.spawn('street', true); g.startZone(z); });
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: path.join(dir, `${name}_1_start.png`) });
+  const m = await metrics(page);
+  await page.keyboard.down('KeyD');
+  for (let i = 0; i < 10; i++) { await page.keyboard.press('KeyJ'); await page.waitForTimeout(250); }
+  await page.keyboard.up('KeyD');
+  await page.screenshot({ path: path.join(dir, `${name}_2_fight.png`) });
+  await page.keyboard.press('KeyK');
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: path.join(dir, `${name}_3_special.png`) });
+  return { shots: [`${name}_1_start.png`, `${name}_2_fight.png`, `${name}_3_special.png`], ...m };
+}
+
+async function shootInvestigate(page, dir, name) {
+  await page.evaluate(() => {
+    const g = window.__game; g.setMode('overworld');
+    let z = null;
+    for (let i = 0; i < 40 && !(z && z.mode === 'investigate'); i++) { g.state.clock = 12 * 60; z = g.overworld.spawn('case', true); }
+    g.startZone(z);
+  });
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: path.join(dir, `${name}_1_scene.png`) });
+  const m = await metrics(page);
+  await page.keyboard.press('KeyX'); await page.waitForTimeout(900);
+  await page.screenshot({ path: path.join(dir, `${name}_2_xray.png`) });
+  await page.keyboard.press('KeyX'); await page.keyboard.press('KeyC'); await page.waitForTimeout(900);
+  await page.screenshot({ path: path.join(dir, `${name}_3_camera.png`) });
+  return { shots: [`${name}_1_scene.png`, `${name}_2_xray.png`, `${name}_3_camera.png`], ...m };
+}
+
+// ------------------------------------------------------------------ main
+(async () => {
+  const { chromium } = loadPlaywright();
+  const srv = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT) }, stdio: 'ignore' });
+  await new Promise((r) => setTimeout(r, 900));
+  const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+  const areas = AREA === 'all' ? Object.keys(AREAS) : AREA.split(',');
+  const report = {};
+  try {
+    for (const area of areas) {
+      if (!AREAS[area]) throw new Error(`unknown area ${area}; one of ${Object.keys(AREAS).join(', ')}`);
+      const dir = path.join(OUT, area);
+      fs.mkdirSync(dir, { recursive: true });
+      report[area] = {};
+      for (const [name, sc] of Object.entries(AREAS[area])) {
+        if (ONLY && ONLY !== name) continue;
+        const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+        const page = await ctx.newPage();
+        const errors = [];
+        page.on('pageerror', (e) => errors.push(e.message));
+        page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().slice(0, 300)); });
+        try {
+          await newGame(page);
+          let r;
+          if (sc.type === '3d') r = await shoot3d(page, dir, name, sc.zone);
+          else if (sc.type === 'fly') r = await shootFly(page, dir, name, sc.plan);
+          else if (sc.type === 'brawl') r = await shootBrawl(page, dir, name);
+          else if (sc.type === 'investigate') r = await shootInvestigate(page, dir, name);
+          report[area][name] = { ...r, errors };
+        } catch (e) {
+          report[area][name] = { failed: e.message.split('\n')[0], errors };
+          await page.screenshot({ path: path.join(dir, `${name}_FAILED.png`) }).catch(() => {});
+        }
+        console.log(`${area}/${name}:`, JSON.stringify(report[area][name]));
+        await ctx.close();
+      }
+      fs.writeFileSync(path.join(dir, 'metrics.json'), JSON.stringify(report[area], null, 2));
+    }
+  } finally {
+    await browser.close();
+    srv.kill();
+  }
+  console.log(`\nshots → ${OUT}`);
+})().catch((e) => { console.error(e); process.exit(1); });
