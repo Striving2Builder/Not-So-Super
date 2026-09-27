@@ -3,8 +3,8 @@
 // road strips on its top and left) is painted once into an offscreen canvas and then blitted.
 // That makes ground detail free per frame: sidewalks, crosswalks, lane paint, parks, and the cast
 // shadows of every building and tree (sun/moon from the north-west), with comic halftone in them.
-// A second, low-res "light map" per cell holds the street-lamp pools, neon spill and shop-window
-// glow, added on top at night in one blit instead of dozens of glow sprites.
+// At night the tiles are repainted with the street-lamp pools, neon spill and shop-window glow
+// baked in, so the lights cost nothing per frame either.
 import { BLOCK, ROAD, LOT } from './city.js';
 import { DISTRICTS } from './data.js';
 import { hash2 } from './rng.js';
@@ -47,51 +47,50 @@ function shadowPath(g, o) {
   }
 }
 
+export const TILE = 3; // blocks per cached tile side: few big blits beat many small ones
+
 export class CityArt {
-  constructor(city, res = 192, lres = 64, max = 170) {
+  /** res: canvas pixels per block; max: tiles kept (day and night variants count separately). */
+  constructor(city, res = 160, max = 40) {
     this.city = city;
-    this.res = res; this.lres = lres; this.max = max;
+    this.res = res; this.max = max;
     this.ground = new Map();
-    this.lights = new Map();
-    this.pool = []; // recycled canvases
+    this.pool = []; // recycled ground canvases
+    this.painted = 0;
   }
 
-  key(bx, by) { return by * 64 + bx; }
+  key(tx, ty) { return ty * 64 + tx; }
 
-  /** Ground canvas for cell (bx, by), painted on first use; LRU-ish eviction by frame stamp. */
-  cell(bx, by, frame) {
-    const k = this.key(bx, by);
+  /**
+   * Ground tile (tx, ty) = blocks [tx*TILE, +TILE) x [ty*TILE, +TILE). Painted on first use when
+   * `paint` allows (the caller rations painting per frame); null if not painted yet.
+   */
+  tile(tx, ty, frame, paint, lit) {
+    const k = this.key(tx, ty) * 2 + (lit ? 1 : 0);
     let e = this.ground.get(k);
     if (!e) {
+      if (!paint) return null;
       if (this.ground.size >= this.max) this.evict(this.ground, frame);
-      e = { c: this.canvas(this.res), f: frame };
-      const t0 = performance.now();
-      this.paintGround(e.c, bx, by);
-      const P = (window.__owPaint ||= { n: 0, ms: 0 }); P.n++; P.ms += performance.now() - t0;
+      const c = this.pool.pop() || document.createElement('canvas');
+      c.width = c.height = this.res * TILE;
+      const g = c.getContext('2d');
+      for (let j = 0; j < TILE; j++) for (let i = 0; i < TILE; i++) this.paintGround(g, tx * TILE + i, ty * TILE + j, tx * TILE * BLOCK, ty * TILE * BLOCK);
+      // Night tiles have the street lights baked in (they switch on at dusk), pre-brightened to
+      // survive the night veil drawn over the whole scene: no extra full-screen light pass.
+      if (lit) for (let j = 0; j < TILE; j++) for (let i = 0; i < TILE; i++) this.paintLights(g, tx * TILE + i, ty * TILE + j, tx * TILE * BLOCK, ty * TILE * BLOCK, 2.2);
+      e = { c, f: frame };
+      this.painted++;
       this.ground.set(k, e);
+      this.upload(e);
     }
     e.f = frame;
-    return e.c;
+    return e.bm || e.c;
   }
 
-  lightCell(bx, by, frame) {
-    const k = this.key(bx, by);
-    let e = this.lights.get(k);
-    if (!e) {
-      if (this.lights.size >= this.max) this.evict(this.lights, frame, true);
-      e = { c: document.createElement('canvas'), f: frame };
-      e.c.width = e.c.height = this.lres;
-      this.paintLights(e.c, bx, by);
-      this.lights.set(k, e);
-    }
-    e.f = frame;
-    return e.c;
-  }
-
-  canvas(res) {
-    const c = this.pool.pop() || document.createElement('canvas');
-    c.width = c.height = res;
-    return c;
+  /** Swap the canvas for an ImageBitmap once ready: a GPU-resident image blits much cheaper. */
+  upload(e) {
+    if (typeof createImageBitmap !== 'function' || window.__owx?.noBm) return;
+    createImageBitmap(e.c).then((bm) => { if (e.dead) bm.close(); else e.bm = bm; }).catch(() => {});
   }
 
   evict(map, frame, drop = false) {
@@ -99,18 +98,29 @@ export class CityArt {
     const es = [...map.entries()].sort((a, b) => a[1].f - b[1].f);
     for (let i = 0; i < es.length / 4; i++) {
       if (es[i][1].f >= frame) break;
+      const e = es[i][1];
       map.delete(es[i][0]);
-      if (!drop) this.pool.push(es[i][1].c);
+      e.dead = true; if (e.bm) e.bm.close();
+      if (!drop) this.pool.push(e.c);
     }
   }
 
   // ---------------------------------------------------------------- ground
-  paintGround(c, bx, by) {
-    const g = c.getContext('2d'), s = this.res / BLOCK, X0 = bx * BLOCK, Y0 = by * BLOCK;
+  /** Paint block cell (bx, by) into a tile whose world origin is (ox, oy), clipped to the cell. */
+  paintGround(g, bx, by, ox, oy) {
+    const s = this.res / BLOCK, X0 = bx * BLOCK, Y0 = by * BLOCK;
     const city = this.city, b = city.block(bx, by);
-    g.setTransform(s, 0, 0, s, -X0 * s, -Y0 * s);
+    g.save();
+    g.setTransform(s, 0, 0, s, -ox * s, -oy * s);
+    g.beginPath(); g.rect(X0, Y0, BLOCK, BLOCK); g.clip();
+    this.paintCell(g, b, bx, by, X0, Y0);
+    g.restore();
+  }
+
+  paintCell(g, b, bx, by, X0, Y0) {
+    const city = this.city;
+    if (!b) return; // past the coast / edge: the land fill underneath shows through
     g.fillStyle = ASPHALT; g.fillRect(X0, Y0, BLOCK, BLOCK);
-    if (!b) return;
     const D = DISTRICTS[b.d], farm = b.d === 'farm', urban = !URBAN_X.has(b.d);
     // worn asphalt: a few darker patches and seams
     g.fillStyle = 'rgba(0,0,0,.12)';
@@ -169,7 +179,7 @@ export class CityArt {
     g.fillStyle = 'rgba(8,10,34,.34)'; g.fill();
     g.clip();
     g.setTransform(1, 0, 0, 1, 0, 0); // halftone in canvas pixels, so the dots stay crisp and even
-    g.fillStyle = g.createPattern(halftone(), 'repeat'); g.fillRect(0, 0, this.res, this.res);
+    g.fillStyle = g.createPattern(halftone(), 'repeat'); g.fillRect(0, 0, g.canvas.width, g.canvas.height);
     g.restore();
     if (farm) {
       // tractor tracks: a dirt road edge instead of a curb
@@ -228,12 +238,16 @@ export class CityArt {
 
   // ---------------------------------------------------------------- night light map
   /** Lamps and spill that touch cell (bx, by): its own and its neighbours' (glows cross cell edges). */
-  paintLights(c, bx, by) {
-    const g = c.getContext('2d'), s = this.lres / BLOCK, X0 = bx * BLOCK, Y0 = by * BLOCK;
-    g.setTransform(s, 0, 0, s, -X0 * s, -Y0 * s);
+  paintLights(g, bx, by, ox, oy, gain = 1) {
+    const s = this.res / BLOCK, X0 = bx * BLOCK, Y0 = by * BLOCK;
+    g.save();
+    g.setTransform(s, 0, 0, s, -ox * s, -oy * s);
+    g.beginPath(); g.rect(X0, Y0, BLOCK, BLOCK); g.clip();
     g.globalCompositeOperation = 'lighter';
     const lamp = glow('#ffcf7a'), cool = glow('#bfe0ff');
-    const put = (spr, x, y, r, a) => { g.globalAlpha = a; g.drawImage(spr, x - r, y - r, r * 2, r * 2); };
+    const put = (spr, x, y, r, a) => {
+      for (let q = a * gain; q > 0.02; q -= 1) { g.globalAlpha = Math.min(1, q); g.drawImage(spr, x - r, y - r, r * 2, r * 2); }
+    };
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       const cx = bx + dx, cy = by + dy, b = this.city.block(cx, cy);
       const x0 = cx * BLOCK, y0 = cy * BLOCK;
@@ -260,16 +274,16 @@ export class CityArt {
         if (o.house && hash2(o.x | 0, o.y | 0, 9) > 0.4) put(lamp, o.x + o.w / 2, o.y + o.d + 4, 14, 0.35);
       }
     }
-    g.globalAlpha = 1;
+    g.restore();
   }
 }
 
 // ---------------------------------------------------------------- screen-space helpers
 const gradeC = { c: null, key: '' };
 /**
- * The colour grade, applied with 'multiply' in one full-screen pass: a moonlit tint that deepens
- * with `night` (colour survives, unlike a flat navy veil) and an ink-blue vignette at the edges.
- * A tiny canvas, rebuilt only when the (quantised) inputs change, stretched to the screen.
+ * The colour grade in one ordinary alpha blit (advanced blend modes like 'multiply' cost a
+ * framebuffer read on mobile GPUs): a moonlit navy veil that deepens with `night`, and an ink-blue
+ * vignette at the edges. A tiny canvas, rebuilt only when the quantised inputs change.
  */
 export function grade(night, edge) {
   const n = Math.round(night * 40) / 40, e = Math.round(edge * 20) / 20, key = n + ':' + e;
@@ -277,12 +291,13 @@ export function grade(night, edge) {
   const c = gradeC.c || (gradeC.c = document.createElement('canvas'));
   c.width = 128; c.height = 64;
   const g = c.getContext('2d');
-  const f = 0.66 * n, tint = (m) => `rgb(${(255 - 222 * m) | 0},${(255 - 205 * m) | 0},${(255 - 120 * m) | 0})`;
+  g.clearRect(0, 0, 128, 64);
+  const a = 0.56 * n, veil = (x) => `rgba(${(8 - 4 * x) | 0},${(12 - 6 * x) | 0},${(38 - 12 * x) | 0},${Math.min(0.92, x)})`;
   g.setTransform(2, 0, 0, 1, 0, 0);
   const grd = g.createRadialGradient(32, 32, 14, 32, 32, 46);
-  grd.addColorStop(0, tint(f));
-  grd.addColorStop(0.55, tint(Math.min(1, f + 0.12 * e)));
-  grd.addColorStop(1, tint(Math.min(1, f + 0.55 * e)));
+  grd.addColorStop(0, veil(a));
+  grd.addColorStop(0.55, veil(a + (1 - a) * 0.1 * e));
+  grd.addColorStop(1, veil(a + (1 - a) * 0.6 * e));
   g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
   gradeC.key = key;
   return c;
