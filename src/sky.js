@@ -116,6 +116,37 @@ export class SpeedFX {
     this.ang = ang; this.frac = speedFrac;
   }
 
+  /**
+   * Comic speed lines: tapered ink-and-white wedges raking in from the screen edges toward her,
+   * re-dealt a dozen times a second so they judder like a hand-drawn panel. Only when boosting.
+   */
+  drawComic(ctx, hx, hy, W, H, night) {
+    const f = Math.max(0, Math.min(1, ((this.frac || 0) - 0.55) / 0.35));
+    if (f <= 0.02) return;
+    const deal = Math.floor(performance.now() / 80);
+    if (deal !== this.dealt) {
+      this.dealt = deal;
+      this.lines = [];
+      const n = 26 + Math.floor(f * 22);
+      for (let i = 0; i < n; i++) this.lines.push({ a: Math.random() * Math.PI * 2, in: 0.52 + Math.random() * 0.3, w: 2 + Math.random() * 7, ink: Math.random() < 0.3 });
+    }
+    const R = Math.hypot(W, H) * 0.62, ox = W / 2, oy = H / 2;
+    ctx.save();
+    for (const pass of [true, false]) {
+      ctx.fillStyle = pass ? `rgba(8,10,30,${0.5 * f})` : night > 0.5 ? `rgba(200,225,255,${0.55 * f})` : `rgba(255,255,255,${0.7 * f})`;
+      ctx.beginPath();
+      for (const l of this.lines) {
+        if (l.ink !== pass) continue;
+        const c = Math.cos(l.a), s = Math.sin(l.a), r0 = R * (l.in + (1 - f) * 0.25), px = -s * l.w, py = c * l.w;
+        // pinch toward the hero, not the screen centre, so the lines frame her
+        const tx = ox + (hx - ox) * 0.6 + c * r0, ty = oy + (hy - oy) * 0.6 + s * r0;
+        ctx.moveTo(tx, ty); ctx.lineTo(ox + c * R * 1.2 + px, oy + s * R * 1.2 + py); ctx.lineTo(ox + c * R * 1.2 - px, oy + s * R * 1.2 - py); ctx.closePath();
+      }
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   draw(ctx, hx, hy, scale) {
     if (this.streaks.length) {
       ctx.save();
