@@ -1,15 +1,43 @@
 {
- "generated": "2026-09-27T02:23:50.023Z",
+ "generated": "2026-09-27T03:02:22.854Z",
  "folders": {
   "Captive": [
    "Captive/supergirl_the_kryptonite_tank.mp4"
   ],
-  "Display": [],
-  "Flying": [],
-  "Intoxicated": [],
-  "Nightclub": [],
-  "Public Humiliation": [],
-  "RDL": [],
-  "Roof Top": []
+  "Flying": [
+   "Flying/SG_Fly_Intoxicated1.mp4",
+   "Flying/SG_Fly_Intoxicated10.mp4",
+   "Flying/SG_Fly_Intoxicated11.mp4",
+   "Flying/SG_Fly_Intoxicated12.mp4",
+   "Flying/SG_Fly_Intoxicated13.mp4",
+   "Flying/SG_Fly_Intoxicated14.mp4",
+   "Flying/SG_Fly_Intoxicated15.mp4",
+   "Flying/SG_Fly_Intoxicated16.mp4",
+   "Flying/SG_Fly_Intoxicated17.mp4",
+   "Flying/SG_Fly_Intoxicated18.mp4",
+   "Flying/SG_Fly_Intoxicated19.mp4",
+   "Flying/SG_Fly_Intoxicated2.mp4",
+   "Flying/SG_Fly_Intoxicated20.mp4",
+   "Flying/SG_Fly_Intoxicated21.mp4",
+   "Flying/SG_Fly_Intoxicated22.mp4",
+   "Flying/SG_Fly_Intoxicated23.mp4",
+   "Flying/SG_Fly_Intoxicated24.mp4",
+   "Flying/SG_Fly_Intoxicated25.mp4",
+   "Flying/SG_Fly_Intoxicated3.mp4",
+   "Flying/SG_Fly_Intoxicated4.mp4",
+   "Flying/SG_Fly_Intoxicated5.mp4",
+   "Flying/SG_Fly_Intoxicated6.mp4",
+   "Flying/SG_Fly_Intoxicated7.mp4",
+   "Flying/SG_Fly_Intoxicated8.mp4",
+   "Flying/SG_Fly_Intoxicated9.mp4",
+   "Flying/SG_Fly_Normal1.mp4",
+   "Flying/SG_Fly_Normal2.mp4",
+   "Flying/SG_Fly_Normal3.mp4",
+   "Flying/SG_Fly_Normal4.mp4",
+   "Flying/SG_Fly_Normal5.mp4",
+   "Flying/SG_Fly_Normal6.mp4",
+   "Flying/SG_Fly_Normal7.mp4",
+   "Flying/SG_Fly_Normal8.mp4"
+  ]
  }
 }
