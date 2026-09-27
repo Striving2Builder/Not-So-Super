@@ -115,6 +115,7 @@ class Batch {
     this.col = g.attributes.color;
     this.mesh = new THREE.Mesh(g, material);
     this.mesh.frustumCulled = false;
+    this.mesh.name = this.name || 'nl-batch';
     scene.add(this.mesh);
     return this.mesh;
   }
@@ -390,34 +391,34 @@ const FLOORS = {
     for (let i = 0; i < 6; i++) { c.fillStyle = 'rgba(255,120,120,.05)'; c.fillRect(rnd(0, 512), 0, rnd(20, 60), 512); }
     speckle(c, 512, 512, 800, 0.06);
   }],
-  gentlemens: [2.5, (c) => {
+  gentlemens: [3, (c) => {
     c.fillStyle = '#220a1e'; c.fillRect(0, 0, 512, 512);
     speckle(c, 512, 512, 4000, 0.05, 2);
-    c.strokeStyle = '#5a3a18'; c.lineWidth = 3;
+    c.strokeStyle = '#3e2412'; c.lineWidth = 3;
     for (let x = -512; x <= 512; x += 128) {
       c.beginPath(); c.moveTo(x, 0); c.lineTo(x + 512, 512); c.stroke();
       c.beginPath(); c.moveTo(x + 512, 0); c.lineTo(x, 512); c.stroke();
     }
-    c.fillStyle = '#7a1a5a';
+    c.fillStyle = '#4e123c';
     for (let x = 0; x <= 512; x += 128) for (let y = 0; y <= 512; y += 128) {
       for (const [dx, dy] of [[0, 0], [64, 64]]) { c.beginPath(); c.arc(x + dx, y + dy, 9, 0, TAU); c.fill(); }
     }
-    c.fillStyle = '#d0a040';
+    c.fillStyle = '#8a6a2a';
     for (let x = 0; x <= 512; x += 128) for (let y = 0; y <= 512; y += 128) for (const [dx, dy] of [[0, 0], [64, 64]]) { c.beginPath(); c.arc(x + dx, y + dy, 3, 0, TAU); c.fill(); }
   }],
-  casino: [2.5, (c) => {
-    c.fillStyle = '#560b18'; c.fillRect(0, 0, 512, 512);
+  casino: [3.6, (c) => {
+    c.fillStyle = '#3e0710'; c.fillRect(0, 0, 512, 512);
     speckle(c, 512, 512, 3000, 0.05, 2);
     for (let x = 0; x <= 512; x += 128) for (let y = 0; y <= 512; y += 128) {
       for (const [dx, dy] of [[0, 0], [64, 64]]) {
         const cx = x + dx, cy = y + dy;
-        c.strokeStyle = '#c0922e'; c.lineWidth = 4; c.beginPath(); c.arc(cx, cy, 26, 0, TAU); c.stroke();
-        c.strokeStyle = '#1f7a74'; c.lineWidth = 5; c.beginPath(); c.arc(cx, cy, 16, 0, TAU); c.stroke();
-        c.fillStyle = '#e0b040'; for (let a = 0; a < 8; a++) { c.beginPath(); c.arc(cx + Math.cos(a * TAU / 8) * 38, cy + Math.sin(a * TAU / 8) * 38, 4, 0, TAU); c.fill(); }
+        c.strokeStyle = '#7a5a1e'; c.lineWidth = 4; c.beginPath(); c.arc(cx, cy, 26, 0, TAU); c.stroke();
+        c.strokeStyle = '#14504c'; c.lineWidth = 5; c.beginPath(); c.arc(cx, cy, 16, 0, TAU); c.stroke();
+        c.fillStyle = '#8a6a26'; for (let a = 0; a < 8; a++) { c.beginPath(); c.arc(cx + Math.cos(a * TAU / 8) * 38, cy + Math.sin(a * TAU / 8) * 38, 4, 0, TAU); c.fill(); }
         c.fillStyle = '#2a0408'; c.beginPath(); c.arc(cx, cy, 8, 0, TAU); c.fill();
       }
     }
-    c.strokeStyle = 'rgba(31,122,116,.6)'; c.lineWidth = 3;
+    c.strokeStyle = 'rgba(20,80,76,.5)'; c.lineWidth = 3;
     for (let x = 0; x <= 512; x += 64) { c.beginPath(); c.moveTo(x, 0); c.bezierCurveTo(x + 30, 128, x - 30, 384, x, 512); c.stroke(); }
   }],
 };
@@ -504,6 +505,7 @@ function buildCrowd(zn, people) {
     if (!list.length) continue;
     const m = new THREE.InstancedMesh(G[key], mat, list.length);
     m.frustumCulled = false;
+    m.name = 'nl-crowd';
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     list.forEach((p, i) => m.setColorAt(i, key === 'head' ? p.skin : key.startsWith('hair') ? p.hairC : key === 'arm' ? (p.type === 'dress' || p.pose === 'dance' && i % 3 === 0 ? p.skin : p.outfit) : p.outfit));
     zn.scene.add(m);
@@ -628,6 +630,7 @@ function makeKit(zn, k) {
 
 function buildKit(X) {
   const { zn } = X, S = zn.scene;
+  X.glow.name = 'nl-glow'; X.cones.name = 'nl-cones'; X.signs.name = 'nl-signs';
   X.glow.build(S, new THREE.MeshBasicMaterial({ map: X.glowT, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide }));
   X.cones.build(S, coneMat());
   if (X.atlas.items.length) {
@@ -638,7 +641,7 @@ function buildKit(X) {
     if (document.fonts && !document.fonts.check('40px Bangers')) document.fonts.load('40px Bangers').then(() => X.atlas.paint()).catch(() => {});
   }
   X.pmat = X.pmat || pointsMat(X.glowT);
-  if (X.bulbs.length) { X.bulbPts = makePoints(X.bulbs, X.pmat); S.add(X.bulbPts); }
+  if (X.bulbs.length) { X.bulbPts = makePoints(X.bulbs, X.pmat); X.bulbPts.name = 'nl-bulbs'; S.add(X.bulbPts); }
   X.crowd = buildCrowd(zn, X.people);
 }
 
@@ -676,10 +679,11 @@ function backBar(X, z0, z1, tintC) {
 }
 
 function haze(X, color, n, y0 = 1.2, y1 = 3.0) {
-  if (X.lite) return;
+  if (!X.rich) return; // big additive sprites: fill-rate heavy, High profile only
   const list = [];
   for (let i = 0; i < n; i++) list.push({ p: [rnd(-13, 13), rnd(y0, y1), rnd(-10, 10)], s: rnd(4, 7), c: C(color).multiplyScalar(rnd(0.03, 0.06)) });
   const pts = makePoints(list, X.pmat || (X.pmat = pointsMat(X.glowT)));
+  pts.name = 'nl-haze';
   X.zn.scene.add(pts);
   X.fx.push((t) => { pts.rotation.y = Math.sin(t * 0.05) * 0.25; });
 }
@@ -705,7 +709,7 @@ function nightclub(zn, X, h) {
     new THREE.BoxGeometry(0.12, 0.06, 7.5).translate(-3.68, 0.03, 0.5), new THREE.BoxGeometry(0.12, 0.06, 7.5).translate(3.68, 0.03, 0.5),
   ]), basic(0xff2fd0));
   S.add(frame);
-  const floorGlow = X.pool(0, 0.5, 5.2, 0xffffff, 0.2, 0.03);
+  const floorGlow = X.glow.push(new THREE.RingGeometry(3.7, 4.9, 4, 1, Math.PI / 4).rotateX(-Math.PI / 2).scale(1, 1, 1).translate(0, 0.03, 0.5), 0xffffff, 0.2);
   // truss over the floor, holding the ball and four moving heads
   const truss = mergeGeometries([
     new THREE.BoxGeometry(8.6, 0.14, 0.14).translate(0, 3.32, -3.7), new THREE.BoxGeometry(8.6, 0.14, 0.14).translate(0, 3.32, 4.7),
@@ -729,7 +733,7 @@ function nightclub(zn, X, h) {
     specks.push({ p: [Math.cos(a) * r, 0.05, Math.sin(a) * r * 0.95], s: rnd(0.1, 0.18), c: C(pickR([0xffffff, 0xbfe8ff, 0xffd0f0])).multiplyScalar(0.7) });
   }
   const speckPts = makePoints(specks, X.pmat || (X.pmat = pointsMat(X.glowT)));
-  speckPts.position.set(0, 0, 0.5); S.add(speckPts);
+  speckPts.name = 'nl-specks'; speckPts.position.set(0, 0, 0.5); S.add(speckPts);
   // moving heads: fake beams + their pools, swept across the floor
   const heads = [];
   const cm = coneMat();
@@ -739,11 +743,11 @@ function nightclub(zn, X, h) {
   for (let i = 0; i < nHeads; i++) {
     const mat = cm.clone(); mat.uniforms.uC.value = C(hcols[i]); mat.uniforms.uI.value = 0.55;
     const beam = new THREE.Mesh(coneGeo(0.03, 0.42), mat);
-    beam.frustumCulled = false;
+    beam.frustumCulled = false; beam.name = 'nl-heads';
     beam.position.set(hpos[i][0], 3.0, hpos[i][1]);
     S.add(beam);
     const pm = new THREE.Mesh(floorQ(0, 0, 3, 3, 0.04 + i * 0.003), new THREE.MeshBasicMaterial({ map: X.glowT, color: hcols[i], transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
-    S.add(pm);
+    pm.name = 'nl-heads'; S.add(pm);
     heads.push({ beam, pool: pm, ph: i * 1.7, col: C(hcols[i]) });
   }
   // lasers fanning from above the DJ over the crowd (not on Battery saver)
@@ -758,7 +762,7 @@ function nightclub(zn, X, h) {
       gs.push(a.rotateY(yaw), b.rotateY(yaw));
     }
     lasers = new THREE.Mesh(mergeGeometries(gs), new THREE.MeshBasicMaterial({ map: bt, color: 0x39ff6a, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide }));
-    lasers.position.set(-8, 2.25, -10.4); lasers.frustumCulled = false;
+    lasers.position.set(-8, 2.25, -10.4); lasers.frustumCulled = false; lasers.name = 'nl-lasers';
     S.add(lasers);
     X.bulb(-8, 2.25, -10.4, 0.7, 0x39ff6a);
   }
@@ -789,7 +793,7 @@ function nightclub(zn, X, h) {
   const ledC = cnv(96, 32), ledT = tex(ledC, { nearest: true });
   const led = new THREE.Mesh(wallQ(...onWall('N', -8, 2.25, 0.03), 7, 2.2, 0), new THREE.MeshBasicMaterial({ map: ledT }));
   S.add(led);
-  const ledHalo = X.halo('N', -8, 2.25, 9, 3.6, 0xffffff, 0.3);
+  const ledHalo = X.halo('N', -8, 2.25, 8, 2.8, 0xffffff, 0.3);
   X.pool(-8, -9.5, 3.5, 0x27e0ff, 0.25);
 
   // signage
@@ -1135,11 +1139,10 @@ function casino(zn, X, h) {
     // a pendant over each table: shade, warm beam, a pool on the felt
     X.cone(new THREE.Vector3(x, 2.85, z), new THREE.Vector3(x, 0.9, z), 1.35, 0xffd890, 0.28);
     X.pool(x, z, 1.7, 0xffe0a0, 0.45, 0.905);
-    X.pool(x, z, 2.8, 0xffb060, 0.2);
     X.bulb(x, 2.8, z, 0.7, 0xffd890);
   }
   S.add(new THREE.Mesh(mergeGeometries(tableCols), lam(0x2a1206)));
-  const shades = mergeGeometries([0, 1, 2, 3].map((i) => new THREE.CylinderGeometry(0.2, 0.62, 0.32, 16, 1, true).translate(-7 + (i % 2) * 8, 2.98, -5 + Math.floor(i / 2) * 8)));
+  const shades = mergeGeometries([0, 1, 2, 3].map((i) => new THREE.CylinderGeometry(0.12, 0.38, 0.24, 16, 1, true).translate(-7 + (i % 2) * 8, 3.0, -5 + Math.floor(i / 2) * 8)));
   S.add(new THREE.Mesh(shades, lam(0x0e4a2a, { side: THREE.DoubleSide, emissive: 0x06200f })));
   const chipGeos = chips.filter((x, i) => i % 2 === 0), chipCols = chips.filter((x, i) => i % 2 === 1);
   chipGeos.forEach((g, i) => { const c = C(chipCols[i]); const a = g.attributes.color.array; for (let j = 0; j < a.length; j += 3) { a[j] = c.r; a[j + 1] = c.g; a[j + 2] = c.b; } });
@@ -1190,7 +1193,7 @@ function casino(zn, X, h) {
     crystals.push(X.bulb(Math.cos(a) * r, rnd(2.35, 2.8), Math.sin(a) * r, 0.12, 0xffffff));
   }
   X.bulb(0, 2.75, 0, 3.2, 0xffc070).c.multiplyScalar(0.35);
-  X.pool(0, 0, 4.5, 0xffc070, 0.35);
+  X.pool(0, 0, 3.2, 0xffc070, 0.35);
   X.cone(new THREE.Vector3(0, 2.7, 0), new THREE.Vector3(0, 0, 0), 2.6, 0xffc070, 0.15);
   // the bar and its bartender
   bar(11, 4, 7, true);
