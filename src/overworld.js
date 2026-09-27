@@ -729,9 +729,12 @@ export class Overworld {
 
     ctx.save();
     if (this.shake > 0) ctx.translate(rand(-this.shake, this.shake), rand(-this.shake, this.shake));
-    // Camera sway: the world rolls a touch against her bank, and breathes at speed.
-    const roll = rich && !h.perch ? -h.bank * 0.045 + Math.sin(this.t * 1.7) * 0.004 * speedFraction(h) : 0;
-    if (roll) { ctx.translate(cx, scy); ctx.rotate(roll); ctx.translate(-cx, -scy); }
+    // Camera sway: the view slides out along her bank and breathes at speed. (A translation, not a
+    // roll: rotating the whole world turns every cheap axis-aligned fill into a slow AA polygon.)
+    if (rich && !h.perch) {
+      const sw = h.bank * 14, br = Math.sin(this.t * 1.7) * 2.5 * speedFraction(h);
+      ctx.translate(-Math.sin(h.ang) * sw + br, Math.cos(h.ang) * sw);
+    }
     if (st && st.intox > 30) {
       const a = Math.sin(this.t * 1.1) * (st.intox - 30) * 0.0009;
       ctx.translate(cx, scy); ctx.rotate(a); ctx.scale(1 + (st.intox - 30) * 0.0008, 1 + (st.intox - 30) * 0.0008); ctx.translate(-cx, -scy);
@@ -760,8 +763,8 @@ export class Overworld {
     const bx0 = Math.max(0, Math.floor((camX - hw) / BLOCK)), bx1 = Math.min(city.landCols - 1, Math.floor((camX + hw) / BLOCK));
     const by0 = Math.max(0, Math.floor((camY - hh) / BLOCK)), by1 = Math.min(city.rows - 1, Math.floor((camY + hh) / BLOCK));
     // Ground: pre-painted cells (roads, sidewalks, lots, cast shadows) just need the right on-screen
-    // bounds (a ground point maps linearly), plus a margin for the camera roll and shake.
-    const TW = TILE * BLOCK, margin = (90 + Math.abs(roll) * W) / k;
+    // bounds (a ground point maps linearly), plus a margin for the camera sway and shake.
+    const TW = TILE * BLOCK, margin = 90 / k;
     const tx0 = Math.max(0, Math.floor((camX - W / 2 / k - margin) / TW)), tx1 = Math.floor((camX + W / 2 / k + margin) / TW);
     const ty0 = Math.max(0, Math.floor((camY - H / 2 / k - margin) / TW)), ty1 = Math.floor((camY + H / 2 / k + margin) / TW);
     const TS = TW * k + 0.6; // a hair of overlap hides seams between tiles
@@ -922,8 +925,8 @@ export class Overworld {
     this.heroScreen = { x: hx, y: hy };
     if (sprite) {
       // Real rigged model rendered top-down with the Flying clip; heading is +x on the sprite.
-      const px = q.heroSprite >= 192 ? 256 : q.heroSprite; // she's drawn big now: a sharper render
-      if (!this.sprite) this.sprite = new HeroSprite(px, px);
+      const px = q.heroSprite;
+      if (!this.sprite || this.sprite.aaOff !== !!DBG.noAA) { this.sprite = new HeroSprite(px, px, { aa: !DBG.noAA }); this.sprite.aaOff = !!DBG.noAA; }
       const sp = this.sprite;
       sp.setSize(px, px);
       if (h.perch) sp.hero.pose('idle', this.t); // standing on the roof (seen from above)
@@ -940,7 +943,7 @@ export class Overworld {
       const img = sp.render({ view: 'top', yaw: 0, span: 2.6, roll: h.perch ? 0 : h.bank * 0.45, pitch: h.perch ? 0 : h.hover * 1.15 - h.lean * 0.25 });
       const size = 2.6 * 40 * hs; // 1 sprite metre ≈ 40 art units
       // Ink outline + a warm rim on her sun side (the light's direction, turned into sprite space).
-      const art = DBG.noInk ? img : this.ink.build(img, Math.atan2(-1, -1) - h.ang - roll, rich, night);
+      const art = DBG.noInk ? img : this.ink.build(img, Math.atan2(-1, -1) - h.ang, rich, night);
       const sc = size / img.width, pad = this.ink.pad * sc;
       ctx.save();
       ctx.translate(hx, hy); ctx.rotate(h.ang);
@@ -970,7 +973,7 @@ export class Overworld {
     // comic speed lines when she really moves
     this.fx.drawComic(ctx, hx, hy, W, H, night);
 
-    // off-screen zone arrows (screen space, unrolled)
+    // off-screen zone arrows (screen space)
     if (!this.attract && !this.diving) this.drawArrows(ctx, V);
 
     // Inside a cloud: brief white-out.

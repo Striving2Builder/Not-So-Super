@@ -89,7 +89,7 @@ export class CityArt {
 
   /** Swap the canvas for an ImageBitmap once ready: a GPU-resident image blits much cheaper. */
   upload(e) {
-    if (typeof createImageBitmap !== 'function' || window.__owx?.noBm) return;
+    if (typeof createImageBitmap !== 'function' || !window.__owx?.bm) return;
     createImageBitmap(e.c).then((bm) => { if (e.dead) bm.close(); else e.bm = bm; }).catch(() => {});
   }
 
