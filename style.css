@@ -150,6 +150,27 @@ body:not(.touch) #btns { transform: scale(.8); transform-origin: bottom right; }
 .opt.bad { border-color: rgba(255, 77, 106, .6); }
 .opt.good { border-color: rgba(62, 224, 138, .55); }
 .portrait { float: right; margin: 0 0 6px 10px; }
+
+/* Capture scene: dialogs become a compact caption bar along the bottom, so the room (and her)
+   stay visible. The dim fades up from the bottom instead of covering the screen; the scene pans
+   up a little while one is open (captured.js). Options sit side by side to keep it short. */
+body[data-mode="captured"] .modal-back.dlg { align-items: flex-end; background: linear-gradient(to top, rgba(2, 4, 12, .85) 0%, rgba(2, 4, 12, .45) 28%, rgba(2, 4, 12, 0) 55%); }
+body[data-mode="captured"] .dlg .modal { width: min(860px, 100%); max-height: 46%; padding: 12px 16px 12px; border-radius: 14px; background: rgba(9, 13, 26, .9); border: 1px solid rgba(255, 255, 255, .14); box-shadow: inset 4px 0 0 var(--gold), 0 -10px 40px rgba(0, 0, 0, .45); animation: capIn .22s ease-out; }
+body[data-mode="captured"] .dlg.villain .modal { background: rgba(6, 22, 12, .9); box-shadow: inset 4px 0 0 #39ff6a, 0 -10px 40px rgba(0, 0, 0, .45); }
+body[data-mode="captured"] .dlg.danger .modal { background: rgba(34, 8, 18, .92); box-shadow: inset 4px 0 0 #ff4d6a, 0 -10px 40px rgba(0, 0, 0, .45); }
+body[data-mode="captured"] .dlg .modal h2 { display: inline-block; font-size: 15px; margin: 0 0 4px; }
+body[data-mode="captured"] .dlg .speaker { display: inline-block; padding: 2px 9px; border-radius: 999px; background: rgba(255, 255, 255, .1); margin-bottom: 6px; }
+body[data-mode="captured"] .dlg.villain .speaker { background: rgba(57, 255, 106, .16); color: #9dffb8; }
+body[data-mode="captured"] .dlg .dtext { font-size: 14px; line-height: 1.4; margin-bottom: 9px; }
+body[data-mode="captured"] .dlg .dtext .hint { font-size: 12px; margin-top: 5px; }
+body[data-mode="captured"] .dlg .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 6px; }
+body[data-mode="captured"] .dlg .opt { min-height: 40px; padding: 7px 10px; font-size: 13px; }
+@keyframes capIn { from { transform: translateY(28px); opacity: 0; } }
+@media (max-height: 460px) {
+  body[data-mode="captured"] .dlg .modal { max-height: 60%; padding: 9px 12px 9px; }
+  body[data-mode="captured"] .dlg .dtext { font-size: 13px; margin-bottom: 7px; }
+  body[data-mode="captured"] .dlg .opt { min-height: 36px; padding: 5px 9px; }
+}
 .portrait canvas { width: 84px; height: 110px; border-radius: 10px; background: #0005; border: 1px solid var(--line); }
 .list { font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
 .list .item { padding: 8px 10px; background: rgba(255, 255, 255, .05); border-radius: 8px; margin-bottom: 6px; }

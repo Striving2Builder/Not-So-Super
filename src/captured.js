@@ -5,6 +5,13 @@ import { drawHumanoid, pose, HERO_LOOK, npcLook, glow, portrait } from './art.js
 import { pick, shuffle, fitScene, $ } from './util.js';
 import { dialog, toast, banner } from './ui.js';
 import { sfx } from './sfx.js';
+import * as THREE from 'three';
+import { heroReady, HeroSprite } from './hero3d.js';
+
+// The rigged 3D Supergirl, sat on the chair: scene pixels per metre (the painted room's scale,
+// matching the old 2D figure) and the seat height her hips rest on.
+const PX_PER_M = 125;
+const SEAT_M = 0.5;
 
 const LW = 1000, LH = 600;
 
@@ -137,7 +144,7 @@ export class Captured {
     this.tauntT = (this.tauntT ?? 3) - dt;
     if (this.tauntT <= 0 && !this.busy) {
       this.tauntT = 7 + Math.random() * 5;
-      const f = fitScene(this.g.w, this.g.h, LW, LH), s = L.screen;
+      const f = this.frame(), s = L.screen;
       this.g.commentary.villainTV(this.villain, f.ox + (s.x + s.w * 0.7) * f.s, f.oy + (s.y + s.h * 0.55) * f.s);
     }
     const inp = this.g.input;
@@ -157,8 +164,14 @@ export class Captured {
 
   hud() {}
 
-  toLogical(x, y) {
+  /** Scene-to-screen fit, panned up while a dialog is open (see render). */
+  frame() {
     const f = fitScene(this.g.w, this.g.h, LW, LH);
+    return { ...f, oy: f.oy - (this.lift || 0) };
+  }
+
+  toLogical(x, y) {
+    const f = this.frame();
     return { x: (x - f.ox) / f.s, y: (y - f.oy) / f.s };
   }
 
@@ -302,7 +315,14 @@ export class Captured {
   render(ctx) {
     const g = this.g, W = g.w, H = g.h;
     ctx.fillStyle = '#05070d'; ctx.fillRect(0, 0, W, H);
-    const f = fitScene(W, H, LW, LH);
+    // While a dialog is open along the bottom, pan the room up just enough that she (and her
+    // chair) stay visible above it, capped so the wall TV doesn't slide under the HUD.
+    const box = document.querySelector('#modal-root .dlg .modal');
+    const base = fitScene(W, H, LW, LH);
+    let want = 0;
+    if (box) want = Math.max(0, Math.min(H * 0.24, base.oy + (L.floorY + 12) * base.s - (box.getBoundingClientRect().top - 10)));
+    this.lift = (this.lift || 0) + (want - (this.lift || 0)) * 0.18;
+    const f = this.frame();
     ctx.save();
     ctx.translate(f.ox, f.oy); ctx.scale(f.s, f.s);
     ctx.beginPath(); ctx.rect(0, 0, LW, LH); ctx.clip();
@@ -418,7 +438,8 @@ export class Captured {
     ctx.fillStyle = wood; ctx.fillRect(x + back * 46 - 7, fy - 200, 14, 200);
     ctx.fillStyle = woodHi; ctx.fillRect(x + back * 46 - 7, fy - 200, 4, 200);
     ctx.fillStyle = wood; ctx.fillRect(x + back * 46 - 9, fy - 190, 18, 12);
-    drawHumanoid(ctx, x, fy, 2.3, face, HERO_LOOK, pose('sitTied', this.t), this.t);
+    if (heroReady()) this.drawSeatedHero(ctx, x, fy, face);
+    else drawHumanoid(ctx, x, fy, 2.3, face, HERO_LOOK, pose('sitTied', this.t), this.t);
     // seat + front leg
     ctx.fillStyle = wood;
     ctx.fillRect(x - 52, fy - 58, 104, 10);
@@ -427,6 +448,43 @@ export class Captured {
     // rope binding her to the post
     ctx.strokeStyle = '#d8c28a'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(x + back * 46, fy - 118); ctx.lineTo(x + face * 6, fy - 112); ctx.moveTo(x + back * 46, fy - 96); ctx.lineTo(x + face * 6, fy - 92); ctx.stroke();
+  }
+
+  /**
+   * The rigged model, posed seated: hips dropped to the seat, thighs forward, shins down, arms
+   * pulled behind the backrest. She strains against the ropes now and then. Rendered in a slight
+   * three-quarter view, then shaded to the dim green-lit room.
+   */
+  drawSeatedHero(ctx, x, fy, face) {
+    if (!this.sprite) { this.sprite = new HeroSprite(240, 300); this.sprite.hero.setWind(0, -2, -1); }
+    const sp = this.sprite, M = sp.hero, B = M.bones;
+    M.root.position.y = 0;
+    M.pose('idle', this.t * 0.7);
+    if (this.hipY === undefined) { M.root.updateWorldMatrix(true, true); this.hipY = B.Hips ? B.Hips.getWorldPosition(new THREE.Vector3()).y : 0.95; }
+    M.root.position.y = SEAT_M - this.hipY;
+    M.root.updateWorldMatrix(true, true);
+    const q = M.root.getWorldQuaternion(new THREE.Quaternion());
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(q), left = new THREE.Vector3(1, 0, 0).applyQuaternion(q), up = new THREE.Vector3(0, 1, 0);
+    const strain = Math.max(0, Math.sin(this.t * 1.7)) ** 6 * (this.crystalOff ? 0.35 : 0.15); // tugging at the ropes
+    for (const [s, sg] of [['Left', 1], ['Right', -1]]) {
+      const out = left.clone().multiplyScalar(sg);
+      M.aim(`${s}UpLeg`, `${s}Leg`, fwd.clone().addScaledVector(out, 0.14).addScaledVector(up, -0.06).normalize());
+      M.aim(`${s}Leg`, `${s}Foot`, up.clone().negate().addScaledVector(fwd, 0.1).addScaledVector(out, 0.04).normalize());
+      M.aim(`${s}Arm`, `${s}ForeArm`, up.clone().negate().addScaledVector(fwd, -0.6 - strain).addScaledVector(out, 0.18 + strain).normalize());
+      M.aim(`${s}ForeArm`, `${s}Hand`, fwd.clone().negate().addScaledVector(out, -0.9).addScaledVector(up, -0.15).normalize());
+    }
+    if (B.Head) M.aim('Neck', 'Head', up.clone().addScaledVector(fwd, 0.12 + strain * 0.5).normalize(), 0.8);
+    const span = 2.4, lift = 0.05;
+    const img = sp.render({ view: 'side', yaw: face * (Math.PI / 2 - 0.4), span, lift });
+    // Shade her into the room: darker than the sprite's studio lights, greener while the crystal glows.
+    const tc = this.tint || (this.tint = document.createElement('canvas'));
+    if (tc.width !== img.width || tc.height !== img.height) { tc.width = img.width; tc.height = img.height; }
+    const t = tc.getContext('2d');
+    t.globalCompositeOperation = 'copy'; t.drawImage(img, 0, 0);
+    t.globalCompositeOperation = 'source-atop';
+    t.fillStyle = this.crystalOff ? 'rgba(10,14,30,.28)' : 'rgba(8,40,18,.34)'; t.fillRect(0, 0, tc.width, tc.height);
+    const h = span * PX_PER_M, w = h * (img.width / img.height);
+    ctx.drawImage(tc, x - w / 2 - face * 8, fy + lift * PX_PER_M - h, w, h);
   }
 
   drawHints(ctx) {
