@@ -77,7 +77,7 @@ export class Special3D {
   applyLook() {
     const r = this.renderer;
     r.toneMapping = THREE.ACESFilmicToneMapping;
-    r.toneMappingExposure = this.exposure ?? 1.25;
+    r.toneMappingExposure = this.exposure ?? 1.1;
   }
 
   resize() {
@@ -114,7 +114,7 @@ export class Special3D {
     this.key.position.set(-6, 14, 8);
     S.add(this.key);
     this.buildWorld();
-    if (!quality().fpsCap) { this.grade = gradeQuad(this.gradeTint ?? 0x07040c, this.gradeK ?? 0.6); S.add(this.grade); }
+    if (quality().look3d === 'full') { this.grade = gradeQuad(this.gradeTint ?? 0x07040c, this.gradeK ?? 0.6); S.add(this.grade); }
     this.heroModel = heroReady() ? new HeroModel() : null;
     this.keepAnimating = false;
     this.camPitch = null; // first frame places the camera directly (no sweep in through walls)
@@ -503,7 +503,7 @@ export class Special3D {
       G.arms.push(p);
     }
     G.scale.setScalar(size * (look.size || 1));
-    inkCharacter(G, { rim: 0xfff0d0 });
+    inkCharacter(G, { rim: 0xfff0d0, outline: quality().look3d !== 'min' });
     this.scene.add(G);
     this.shadows && this.shadows.track(G, 0.45 * size * (look.size || 1));
     return G;
@@ -513,7 +513,8 @@ export class Special3D {
   makeCharacter(kind, look, scale = 1) {
     if (!enemyReady(kind)) return this.makeNPC(look);
     const e = new Enemy(kind, scale);
-    inkCharacter(e.model, { rim: this.castRim ?? 0xffd6a0 });
+    // ink hulls on the skinned cast double their vertex skinning: only on the High profile
+    inkCharacter(e.model, { rim: this.castRim ?? 0xffd6a0, outline: quality().look3d === 'full' });
     this.scene.add(e.root);
     this.cast.push(e);
     this.shadows && this.shadows.track(e.root, 0.5 * scale);

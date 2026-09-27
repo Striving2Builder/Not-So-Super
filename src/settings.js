@@ -8,14 +8,16 @@ const KEY = 'supergirl-settings';
  * What each profile changes. Every renderer reads these through quality().
  * clubMaterials: 'full' as exported · 'standard' drops glass/clearcoat/sheen (no extra render
  * pass) · 'lambert' simple lit materials, no normal/roughness maps (fewest, cheapest shaders).
+ * look3d (3D zones' comic look): 'full' ink outlines on every figure + vignette grade · 'lite' ink
+ * outlines on the heroine and procedural people only, no grade · 'min' heroine only, no light pools.
  */
 export const PROFILES = {
   // desktop: everything on
-  high: { id: 'high', label: 'High', fpsCap: 0, dpr2d: 2, dpr3d: 1.6, heroSprite: 192, clubTex: 'full', clubCache: 3, clubMaterials: 'full' },
+  high: { id: 'high', label: 'High', fpsCap: 0, dpr2d: 2, dpr3d: 1.6, heroSprite: 192, clubTex: 'full', clubCache: 3, clubMaterials: 'full', look3d: 'full' },
   // phones/tablets that keep up: full frame rate, but lite club textures (memory is what runs out)
-  balanced: { id: 'balanced', label: 'Balanced', fpsCap: 0, dpr2d: 2, dpr3d: 1.25, heroSprite: 192, clubTex: 'lite', clubCache: 1, clubMaterials: 'standard' },
+  balanced: { id: 'balanced', label: 'Balanced', fpsCap: 0, dpr2d: 2, dpr3d: 1.25, heroSprite: 192, clubTex: 'lite', clubCache: 1, clubMaterials: 'standard', look3d: 'lite' },
   // older devices / low-power mode: 30 fps, 1× resolution, cheap club materials
-  saver: { id: 'saver', label: 'Battery saver', fpsCap: 30, dpr2d: 1, dpr3d: 1, heroSprite: 128, clubTex: 'lite', clubCache: 1, clubMaterials: 'lambert' },
+  saver: { id: 'saver', label: 'Battery saver', fpsCap: 30, dpr2d: 1, dpr3d: 1, heroSprite: 128, clubTex: 'lite', clubCache: 1, clubMaterials: 'lambert', look3d: 'min' },
 };
 
 export const GRAPHICS_MODES = ['auto', 'high', 'saver'];

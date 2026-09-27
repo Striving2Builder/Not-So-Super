@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { toon, lightPool } from './look3d.js';
 import { rand, chance } from './util.js';
+import { quality } from './settings.js';
 
 export const VENUE_KINDS = new Set(['warehouse', 'penthouse', 'lair']);
 
@@ -74,7 +75,7 @@ export function venueMats(zn, k) {
     }, { repeat: true });
     M.wall = worldTile(toon(0xffffff, { map: wallT }, { halftone: 0.6 }), 3.4);
     M.skirt = worldTile(toon(0xffffff, { map: hazardTex() }, { halftone: 0 }), 1.2); M.skirtH = 0.2;
-    M.hall = toon(0xffffff, { map: tex(W, H, (g) => {
+    M.hall = toon(0xffffff, { map: tex(W, H, (g) => { lit(g, () => {
       g.fillStyle = '#6d7077'; g.fillRect(0, 0, W, H);
       blotch(g, W, H, 60, 'rgba(30,32,40,A)', 30, 140, 0.35);
       blotch(g, W, H, 30, 'rgba(200,200,190,A)', 30, 120, 0.12);
@@ -98,20 +99,20 @@ export function venueMats(zn, k) {
       stencil(g, 'B-2', px(9), pz(-1.5), 48, 'rgba(242,194,26,.6)');
       stencil(g, 'NO SMOKING', px(0), pz(9), 30, 'rgba(230,60,40,.7)');
       g.strokeStyle = 'rgba(230,60,40,.7)'; g.lineWidth = 4; g.strokeRect(px(-3.2), pz(8.4), 6.4 * m2p, 1.2 * m2p);
-    }) }, { halftone: 0.5 });
-    M.back = worldTile(toon(0xffffff, { map: concreteTile('#4a4c52', '#2a2a30') }), 2);
-    M.office = worldTile(toon(0xffffff, { map: planks('#7a5838', '#4a321e') }), 2);
+    }, LIGHT.warehouse); }) }, { halftone: 0.5 });
+    M.back = roomFloor(concreteTile('#4a4c52', '#2a2a30'), 12, 10, [[0, 0, 3.5, '#ffd9a0', 0.45]]);
+    M.office = roomFloor(planks('#7a5838', '#4a321e'), 10, 10, [[0, 0, 3.2, '#ffe6c0', 0.45]]);
     M.mat = toon(0xffffff, { map: tex(128, 96, (g, w, h) => { g.fillStyle = '#232323'; g.fillRect(0, 0, w, h); g.strokeStyle = '#3a3a3a'; g.lineWidth = 3; for (let x = 4; x < w; x += 8) { g.beginPath(); g.moveTo(x, 4); g.lineTo(x, h - 4); g.stroke(); } hazardFill(g, 0, 0, w, 8, 6); hazardFill(g, 0, h - 8, w, 8, 6); }) });
     M.door = doorMat('#6a7480', 'RESTRICTED');
     M.hazard = toon(0xffffff, { map: hazardTex() }, { halftone: 0 });
-    M.lights = () => rig(zn, { sky: 0xb8c8e0, ground: 0x3a342c, hemi: 0.6, amb: 0.12, cols: [0xffc27a, 0xffd9a0, 0x9fc8ff, 0xffb060], power: 42, office: 0xffe6c0, pool: 0.22 });
+    M.lights = () => rig(zn, { sky: 0xc8d4ea, ground: 0x3a342c, hemi: 0.85, amb: 0.15, key: 0xffe2b8, keyK: 1.2 });
   } else if (k === 'penthouse') {
     // floor-to-ceiling glass; bronze frames; the city far below
     M.wall = toon(0x9fd0ff, { transparent: true, opacity: 0.22, emissive: 0x0a1830 }, { halftone: 0 });
     M.skirt = toon(0x3a2a1c, {}, { halftone: 0.3 }); M.skirtH = 0.16;
     M.rail = toon(0x8a6a3a, { emissive: 0x2a1a08 }, { halftone: 0 }); M.railY = 3.32;
     M.posts = { mat: toon(0x2a2018, {}, { halftone: 0 }), every: 2.6 };
-    M.hall = toon(0xffffff, { map: tex(W, H, (g) => {
+    M.hall = toon(0xffffff, { map: tex(W, H, (g) => { lit(g, () => {
       // cream marble slabs with gold joints, a black marble border, an art-deco medallion
       g.fillStyle = '#e8dfcf'; g.fillRect(0, 0, W, H);
       for (let i = 0; i < 40; i++) {
@@ -133,13 +134,13 @@ export function venueMats(zn, k) {
       g.fillStyle = '#d0a848';
       for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a - 0.07) * 2.1 * m2p, cy + Math.sin(a - 0.07) * 2.1 * m2p); g.lineTo(cx + Math.cos(a + 0.07) * 2.1 * m2p, cy + Math.sin(a + 0.07) * 2.1 * m2p); g.fill(); }
       g.fillStyle = '#1c1a20'; g.beginPath(); g.arc(cx, cy, 0.5 * m2p, 0, 7); g.fill();
-    }) }, { halftone: 0.4 });
-    M.back = worldTile(toon(0xffffff, { map: planks('#5a3a24', '#2e1c10', true) }), 2);
-    M.office = worldTile(toon(0xffffff, { map: planks('#6a4a2e', '#3a2616', true) }), 2);
+    }, LIGHT.penthouse); }) }, { halftone: 0.4 });
+    M.back = roomFloor(planks('#5a3a24', '#2e1c10', true), 12, 10, [[0, 0, 3.5, '#ffd6a0', 0.35]]);
+    M.office = roomFloor(planks('#6a4a2e', '#3a2616', true), 10, 10, [[0, 0, 3.2, '#fff0d0', 0.35]]);
     M.mat = toon(0x3a1420);
     M.door = doorMat('#2a2a34', 'PRIVATE', '#d0a848');
     M.hazard = toon(0xd0a848, { emissive: 0x3a2a08 }, { halftone: 0 });
-    M.lights = () => rig(zn, { sky: 0x8aa8e0, ground: 0x6a5a48, hemi: 0.75, amb: 0.1, cols: [0xffd6a0, 0xffe4b8, 0xffc890, 0xffd6a0], power: 26, office: 0xfff0d0, pool: 0.2 });
+    M.lights = () => rig(zn, { sky: 0x9ab4e8, ground: 0x6a5a48, hemi: 0.8, amb: 0.12, key: 0xffe6c8, keyK: 1.1 });
   } else {
     // lair: riveted bunker panels, a toxic-green glow in the floor grates
     const wallT = tex(256, 256, (g, w, h) => {
@@ -162,7 +163,7 @@ export function venueMats(zn, k) {
       for (const x of [-9, 9]) g.fillRect(px(x) - 3, 0, 6, H);
       g.fillStyle = '#a0ff39'; g.fillRect(px(-2.1), pz(-12), 4.2 * m2p, 5);
     });
-    M.hall = toon(0xffffff, { emissive: 0xffffff, emissiveIntensity: 0.9, emissiveMap: grateE, map: tex(W, H, (g) => {
+    M.hall = toon(0xffffff, { emissive: 0xffffff, emissiveIntensity: 0.9, emissiveMap: grateE, map: tex(W, H, (g) => { lit(g, () => {
       g.fillStyle = '#2c3430'; g.fillRect(0, 0, W, H);
       // diamond plate in each 2 m panel
       g.fillStyle = 'rgba(255,255,255,.07)';
@@ -180,13 +181,13 @@ export function venueMats(zn, k) {
       hazardFill(g, px(-2.2), pz(-12), 4.4 * m2p, 1.4 * m2p, 12, '#a0ff39');
       stencil(g, 'SECTOR 13', px(8), pz(3), 54, 'rgba(160,255,57,.35)');
       stencil(g, '☠', px(-8), pz(-3), 110, 'rgba(160,255,57,.2)', 0, 'Georgia, serif');
-    }) }, { halftone: 0.5 });
-    M.back = worldTile(toon(0xffffff, { map: concreteTile('#262e2a', '#101612') }), 2);
-    M.office = worldTile(toon(0xffffff, { map: concreteTile('#303834', '#141a16') }), 2);
+    }, LIGHT.lair); }) }, { halftone: 0.5 });
+    M.back = roomFloor(concreteTile('#262e2a', '#101612'), 12, 10, [[0, 0, 3.5, '#39ff6a', 0.4]]);
+    M.office = roomFloor(concreteTile('#303834', '#141a16'), 10, 10, [[0, 0, 3.2, '#d0ffe0', 0.35]]);
     M.mat = toon(0x1a201c);
     M.door = doorMat('#2e3a34', 'LAB 0', '#a0ff39');
     M.hazard = toon(0xffffff, { map: hazardTex('#a0ff39') }, { halftone: 0 });
-    M.lights = () => rig(zn, { sky: 0x9fe0b0, ground: 0x0a1a10, hemi: 0.5, amb: 0.1, cols: [0x39ff6a, 0xa0ff39, 0x39ffd0, 0x7aff9a], power: 34, office: 0xd0ffe0, pool: 0.28 });
+    M.lights = () => rig(zn, { sky: 0xa8f0c0, ground: 0x0a1a10, hemi: 0.75, amb: 0.1, key: 0xd8ffe0, keyK: 1.0 });
   }
   return M;
 }
@@ -232,25 +233,63 @@ function doorMat(base, label, accent = '#f2c21a') {
   }) }, { halftone: 0.4 });
 }
 
-/** Hemisphere + ambient + four coloured points over the hall and back room, one in the office, pools on the floor. */
+// Lamp positions over the hall (x, z) and their colours per venue. Their light is baked into the
+// floor texture (pools + contact darkening along the walls) rather than being dynamic point
+// lights: per-pixel lights are the most expensive thing a phone GPU does here.
+export const LAMPS = [[-8, -3], [8, -3], [0, 7]];
+const LIGHT = {
+  warehouse: { cols: ['#ffc27a', '#ffd9a0', '#9fc8ff'], k: 0.5, edge: 0.55 },
+  penthouse: { cols: ['#ffd6a0', '#ffe4b8', '#ffc890'], k: 0.35, edge: 0.3 },
+  lair: { cols: ['#39ff6a', '#a0ff39', '#39ffd0'], k: 0.45, edge: 0.6 },
+};
+
+/** Run `draw`, then bake the lamp pools and the darkening at the foot of the walls into the hall floor. */
+function lit(g, draw, L) {
+  draw();
+  const W = g.canvas.width, H = g.canvas.height, px = (x) => ((x + 15) / 30) * W, pz = (z) => ((z + 12) / 24) * H, m = W / 30;
+  poolsOn(g, LAMPS.map(([x, z], i) => [px(x), pz(z), 6.5 * m, L.cols[i], L.k]));
+  edgeShade(g, W, H, 1.6 * m, L.edge);
+}
+
+function poolsOn(g, pools) {
+  g.save(); g.globalCompositeOperation = 'lighter';
+  for (const [x, y, r, col, k] of pools) {
+    const gr = g.createRadialGradient(x, y, 0, x, y, r);
+    const c = parseInt(col.slice(1), 16), rgb = `${c >> 16},${(c >> 8) & 255},${c & 255}`;
+    gr.addColorStop(0, `rgba(${rgb},${k})`); gr.addColorStop(0.45, `rgba(${rgb},${k * 0.45})`); gr.addColorStop(1, `rgba(${rgb},0)`);
+    g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  g.restore();
+}
+
+function edgeShade(g, W, H, band, k) {
+  for (const [x0, y0, x1, y1, x, y, w, h] of [[0, 0, 0, band, 0, 0, W, band], [0, H, 0, H - band, 0, H - band, W, band], [0, 0, band, 0, 0, 0, band, H], [W, 0, W - band, 0, W - band, 0, band, H]]) {
+    const gr = g.createLinearGradient(x0, y0, x1, y1);
+    gr.addColorStop(0, `rgba(0,0,0,${k})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(x, y, w, h);
+  }
+}
+
+/** A room floor (own UVs, w×d metres) tiled from a 2 m tile texture, with baked light pools. */
+function roomFloor(tile, w, d, pools, ppm = 32) {
+  const t = tex(w * ppm, d * ppm, (g, W, H) => {
+    const pat = g.createPattern(tile.image, 'repeat');
+    const k = (2 * ppm) / tile.image.width;
+    pat.setTransform(new DOMMatrix([k, 0, 0, k, 0, 0]));
+    g.fillStyle = pat; g.fillRect(0, 0, W, H);
+    poolsOn(g, pools.map(([x, z, r, col, a]) => [W / 2 + x * ppm, H / 2 + z * ppm, r * ppm, col, a]));
+    edgeShade(g, W, H, 1.2 * ppm, 0.5);
+  });
+  return toon(0xffffff, { map: t });
+}
+
+/** Hemisphere + ambient; the key light (set up by the zone) is tinted for the venue. No point lights. */
 function rig(zn, o) {
   const S = zn.scene;
   S.add(new THREE.HemisphereLight(o.sky, o.ground, o.hemi));
   S.add(new THREE.AmbientLight(0xffffff, o.amb));
-  const pos = [[-8, 3, -3], [8, 3, -3], [0, 3, 7], [0, 3, -17]];
-  zn.plights = pos.map((p, i) => {
-    const l = new THREE.PointLight(o.cols[i % o.cols.length], o.power, 24, 1.25);
-    l.position.set(...p);
-    S.add(l);
-    const pool = lightPool(o.cols[i % o.cols.length], 5.2, o.pool);
-    pool.position.set(p[0], 0.012, p[2]);
-    S.add(pool);
-    return l;
-  });
-  const office = new THREE.PointLight(o.office, o.power * 0.6, 14, 1.3);
-  office.position.set(20, 3, 0);
-  S.add(office);
-  const op = lightPool(o.office, 4, o.pool * 0.8); op.position.set(20, 0.012, 0); S.add(op);
+  zn.key.color.set(o.key); zn.key.intensity = o.keyK;
+  zn.plights = [];
 }
 
 // ---------------------------------------------------------------- dressing
@@ -365,12 +404,6 @@ function warehouse(zn, { add, spot }) {
   add(new THREE.PlaneGeometry(4, 3), shutter, -14.78, 1.5, 3, { ry: Math.PI / 2 });
   add(new THREE.BoxGeometry(0.3, 0.3, 4.4), black, -14.7, 3.1, 3);
   // hanging work lamps over the light pools
-  for (const l of zn.plights) {
-    const { x, z } = l.position;
-    add(new THREE.CylinderGeometry(0.14, 0.55, 0.32, 14), shadeM, x, 3.25, z);
-    add(new THREE.SphereGeometry(0.15, 10, 8), bulb, x, 3.08, z);
-    add(new THREE.CylinderGeometry(0.02, 0.02, 1.2, 4), black, x, 4.0, z);
-  }
   // office: desk, chair, filing boxes, a pin-board
   zn.box(2.6, 0.12, 1.2, 20, 0.78, 0, mat('desk', () => toon(0x6a4a2a)));
   for (const [dx, dz] of [[-1.2, -0.5], [1.2, -0.5], [-1.2, 0.5], [1.2, 0.5]]) zn.box(0.08, 0.74, 0.08, 20 + dx, 0.37, dz, black, { collide: false });
