@@ -15,6 +15,8 @@ node_modules/
 Thumbs.db
 
 # AAA reference screenshots for the polish critics (copyrighted: local only)
-docs/references/*/
+docs/references/
 # Screenshot harness output
 /shots/
+# Agent worktrees for the polish passes
+.claude/worktrees/
