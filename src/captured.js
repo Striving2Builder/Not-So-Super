@@ -5,6 +5,7 @@ import { drawHumanoid, pose, HERO_LOOK, npcLook, glow, portrait } from './art.js
 import { pick, shuffle, fitScene, $ } from './util.js';
 import { dialog, toast, banner } from './ui.js';
 import { sfx } from './sfx.js';
+import { mediaFolders } from './media.js';
 import * as THREE from 'three';
 import { heroReady, HeroSprite } from './hero3d.js';
 
@@ -91,10 +92,18 @@ export class Captured {
   /** Loop a villain video on the wall TV if any are listed in CAPTURE_VIDEOS (data.js). */
   setupVideo(zone) {
     this.stopVideo();
-    const list = (CAPTURE_VIDEOS[zone.venue] || []).concat(CAPTURE_VIDEOS.any || []);
-    if (!list.length) return;
+    const token = (this.videoToken = {});
+    mediaFolders().then((folders) => {
+      if (this.videoToken !== token || this.done) return; // left the scene while the list loaded
+      const named = (CAPTURE_VIDEOS[zone.venue] || []).concat(CAPTURE_VIDEOS.any || []).map((f) => 'assets/video/' + f);
+      const list = named.concat(folders[CAPTURE_VIDEOS.folder] || []);
+      if (list.length) this.startVideo(pick(list));
+    });
+  }
+
+  startVideo(url) {
     const v = document.createElement('video');
-    v.src = 'assets/video/' + pick(list);
+    v.src = url;
     v.loop = true;
     v.playsInline = true;           // iOS: play inside the page, not fullscreen
     v.setAttribute('playsinline', '');
@@ -105,6 +114,7 @@ export class Captured {
   }
 
   stopVideo() {
+    this.videoToken = null;
     const v = this.video;
     if (!v) return;
     v.pause();

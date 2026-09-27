@@ -32,7 +32,10 @@
     </div>
     <div id="hud-top" class="panel"><div id="hud-title"></div><div id="hud-sub"></div></div>
     <div id="hud-right">
-      <canvas id="minimap" width="160" height="160"></canvas>
+      <div id="mapbox">
+        <canvas id="minimap" width="160" height="160"></canvas>
+        <div id="feed"><video muted playsinline preload="auto"></video><img alt=""><div class="feed-cap"><span class="feed-live">● LIVE</span><span class="feed-where"></span></div><span class="feed-x">✕</span></div>
+      </div>
       <button id="fs-btn" class="iconbtn" aria-label="Fullscreen">⛶</button>
       <button id="pause-btn" class="iconbtn" aria-label="Pause">❚❚</button>
     </div>

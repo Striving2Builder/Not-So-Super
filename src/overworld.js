@@ -10,6 +10,7 @@ import { quality, settings } from './settings.js';
 import { AirEvents } from './airevents.js';
 import { Paparazzi } from './paparazzi.js';
 import { Navigator } from './nav.js';
+import { CityFeed } from './cityfeed.js';
 import { stepFlight, stepAltitude, speedFraction, cameraZoom, cameraLead, FLIGHT, BANDS, CRUISE_BAND, CAM_ABOVE } from './flight.js';
 import { Airspace } from './airspace.js';
 import { drawAtmosphere, FOG_Z } from './atmosphere.js';
@@ -52,6 +53,7 @@ export class Overworld {
     this.events = new AirEvents(this);   // airborne rescues and stunts
     this.paps = new Paparazzi(this);     // tabloid drones in vice districts at night
     this.nav = new Navigator();          // waypoint + autopilot
+    this.feed = new CityFeed();          // clips in the minimap corner
   }
 
   reset() {
@@ -71,6 +73,7 @@ export class Overworld {
     this.district = null;
     this.events.reset();
     this.paps.reset();
+    this.feed.stop();
     this.nav.clear();
     this.shock = null;
     this.choppersAnnounced = false;
@@ -103,6 +106,7 @@ export class Overworld {
   exit() {
     $('prompt').classList.remove('on');
     this.audio.stop();
+    this.feed.stop();
   }
 
   // ------------------------------------------------------------------ launch & landing
@@ -167,6 +171,7 @@ export class Overworld {
     const h = this.hero;
     h.perch = { z: b.h + 2 };
     h.speed = 0;
+    this.feed.onPerch(DISTRICTS[this.district]?.name);
     this.perchT = 0;
     this.listened = false;
     this.waitNoted = false;
@@ -268,7 +273,7 @@ export class Overworld {
   }
 
   /** Called by the main loop while a modal (pause, map, dialog) is up. */
-  onPaused() { this.audio.silence(); }
+  onPaused() { this.audio.silence(); this.feed.pause(); }
 
   /** Siren from the nearest incident: louder as she approaches, panned to its side of the screen. */
   nearestSiren() {
@@ -433,6 +438,7 @@ export class Overworld {
       if (D && !this.attract) {
         if (D.vice) toast('📸 Tabloid photographers lurk in this district', 'bad');
         this.g.commentary.onDistrict(d); // "MEANWHILE, IN THE DOCKS…" caption with the crime report
+        this.feed.onDistrict(d, D.name);
       }
     }
     const D = DISTRICTS[d];
@@ -441,7 +447,7 @@ export class Overworld {
     const exposure = h.perch ? BANDS[h.z < BANDS[CRUISE_BAND].z - 60 ? 0 : CRUISE_BAND].vice : BANDS[h.band].vice;
     g.vice = { active: !!(D && D.vice), where: D && D.name, rate: 1.1 * exposure };
 
-    if (!this.attract && st) this.updateCity(dt);
+    if (!this.attract && st) { this.updateCity(dt); this.feed.update(dt, DISTRICTS[this.district]?.name); }
 
     // --- zones
     if (!this.attract) {

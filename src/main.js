@@ -213,6 +213,7 @@ async function pauseMenu() {
       { label: `Sound: ${sfx.enabled ? 'ON' : 'OFF'}`, value: 's' },
       { label: `Comic commentary: ${comic.enabled ? 'ON' : 'OFF'}`, value: 'c' },
       { label: `Graphics: ${settings.graphicsLabel}`, note: 'Battery saver: 30 fps, lighter clubs', value: 'g' },
+      { label: `City feed videos: ${settings.cityFeed ? 'ON' : 'OFF'}`, note: 'Clips in the minimap corner', value: 'f' },
       { label: 'How to play', value: 'h' },
       ...(inMission ? [{ label: 'Abort mission', note: '−3 reputation', value: 'a', cls: 'bad' }] : []),
       ...(game.modeName === 'overworld' ? [{ label: 'Save & quit to title', value: 'q' }] : []),
@@ -221,6 +222,7 @@ async function pauseMenu() {
   if (v === 's') { sfx.toggle(); return pauseMenu(); }
   if (v === 'c') { comic.toggle(); return pauseMenu(); }
   if (v === 'g') { settings.cycleGraphics(); return pauseMenu(); }
+  if (v === 'f') { if (!settings.toggleCityFeed()) game.overworld.feed.stop(); return pauseMenu(); }
   if (v === 'h') { await dialog({ title: 'How to play', text: HOWTO }); return pauseMenu(); }
   if (v === 'a' && game.mode.abort) game.mode.abort();
   if (v === 'q') { st.save(); showTitle(); }

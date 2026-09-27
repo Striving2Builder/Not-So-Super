@@ -27,7 +27,7 @@ function read() {
   try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
 }
 function write() {
-  try { localStorage.setItem(KEY, JSON.stringify({ graphics: state.graphics, autoSlow: state.autoSlow, autopilot: state.autopilot })); } catch (e) { /* private mode */ }
+  try { localStorage.setItem(KEY, JSON.stringify({ graphics: state.graphics, autoSlow: state.autoSlow, autopilot: state.autopilot, cityFeed: state.cityFeed })); } catch (e) { /* private mode */ }
 }
 
 const saved = read();
@@ -35,6 +35,7 @@ const state = {
   graphics: GRAPHICS_MODES.includes(saved.graphics) ? saved.graphics : 'auto',
   autoSlow: !!saved.autoSlow, // Auto measured this device as too slow once → stay on Battery saver
   autopilot: saved.autopilot !== false, // fly toward the waypoint while the stick is idle
+  cityFeed: saved.cityFeed !== false,   // clips in the minimap corner
 };
 const listeners = [];
 
@@ -56,6 +57,8 @@ export const settings = {
     write(); changed();
   },
   get autopilot() { return state.autopilot; },
+  get cityFeed() { return state.cityFeed; },
+  toggleCityFeed() { state.cityFeed = !state.cityFeed; write(); return state.cityFeed; },
   toggleAutopilot() { state.autopilot = !state.autopilot; write(); return state.autopilot; },
   onChange(fn) { listeners.push(fn); },
 };

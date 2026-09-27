@@ -181,6 +181,19 @@ export const DEALS = [
 // With no videos listed, the TV shows the villain's green silhouette feed.
 export const CAPTURE_VIDEOS = {
   any: [],
+  folder: 'Captive', // every clip in assets/video/Captive/ plays on the capture-room TV (see media.js)
+};
+
+// City feed: clips in the minimap corner (src/cityfeed.js). Folders are under assets/video/;
+// run `node tools/build_video_manifest.js` after adding clips.
+export const CITY_FEED = {
+  folders: { flying: 'Flying', rooftop: 'Roof Top' },
+  hot: ['redlight', 'entertainment'], // clips keep coming while she's in these districts
+  cooldown: 35,        // seconds between district-entry clips elsewhere
+  perchCooldown: 20,   // seconds between rooftop clips
+  hotGap: [14, 24],    // seconds between clips while in a hot district
+  clipMax: 12,         // cut videos off after this many seconds
+  imageSecs: 6,        // how long a still stays up
 };
 
 export const SIGN_WORDS = {

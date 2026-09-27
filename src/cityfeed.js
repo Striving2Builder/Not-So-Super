@@ -1,0 +1,113 @@
+// City feed: short clips of the heroine (videos or stills) that play in the minimap corner. The
+// corner grows into a 16:9 panel while a clip plays (the map shrinks to an inset), then settles back.
+//   entering a district → a clip from the "flying" folder
+//   perching on a roof  → a clip from the "rooftop" folder
+//   hot districts (Red Light, Entertainment) → clips keep coming while she's there
+// Clips are listed in assets/video/manifest.json (tools/build_video_manifest.js); what plays where
+// is tuned in CITY_FEED (data.js). With no clips on disk it simply never shows.
+import { CITY_FEED } from './data.js';
+import { settings } from './settings.js';
+import { rand, shuffle, $ } from './util.js';
+import { mediaFolders, isImage as imageUrl } from './media.js';
+
+export class CityFeed {
+  constructor() {
+    this.box = $('mapbox');
+    this.panel = $('feed');
+    this.video = this.panel && this.panel.querySelector('video');
+    this.img = this.panel && this.panel.querySelector('img');
+    this.label = this.panel && this.panel.querySelector('.feed-where');
+    this.lists = {};   // category → clip URLs
+    this.bags = {};    // category → shuffled clips not yet played (no repeats until all have shown)
+    this.playing = null;
+    this.last = -1e9;  // time the last clip started (seconds, on this.t)
+    this.hotGap = CITY_FEED.hotGap[0];
+    this.t = 0;
+    this.load();
+    if (!this.panel) return;
+    this.panel.addEventListener('click', (e) => { e.stopPropagation(); this.stop(); });
+    this.video.addEventListener('ended', () => this.stop());
+    this.video.addEventListener('error', () => this.drop());
+    this.img.addEventListener('error', () => this.drop());
+  }
+
+  load() {
+    mediaFolders().then((folders) => {
+      for (const [cat, folder] of Object.entries(CITY_FEED.folders)) this.lists[cat] = folders[folder] || [];
+    });
+  }
+
+  get enabled() { return settings.cityFeed && !!this.panel; }
+
+  /** She flew into a new district. */
+  onDistrict(key, name) {
+    this.district = key;
+    const hot = CITY_FEED.hot.includes(key);
+    if (hot || this.t - this.last > CITY_FEED.cooldown) this.play('flying', name, hot);
+  }
+
+  /** She landed on a rooftop. */
+  onPerch(name) {
+    if (this.t - this.last > CITY_FEED.perchCooldown) this.play('rooftop', name ? `Rooftops · ${name}` : 'Rooftops');
+  }
+
+  update(dt, districtName) {
+    this.t += dt;
+    if (this.playing) {
+      if (this.video.paused && this.playing.video) this.video.play().catch(() => {}); // resume after a pause
+      if (this.t - this.playing.start > (this.playing.video ? CITY_FEED.clipMax : CITY_FEED.imageSecs)) this.stop();
+      return;
+    }
+    // Hot districts: more clips, for as long as she stays
+    if (CITY_FEED.hot.includes(this.district) && this.t - this.last > this.hotGap) this.play('flying', districtName, true);
+  }
+
+  /** Game paused (dialog, map): freeze the clip. */
+  pause() { if (this.playing && this.playing.video) this.video.pause(); }
+
+  play(cat, where, hot = false) {
+    if (!this.enabled || this.playing) return false;
+    const url = this.next(cat);
+    if (!url) return false;
+    const isImage = imageUrl(url);
+    this.playing = { url, start: this.t, video: !isImage };
+    this.last = this.t;
+    this.hotGap = rand(...CITY_FEED.hotGap);
+    this.label.textContent = where || '';
+    this.panel.classList.toggle('hot', hot);
+    this.panel.classList.toggle('still', isImage);
+    if (isImage) { this.img.src = url; this.video.removeAttribute('src'); }
+    else {
+      this.img.removeAttribute('src');
+      this.video.muted = true; // autoplay in the page (iOS) needs muted + playsinline
+      this.video.src = url;
+      this.video.play().catch(() => {});
+    }
+    this.box.classList.add('feed-on');
+    return true;
+  }
+
+  stop() {
+    if (!this.playing) return;
+    this.playing = null;
+    this.box.classList.remove('feed-on');
+    this.video.pause();
+    this.video.removeAttribute('src');
+    this.video.load(); // release the decoder
+  }
+
+  /** A clip failed to load: forget it and close. */
+  drop() {
+    if (!this.playing) return;
+    const bad = this.playing.url;
+    for (const k in this.lists) this.lists[k] = this.lists[k].filter((u) => u !== bad);
+    this.stop();
+  }
+
+  next(cat) {
+    const all = this.lists[cat] || [];
+    if (!all.length) return null;
+    if (!this.bags[cat] || !this.bags[cat].length) this.bags[cat] = shuffle([...all]);
+    return this.bags[cat].pop();
+  }
+}
