@@ -75,7 +75,13 @@ export class Stage {
     }
     // foreground occluders: sparse, dark, fast parallax
     this.fg = [];
-    if (st !== 'farm' && st !== 'houses') for (let fx = 500; fx < len + 800; fx += r.range(800, 1200)) this.fg.push({ x: fx, kind: r.pick(['pole', 'pole', 'sign']) });
+    // Frame the fights, never split them: one occluder near a screen edge of each locked fight camera
+    // (parallax 1.4, so ~200 units off-centre lands ~40% out from the middle), one between fights.
+    if (st !== 'farm' && st !== 'houses') this.b.waves.forEach((w, i) => {
+      const cx = w.x + 80;
+      this.fg.push({ x: cx + (i % 2 ? -1 : 1) * r.range(190, 215), kind: r.pick(['pole', 'pole', 'sign']) });
+      this.fg.push({ x: cx + 330, kind: 'pole' });
+    });
     this.skySeed = r.int(1, 1e6);
   }
 
@@ -114,9 +120,32 @@ export class Stage {
 
   // ---------------------------------------------------------------- per-frame drawing
   /** Everything behind the actors. */
+  /**
+   * Everything behind the actors. The static set is cached as one opaque screen layer whenever the
+   * camera holds still (it's locked during every fight), so a fight frame costs one blit plus the
+   * animated lights; while scrolling it's drawn layer by layer.
+   */
   drawBack(ctx, W, H, cam, t, night) {
-    const b = this.b, k = b.k, gt = b.gt;
     this.geom(W, H);
+    const nb = Math.round(night * 4) / 4, px = Math.round(cam * this.b.k * this.dpr);
+    const key = px + '|' + nb + '|' + W + 'x' + H;
+    if (this.bgKey !== key) {
+      if (this.lastKey === key) {
+        if (!this.bg) this.bg = mk(1, 1);
+        if (this.bg.width !== Math.round(W * this.dpr) || this.bg.height !== Math.round(H * this.dpr)) { this.bg.width = Math.round(W * this.dpr); this.bg.height = Math.round(H * this.dpr); }
+        const g = this.bg.getContext('2d');
+        g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+        g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+        this.drawStatic(g, W, H, cam, t, night);
+        this.bgKey = key;
+      } else { this.lastKey = key; this.bgKey = null; this.drawStatic(ctx, W, H, cam, t, night); }
+    }
+    if (this.bgKey === key) ctx.drawImage(this.bg, 0, 0, W, H);
+    this.drawLive(ctx, W, H, cam, t, night);
+  }
+
+  drawStatic(ctx, W, H, cam, t, night) {
+    const b = this.b, k = b.k, gt = b.gt;
     // night is baked into every cached layer (bucketed), so there's no full-screen tint pass
     const nb = (this.nb = Math.round(night * 4) / 4);
     // Sky and skylines only show between/above facades: clip them to the gaps (saves fill on phones).
@@ -128,8 +157,7 @@ export class Stage {
       .sort((a, c) => a.x0 - c.x0);
     for (const f of tall) { if (f.x0 > cx + 1) gaps.push([cx, f.x0 + 1]); cx = Math.max(cx, f.x1 - 1); }
     if (cx < W) gaps.push([cx, W]);
-    const DBG = window.__bx || {};
-    if (gaps.length && !DBG.sky) {
+    if (gaps.length) {
       ctx.save();
       ctx.beginPath(); for (const [x0, x1] of gaps) ctx.rect(x0, -30, x1 - x0, gt + 34); ctx.clip();
       ctx.drawImage(this.cached(`sky${nb}`, W, Math.ceil(gt) + 4, (g) => { this.paintSky(g, W, gt + 4, nb); this.tint(g, nb); }), 0, 0, W, Math.ceil(gt) + 4);
@@ -149,27 +177,18 @@ export class Stage {
     }
     // facades
     const lit = night > 0.4;
-    for (const f of DBG.fac ? [] : this.facades) {
+    for (const f of this.facades) {
       const x = W / 2 + (f.x - cam) * k;
       if (x > W + 90 * k || x + (f.w + 90) * k < 0) { if (this.facadeCache.has(f)) this.facadeCache.delete(f); continue; }
       let fc = this.facadeCache.get(f);
       if (!fc || fc.lit !== lit || fc.nb !== nb) { fc = this.bakeFacade(f, lit, nb); this.facadeCache.set(f, fc); }
       ctx.drawImage(fc.c, x - fc.padX * k, gt - fc.top * k, fc.c.width / this.dpr, fc.c.height / this.dpr);
-      // neon breathes and flickers
-      if (fc.neon && lit) {
-        const on = Math.sin(t * 7 + f.id * 3.1) > -0.9 ? 1 : 0.25;
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = (0.55 + Math.sin(t * 2.3 + f.id) * 0.12) * on;
-        const gw = fc.neon.w * k * 1.6, gh = 70 * k;
-        ctx.drawImage(glow(f.neon), x + fc.neon.x * k - gw / 2, gt + fc.neon.y * k - gh / 2, gw, gh);
-        ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-      }
     }
     // ground (wall-contact shadow baked in)
     const tileW = Math.ceil(420 * k);
     const gtile = this.cached(`ground${nb}`, tileW, Math.ceil(H - gt) + 2, (g) => { this.paintGround(g, tileW, H - gt, k); this.tint(g, nb); });
     const goff = -(((cam * k) % tileW) + tileW) % tileW;
-    if (!DBG.ground) for (let x = goff; x < W; x += tileW) ctx.drawImage(gtile, x, gt, tileW, Math.ceil(H - gt) + 2);
+    for (let x = goff; x < W; x += tileW) ctx.drawImage(gtile, x, gt, tileW, Math.ceil(H - gt) + 2);
     // props + lamp posts (back edge of the sidewalk)
     for (const p of this.props) {
       const x = W / 2 + (p.x - cam) * k;
@@ -183,8 +202,31 @@ export class Stage {
       const spr = this.propSprite('lamp', k);
       ctx.drawImage(spr, x - spr.cssW / 2, gt + 6 * k - spr.cssH, spr.cssW, spr.cssH);
     }
-    // night: light pools and lamp heads on top of the (baked) tint
-    if (night > 0.3 && !DBG.lamps) {
+    this.drawLamps(ctx, W, H, cam, night);
+  }
+
+  /** Animated light on top of the set: neon breathing/flicker, lamp heads, cones and pools. */
+  drawLive(ctx, W, H, cam, t, night) {
+    const b = this.b, k = b.k, gt = b.gt, lit = night > 0.4;
+    if (lit) for (const f of this.facades) {
+      const fc = this.facadeCache.get(f);
+      if (!fc || !fc.neon) continue;
+      const x = W / 2 + (f.x - cam) * k;
+      if (fc.neon && lit) {
+        const on = Math.sin(t * 7 + f.id * 3.1) > -0.9 ? 1 : 0.25;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = (0.55 + Math.sin(t * 2.3 + f.id) * 0.12) * on;
+        const gw = fc.neon.w * k * 1.6, gh = 70 * k;
+        ctx.drawImage(glow(f.neon), x + fc.neon.x * k - gw / 2, gt + fc.neon.y * k - gh / 2, gw, gh);
+        ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+  }
+
+  /** Night lamp heads, light cones and pools on the pavement (static, so part of the cached layer). */
+  drawLamps(ctx, W, H, cam, night) {
+    const k = this.b.k, gt = this.b.gt;
+    if (night > 0.3) {
       ctx.globalCompositeOperation = 'lighter';
       for (const lx of this.lamps) {
         const x = W / 2 + (lx - cam) * k;

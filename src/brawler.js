@@ -681,8 +681,7 @@ export class Brawler {
       ctx.translate(fp.x, fp.y); ctx.scale(z, z); ctx.translate(-fp.x, -fp.y);
     }
 
-    const DBG = window.__bx || {};
-    if (!DBG.back) this.stage.drawBack(ctx, W, H, this.cam, this.t, night); else { ctx.fillStyle = '#555'; ctx.fillRect(0, 0, W, H); }
+    this.stage.drawBack(ctx, W, H, this.cam, this.t, night);
 
     // depth-sorted actors
     const drawables = [];
@@ -704,10 +703,10 @@ export class Brawler {
     for (const d of drawables) {
       if (d.f) this.drawFire(ctx, d.f, this.sx(d.f.x), this.gy(d.f.z), this.sc(d.f.z));
       else if (d.c) this.drawCaptive(ctx, d.c, this.sx(d.c.x), this.gy(d.c.z), this.sc(d.c.z));
-      else if (d.e) !DBG.enemy && this.drawEnemy(ctx, d.e, this.sx(d.e.x), this.gy(d.e.z), this.sc(d.e.z));
+      else if (d.e) this.drawEnemy(ctx, d.e, this.sx(d.e.x), this.gy(d.e.z), this.sc(d.e.z));
       else if (d.b) this.drawBreakable(ctx, d.b, this.sx(d.b.x), this.gy(d.b.z), this.sc(d.b.z));
       else if (d.q) this.drawPickup(ctx, d.q, this.sx(d.q.x), this.gy(d.q.z), this.sc(d.q.z));
-      else if (!DBG.hero) this.drawPlayer(ctx, this.sx(this.p.x), this.gy(this.p.z), this.sc(this.p.z));
+      else this.drawPlayer(ctx, this.sx(this.p.x), this.gy(this.p.z), this.sc(this.p.z));
     }
     // bullets: hot tracer streaks
     for (const b of this.bullets) {
@@ -730,7 +729,7 @@ export class Brawler {
     if (this.p.st === 'beam' && this.p.st_t > 0.06) this.drawBeam(ctx);
     ctx.restore();
 
-    if (!DBG.grade) this.stage.drawGrade(ctx, W, H, night);
+    this.stage.drawGrade(ctx, W, H, night);
     if (this.redFlash > 0) {
       const r = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, W * 0.7);
       r.addColorStop(0, 'rgba(255,0,40,0)'); r.addColorStop(1, `rgba(255,0,40,${this.redFlash * 0.7})`);
