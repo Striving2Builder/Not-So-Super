@@ -124,7 +124,11 @@ export class ClubMood {
     S.add(this.key);
     this.pickT = 0;
 
-    this.buildBlobs();
+    // The shared 3D look (look3d.js) already gives every character a contact shadow and an inked
+    // rim; then the club only lends it its rim colour instead of stacking a second set on top.
+    this.coreLook = !!zone.shadows;
+    if (this.coreLook) zone.castRim = M.rim;
+    else this.buildBlobs();
     this.rimU = { value: new THREE.Color(M.rim) };
     this.rimmed = new WeakSet();
     this.vignette();
@@ -277,6 +281,8 @@ export class ClubMood {
     const dx = cam.position.x - h.x, dz = cam.position.z - h.z, d = Math.hypot(dx, dz) || 1;
     this.key.position.set(h.x + dx / d * 1.6, h.y + 1.7, h.z + dz / d * 1.6);
 
+    this.updateBeams(cam);
+    if (this.coreLook) return;
     // rim everyone (new cast members get patched the first time they show up) + contact shadows
     const ppl = this.people(), mtx = new THREE.Matrix4(), s = new THREE.Vector3(), q = new THREE.Quaternion(), p = new THREE.Vector3();
     let n = 0;
@@ -290,7 +296,6 @@ export class ClubMood {
     }
     this.blobs.count = n;
     this.blobs.instanceMatrix.needsUpdate = true;
-    this.updateBeams(cam);
   }
 
   /** Skip merged chunks lying wholly above the slice plane (ceilings, upper floors). */
