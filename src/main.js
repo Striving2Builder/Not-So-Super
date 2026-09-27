@@ -15,11 +15,13 @@ import { UI, dialog, toast } from './ui.js';
 import { sfx } from './sfx.js';
 import { $, pick, chance, fmtTime } from './util.js';
 import { loadHero } from './hero3d.js';
+import { loadEnemies } from './enemies.js';
 import { comic } from './comic.js';
 import { Commentary } from './commentary.js';
 import { settings, quality, autoTune } from './settings.js';
 
 loadHero();
+loadEnemies(); // guard and boss models for the 3D zones (procedural stand-ins until they arrive)
 
 const canvas = $('c2d');
 const ctx = canvas.getContext('2d');

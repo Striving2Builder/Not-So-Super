@@ -37,6 +37,9 @@ export function loadHero() {
 
 export const heroReady = () => asset.ready;
 
+/** The loaded rig (rest-pose scene + clips by name), for retargeting her clips onto other characters. */
+export const heroRig = () => (asset.ready ? { scene: asset.scene, clips: asset.clips, loops: LOOPS } : null);
+
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _q = new THREE.Quaternion(), _pq = new THREE.Quaternion();
 
 export class HeroModel {

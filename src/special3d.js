@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { quality } from './settings.js';
 import { HeroModel, heroReady } from './hero3d.js';
+import { Enemy, enemyReady, GUARD_KINDS, bossKind } from './enemies.js';
 import { VENUES, THEMES, INTOX_ITEMS, BAIT_ITEMS, HERO, FIRST_NAMES, LAST_NAMES } from './data.js';
 import { pick, shuffle, chance, clamp, rand, wobble, $ } from './util.js';
 import { dialog, toast, banner, qte, keypad, flash } from './ui.js';
@@ -82,7 +83,7 @@ export class Special3D {
       done: false, busy: false, t: 0, alert: 0, en: 100, xray: false, inside: 0, bonus: 0, wrong: 0,
       hasCode: false, hasKey: false, doorOpen: false, bossDone: !zone.boss, bossMet: false, punchT: 0,
       code: String(1000 + Math.floor(Math.random() * 9000)),
-      colliders: [], inter: [], guards: [], anims: [], hidden: [], itemSpots: [], evidence: [], captives: [],
+      colliders: [], inter: [], guards: [], anims: [], hidden: [], itemSpots: [], evidence: [], captives: [], cast: [],
       // per-zone references: this object is reused for every zone, so nothing may carry over
       boss: null, informant: null, near: null, _lastGood: null,
     });
@@ -179,6 +180,7 @@ export class Special3D {
 
   exit() {
     this.detachShared();
+    for (const e of this.cast || []) e.root.remove(e.model); // shares geometry/textures with the loaded templates
     document.body.classList.remove('three');
     $('marker').classList.remove('on');
     $('xray-tint').classList.remove('on');
@@ -498,6 +500,18 @@ export class Special3D {
     return G;
   }
 
+  /** A cast enemy model (enemies.js) once it has loaded, else the procedural NPC in `look`. */
+  makeCharacter(kind, look, scale = 1) {
+    if (!enemyReady(kind)) return this.makeNPC(look);
+    const e = new Enemy(kind, scale);
+    this.scene.add(e.root);
+    this.cast.push(e);
+    return e.root;
+  }
+
+  makeGuard() { return this.makeCharacter(pick(GUARD_KINDS), npcLook('guard')); }
+  makeBoss() { return this.makeCharacter(bossKind(this.zone.boss), npcLook('boss'), 1.06); }
+
   // ------------------------------------------------------------------ gameplay setup
   placeGameplay() {
     const z = this.zone, th = this.theme, V = this.V;
@@ -519,7 +533,7 @@ export class Special3D {
     const nG = Math.min(5, 2 + (z.boss ? 1 : 0) + (th.extraGuards || 0) + (chance(0.5) ? 1 : 0));
     for (let i = 0; i < nG; i++) {
       const route = routes[i].map(([x, zz]) => new THREE.Vector3(x, 0, zz));
-      const mesh = this.makeNPC(npcLook('guard'));
+      const mesh = this.makeGuard();
       mesh.position.copy(route[0]);
       const cone = new THREE.Mesh(
         new THREE.CircleGeometry(GUARD_RANGE, 24, -Math.PI / 2 - GUARD_FOV / 2, GUARD_FOV).rotateX(-Math.PI / 2),
@@ -590,7 +604,7 @@ export class Special3D {
     }
     // Boss
     if (z.boss) {
-      this.boss = this.makeNPC(npcLook('boss'));
+      this.boss = this.makeBoss();
       this.boss.position.set(0, 0, -21.2);
     }
     this.keypadInter = this.addInter(new THREE.Vector3(2.1, 0, -11), 'Use the security door', () => !this.doorOpen, () => this.useDoor(), 'door');
@@ -786,7 +800,8 @@ export class Special3D {
     this.bossDone = true;
     sfx.hit(); flash('#fff');
     const b = this.boss;
-    this.anims.push(() => { if (b.rotation.x > -Math.PI / 2) { b.rotation.x -= 0.08; b.position.y = 0.2; } });
+    if (b.enemy) b.enemy.knockDown();
+    else this.anims.push(() => { if (b.rotation.x > -Math.PI / 2) { b.rotation.x -= 0.08; b.position.y = 0.2; } });
     banner(`${this.zone.boss.toUpperCase()} DEFEATED`, '', '#3ee08a');
     this.bonus += 10;
   }
@@ -859,6 +874,7 @@ export class Special3D {
   // ------------------------------------------------------------------ update
   update(dt) {
     if (this.done && this.keepAnimating && this.heroModel) this.heroModel.update(dt);
+    if (this.scene) for (const e of this.cast) e.update(dt);
     if (this.done || !this.scene) return;
     const g = this.g, inp = g.input, st = g.state;
     this.t += dt;
@@ -950,7 +966,8 @@ export class Special3D {
         const m = gd.mesh;
         const s = this.screenOf(m.position, 1.6);
         if (s) this.g.commentary.hit(s.x, s.y, { big: true });
-        this.anims.push(() => { if (m.rotation.x > -Math.PI / 2) { m.rotation.x -= 0.12; m.position.y = 0.15; } });
+        if (m.enemy) m.enemy.knockDown();
+        else this.anims.push(() => { if (m.rotation.x > -Math.PI / 2) { m.rotation.x -= 0.12; m.position.y = 0.15; } });
         if (gd.seeing) { this.alert = Math.min(99, this.alert + 20); toast('He got a shout off before going down!', 'bad'); }
         else toast('Silent takedown', 'good');
         return;
@@ -973,6 +990,7 @@ export class Special3D {
         gd.look = 1.2;
         this.alert = Math.min(100, this.alert + dt * (30 + (GUARD_RANGE - d) * 9));
       }
+      if (m.enemy) { if (gd.look > 0) m.enemy.play('combatIdle'); else m.enemy.play('walk', { speed: 1.2 }); } // walk clip at 1.7 m/s
       if (gd.look > 0) {
         gd.look -= dt;
         if (gd.seeing) m.rotation.y = Math.atan2(dx, dz);

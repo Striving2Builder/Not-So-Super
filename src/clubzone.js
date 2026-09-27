@@ -293,7 +293,8 @@ export class ClubZone extends Special3D {
 
   spawnPoint() { return { pos: this.spawn.clone(), heading: this.spawnHeading }; }
 
-  bossTrigger(h) { return this.boss && h.position.distanceTo(this.boss.position) < 7; }
+  // (a boss close to the entrance in a small club only confronts her once she's well inside)
+  bossTrigger(h) { return this.boss && h.position.distanceTo(this.boss.position) < Math.min(7, this.far(this.boss.position) * 0.6); }
 
   // ------------------------------------------------------------------ placement
   onMain(p) { return Math.abs(p.y - this.club.mainY) < 0.3; }
@@ -336,10 +337,17 @@ export class ClubZone extends Special3D {
     this.far = (p) => p.distanceTo(this.spawn);
     this.maxD = Math.max(...floor.map(this.far));
     const used = [this.spawn];
-    /** Random floor spot passing `test`, at least `gap` metres from everything placed so far. */
-    this.choose = (test, gap = 3) => {
-      const cands = shuffle(floor.filter((p) => test(p) && used.every((u) => u.distanceTo(p) > gap)));
-      const p = cands[0] || pick(floor);
+    /**
+     * Random floor spot passing `test`, at least `gap` metres from everything placed so far. When
+     * nothing passes and `prefer` is given (small clubs, crowded by earlier placements): squeeze the
+     * gap before giving up on `test`, then take the free spot scoring highest on `prefer`.
+     */
+    this.choose = (test, gap = 3, prefer = null) => {
+      const free = (p, g) => used.every((u) => u.distanceTo(p) > g);
+      let p = null;
+      for (let g = gap; !p && g >= 1; g = prefer ? g / 2 : 0) p = shuffle(floor.filter((q) => test(q) && free(q, g)))[0];
+      if (!p && prefer) for (const q of floor) if (free(q, 1) && (!p || prefer(q) > prefer(p))) p = q;
+      p = p || pick(floor);
       used.push(p);
       return p.clone();
     };
@@ -397,7 +405,7 @@ export class ClubZone extends Special3D {
         route = this.far(a) <= this.far(b) ? [a.clone(), b.clone()] : [b.clone(), a.clone()];
       }
       if (!route) continue;
-      const mesh = this.makeNPC(npcLook('guard'));
+      const mesh = this.makeGuard();
       mesh.position.copy(route[0]);
       mesh.rotation.y = Math.atan2(route[1].x - route[0].x, route[1].z - route[0].z);
       const cone = new THREE.Mesh(
@@ -466,7 +474,9 @@ export class ClubZone extends Special3D {
   }
 
   placeBoss() {
-    this.boss = this.placeNPC(npcLook('boss'), (q) => this.far(q) > this.maxD * 0.75, 5);
+    const b = (this.boss = this.makeBoss());
+    b.position.copy(this.choose((q) => this.far(q) > this.maxD * 0.75, 5, this.far));
+    this.faceSpawn(b);
   }
 
   /** Table tops / bar counters: upward-facing surfaces 0.55–1.25 m above the local floor. */
