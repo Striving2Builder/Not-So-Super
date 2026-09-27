@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-import { Special3D } from './special3d.js';
+import { Special3D, CAM_DIST, CAM_PITCHES } from './special3d.js';
 import { VENUES, THEMES, INTOX_ITEMS, BAIT_ITEMS, FIRST_NAMES, HERO } from './data.js';
 import { pick, shuffle, chance, rand, $ } from './util.js';
 import { dialog, toast, banner } from './ui.js';
@@ -313,8 +313,20 @@ export class ClubZone extends Special3D {
     const cz = (c.box.min.z + c.box.max.z) / 2, cx = (c.box.min.x + c.box.max.x) / 2;
     const open = floor.filter((p) => this.onMain(p) && this.near(p, 2.5) >= 14);
     open.sort((a, b) => Math.abs(b.z - cz) - Math.abs(a.z - cz));
-    this.spawn = (open[0] || floor[0]).clone();
-    this.spawnHeading = Math.atan2(cx - this.spawn.x, cz - this.spawn.z);
+    // Spawn toward the entrance end, facing into the club, on the first spot where the normal
+    // camera angle behind her is clear AND the camera hangs over the club's own floor (the very
+    // end is often right against the outside wall: the camera either squashes into her back or
+    // floats outside, looking down on sliced-open walls).
+    const facing = (p) => Math.atan2(cx - p.x, cz - p.z);
+    const camClear = (p) => {
+      this.yaw = facing(p) - Math.PI;
+      const off = this.cameraOffset(CAM_PITCHES[0]);
+      if (this.cameraReach(p, off) < CAM_DIST * 0.75) return false;
+      const gx = p.x + off.x, gz = p.z + off.z;
+      return floor.some((q) => Math.abs(q.y - p.y) < 0.5 && (q.x - gx) ** 2 + (q.z - gz) ** 2 < 1.5 * 1.5);
+    };
+    this.spawn = (open.slice(0, 120).find(camClear) || open[0] || floor[0]).clone();
+    this.spawnHeading = facing(this.spawn);
     this.far = (p) => p.distanceTo(this.spawn);
     this.maxD = Math.max(...floor.map(this.far));
     const used = [this.spawn];

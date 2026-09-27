@@ -33,6 +33,10 @@ function segHitsBox(ax, az, bx, bz, c) {
   return true;
 }
 
+// Third-person camera: distance behind her, and the pitches it may use (the first is the normal view).
+export const CAM_DIST = 7.6;
+export const CAM_PITCHES = [0.86, 1.05, 1.25, 1.42];
+
 function canvasTex(w, h, draw, repeat) {
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
@@ -90,6 +94,7 @@ export class Special3D {
     this.buildWorld();
     this.heroModel = heroReady() ? new HeroModel() : null;
     this.keepAnimating = false;
+    this.camPitch = null; // first frame places the camera directly (no sweep in through walls)
     this.landT = 0;
     if (this.heroModel) {
       this.hero = new THREE.Group();
@@ -143,6 +148,26 @@ export class Special3D {
 
   /** How far the camera may sit from her along `off` (club raids shorten it past obstacles). */
   cameraReach(h, off) { return off.length(); }
+
+  /** Camera offset from her at a given pitch (radians above horizontal), behind her along yaw. */
+  cameraOffset(pitch, dist = CAM_DIST) {
+    return new THREE.Vector3(Math.sin(this.yaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist, Math.cos(this.yaw) * Math.cos(pitch) * dist);
+  }
+
+  /**
+   * The lowest camera pitch with a clear view of her. When a wall blocks the usual angle the
+   * camera swings up toward top-down (club ceilings are sliced away above her head, so from
+   * overhead the view is nearly always clear) instead of squashing in against her back.
+   */
+  cameraPitch(h) {
+    let best = CAM_PITCHES[0], bestReach = -1;
+    for (const p of CAM_PITCHES) {
+      const reach = this.cameraReach(h, this.cameraOffset(p));
+      if (reach >= CAM_DIST * 0.75) return p;
+      if (reach > bestReach) { bestReach = reach; best = p; }
+    }
+    return best;
+  }
 
   /** Should the boss confrontation start now? */
   bossTrigger(h) { return this.doorOpen && h.position.z < -13; }
@@ -1047,10 +1072,12 @@ export class Special3D {
   render() {
     if (!this.scene) return;
     const h = this.hero.position, st = this.g.state;
-    const pitch = 0.86, dist = 7.6;
-    const off = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist, Math.cos(this.yaw) * Math.cos(pitch) * dist);
-    const want = h.clone().add(off.multiplyScalar(this.cameraReach(h, off) / dist));
-    this.cam.position.lerp(want, 0.2);
+    const target = this.cameraPitch(h), snap = this.camPitch === null;
+    // tilt up quickly to get out from behind a wall; settle back down gently
+    this.camPitch = snap ? target : this.camPitch + (target - this.camPitch) * (target > this.camPitch ? 0.3 : 0.08);
+    const off = this.cameraOffset(this.camPitch);
+    const want = h.clone().add(off.multiplyScalar(this.cameraReach(h, off) / CAM_DIST));
+    if (snap) this.cam.position.copy(want); else this.cam.position.lerp(want, 0.2);
     this.cam.lookAt(h.x, h.y + 1.1, h.z);
     if (st.intox > 30) {
       const k = (st.intox - 30) / 70;
