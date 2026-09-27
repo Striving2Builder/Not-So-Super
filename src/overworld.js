@@ -260,6 +260,7 @@ export class Overworld {
         const y = b.y0 + 3 + (e === 0 ? 0 : e === 1 ? f : e === 2 ? side : side - f);
         ctx.fillStyle = cols[i % cols.length];
         const px = V.SX(x), py = V.SY(y);
+        if (fade > 0.35 && px > 0 && py > 0 && px < V.W && py < V.H) this.peds.push({ x, y });
         ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
         // close to her: an arm raised, pointing up at her
         const dx = this.hero.x - x, dy = this.hero.y - y, d2 = dx * dx + dy * dy;
@@ -271,6 +272,24 @@ export class Overworld {
       }
     }
     ctx.restore();
+  }
+
+  /**
+   * A pedestrian on screen, off to one side of her, to put a citizen's line in the mouth of.
+   * Returns { x, y, anchor } (screen point + a follower that keeps the tail on them as the
+   * street scrolls), or null when nobody's in view, e.g. she's flying too high to see the street.
+   */
+  speakerSpot() {
+    const V = this.V, hs = this.heroScreen;
+    if (!V || !hs || !this.peds?.length) return null;
+    const near = this.peds.filter((p) => {
+      const d = dist(V.SX(p.x), V.SY(p.y), hs.x, hs.y);
+      return d > 110 && d < 340;
+    });
+    if (!near.length) return null;
+    const p = pick(near);
+    const anchor = () => (this.g.modeName === 'overworld' && this.V ? { x: this.V.SX(p.x), y: this.V.SY(p.y) } : null);
+    return { ...anchor(), anchor };
   }
 
   /** Called by the main loop while a modal (pause, map, dialog) is up. */
@@ -513,11 +532,11 @@ export class Overworld {
     }
     // crowds below shout when she skims past
     this.crowdT -= dt;
-    if (this.crowdT <= 0 && h.z < 260 && h.speed > 200 && this.heroScreen && DISTRICTS[this.district] && this.district !== 'farm') {
+    const spot = this.crowdT <= 0 && h.z < 260 && h.speed > 200 && DISTRICTS[this.district] && this.district !== 'farm' && this.speakerSpot();
+    if (spot) {
       this.crowdT = rand(16, 28);
-      const side = chance(0.5) ? -1 : 1;
       const lines = st.rep < 0 ? ['Hey! Watch it!', 'Show-off!', 'There goes trouble…'] : ['Look! Up in the sky!', "It's Supergirl!", "Mommy, look, she's flying!", "Go get 'em!"];
-      this.g.commentary.talk(pick(lines), this.heroScreen.x + side * rand(120, 220), this.heroScreen.y + rand(60, 140), { kind: 'shout', speaker: 'CROWD' });
+      this.g.commentary.talk(pick(lines), spot.x, spot.y, { kind: 'shout', speaker: 'CROWD', anchor: spot.anchor });
     }
     const res = this.nav.update(h, (ref) => this.zones.includes(ref) || this.events.list.includes(ref));
     if (res === 'arrived') toast(this.near ? "You're over the incident: DIVE!" : '🧭 Arrived at your waypoint', 'info');
@@ -777,6 +796,7 @@ export class Overworld {
 
     // street life, visible when she's low
     const h = this.hero;
+    this.peds = []; // pedestrians on screen this frame (world coords), for citizen chatter
     if (h.z < 260) this.drawPedestrians(ctx, V, city, bx0, bx1, by0, by1);
 
     // zone ground rings

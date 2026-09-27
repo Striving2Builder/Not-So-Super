@@ -62,8 +62,12 @@ export const comic = {
     drop(el, 700 + size * 250);
   },
 
-  /** Speech bubble whose tail points at (x, y). kind: 'speech' | 'shout' | 'thought'. */
-  say(text, x, y, { kind = 'speech', speaker = '', ms } = {}) {
+  /**
+   * Speech bubble whose tail points at (x, y). kind: 'speech' | 'shout' | 'thought'.
+   * anchor: optional () => {x, y} | null, called every frame so the bubble rides along with a
+   * speaker in a scrolling world; returning null pops the bubble early.
+   */
+  say(text, x, y, { kind = 'speech', speaker = '', ms, anchor } = {}) {
     if (!enabled) return;
     const l = layer();
     while (count('bubble') >= MAX_BUBBLES) l.querySelector('.bubble').remove();
@@ -74,12 +78,28 @@ export const comic = {
     // Place above the point (or below if too close to the top), keeping it on screen.
     const r = el.getBoundingClientRect();
     const below = y - r.height - 26 < 70;
-    const left = clampX(x, r.width / 2) - r.width / 2;
-    el.style.left = left + 'px';
-    el.style.top = (below ? y + 26 : y - r.height - 26) + 'px';
-    el.style.setProperty('--tail', Math.max(18, Math.min(r.width - 18, x - left)) + 'px');
+    const place = (px, py) => {
+      const left = clampX(px, r.width / 2) - r.width / 2;
+      el.style.left = left + 'px';
+      el.style.top = (below ? py + 26 : py - r.height - 26) + 'px';
+      el.style.setProperty('--tail', Math.max(18, Math.min(r.width - 18, px - left)) + 'px');
+    };
+    place(x, y);
     if (below) el.classList.add('below');
     drop(el, ms || 1900 + text.length * 45);
+    if (anchor) {
+      const follow = () => {
+        if (!el.isConnected || el.classList.contains('out')) return;
+        const p = anchor();
+        if (!p || p.x < -40 || p.y < -40 || p.x > innerWidth + 40 || p.y > innerHeight + 40) {
+          el.classList.add('out'); setTimeout(() => el.remove(), 350);
+          return;
+        }
+        place(p.x, p.y);
+        requestAnimationFrame(follow);
+      };
+      requestAnimationFrame(follow);
+    }
   },
 
   /** Yellow narrator caption box ("MEANWHILE..."). */

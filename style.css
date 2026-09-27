@@ -333,11 +333,12 @@ body.title-on #comic-layer { display: none; }
 @keyframes shake { 0% { translate: 0 0; } 50% { translate: 2px -1px; } 100% { translate: -2px 1px; } }
 
 /* Narrator captions */
-.caption { position: absolute; left: 50%; max-width: min(620px, 80vw); padding: 7px 16px 6px; background: #ffe24a; color: #111; border: 3px solid #111; box-shadow: 5px 5px 0 rgba(0, 0, 0, .5); font-size: clamp(16px, 2.3vw, 24px); letter-spacing: .06em; text-transform: uppercase; text-align: center; transform: translateX(-50%) skew(-6deg); animation: cap-in .45s cubic-bezier(.2, 1.4, .5, 1) both; }
-.caption.top { top: calc(64px + var(--st)); }
-.caption.bottom { bottom: calc(130px + var(--sb)); }
-.caption.out { transform: translateX(-50%) skew(-6deg) translateY(-12px); }
-@keyframes cap-in { from { transform: translateX(-160%) skew(-6deg); } to { transform: translateX(-50%) skew(-6deg); } }
+/* Lower left, just above the joystick; slides in from the left edge like a comic panel. */
+.caption { position: absolute; left: calc(14px + var(--sl)); bottom: calc(180px + var(--sb)); max-width: min(440px, 44vw); padding: 7px 16px 6px; background: #ffe24a; color: #111; border: 3px solid #111; box-shadow: 5px 5px 0 rgba(0, 0, 0, .5); font-size: clamp(15px, 2vw, 22px); letter-spacing: .06em; text-transform: uppercase; text-align: left; transform: skew(-6deg); transform-origin: left bottom; animation: cap-in .5s cubic-bezier(.2, 1.3, .5, 1) both; }
+.caption.out { animation: cap-out .32s ease-in both; }
+@keyframes cap-in { from { transform: skew(-6deg) translateX(calc(-100% - 40px)); } to { transform: skew(-6deg); } }
+@keyframes cap-out { to { transform: skew(-6deg) translateX(calc(-100% - 40px)); } }
+@media (max-height: 460px) { .caption { bottom: calc(160px + var(--sb)); max-width: 40vw; font-size: 14px; } }
 
 /* EXTRA! news flashes */
 .newsflash { position: absolute; left: 50%; top: calc(150px + var(--st)); transform: translateX(-50%) rotate(-2deg); display: flex; align-items: center; gap: 10px; max-width: min(640px, 86vw); padding: 8px 16px 7px 10px; background: #f3ecd8; color: #111; border: 3px solid #111; box-shadow: 6px 6px 0 rgba(0, 0, 0, .5); font-size: clamp(16px, 2.4vw, 25px); letter-spacing: .03em; animation: news-in .6s cubic-bezier(.2, 1.3, .5, 1) both; }

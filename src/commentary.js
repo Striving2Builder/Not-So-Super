@@ -116,7 +116,7 @@ export class Commentary {
     if (this.g.modeName !== 'overworld') return;
     this.ambientT -= dt;
     this.newsT -= dt;
-    if (this.ambientT <= 0) { this.ambientT = rand(14, 24); this.citizen(); }
+    if (this.ambientT <= 0) this.ambientT = this.citizen() ? rand(14, 24) : 3; // nobody in view: try again soon
     if (this.newsT <= 0) { this.newsT = rand(55, 80); this.news(); }
   }
 
@@ -131,21 +131,21 @@ export class Commentary {
     comic.caption(`${line} ${report}`);
   }
 
+  /** A pedestrian in view pipes up. Returns false when nobody's on screen to say it. */
   citizen() {
     const ow = this.g.overworld;
-    if (!ow || !ow.heroScreen) return;
-    const { x, y } = ow.heroScreen;
-    // somebody on the street below, off to one side of her
-    const side = chance(0.5) ? -1 : 1;
-    const px = x + side * rand(140, 260), py = y + rand(40, 160);
+    const spot = ow?.speakerSpot();
+    if (!spot) return false;
+    const { x: px, y: py, anchor } = spot;
     const zones = ow.zones.filter((z) => z.kind !== 'special');
     if (zones.length && chance(0.35)) {
       const z = pick(zones);
-      comic.say(fill(pick(RUMOR), { C: z.name.toLowerCase(), D: placeName(z.district) }), px, py, { kind: 'speech', speaker: 'CITIZEN' });
+      comic.say(fill(pick(RUMOR), { C: z.name.toLowerCase(), D: placeName(z.district) }), px, py, { kind: 'speech', speaker: 'CITIZEN', anchor });
     } else {
       const bad = !GOOD.has(this.tierNow) && this.tierNow !== 'rookie';
-      comic.say(pick(CITIZEN[this.tierNow]), px, py, { kind: bad ? 'shout' : 'speech', speaker: pick(['CITIZEN', 'KID', 'CABBIE', 'GRANNY', 'NEWSBOY']) });
+      comic.say(pick(CITIZEN[this.tierNow]), px, py, { kind: bad ? 'shout' : 'speech', speaker: pick(['CITIZEN', 'KID', 'CABBIE', 'GRANNY', 'NEWSBOY']), anchor });
     }
+    return true;
   }
 
   news() {
