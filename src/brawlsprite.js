@@ -15,7 +15,7 @@ export const SPAN = 2.6, LIFT = 0.12; // frame covers 2.6 m of height, feet 0.12
 export const LOOKS = {
   thug:     { model: 'robber', scale: 1, recolor: { stripe: '#f2f2f2', dark: '#1a1a22', pants: '#2a3550', skin: '#e8c49a' }, hat: 'cap', hatCol: '#d8122e' },
   knife:    { model: 'robber', scale: 0.96, recolor: { stripe: '#e84a3a', dark: '#2a0e12', pants: '#1c1c20', skin: '#b57a55' }, hat: 'bandana', hatCol: '#d8122e' },
-  brute:    { model: 'robber', scale: 1.24, recolor: { stripe: '#8a9a5a', dark: '#2a3018', pants: '#3a3026', skin: '#8a5a3b' }, hat: 'none', beard: true },
+  brute:    { model: 'robber', scale: 1.24, recolor: { stripe: '#9a6ae8', dark: '#1e1236', pants: '#2a2a34', skin: '#8a5a3b' }, hat: 'none', beard: true },
   gunman:   { model: 'police', scale: 1, tint: 0x9a9ab8, hat: 'shades' },
   arsonist: { model: 'robber', scale: 1, recolor: { stripe: '#ff9a1f', dark: '#3a1a08', pants: '#3a3a2a', skin: '#f1c7a5' }, hat: 'beanie', hatCol: '#2a2a30' },
   boss:     { model: 'riddler', scale: 1.14 },

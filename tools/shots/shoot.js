@@ -51,8 +51,8 @@ const AREAS = {
   },
   brawler: {
     street: { type: 'brawl' },
-    downtown: { type: 'brawl', crime: 'gang', clock: 21 * 60, crowd: true },
-    shops: { type: 'brawl', crime: 'robbery', district: 'retail', clock: 13 * 60, crowd: true },
+    downtown: { type: 'brawl', crime: 'gang', clock: 21 * 60, crowd: true, god: true },
+    shops: { type: 'brawl', crime: 'robbery', district: 'retail', clock: 13 * 60, crowd: true, god: true },
   },
   investigation: {
     daycase: { type: 'investigate' },
@@ -160,6 +160,8 @@ async function shootBrawl(page, dir, name, sc = {}) {
       z = g.overworld.spawn('street', true);
     }
     g.startZone(z);
+    // pinned scenarios keep her on her feet so every frame shows the move being shot, not a stagger
+    if (sc.god) g.mode.p.god = true;
   }, sc);
   await page.waitForTimeout(2500);
   await page.screenshot({ path: path.join(dir, `${name}_1_start.png`) });

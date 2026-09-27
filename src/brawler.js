@@ -76,7 +76,7 @@ export class Brawler {
       this.breakables.push({ x, z: this.rng.range(0.1, 0.85), kind: this.rng.pick(kinds), broken: false, wob: 0 });
     }
 
-    this.p = { x: 300, z: 0.5, y: 0, vy: 0, hp: 100, en: 100, facing: 1, st: 'idle', st_t: 0, combo: 0, queued: false, inv: 0, hitSet: new Set() };
+    this.p = { x: 400, z: 0.5, y: 0, vy: 0, hp: 100, en: 100, facing: 1, st: 'idle', st_t: 0, combo: 0, queued: false, inv: 0, hitSet: new Set() };
     this.cam = 0;
     this.lock = null;
     this.geom();
@@ -562,7 +562,7 @@ export class Brawler {
 
   hurtPlayer(dmg, dir, knock = false) {
     const p = this.p;
-    if (p.inv > 0 || p.st === 'down') return;
+    if (p.inv > 0 || p.god || p.st === 'down') return; // god: harness-only (tools/shots)
     p.hp = Math.max(0, p.hp - dmg);
     p.inv = 0.5;
     sfx.hurt();
@@ -681,7 +681,8 @@ export class Brawler {
       ctx.translate(fp.x, fp.y); ctx.scale(z, z); ctx.translate(-fp.x, -fp.y);
     }
 
-    this.stage.drawBack(ctx, W, H, this.cam, this.t, night);
+    const DBG = window.__bx || {};
+    if (!DBG.back) this.stage.drawBack(ctx, W, H, this.cam, this.t, night); else { ctx.fillStyle = '#555'; ctx.fillRect(0, 0, W, H); }
 
     // depth-sorted actors
     const drawables = [];
@@ -703,10 +704,10 @@ export class Brawler {
     for (const d of drawables) {
       if (d.f) this.drawFire(ctx, d.f, this.sx(d.f.x), this.gy(d.f.z), this.sc(d.f.z));
       else if (d.c) this.drawCaptive(ctx, d.c, this.sx(d.c.x), this.gy(d.c.z), this.sc(d.c.z));
-      else if (d.e) this.drawEnemy(ctx, d.e, this.sx(d.e.x), this.gy(d.e.z), this.sc(d.e.z));
+      else if (d.e) !DBG.enemy && this.drawEnemy(ctx, d.e, this.sx(d.e.x), this.gy(d.e.z), this.sc(d.e.z));
       else if (d.b) this.drawBreakable(ctx, d.b, this.sx(d.b.x), this.gy(d.b.z), this.sc(d.b.z));
       else if (d.q) this.drawPickup(ctx, d.q, this.sx(d.q.x), this.gy(d.q.z), this.sc(d.q.z));
-      else this.drawPlayer(ctx, this.sx(this.p.x), this.gy(this.p.z), this.sc(this.p.z));
+      else if (!DBG.hero) this.drawPlayer(ctx, this.sx(this.p.x), this.gy(this.p.z), this.sc(this.p.z));
     }
     // bullets: hot tracer streaks
     for (const b of this.bullets) {
@@ -729,7 +730,7 @@ export class Brawler {
     if (this.p.st === 'beam' && this.p.st_t > 0.06) this.drawBeam(ctx);
     ctx.restore();
 
-    this.stage.drawGrade(ctx, W, H, night);
+    if (!DBG.grade) this.stage.drawGrade(ctx, W, H, night);
     if (this.redFlash > 0) {
       const r = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, W * 0.7);
       r.addColorStop(0, 'rgba(255,0,40,0)'); r.addColorStop(1, `rgba(255,0,40,${this.redFlash * 0.7})`);
@@ -807,6 +808,10 @@ export class Brawler {
     // one readback of the WebGL canvas into 2D, then outline from the copy (each WebGL drawImage is a readback)
     if (!this.heroCopy) { this.heroCopy = document.createElement('canvas'); this.heroCopy.width = img.width; this.heroCopy.height = img.height; this.hcx = this.heroCopy.getContext('2d'); }
     this.hcx.clearRect(0, 0, img.width, img.height); this.hcx.drawImage(img, 0, 0);
+    // ink it once per render (not per frame): 3 px outline in sprite pixels, 4 px padding
+    if (!this.heroInk) { this.heroInk = document.createElement('canvas'); this.heroInk.width = img.width + 8; this.heroInk.height = img.height + 8; this.hix = this.heroInk.getContext('2d'); }
+    this.hix.clearRect(0, 0, this.heroInk.width, this.heroInk.height);
+    inkOutline(this.hix, this.heroCopy, img.width, img.height, 3, 4, 4);
     }
     // Sprite frame is 2.6 m tall at 54 units per metre.
     const hpx = 2.6 * M * s, wpx = hpx * (220 / 300);
@@ -816,7 +821,8 @@ export class Brawler {
     ctx.drawImage(glow('#ffd070'), x - wpx * 0.5, top + hpx * 0.1, wpx, hpx * 0.8);
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     const hc = this.heroCopy;
-    inkOutline(ctx, hc, wpx, hpx, Math.max(1.2, 1.5 * s), x - wpx / 2, top);
+    const pk = wpx / 220;
+    ctx.drawImage(this.heroInk, x - wpx / 2 - 4 * pk, top - 4 * pk, wpx + 8 * pk, hpx + 8 * pk);
     if (p.flash > 0) { p.flash -= 1 / 60; ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.6; ctx.drawImage(hc, x - wpx / 2, top, wpx, hpx); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
     this.drawSwing(ctx, x, y, s);
     if (p.st === 'breath') {

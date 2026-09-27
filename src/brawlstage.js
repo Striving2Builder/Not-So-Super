@@ -67,7 +67,7 @@ export class Stage {
     // street furniture on the back edge of the sidewalk (never in the way)
     this.lamps = [];
     for (let lx = 140; lx < len + 500; lx += 460) this.lamps.push(lx + r.range(-40, 40));
-    const PROPS = st === 'farm' ? ['hay', 'fence', 'hay'] : st === 'houses' ? ['hydrant', 'mailbox', 'tree', 'bin'] : st === 'docks' ? ['bollard', 'crate', 'bollard'] : ['hydrant', 'newsbox', 'bags', 'bench', 'meter', 'tree'];
+    const PROPS = st === 'farm' ? ['hay', 'fence', 'hay'] : st === 'houses' ? ['hydrant', 'mailbox', 'tree', 'bin'] : st === 'docks' ? ['bollard', 'crate', 'bollard'] : st === 'warehouses' || st === 'factory' || st === 'lair' ? ['bags', 'bollard', 'crate', 'meter', 'hydrant'] : ['hydrant', 'newsbox', 'bags', 'bench', 'meter', 'tree'];
     this.props = [];
     for (let px = 60; px < len + 500; px += r.range(130, 240)) {
       if (this.lamps.some((l) => Math.abs(l - px) < 50)) continue;
@@ -75,7 +75,7 @@ export class Stage {
     }
     // foreground occluders: sparse, dark, fast parallax
     this.fg = [];
-    for (let fx = 500; fx < len + 800; fx += r.range(700, 1000)) this.fg.push({ x: fx, kind: st === 'farm' ? 'post' : r.pick(['pole', 'pole', 'hydrant', 'cone', 'sign']) });
+    if (st !== 'farm' && st !== 'houses') for (let fx = 500; fx < len + 800; fx += r.range(800, 1200)) this.fg.push({ x: fx, kind: r.pick(['pole', 'pole', 'sign']) });
     this.skySeed = r.int(1, 1e6);
   }
 
@@ -128,7 +128,8 @@ export class Stage {
       .sort((a, c) => a.x0 - c.x0);
     for (const f of tall) { if (f.x0 > cx + 1) gaps.push([cx, f.x0 + 1]); cx = Math.max(cx, f.x1 - 1); }
     if (cx < W) gaps.push([cx, W]);
-    if (gaps.length) {
+    const DBG = window.__bx || {};
+    if (gaps.length && !DBG.sky) {
       ctx.save();
       ctx.beginPath(); for (const [x0, x1] of gaps) ctx.rect(x0, -30, x1 - x0, gt + 34); ctx.clip();
       ctx.drawImage(this.cached(`sky${nb}`, W, Math.ceil(gt) + 4, (g) => { this.paintSky(g, W, gt + 4, nb); this.tint(g, nb); }), 0, 0, W, Math.ceil(gt) + 4);
@@ -148,7 +149,7 @@ export class Stage {
     }
     // facades
     const lit = night > 0.4;
-    for (const f of this.facades) {
+    for (const f of DBG.fac ? [] : this.facades) {
       const x = W / 2 + (f.x - cam) * k;
       if (x > W + 90 * k || x + (f.w + 90) * k < 0) { if (this.facadeCache.has(f)) this.facadeCache.delete(f); continue; }
       let fc = this.facadeCache.get(f);
@@ -168,7 +169,7 @@ export class Stage {
     const tileW = Math.ceil(420 * k);
     const gtile = this.cached(`ground${nb}`, tileW, Math.ceil(H - gt) + 2, (g) => { this.paintGround(g, tileW, H - gt, k); this.tint(g, nb); });
     const goff = -(((cam * k) % tileW) + tileW) % tileW;
-    for (let x = goff; x < W; x += tileW) ctx.drawImage(gtile, x, gt, tileW, Math.ceil(H - gt) + 2);
+    if (!DBG.ground) for (let x = goff; x < W; x += tileW) ctx.drawImage(gtile, x, gt, tileW, Math.ceil(H - gt) + 2);
     // props + lamp posts (back edge of the sidewalk)
     for (const p of this.props) {
       const x = W / 2 + (p.x - cam) * k;
@@ -183,7 +184,7 @@ export class Stage {
       ctx.drawImage(spr, x - spr.cssW / 2, gt + 6 * k - spr.cssH, spr.cssW, spr.cssH);
     }
     // night: light pools and lamp heads on top of the (baked) tint
-    if (night > 0.3) {
+    if (night > 0.3 && !DBG.lamps) {
       ctx.globalCompositeOperation = 'lighter';
       for (const lx of this.lamps) {
         const x = W / 2 + (lx - cam) * k;
@@ -219,7 +220,7 @@ export class Stage {
       const x = W / 2 + (o.x - cam) * ks;
       if (x < -60 * ks || x > W + 60 * ks) continue;
       const near = actors.some((a) => Math.abs(a - x) < 60 * k);
-      ctx.globalAlpha = near ? 0.45 : 0.95;
+      ctx.globalAlpha = near ? 0.7 : 0.97;
       const spr = this.propSprite('fg_' + o.kind, ks);
       ctx.drawImage(spr, x - spr.cssW / 2, H + 12 * ks - spr.cssH, spr.cssW, spr.cssH);
     }
@@ -228,15 +229,18 @@ export class Stage {
 
   /** Final grade: vignette + a top shade that pushes the eye down onto the lane. */
   drawGrade(ctx, W, H, night) {
-    const v = this.cached(`vig${Math.round(night * 4)}`, W, H, (g) => {
-      const r = g.createRadialGradient(W / 2, H * 0.62, H * 0.35, W / 2, H * 0.62, Math.hypot(W, H) * 0.62);
-      r.addColorStop(0, 'rgba(0,0,0,0)'); r.addColorStop(1, `rgba(8,4,20,${0.5 + night * 0.15})`);
-      g.fillStyle = r; g.fillRect(0, 0, W, H);
-      const tg = g.createLinearGradient(0, 0, 0, H * 0.3);
-      tg.addColorStop(0, 'rgba(8,4,20,.35)'); tg.addColorStop(1, 'rgba(8,4,20,0)');
-      g.fillStyle = tg; g.fillRect(0, 0, W, H * 0.3);
+    // edge bands only: the middle of the screen is left untouched (no full-screen blend pass)
+    const a = 0.5 + night * 0.15, sw = Math.round(W * 0.14), th = Math.round(H * 0.3), bh = Math.round(H * 0.12);
+    const band = (key, w, h, x0, y0, x1, y1, a0) => this.cached(key + Math.round(night * 4), w, h, (g) => {
+      const gr = g.createLinearGradient(x0, y0, x1, y1);
+      gr.addColorStop(0, `rgba(8,4,20,${a0})`); gr.addColorStop(1, 'rgba(8,4,20,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, w, h);
     });
-    ctx.drawImage(v, 0, 0, W, H);
+    ctx.drawImage(band('vt', W, th, 0, 0, 0, th, 0.5), 0, 0, W, th);
+    ctx.drawImage(band('vb', W, bh, 0, bh, 0, 0, a * 0.7), 0, H - bh, W, bh);
+    const side = band('vs', sw, H - th - bh, 0, 0, sw, 0, a);
+    ctx.drawImage(side, 0, th, sw, H - th - bh);
+    ctx.save(); ctx.translate(W, 0); ctx.scale(-1, 1); ctx.drawImage(side, 0, th, sw, H - th - bh); ctx.restore();
   }
 
   // ---------------------------------------------------------------- painters (run once)
@@ -272,12 +276,43 @@ export class Stage {
     }
   }
 
+  /** Farm / suburb horizon: rolling hills far back, an inked treeline with the odd silo or water tower. */
+  paintCountry(g, W, gt, far, night, r) {
+    const k = this.b.k, dark = night > 0.5;
+    const col = far ? (dark ? '#1e2a44' : '#8fb88a') : (dark ? '#142018' : '#4f8a44');
+    g.fillStyle = col; g.strokeStyle = rgba(INK, far ? 0.25 : 0.6); g.lineWidth = far ? 1 : 1.6;
+    g.beginPath(); g.moveTo(0, gt + 2);
+    if (far) {
+      const a1 = r.range(0.004, 0.008), a2 = r.range(0.011, 0.02), ph = r.range(0, 6);
+      for (let x = 0; x <= W; x += 8) g.lineTo(x, gt - 44 * k - Math.sin(x * a1 / k + ph) * 22 * k - Math.sin(x * a2 / k) * 9 * k);
+    } else {
+      let x = 0;
+      while (x <= W + 20) { const rr = r.range(10, 20) * k; g.arc(x, gt - 18 * k - r.range(0, 12) * k, rr, Math.PI, 0); x += rr * 1.4; }
+    }
+    g.lineTo(W, gt + 2); g.closePath(); g.fill(); g.stroke();
+    if (far) {
+      // field stripes on the hills
+      g.save(); g.clip(); g.fillStyle = dark ? 'rgba(255,255,255,.03)' : 'rgba(255,240,160,.18)';
+      for (let x = -W; x < W * 2; x += 36 * k) { g.beginPath(); g.moveTo(x, gt); g.lineTo(x + 18 * k, gt); g.lineTo(x + 70 * k, gt - 120 * k); g.lineTo(x + 52 * k, gt - 120 * k); g.fill(); }
+      g.restore();
+    } else {
+      for (let x = r.range(40, 200); x < W; x += r.range(260, 480)) {
+        const sil = r.chance(0.5), c2 = dark ? '#1c2230' : '#9aa4ae';
+        g.fillStyle = c2; g.strokeStyle = INK; g.lineWidth = 1.5;
+        if (sil) { g.beginPath(); g.rect(x, gt - 90 * k, 22 * k, 90 * k); g.fill(); g.stroke(); g.beginPath(); g.arc(x + 11 * k, gt - 90 * k, 11 * k, Math.PI, 0); g.fill(); g.stroke(); }
+        else { g.beginPath(); g.rect(x + 6 * k, gt - 60 * k, 3 * k, 60 * k); g.rect(x + 25 * k, gt - 60 * k, 3 * k, 60 * k); g.fill(); g.beginPath(); g.ellipse(x + 17 * k, gt - 72 * k, 18 * k, 13 * k, 0, 0, Math.PI * 2); g.fill(); g.stroke(); }
+        if (dark && r.chance(0.6)) { g.fillStyle = '#ffd98a'; g.fillRect(x + 8 * k, gt - 40 * k, 4 * k, 5 * k); }
+      }
+    }
+  }
+
   paintSkyline(g, W, gt, layer, night) {
     const r = new RNG(this.skySeed + layer * 977);
     const far = layer === 0;
     const base = night > 0.5 ? (far ? '#241c4a' : '#18142e') : (far ? '#8da4c8' : '#6a7ea0');
     const lit = night > 0.4;
     const k = this.b.k;
+    if (this.st === 'farm' || this.st === 'houses') return this.paintCountry(g, W, gt, far, night, r);
     let x = -20;
     while (x < W + 20) {
       const w = r.range(far ? 30 : 50, far ? 80 : 120) * k * 0.7;
@@ -477,7 +512,10 @@ export class Stage {
   // ---------------------------------------------------------------- facades
   bakeFacade(f, lit, nb = 0) {
     const k = this.b.k, dpr = this.dpr, gt = this.b.gt;
-    const padX = 70, top = Math.min(f.h + 150, gt / k + 16);
+    // tight bounds: transparent padding still costs fill on every frame
+    const st = f.kind;
+    const padX = st === 'farm' ? 64 : st === 'houses' ? 24 : 6;
+    const top = Math.min(f.h + (st === 'factory' ? 125 : st === 'farm' ? 25 : 8), gt / k + 16);
     const c = mk((f.w + padX * 2) * k * dpr, (top + 4) * k * dpr);
     const g = c.getContext('2d');
     g.setTransform(k * dpr, 0, 0, k * dpr, padX * k * dpr, top * k * dpr);
