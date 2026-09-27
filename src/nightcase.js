@@ -31,6 +31,10 @@ export function nightCaseFields() {
 export class NightCase extends ClubZone {
   themeFor(zone) { return NIGHT_CASES[zone.theme]; }
 
+  /** Who works the floor here, in dialog text ("bouncer" in clubs; the asylum says "orderly"). */
+  get staff() { return 'bouncer'; }
+  get Staff() { return this.staff[0].toUpperCase() + this.staff.slice(1); }
+
   setupControls() {
     this.g.input.setButtons([
       { id: 'interact', label: 'USE', key: 'E', cls: 'big' },
@@ -39,7 +43,7 @@ export class NightCase extends ClubZone {
       { id: 'notes', label: 'NOTES', key: 'N', slot: 3 },
       { id: 'punch', label: 'PUNCH', key: 'F', slot: 4 },
     ]);
-    $('hud-extra').innerHTML = `<div class="barlabel"><span>Bouncer alert</span></div><div class="bar"><i id="b-alert" class="b-alert"></i></div>
+    $('hud-extra').innerHTML = `<div class="barlabel"><span>${this.Staff} alert</span></div><div class="bar"><i id="b-alert" class="b-alert"></i></div>
       <div class="barlabel"><span>X-ray power</span></div><div class="bar"><i id="b-en" class="b-en"></i></div>`;
   }
 
@@ -184,7 +188,7 @@ export class NightCase extends ClubZone {
     } else {
       sfx.lose();
       this.alert = Math.min(99, this.alert + 20);
-      await dialog({ speaker: w.name, text: '"Forget it." They clam up and signal a bouncer.<span class="hint">Bouncer alert +20. The other clues may be enough — or check under the drinks for notes.</span>' });
+      await dialog({ speaker: w.name, text: `"Forget it." They clam up and signal ${/^[aeiou]/.test(this.staff) ? 'an' : 'a'} ${this.staff}.<span class="hint">${this.Staff} alert +20. The other clues may be enough — or check the temptations for notes.</span>` });
     }
   }
 

@@ -72,6 +72,33 @@ export const NIGHT_CASES = {
   captive:       { name: 'Captive Situation', crime: 'the hostage situation', captives: 2, clueProps: ['Zip Ties', 'Ransom Recording', 'Van Keys'] },
 };
 
+// The asylum (src/asylum.js): a 3D investigation in a cross of padded-cell corridors. Caught =
+// sedated: a video plays and she wakes in a cell with the case reset, until she solves it.
+export const ASYLUM = {
+  venue: 'Ravenmoor Asylum',
+  districts: ['suburb', 'farm', 'lair'],
+  cellsPerSide: 3,        // padded cells on each side of each of the four wings
+  videoFolder: 'Asylum',  // clips in assets/video/Asylum/ play when she's sedated
+  reward: 45,
+};
+export const ASYLUM_JOBS = ['orderly', 'night nurse', 'staff psychiatrist', 'warden', 'pharmacist', 'janitor', 'administrator', 'visiting doctor'];
+export const ASYLUM_CASES = {
+  vanishing:   { name: 'Vanishing Patients', crime: 'the patients who vanished overnight', captives: 2, clueProps: ['Altered Transfer Papers', 'Night-Shift Log', 'Wheelchair Tracks'] },
+  experiments: { name: 'Illegal Experiments', crime: 'the illegal experiments on patients', captives: 1, clueProps: ['Unmarked Syringes', 'Treatment Chart', 'Research Notebook'] },
+  framed:      { name: 'The Wrong Patient', crime: 'the sane woman locked away to silence her', clueProps: ['Forged Commitment Order', 'Hush-Money Receipt', 'Visitor Log'] },
+  overdoses:   { name: 'Sedative Overdoses', crime: 'the sedative overdoses', extraTemptations: 2, clueProps: ['Swapped Pill Bottles', 'Pharmacy Ledger', 'Crushed Pills'] },
+};
+// Temptations and bait inside the asylum (same shape as INTOX_ITEMS / BAIT_ITEMS).
+export const ASYLUM_ITEMS = [
+  { name: 'Paper Cup of Pills', desc: 'Two chalky pills in a paper cup, labelled <em>"Nighttime"</em>. They would take the edge off… and recharge you.', intox: 24, perk: 'energy' },
+  { name: 'Lavender Tonic', desc: 'A little bottle of calming tonic. It smells lovely. Too lovely.', intox: 20, perk: 'none' },
+  { name: 'Warm Milk', desc: 'A mug of warm milk left at the nurses\' station. Something is stirred into it.', intox: 18, perk: 'none' },
+];
+export const ASYLUM_BAIT = [
+  { name: 'Staff Keycard', desc: 'A keycard left on the counter. Could open every door in the building… or somebody wants it found.' },
+  { name: 'Patient File', desc: 'A thick file marked CONFIDENTIAL. It could be evidence… or a setup.' },
+];
+
 // Special zones (3D third-person). One venue per special district.
 export const VENUES = {
   'Nightclub':         { districts: ['nightclub'], themes: ['drugs', 'intoxication', 'gang', 'blackmail', 'hypnosis'], vice: true, kind: 'club', bg: '#0c0716', floor: '#1b1428', wall: '#2c2142', lights: [0xff2fd0, 0x27e0ff, 0x9d4dff] },
@@ -84,6 +111,7 @@ export const VENUES = {
   'Triangle Club':     { districts: ['nightclub', 'entertainment', 'naughty'], themes: ['drugs', 'blackmail', 'trafficking', 'intoxication', 'gang'], vice: true, kind: 'premade', club: 'triangle', bg: '#0a0610', floor: '#2a1d33', wall: '#3a2a44', lights: [0xff5fd0, 0x7fd0ff, 0xffc890] },
   'The Clubhouse':     { districts: ['warehouse', 'nightclub', 'lair'], themes: ['gang', 'weapons', 'drugs', 'extortion'], vice: true, kind: 'premade', club: 'clubhouse', bg: '#05070c', floor: '#1a1a20', wall: '#3a1a18', lights: [0x27e0ff, 0xff3030, 0xffc890] },
   'Velvet Lounge':     { districts: ['naughty', 'redlight', 'nightclub'], themes: ['blackmail', 'hypnosis', 'intoxication', 'extortion'], vice: true, kind: 'premade', club: 'stripclub', bg: '#07050a', floor: '#2a1d22', wall: '#3a1a22', lights: [0xff3fb8, 0x9d4dff, 0xffc890] },
+  'Ravenmoor Asylum':  { districts: ['suburb', 'farm', 'lair'], themes: [], vice: false, kind: 'asylum', asylum: true, bg: '#0a0d0c', floor: '#5a6660', wall: '#c8cfc4', lights: [0xdff5e8, 0xc8f0ff, 0xfff4d8] },
   'Underground Lair':  { districts: ['lair'], themes: ['mindcontrol', 'hypnosis', 'weapons', 'trafficking'], vice: true, kind: 'lair', bg: '#030805', floor: '#1a201c', wall: '#2a322c', lights: [0x39ff6a, 0xa0ff39, 0x39ffd0] },
 };
 

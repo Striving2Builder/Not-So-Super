@@ -8,6 +8,7 @@ import { Special3D } from './special3d.js';
 import { Captured } from './captured.js';
 import { ClubZone } from './clubzone.js';
 import { NightCase } from './nightcase.js';
+import { AsylumZone } from './asylum.js';
 import { showNewspaper } from './newspaper.js';
 import { HERO, DISTRICTS, THEMES, DEALS, BOSSES, VENUES } from './data.js';
 import { UI, dialog, toast } from './ui.js';
@@ -31,6 +32,7 @@ game.modes = {
   captured: new Captured(game),
   club: new ClubZone(game),
   nightcase: new NightCase(game),
+  asylum: new AsylumZone(game),
 };
 game.overworld = game.modes.overworld;
 game.commentary = new Commentary(game);
@@ -45,6 +47,7 @@ function resize() {
   game.modes.special.resize();
   game.modes.club.resize();
   game.modes.nightcase.resize();
+  game.modes.asylum.resize();
 }
 addEventListener('resize', resize);
 settings.onChange(() => resize()); // resolution follows the graphics profile
@@ -68,7 +71,7 @@ game.setMode = (name, p) => {
 /** Which game mode plays a zone. */
 function modeFor(z) {
   if (z.mode === 'special' && VENUES[z.venue]?.club) return 'club';  // raid inside a premade club
-  return { brawl: 'brawler', investigate: 'investigate', special: 'special', nightcase: 'nightcase' }[z.mode];
+  return { brawl: 'brawler', investigate: 'investigate', special: 'special', nightcase: 'nightcase', asylum: 'asylum' }[z.mode];
 }
 
 game.startZone = (z) => {
@@ -89,7 +92,7 @@ game.endZone = async (zone, res) => {
   if (res.outcome === 'win') {
     st.addRep(res.rep, 'Saved the day');
     if (zone.mode === 'brawl') st.stats.saves++;
-    if (zone.mode === 'investigate' || zone.mode === 'nightcase') st.stats.cases++;
+    if (zone.mode === 'investigate' || zone.mode === 'nightcase' || zone.mode === 'asylum') st.stats.cases++;
     if (zone.mode === 'special') st.stats.specials++;
     await showNewspaper({ ...victoryPaper(zone, res), rep: res.rep });
   } else if (res.outcome === 'lose') {
@@ -169,7 +172,7 @@ function victoryPaper(zone, res) {
       ],
     };
   }
-  if (zone.mode === 'investigate' || zone.mode === 'nightcase') {
+  if (zone.mode === 'investigate' || zone.mode === 'nightcase' || zone.mode === 'asylum') {
     return {
       photo: 'case',
       headline: chance(0.5) ? `${H} CRACKS THE CASE!` : `MYSTERY SOLVED!`,
@@ -198,6 +201,7 @@ const HOWTO = `<div class="howto">
   <h3>Street crime ( ! and fires)</h3>Side-scrolling brawls. PUNCH (<kbd>J</kbd>) combos, JUMP (<kbd>L</kbd>/<kbd>Space</kbd>) for flying kicks, HEAT VISION / FREEZE BREATH (<kbd>K</kbd>). Stand next to captives to untie them.
   <h3>Investigations ( ? )</h3>Tap objects to search. X-RAY (<kbd>X</kbd>) sees inside sealed things. CAMERA (<kbd>C</kbd>) photographs found clues for bonus rep. Question the witness, then accuse the suspect whose traits match your clues.
   <h3>Special zones ( ★ and ☠ bosses)</h3>3D infiltrations. Get the door code, find the keycard, get into the back room, finish the job and escape. USE (<kbd>E</kbd>), PUNCH (<kbd>F</kbd>) guards from behind, X-RAY reveals bait. Drag the screen to turn the camera. <b>You can be captured here.</b>
+  <h3>Ravenmoor Asylum ( ✚ )</h3>A 3D investigation in padded-cell corridors. Open cell doors (USE) to find clues, patients and witnesses; X-RAY sees through the doors. Orderlies patrol the halls. <b>Get caught and you're sedated</b>: you wake in a cell with the same case reset. The only way out is to name the culprit (SUSPECTS).
   <h3>Reputation</h3>Victories make the front page. You lose reputation for getting captured, failing, lingering in vice districts and venues (<i>tabloid heat</i>), and being seen intoxicated. Tempting drinks and gifts raise intoxication; some "gifts" are traps.
 </div>`;
 

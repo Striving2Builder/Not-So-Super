@@ -184,10 +184,10 @@ export class ClubZone extends Special3D {
     $('hud-title').textContent = zone.name;
     $('hud-sub').textContent = 'Loading the club…';
     const key = VENUES[zone.venue].club;
-    activeId = variantId(key);
+    activeId = key ? variantId(key) : null;
     this.warming = true;
     this.showLoading(key);
-    loadClub(key).then((club) => {
+    this.loadBuilding(key).then((club) => {
       if (this.g.mode !== this || this.done) return;
       this.club = club;
       super.enter(p);
@@ -199,6 +199,9 @@ export class ClubZone extends Special3D {
       this.g.endZone(zone, { outcome: 'abort', rep: 0 });
     }).finally(() => this.hideLoading());
   }
+
+  /** The building to play in: a premade club by default (the asylum generates its own). */
+  loadBuilding(key) { return loadClub(key); }
 
   /**
    * Compile every shader the club needs before the first frame. Done lazily, the first frame
@@ -240,7 +243,7 @@ export class ClubZone extends Special3D {
     const L = (this._loading = { warming: false });
     const tick = () => {
       if (this._loading !== L) return;
-      const p = L.warming ? { stage: 'Warming up', progress: 1 } : clubProgress(key) || { stage: 'Downloading', progress: 0 };
+      const p = L.warming ? { stage: 'Warming up', progress: 1 } : (key && clubProgress(key)) || { stage: key ? 'Downloading' : 'Building the scene', progress: key ? 0 : 1 };
       const frac = p.stage === 'Downloading' ? 0.6 * p.progress : p.stage === 'Warming up' ? 0.9 : 0.75;
       el.querySelector('.lbl').textContent = p.stage + '…';
       el.querySelector('i').style.width = Math.round(frac * 100) + '%';
@@ -392,12 +395,12 @@ export class ClubZone extends Special3D {
    * Temptations (intoxicating) and bait (maybe a trap) on table tops / the bar.
    * `onTake(it)` runs after a temptation is taken (night cases hide notes under drinks).
    */
-  placeItems(n, { onTake } = {}) {
+  placeItems(n, { onTake, intox = INTOX_ITEMS, bait: baitPool = BAIT_ITEMS } = {}) {
     const spots = this.surfaceSpots();
     const count = Math.min(spots.length, n);
     for (let i = 0; i < count; i++) {
       const bait = i === 0 || (i === 3 && chance(0.5));
-      const def = bait ? pick(BAIT_ITEMS) : pick(INTOX_ITEMS);
+      const def = bait ? pick(baitPool) : pick(intox);
       const p = spots[i], trapped = bait ? chance(0.6) : false, col = bait ? 0xffd84d : 0xff7ad0;
       const mesh = new THREE.Mesh(bait ? new THREE.BoxGeometry(0.4, 0.25, 0.3) : new THREE.CylinderGeometry(0.07, 0.05, 0.28, 10), new THREE.MeshLambertMaterial({ color: col, emissive: col, emissiveIntensity: 0.5 }));
       mesh.position.set(p.x, p.y + 0.14, p.z);

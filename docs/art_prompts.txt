@@ -1,0 +1,241 @@
+===============================================================================
+  SUPERGIRL: CITY PATROL - SCENE ART PROMPTS
+  Backgrounds for the investigation scenes and the capture room
+===============================================================================
+
+CONTENTS
+  1. Setup (do this first)
+  2. Checklist of images to make
+  3. Prompts - core investigation scenes (6)
+  4. Prompts - variations of the most-used scenes (3)
+  5. Prompts - optional new scenes (4)
+  6. Prompt - capture room (restyle, same layout)
+  7. Fixes when an image comes out wrong
+  8. Delivery
+
+
+-------------------------------------------------------------------------------
+1. SETUP (do this first)
+-------------------------------------------------------------------------------
+
+STYLE
+  Modern comic-book line art: clean ink outlines, cel-shaded flat colours,
+  atmospheric lighting. (The "rainy rooftops" / "grey city rooftop" look.)
+
+STYLE (written into every prompt)
+  Each prompt already describes the style in full, so it works on its own:
+  "Contemporary comic-book illustration in a polished graphic-novel style: bold clean black ink outlines of varying line weight, cel-shaded flat colour blocks with smooth soft gradients, light ink hatching in the shadows, a muted, slightly desaturated palette tinted by the scene lighting described below, with warm light accents, gentle atmospheric haze for depth, crisp readable shapes, clean digital comic finish, no painterly blur, no photorealism."
+  You don't need a style reference image. For extra consistency you CAN
+  attach your best finished scene as a reference too, optional.
+  Do NOT use watermarked artist images (e.g. the DeviantArt one) as a
+  reference.
+
+SIZE
+  5:3 aspect ratio, about 2000 x 1200 pixels.
+  Midjourney: add   --ar 5:3 --no people, text, letters, watermark
+                    (optional: --sref <link to your best finished scene>)
+  ChatGPT / Gemini: paste the prompt as-is.
+
+RULES EVERY IMAGE MUST FOLLOW (already written into each prompt)
+  - Straight-on, eye-level view like a theatre stage set; back wall faces
+    the camera.
+  - The line where wall meets floor sits about 63% of the way down.
+  - Every prop is a separate, clearly readable object - nothing overlapping.
+    (Each prop becomes something the player taps.)
+  - Empty floor in the lower-right quarter (a witness stands there).
+  - No people. No readable text, signs or lettering.
+  - Props do not need exact positions - roughly left-to-right as listed is
+    enough. I will move the tap areas to match your image.
+
+MOOD ADD-ONS (optional, append to a prompt)
+  Neon districts:   vivid neon signage glow, wet reflective surfaces.
+  Red Light scenes: dominant crimson colour grade.
+
+
+-------------------------------------------------------------------------------
+2. CHECKLIST OF IMAGES TO MAKE
+-------------------------------------------------------------------------------
+
+  [ ]  #   File name            Scene                 Used by (case)
+  ---  --  -------------------  --------------------  ------------------------------------
+  [ ]  1   office.webp          Office                Blackmail Letters, Insider Trading
+  [ ]  2   apartment.webp       Apartment             Missing Person, Arson Mystery
+  [ ]  3   alley.webp           Alley                 Smuggling Tip-off, Spiked Drinks
+  [ ]  4   barn.webp            Barn                  Poisoned Crops
+  [ ]  5   casino.webp          Casino                Rigged Tables
+  [ ]  6   factory.webp         Factory               Sabotage
+  -- variations (recommended) --
+  [ ]  1b  office_2.webp        Office, ransacked     same as 1
+  [ ]  2b  apartment_2.webp     Rainy studio          same as 2
+  [ ]  3b  alley_2.webp         Foggy dockside alley  same as 3
+  -- optional new scenes (I add these to the game) --
+  [ ]  7   clubbar.webp         Nightclub back bar    Spiked Drinks
+  [ ]  8   pier.webp            Dockside pier         Smuggling Tip-off
+  [ ]  9   burned.webp          Burned-out house      Arson Mystery
+  [ ]  10  hotel.webp           Hotel room            Missing Person
+  -- restyle --
+  [ ]  11  room.png             Capture room          Capture escape scene
+
+  Minimum: 1-6.   Recommended: 1-6 + 1b, 2b, 3b + 11.   Full: everything.
+
+
+-------------------------------------------------------------------------------
+3. PROMPTS - CORE INVESTIGATION SCENES
+-------------------------------------------------------------------------------
+
+## 1. OFFICE  ->  office.webp
+   Props: filing cabinet, oil painting, potted plant, desk + computer,
+          wastebasket, coat rack, window, bookshelf
+   Mood:  corporate, after hours
+
+Contemporary comic-book illustration in a polished graphic-novel style: bold clean black ink outlines of varying line weight, cel-shaded flat colour blocks with smooth soft gradients, light ink hatching in the shadows, a muted, slightly desaturated palette tinted by the scene lighting described below, with warm light accents, gentle atmospheric haze for depth, crisp readable shapes, clean digital comic finish, no painterly blur, no photorealism. Straight-on eye-level view like a theatre stage set: the back wall faces the camera and the floor line sits about 63% down the image. An executive office after hours, cold blue night light from a large window mixed with a warm desk lamp. From left to right: a tall grey metal filing cabinet against the left wall; an oil portrait of a stern company founder on the upper-left wall; a potted ficus on the floor front-left; a large wooden executive desk in the centre with a computer monitor, papers and coffee rings on it; a small wastebasket on the floor right of the desk; a coat rack with a scarf and umbrella; a large window upper right showing city lights; a tall bookshelf of business books against the right wall. Every object separate and clearly readable, nothing overlapping. Empty floor in the lower-right quarter. No people, no text, no lettering. 5:3 aspect ratio.
+
+
+## 2. APARTMENT  ->  apartment.webp
+   Props: wall shelf, TV, trash can, sofa, framed photo, floor lamp,
+          window, coat hooks, fridge
+   Mood:  lived-in, someone left in a hurry
+
+Contemporary comic-book illustration in a polished graphic-novel style: bold clean black ink outlines of varying line weight, cel-shaded flat colour blocks with smooth soft gradients, light ink hatching in the shadows, a muted, slightly desaturated palette tinted by the scene lighting described below, with warm light accents, gentle atmospheric haze for depth, crisp readable shapes, clean digital comic finish, no painterly blur, no photorealism. Straight-on eye-level view like a theatre stage set: the back wall faces the camera and the floor line sits about 63% down the image. A lived-in city apartment living room that someone left in a hurry, warm lamplight and blue TV glow. From left to right: a wall shelf with knick-knacks and a snow globe on the upper left; an old television on a low stand; a trash can overflowing with takeout boxes; a lumpy sofa in the centre with scattered cushions; a framed family beach photo on the wall above the sofa; a tall floor lamp; a window upper right with a city view; coat hooks with a damp rain jacket; a tall refrigerator against the right wall. Every object separate and clearly readable, nothing overlapping. Empty floor in the lower-right quarter. No people, no text, no lettering. 5:3 aspect ratio.
+
+
+## 3. ALLEY  ->  alley.webp        (suggested first image: good test of the style)
+   Props: dumpster, torn poster, crate, oil drum, steel door, trash can,
+          drainpipe
+   Mood:  night, wet brick, neon spill
+
+Contemporary comic-book illustration in a polished graphic-novel style: bold clean black ink outlines of varying line weight, cel-shaded flat colour blocks with smooth soft gradients, light ink hatching in the shadows, a muted, slightly desaturated palette tinted by the scene lighting described below, with warm light accents, gentle atmospheric haze for depth, crisp readable shapes, clean digital comic finish, no painterly blur, no photorealism. Straight-on eye-level view like a theatre stage set: a brick wall faces the camera, wet asphalt ground, the ground line about 63% down the image. A narrow back alley behind a nightclub at night, puddles reflecting pink and cyan neon spill from off-screen. From left to right: a large green dumpster; a torn, peeling club flyer on the brick wall (blank, no readable words); a wooden produce crate; a rusty oil drum; a heavy steel back door with a caged bulb above it; a dented metal trash can; a rusty drainpipe running the full height of the right edge. Every object separate and clearly readable, nothing overlapping. Empty ground in the lower-right quarter. No people, no text, no lettering. 5:3 aspect ratio.
+
+
+## 4. BARN  ->  barn.webp
+   Props: hay bales, hayloft door, seed crate, feed trough, tractor,
+          tool shelf, chemical drum
+   Mood:  rural, dusty, warm light
+
+Contemporary comic-book illustration in a polished graphic-novel style: bold clean black ink outlines of varying line weight, cel-shaded flat colour blocks with smooth soft gradients, light ink hatching in the shadows, a muted, slightly desaturated palette tinted by the scene lighting described below, with warm light accents, gentle atmospheric haze for depth, crisp readable shapes, clean digital comic finish, no painterly blur, no photorealism. Straight-on eye-level view like a theatre stage set: a red wooden plank wall faces the camera, dirt-and-straw floor, floor line about 63% down the image. The inside of an old farm barn in late afternoon, dusty golden light beams through gaps in the planks. From left to right: stacked hay bales on the left; a hayloft door high on the wall above centre with a forced, broken latch; a wooden seed crate with torn seed packets; a long feed trough on the floor front-centre; a red tractor on the right half; a tool shelf with pitchforks, rope and a sickle on the upper right; a metal chemical drum with a scraped hazard label on the far right. Every object separate and clearly readable, nothing overlapping. Empty floor in the lower-right quarter. No people, no text, no lettering. 5:3 aspect ratio.
+
+
+## 5. CASINO  ->  casino.webp
+   Props: 2 slot machines, gilded mirror, roulette table, cashier cage,
+          cocktail bar, security monitor
+   Mood:  red-and-gold glitz
+
+Contemporary comic-book illustration in a polished graphic-novel style: bold clean black ink outlines of varying line weight, cel-shaded flat colour blocks with smooth soft gradients, light ink hatching in the shadows, a muted, slightly desaturated palette tinted by the scene lighting described below, with warm light accents, gentle atmospheric haze for depth, crisp readable shapes, clean digital comic finish, no painterly blur, no photorealism. Straight-on eye-level view like a theatre stage set: the back wall faces the camera and the floor line sits about 63% down the image. A glitzy but seedy casino floor after closing, deep red patterned carpet, gold trim, warm chandelier light and blinking machine lights. From left to right: two tall slot machines side by side on the far left; a gilded wall mirror above centre; a roulette table front-centre with a wheel and chip stacks; a barred cashier cage with neat chip towers; a long polished cocktail bar on the right with glittering bottles; a small security camera monitor high on the upper-right wall showing static. Every object separate and clearly readable, nothing overlapping. Empty floor in the lower-right quarter. No people, no text, no lettering. 5:3 aspect ratio.
+
+
+## 6. FACTORY  ->  factory.webp
+   Props: press machine, shift board, scrap bin, parts crate, oil drum,
+          parts shelf, lockers
+   Mood:  industrial, harsh overhead lights
+
+Contemporary comic-book illustration in a polished graphic-novel style: bold clean black ink outlines of varying line weight, cel-shaded flat colour blocks with smooth soft gradients, light ink hatching in the shadows, a muted, slightly desaturated palette tinted by the scene lighting described below, with warm light accents, gentle atmospheric haze for depth, crisp readable shapes, clean digital comic finish, no painterly blur, no photorealism. Straight-on eye-level view like a theatre stage set: a grey concrete-and-steel wall faces the camera, oil-stained concrete floor, floor line about 63% down the image. A factory production floor on the night shift, harsh overhead industrial lights, haze in the air. From left to right: a large hydraulic press machine with a wrench jammed in it on the left; a shift roster board on the wall with pinned papers (no readable words); a small scrap bin of metal shavings; a parts crate of bolts and brackets; an oil drum leaking a rainbow puddle; a tall parts shelf with one conspicuous gap; a row of staff lockers against the right wall. Every object separate and clearly readable, nothing overlapping. Empty floor in the lower-right quarter. No people, no text, no lettering. 5:3 aspect ratio.
+
+
+-------------------------------------------------------------------------------
+4. PROMPTS - VARIATIONS (the game picks one at random)
+-------------------------------------------------------------------------------
+
+## 1b. OFFICE, RANSACKED  ->  office_2.webp
+
+Contemporary comic-book illustration in a polished graphic-novel style: bold clean black ink outlines of varying line weight, cel-shaded flat colour blocks with smooth soft gradients, light ink hatching in the shadows, a muted, slightly desaturated palette tinted by the scene lighting described below, with warm light accents, gentle atmospheric haze for depth, crisp readable shapes, clean digital comic finish, no painterly blur, no photorealism. Straight-on eye-level view like a theatre stage set: the back wall faces the camera and the floor line sits about 63% down the image. An executive office that has been ransacked: drawers pulled out, papers scattered on the floor, the painting hanging crooked, green banker's-lamp light and a flickering overhead. From left to right: a filing cabinet with open drawers; a crooked oil painting on the wall; a potted plant knocked on its side; an executive desk in the centre with a computer and spilled folders; a tipped-over wastebasket; a coat rack; a rain-streaked window upper right; a half-emptied bookshelf on the right. Every object separate and clearly readable, nothing overlapping. Empty floor in the lower-right quarter. No people, no text, no lettering. 5:3 aspect ratio.
+
+
+## 2b. APARTMENT, RAINY STUDIO  ->  apartment_2.webp
+
+Contemporary comic-book illustration in a polished graphic-novel style: bold clean black ink outlines of varying line weight, cel-shaded flat colour blocks with smooth soft gradients, light ink hatching in the shadows, a muted, slightly desaturated palette tinted by the scene lighting described below, with warm light accents, gentle atmospheric haze for depth, crisp readable shapes, clean digital comic finish, no painterly blur, no photorealism. Straight-on eye-level view like a theatre stage set: the back wall faces the camera and the floor line sits about 63% down the image. A small cramped studio apartment at night, rain running down the window, neon sign light from outside tinting the room magenta and teal. From left to right: a wall shelf with books and a snow globe; a small TV on a crate; a trash can; a worn sofa bed in the centre with a tangled blanket; a framed photo on the wall; a bent floor lamp; a rain-covered window upper right; coat hooks with a jacket; a humming old refrigerator on the right. Every object separate and clearly readable, nothing overlapping. Empty floor in the lower-right quarter. No people, no text, no lettering. 5:3 aspect ratio.
+
+
+## 3b. ALLEY, FOGGY DOCKSIDE  ->  alley_2.webp
+
+Contemporary comic-book illustration in a polished graphic-novel style: bold clean black ink outlines of varying line weight, cel-shaded flat colour blocks with smooth soft gradients, light ink hatching in the shadows, a muted, slightly desaturated palette tinted by the scene lighting described below, with warm light accents, gentle atmospheric haze for depth, crisp readable shapes, clean digital comic finish, no painterly blur, no photorealism. Straight-on eye-level view like a theatre stage set: a weathered brick-and-corrugated-metal wall faces the camera, wet cobblestones, ground line about 63% down the image. A foggy alley near the harbour at night, orange sodium streetlight, mist drifting low. From left to right: a battered dumpster; a torn poster on the wall (no readable words); a stack of wooden cargo crates; an oil drum; a rusted steel side door; a trash can; a drainpipe on the far right. Every object separate and clearly readable, nothing overlapping. Empty ground in the lower-right quarter. No people, no text, no lettering. 5:3 aspect ratio.
+
+
+-------------------------------------------------------------------------------
+5. PROMPTS - OPTIONAL NEW SCENES (I add these to the game and move the case)
+-------------------------------------------------------------------------------
+
+## 7. NIGHTCLUB BACK BAR  ->  clubbar.webp      (for Spiked Drinks)
+   Props: bottle shelf, bar counter, ice bucket, cash register, booth,
+          DJ booth, back door
+
+Contemporary comic-book illustration in a polished graphic-novel style: bold clean black ink outlines of varying line weight, cel-shaded flat colour blocks with smooth soft gradients, light ink hatching in the shadows, a muted, slightly desaturated palette tinted by the scene lighting described below, with warm light accents, gentle atmospheric haze for depth, crisp readable shapes, clean digital comic finish, no painterly blur, no photorealism. Straight-on eye-level view like a theatre stage set: the back wall faces the camera and the floor line sits about 63% down the image. The back bar of a nightclub after closing, magenta and cyan neon, smoky haze, sticky floor, vivid neon glow and wet reflective surfaces. From left to right: a lit shelf of liquor bottles on the back wall; a long bar counter with abandoned cocktail glasses; a metal ice bucket on the counter; an old cash register at the end of the bar; a curved velvet booth with a small table; a DJ booth with turntables; a heavy staff-only back door on the right. Every object separate and clearly readable, nothing overlapping. Empty floor in the lower-right quarter. No people, no text, no lettering. 5:3 aspect ratio.
+
+
+## 8. DOCKSIDE PIER  ->  pier.webp      (for Smuggling Tip-off)
+   Props: shipping container, rope coil, cargo crates, fish crates,
+          harbour office door, lamp post, bollard
+
+Contemporary comic-book illustration in a polished graphic-novel style: bold clean black ink outlines of varying line weight, cel-shaded flat colour blocks with smooth soft gradients, light ink hatching in the shadows, a muted, slightly desaturated palette tinted by the scene lighting described below, with warm light accents, gentle atmospheric haze for depth, crisp readable shapes, clean digital comic finish, no painterly blur, no photorealism. Straight-on eye-level view like a theatre stage set: the side of a corrugated harbour warehouse faces the camera, wet wooden pier planks in front, ground line about 63% down the image. A harbour pier at night in thick fog, orange sodium lamp light, dark water glimpsed at the edges. From left to right: the open end of a rusty shipping container; a big coil of mooring rope; a stack of wooden cargo crates; a pile of fish crates; the harbour office door with a small lit window; a tall iron lamp post; a squat iron mooring bollard. Every object separate and clearly readable, nothing overlapping. Empty planks in the lower-right quarter. No people, no text, no lettering. 5:3 aspect ratio.
+
+
+## 9. BURNED-OUT HOUSE  ->  burned.webp      (for Arson Mystery)
+   Props: charred bookcase, scorched sofa, melted TV, gas can,
+          broken window, fuse box, fallen beam
+
+Contemporary comic-book illustration in a polished graphic-novel style: bold clean black ink outlines of varying line weight, cel-shaded flat colour blocks with smooth soft gradients, light ink hatching in the shadows, a muted, slightly desaturated palette tinted by the scene lighting described below, with warm light accents, gentle atmospheric haze for depth, crisp readable shapes, clean digital comic finish, no painterly blur, no photorealism. Straight-on eye-level view like a theatre stage set: the back wall faces the camera and the floor line sits about 63% down the image. The living room of a house gutted by fire, soot-blackened walls, ash on the floor, cold grey dawn light through a broken window, faint wisps of smoke. From left to right: a charred bookcase; a scorched sofa frame with burned-through springs; a melted television on a stand; a red gas can on the floor; a broken window upper right; an open fuse box on the wall; a fallen roof beam on the far right. Every object separate and clearly readable, nothing overlapping. Empty floor in the lower-right quarter. No people, no text, no lettering. 5:3 aspect ratio.
+
+
+## 10. HOTEL ROOM  ->  hotel.webp      (for Missing Person)
+   Props: wardrobe, luggage rack, bed, nightstand, mirror, minibar,
+          balcony door, room-service cart
+
+Contemporary comic-book illustration in a polished graphic-novel style: bold clean black ink outlines of varying line weight, cel-shaded flat colour blocks with smooth soft gradients, light ink hatching in the shadows, a muted, slightly desaturated palette tinted by the scene lighting described below, with warm light accents, gentle atmospheric haze for depth, crisp readable shapes, clean digital comic finish, no painterly blur, no photorealism. Straight-on eye-level view like a theatre stage set: the back wall faces the camera and the floor line sits about 63% down the image. A mid-range hotel room at night, quiet and unsettling, warm bedside lamp and cold light from the balcony door. From left to right: a tall wooden wardrobe slightly ajar; a luggage rack with an open suitcase; a neatly made bed in the centre that hasn't been slept in; a nightstand with a lamp and phone; a wall mirror above a dresser; a small minibar fridge; a balcony door with sheer curtains blowing; a room-service cart with an untouched covered plate. Every object separate and clearly readable, nothing overlapping. Empty floor in the lower-right quarter. No people, no text, no lettering. 5:3 aspect ratio.
+
+
+-------------------------------------------------------------------------------
+6. PROMPT - CAPTURE ROOM (new style, same layout)
+-------------------------------------------------------------------------------
+
+## 11. CAPTURE ROOM  ->  room.png   (replaces assets/capture/room.png)
+   Where the heroine is held after a capture: an escape puzzle.
+   The game draws these ON TOP of the image, so their spots must be left as
+   described: Supergirl tied to her chair (centre floor), the guard (far
+   right, in front of the door), the key ring (on the table), the glowing
+   green crystal (in the glass cup) and the villain's video (on the TV).
+
+   Layout (5:3 image; positions as fractions of width across / height down).
+   It's all written into the prompt below, so no reference image is needed.
+     - Air vent grille:          top-left corner, 0-10% across, 2-20% down
+     - Wall TV in a heavy frame: centre, 27-72% across, 12-54% down;
+                                 screen plain flat green, blank (video plays there)
+     - Small wooden table:       far left, 0-23% across, tabletop 55% down,
+                                 legs to the floor; tabletop EMPTY
+     - Brass pedestal stand:     78% across; empty glass cup on top at 44% down;
+                                 base on the floor
+     - Wall power socket:        86% across, 61% down, cord hanging free
+     - Steel door:               far right, 92-100% across, 15-74% down
+     - Ceiling spotlight:        top centre, cone of light onto the centre floor
+     - Wall meets floor:         69% down; centre floor (40-60% across) EMPTY -
+                                 the chair stands there, feet at about 78% down
+
+   Optional: if the layout comes out wrong, attach the current
+   assets/capture/room.png and add "Use the attached image ONLY for the
+   layout; ignore its painting style." to the end of the prompt.
+
+Contemporary comic-book illustration in a polished graphic-novel style: bold clean black ink outlines of varying line weight, cel-shaded flat colour blocks with smooth soft gradients, light ink hatching in the shadows, a muted, slightly desaturated palette tinted by the scene lighting described below, with warm light accents, gentle atmospheric haze for depth, crisp readable shapes, clean digital comic finish, no painterly blur, no photorealism. Straight-on eye-level view of a villain's secret holding cell, like a theatre stage set: riveted dark steel wall panels face the camera, cracked stained concrete floor, the line where wall meets floor about 69% down the image. Layout from left to right: a rectangular air-vent grille in the top-left corner of the wall; a small sturdy wooden table against the far left, its top about 55% down the image and completely empty; in the centre of the wall, a large wall-mounted TV monitor spanning roughly the middle 40% of the width and the upper-middle of the wall, set in a heavy bolted metal frame, its screen a plain flat glowing green and completely blank; a single industrial ceiling spotlight at top centre casting a hard cone of light onto an empty patch of floor in the middle of the room; on the right, a tall ornate brass pedestal stand standing on the floor with an empty glass cup on top at about half the image height; a wall power socket low on the wall to the right of the stand with a loose cord; a heavy steel door with rivets on the far right wall. Sickly green ambient glow spilling from the right side of the room, deep shadows in the corners, dark oppressive mood. The centre of the floor is empty. Every object separate and clearly readable. No people, no chair, no text, no lettering. 5:3 aspect ratio.
+
+
+-------------------------------------------------------------------------------
+7. FIXES WHEN AN IMAGE COMES OUT WRONG
+-------------------------------------------------------------------------------
+
+  Room is tilted / 3D-looking      add: "flat frontal view, one-point perspective,
+                                        camera parallel to the back wall"
+  Props merged or overlapping      add: "generous space between each object"
+  Text or letters appear           add: "all signs, posters and papers blank",
+                                        then regenerate
+  Style drifts from other scenes   attach your best finished scene as a style
+                                   reference (Midjourney: --sref <link>)
+  People appear                    add: "empty scene, no figures, no silhouettes"
+  Too dark to see props            add: "props clearly lit and readable"
+
+
+-------------------------------------------------------------------------------
+8. DELIVERY
+-------------------------------------------------------------------------------
+
+  - Save as WebP (or JPG), about 2000 x 1200, roughly 1 MB each.
+  - Use the file names from the checklist.
+  - Put them in:  assets/scenes/        (capture room: assets/capture/room.png)
+  - Tell me when they're in. I will wire each one in, move the tap areas onto
+    the props where they actually ended up, and add the new scenes (7-10).

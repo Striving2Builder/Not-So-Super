@@ -1,7 +1,7 @@
 // Flying patrol over the procedural city, drawn in 2.5D: every point is projected with a
 // straight-down perspective camera, so rooftops grow and lean away from screen centre.
 import { BLOCK, ROAD, LOT } from './city.js';
-import { DISTRICTS, STREET_CRIMES, CASES, VENUES, THEMES, BOSSES, HERO, NIGHT_DISTRICTS } from './data.js';
+import { DISTRICTS, STREET_CRIMES, CASES, VENUES, THEMES, BOSSES, HERO, NIGHT_DISTRICTS, ASYLUM } from './data.js';
 import { drawHeroTop, glow } from './art.js';
 import { clamp, lerp, pick, chance, rand, dist, shade, rgba, easeOut, easeInOut, fmtClock, fmtTime, wobble, $ } from './util.js';
 import { heroReady, HeroSprite } from './hero3d.js';
@@ -17,6 +17,7 @@ import { drawAtmosphere, FOG_Z } from './atmosphere.js';
 import { Sky, SpeedFX } from './sky.js';
 import { FlightAudio } from './flightaudio.js';
 import { nightCaseFields } from './nightcase.js';
+import { asylumFields } from './asylum.js';
 import { toast, banner, flash, openModal, closeModal } from './ui.js';
 import { hash2 } from './rng.js';
 import { sfx } from './sfx.js';
@@ -291,6 +292,8 @@ export class Overworld {
     // Always keep one club raid (premade 3D club) somewhere on the map.
     const clubs = Object.keys(VENUES).filter((v) => VENUES[v].club);
     if (clubs.length && !this.zones.some((z) => z.mode === 'special' && VENUES[z.venue]?.club)) { this.spawn('special', initial, pick(clubs)); return; }
+    // ...and the asylum (its own zone type, src/asylum.js)
+    if (!this.zones.some((z) => z.mode === 'asylum') && this.spawn('asylum', initial)) return;
     for (const k of ['street', 'case', 'special']) {
       if (counts[k] < TARGET[k]) { this.spawn(k, initial); return; }
     }
@@ -303,10 +306,11 @@ export class Overworld {
     // After dark, most cases are night cases inside the 3D clubs.
     const night = kind === 'case' && this.g.state && this.g.state.isNight && chance(0.75);
     let def, districts, venueName;
-    if (kind === 'street') { def = pick(STREET_CRIMES); districts = def.districts; }
+    if (kind === 'asylum') districts = ASYLUM.districts;
+    else if (kind === 'street') { def = pick(STREET_CRIMES); districts = def.districts; }
     else if (night) districts = NIGHT_DISTRICTS;
     else if (kind === 'case') { def = pick(CASES); districts = def.districts; }
-    else { venueName = forceVenue || pick(Object.keys(VENUES)); def = VENUES[venueName]; districts = def.districts; }
+    else { venueName = forceVenue || pick(Object.keys(VENUES).filter((v) => !VENUES[v].asylum)); def = VENUES[venueName]; districts = def.districts; }
     const cands = city.blocks.filter((b) => {
       if (districts !== '*' && !districts.includes(b.d)) return false;
       const cx = b.x0 + LOT / 2, cy = b.y0 + LOT / 2;
@@ -316,7 +320,9 @@ export class Overworld {
     if (!cands.length) return null;
     const b = pick(cands);
     const z = { uid: this.uid++, kind, district: b.d, t: 0, x: b.x0 + LOT / 2, y: b.y0 + LOT / 2 };
-    if (kind === 'street') {
+    if (kind === 'asylum') {
+      Object.assign(z, asylumFields());
+    } else if (kind === 'street') {
       if (!def.variant) { z.x = b.x0 - ROAD / 2; z.y = b.y0 + LOT * rand(0.25, 0.75); }
       Object.assign(z, {
         mode: 'brawl', def, name: def.name, reward: def.reward, diff: def.diff, boss: def.boss || null, variant: def.variant,
@@ -633,7 +639,7 @@ export class Overworld {
     g.fillStyle = '#fff'; g.strokeStyle = '#d82630'; g.lineWidth = 3;
     g.beginPath(); g.arc(this.hero.x * m, this.hero.y * m, 7, 0, Math.PI * 2); g.fill(); g.stroke();
     const legend = Object.values(DISTRICTS).map((d) => `<span><i style="background:${d.map}"></i>${d.name}</span>`).join('');
-    const kinds = `<span><i style="background:#ffd23f"></i>Street crime</span><span><i style="background:#ff7a1a"></i>Fire</span><span><i style="background:#3fd0ff"></i>Investigation</span><span><i style="background:#b36bff"></i>Night case</span><span><i style="background:#ff3fb8"></i>Special zone</span><span><i style="background:#ff3030"></i>Boss</span>`;
+    const kinds = `<span><i style="background:#ffd23f"></i>Street crime</span><span><i style="background:#ff7a1a"></i>Fire</span><span><i style="background:#3fd0ff"></i>Investigation</span><span><i style="background:#b36bff"></i>Night case</span><span><i style="background:#ff3fb8"></i>Special zone</span><span><i style="background:#ff3030"></i>Boss</span><span><i style="background:#9fe8ff"></i>Asylum</span>`;
     for (const e of this.events.markers()) {
       g.fillStyle = e.color; g.strokeStyle = '#000'; g.lineWidth = 2;
       g.fillRect(e.x * m - 6, e.y * m - 6, 12, 12); g.strokeRect(e.x * m - 6, e.y * m - 6, 12, 12);
