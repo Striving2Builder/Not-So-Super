@@ -136,7 +136,7 @@ export class ClubMood {
     const pos = [], uv = [], col = [], idx = [];
     for (const s of src) {
       const r = THREE.MathUtils.clamp(1.3 + Math.sqrt(s.power) * 0.13, 1.6, 4.2);
-      const k = THREE.MathUtils.clamp(0.25 + s.power / 400, 0.3, 0.8) * this.M.pools;
+      const k = THREE.MathUtils.clamp(0.25 + s.power / 400, 0.3, 0.65) * this.M.pools;
       const n = pos.length / 3, y = s.floor.y + 0.03;
       for (const [dx, dz, u, v] of [[-r, -r, 0, 0], [r, -r, 1, 0], [r, r, 1, 1], [-r, r, 0, 1]]) {
         pos.push(s.floor.x + dx, y, s.floor.z + dz); uv.push(u, v); col.push(s.color.r * k, s.color.g * k, s.color.b * k);
@@ -185,7 +185,9 @@ export class ClubMood {
     this.beamSrc.forEach((s, i) => {
       to.subVectors(cam.position, s.floor); to.y = 0;
       side.crossVectors(up, to).normalize();
-      const top = 0.18, bot = THREE.MathUtils.clamp(Math.sqrt(s.power) * 0.06, 0.9, 2.2);
+      // a shaft right by the camera would wash the whole screen (and cost a screenful of fill)
+      const near = THREE.MathUtils.smoothstep(Math.hypot(to.x, to.z), 2.5, 5);
+      const top = 0.18 * near, bot = THREE.MathUtils.clamp(Math.sqrt(s.power) * 0.06, 0.9, 2.2) * near;
       const T = s.pos, B = s.floor, k = i * 12;
       a[k] = T.x - side.x * top; a[k + 1] = T.y; a[k + 2] = T.z - side.z * top;
       a[k + 3] = T.x + side.x * top; a[k + 4] = T.y; a[k + 5] = T.z + side.z * top;
@@ -265,7 +267,7 @@ export class ClubMood {
         l.intensity = Math.max(0, l.intensity - dt * 60);
         if (l.intensity <= 0) { sl.src = sl.want; if (sl.src) { l.position.copy(sl.src.pos); l.color.copy(sl.src.color); } }
       } else if (sl.src) {
-        const target = THREE.MathUtils.clamp(sl.src.power / 12, 10, 40) * this.M.light;
+        const target = THREE.MathUtils.clamp(sl.src.power / 14, 8, 24) * this.M.light;
         l.intensity = snap ? target : Math.min(target, l.intensity + dt * 60);
       }
     }
