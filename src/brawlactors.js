@@ -230,7 +230,7 @@ export const actorDraw = {
    * mirrored space): the low-poly crooks get personality and crews read apart at a glance.
    */
   drawHeadgear(ctx, e, f, fy, s) {
-    const L = LOOKS[e.type];
+    const L = LOOKS[e.lk];
     if (!L || !L.hat) return;
     const m = M * s;
     const hx = f.head[0] * m, hy = fy - f.head[1] * m, tx = f.top[0] * m, ty = fy - f.top[1] * m;
@@ -252,7 +252,7 @@ export const actorDraw = {
         if (L.beard) { ctx.fillStyle = '#2a1a12'; ctx.beginPath(); ctx.ellipse(ex, ey + r * 0.55, r * 0.42, r * 0.3, 0, 0, Math.PI); ctx.fill(); ctx.stroke(); }
       }
     }
-    const col = L.hatCol || '#333';
+    const col = e.hatCol || '#333';
     if (L.hat === 'cap') {
       ctx.fillStyle = col;
       ctx.beginPath(); ctx.arc(0, -r * 0.05, r * 1.02, Math.PI * 1.02, Math.PI * 1.98); ctx.closePath(); ctx.fill(); ctx.stroke();
@@ -270,15 +270,51 @@ export const actorDraw = {
     } else if (L.hat === 'shades' && !down) {
       ctx.fillStyle = '#0a0a10'; ctx.beginPath(); ctx.roundRect(r * 0.1, -r * 0.2, r * 0.8, r * 0.3, r * 0.1); ctx.fill();
       ctx.fillStyle = 'rgba(160,220,255,.7)'; ctx.fillRect(r * 0.2, -r * 0.16, r * 0.25, r * 0.06);
+    } else if (L.hat === 'hood') {
+      // hoodie: a deep cowl wrapping the back of the head, open toward the face
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.moveTo(r * 0.55, -r * 1.02); ctx.quadraticCurveTo(-r * 0.6, -r * 1.45, -r * 1.25, -r * 0.2);
+      ctx.quadraticCurveTo(-r * 1.3, r * 0.9, -r * 0.3, r * 1.25); ctx.lineTo(r * 0.1, r * 0.95); ctx.quadraticCurveTo(-r * 0.75, r * 0.3, -r * 0.55, -r * 0.35);
+      ctx.quadraticCurveTo(-r * 0.2, -r * 0.95, r * 0.55, -r * 1.02); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.beginPath(); ctx.moveTo(-r * 0.9, -r * 0.4); ctx.quadraticCurveTo(-r * 1, r * 0.4, -r * 0.4, r * 0.95); ctx.stroke();
+    } else if (L.hat === 'ponytail') {
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(0, 0, r * 1.04, Math.PI * 0.95, Math.PI * 1.85); ctx.quadraticCurveTo(r * 0.2, -r * 0.3, -r * 0.3, -r * 0.1); ctx.closePath(); ctx.fill(); ctx.stroke();
+      const sw = Math.sin(this.t * 7 + e.phase * 6) * r * 0.25;
+      ctx.beginPath(); ctx.moveTo(-r * 0.8, -r * 0.55); ctx.quadraticCurveTo(-r * 1.9, -r * 0.4 + sw, -r * 1.7, r * 0.9 + sw); ctx.quadraticCurveTo(-r * 1.3, r * 0.2, -r * 0.85, -r * 0.15); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ff5fa2'; ctx.beginPath(); ctx.arc(-r * 0.9, -r * 0.4, r * 0.16, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    } else if (L.hat === 'helmet') {
+      // riot helmet with a raised clear visor
+      ctx.fillStyle = '#1c2230';
+      ctx.beginPath(); ctx.arc(0, -r * 0.05, r * 1.12, Math.PI * 0.92, Math.PI * 2.02); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = 'rgba(170,220,255,.45)'; ctx.beginPath(); ctx.moveTo(r * 0.2, -r * 0.9); ctx.quadraticCurveTo(r * 1.45, -r * 0.6, r * 1.2, r * 0.45); ctx.lineTo(r * 0.75, r * 0.4); ctx.quadraticCurveTo(r * 0.95, -r * 0.4, r * 0.2, -r * 0.9); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ffe14a'; ctx.fillRect(-r * 0.7, -r * 0.35, r * 0.5, r * 0.18);
+    } else if (L.hat === 'mask') {
+      // wrestler's hood: red mask, white eye flashes, a spiked mohawk
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(0, 0, r * 1.05, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      if (!down) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(r * 0.3, -r * 0.05, r * 0.22, r * 0.14, -0.3, 0, Math.PI * 2); ctx.ellipse(r * 0.78, -r * 0.08, r * 0.16, r * 0.12, 0.3, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+      ctx.fillStyle = '#111';
+      ctx.beginPath(); for (let i = 0; i < 5; i++) { const a0 = Math.PI * (1.15 + i * 0.16); ctx.lineTo(Math.cos(a0) * r, Math.sin(a0) * r); ctx.lineTo(Math.cos(a0 + 0.08) * r * 1.6, Math.sin(a0 + 0.08) * r * 1.6); } ctx.lineTo(Math.cos(Math.PI * 1.95) * r, Math.sin(Math.PI * 1.95) * r); ctx.closePath(); ctx.fill(); ctx.stroke();
     }
     ctx.restore();
+    // riot shield held out on the lead hand: clear polycarbonate with a stencilled word
+    if (L.shield && f.lhand && !down) {
+      const m2 = M * s, sx = Math.max(f.lhand[0], f.hand ? f.hand[0] : 0) * m2 + 8 * s, sy = fy - f.lhand[1] * m2;
+      ctx.save(); ctx.translate(sx, sy);
+      ctx.fillStyle = 'rgba(150,200,240,.42)'; ctx.strokeStyle = INK; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(-5 * s, -48 * s, 16 * s, 82 * s, 5 * s); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(-1 * s, -44 * s, 3 * s, 70 * s);
+      ctx.save(); ctx.rotate(-Math.PI / 2); ctx.font = `900 ${8 * s}px Impact, system-ui`; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.fillText('POLICE', 0, 6 * s); ctx.restore();
+      ctx.restore();
+    }
   },
 
   /** Which baked sprite frame shows this crook right now. */
   enemyFrame(e) {
-    const t = e.type;
+    const t = e.lk;
     let anim = 'idle', u = this.t * 0.8 + e.phase;
-    const brute = t === 'brute';
+    const brute = !!(LOOKS[t] && LOOKS[t].kick); // kick-strikers
     switch (e.st) {
       case 'enter': if (e.entry === 'drop') { anim = 'jump'; u = 0.5 + Math.max(-0.5, Math.min(0.5, -e.vy / 900)); } else { anim = e.entry === 'run' ? 'run' : 'walk'; u = e.phase; } break;
       case 'approach': if (e.landT > 0) { e.landT -= 1 / 60; anim = 'fall'; u = 0; } else if (e.moving) { anim = e.def.spd > 140 ? 'run' : 'walk'; u = e.phase; } break;

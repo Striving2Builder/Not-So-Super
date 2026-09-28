@@ -11,7 +11,7 @@ import { banner, toast } from './ui.js';
 import { comic } from './comic.js';
 import { quality } from './settings.js';
 import { Stage } from './brawlstage.js';
-import { spriteBudget, prewarm, LOOKS } from './brawlsprite.js';
+import { spriteBudget, prewarm, LOOKS, VARIANTS } from './brawlsprite.js';
 import { EN, DZ } from './brawldata.js';
 import { actorDraw } from './brawlactors.js';
 import { fxDraw } from './brawlfx.js';
@@ -48,7 +48,15 @@ export class Brawler {
       const list = [];
       for (let j = 0; j < n; j++) list.push(pick(zone.def.enemies));
       if (i === nWaves - 1 && zone.boss) list.push('boss');
-      this.waves.push({ x, list, queue: [], spawned: false, cleared: false, next: 0, n: 0 });
+      // deal each type's looks round-robin (offset per wave) so the pack reads as different people
+      const rr = {};
+      const looks = list.map((t) => {
+        const v = VARIANTS[t] || [t];
+        if (t === 'boss') return v[[...(zone.boss || '')].reduce((h, c) => h + c.charCodeAt(0), 0) % v.length];
+        rr[t] = (rr[t] ?? i) + 1;
+        return v[(rr[t] - 1) % v.length];
+      });
+      this.waves.push({ x, list, looks, queue: [], spawned: false, cleared: false, next: 0, n: 0 });
     }
     this.len = this.waves[nWaves - 1].x + 600;
     const nCap = zone.def.captives || 0;
@@ -71,12 +79,14 @@ export class Brawler {
     this.lock = null;
     this.geom();
     this.stage = new Stage(this);
-    this.types = [...new Set([...zone.def.enemies, ...(zone.boss ? ['boss'] : [])])].filter((t) => LOOKS[t]);
+    const lk = (ws) => [...new Set(ws.flatMap((w) => w.looks))].filter((l) => LOOKS[l]);
+    this.looks = lk(this.waves);
+    this.firstLooks = lk(this.waves.slice(0, 1)).filter((l) => LOOKS[l].model !== 'riddler');
     // Bake the crooks' sprites up front, behind the zone transition (~0.1 s on a phone GPU); anything
     // left over trickles in during the banner.
     this.warm = this.bossWarm = false;
     spriteBudget(quality().brawlBakeMs || 900);
-    this.warm = prewarm(this.types.filter((t) => t !== 'boss'));
+    this.warm = prewarm(this.firstLooks) && prewarm(this.looks.filter((l) => LOOKS[l].model !== 'riddler'));
 
     g.input.setStick(true);
     g.input.setButtons([
@@ -137,9 +147,9 @@ export class Brawler {
         w.spawned = true;
         this.lock = w;
         // first few pile in now, the rest are reinforcements that arrive as the crowd thins
-        w.queue = w.list.slice();
+        w.queue = w.list.map((t, j) => [t, w.looks[j]]);
         const first = Math.min(w.queue.length, 4);
-        for (let i = 0; i < first; i++) this.spawnEnemy(w.queue.shift(), w, i);
+        for (let i = 0; i < first; i++) this.spawnEnemy(...w.queue.shift(), w, i);
         if (w.list.includes('boss')) banner(this.zone.boss.toUpperCase(), 'BOSS FIGHT', '#ff3030');
         // Once they've run on screen, somebody mouths off.
         setTimeout(() => {
@@ -157,7 +167,7 @@ export class Brawler {
       const w = this.lock;
       const alive = this.enemies.filter((e) => e.wave === w && !e.dead).length;
       w.next -= dt;
-      if (w.queue.length && alive < 3 && w.next <= 0) { this.spawnEnemy(w.queue.shift(), w, w.n); w.next = 0.7; }
+      if (w.queue.length && alive < 3 && w.next <= 0) { this.spawnEnemy(...w.queue.shift(), w, w.n); w.next = 0.7; }
       if (!w.queue.length && alive === 0) {
         w.cleared = true; this.lock = null; this.goT = 3; sfx.pickup();
         const s = this.screenOf(p.x, p.z, 115);
@@ -435,15 +445,16 @@ export class Brawler {
     for (let i = 0; i < n; i++) this.fx.push({ kind: 'dust', x: x + rand(-14, 14), y: rand(2, 8), z, vx: rand(-60, 60), vy: rand(10, 40), t: 0, max: rand(0.35, 0.6), r: rand(7, 13) });
   }
 
-  spawnEnemy(type, wave, i) {
+  spawnEnemy(type, lk, wave, i) {
     const vh = this.viewHalf, side = i % 2 === 0 ? 1 : -1;
     const cx = clamp(wave.x + 80, vh, this.len - vh);
     const def = { ...EN[type] };
+    if (LOOKS[lk] && LOOKS[lk].name) def.name = LOOKS[lk].name;
     if (def.boss) def.name = (this.zone.boss || 'BOSS').toUpperCase();
     const look = type === 'boss' ? npcLook('boss') : npcLook(type);
     const tz = rand(0.15, 0.95);
     const e = {
-      type, def, look, wave, x: cx + side * (vh + 60 + (i % 4) * 40), z: tz, y: 0, vy: 0, vx: 0,
+      type, lk, hatCol: LOOKS[lk] && LOOKS[lk].hatCols ? pick(LOOKS[lk].hatCols) : null, def, look, wave, x: cx + side * (vh + 60 + (i % 4) * 40), z: tz, y: 0, vy: 0, vx: 0,
       hp: def.hp, max: def.hp, facing: -side, st: 'enter', st_t: 0, cd: rand(0.6, 1.5), dead: false,
       phase: rand(0, 1), flash: 0, barT: 0, slot: wave.n % 3, zOff: ((wave.n % 4) - 1.5) * 0.18, entry: 'run', tx: cx + side * rand(120, vh - 60), tz,
     };
@@ -703,8 +714,8 @@ export class Brawler {
     // Sprite bakes: a big burst while the banner plays and the first wave piles in, then ~one per frame.
     // The boss (a heavy model) is baked on the walk between waves, never mid-fight.
     spriteBudget(this.t < 3 ? 45 : 3);
-    if (!this.warm) this.warm = prewarm(this.types.filter((t) => t !== 'boss'));
-    else if (!this.bossWarm && this.types.includes('boss') && !this.lock) this.bossWarm = prewarm(['boss']);
+    if (!this.warm) this.warm = prewarm(this.firstLooks) && prewarm(this.looks.filter((l) => LOOKS[l].model !== 'riddler'));
+    else if (!this.bossWarm && !this.lock) this.bossWarm = prewarm(this.looks);
     ctx.save();
     if (this.shake > 0) {
       const s = this.shake;
@@ -731,7 +742,7 @@ export class Brawler {
       const o = d.e || d.p || d.c || d.b;
       if (!o || (d.e && d.e.dead && d.e.st_t > 0.6)) continue;
       const lying = d.e && (d.e.st === 'down' && d.e.landed);
-      const wide = d.b ? 1.1 : lying ? 2.1 : d.e ? (LOOKS[d.e.type]?.scale || 1) : 1;
+      const wide = d.b ? 1.1 : lying ? 2.1 : d.e ? (LOOKS[d.e.lk] ? LOOKS[d.e.lk].scale * (LOOKS[d.e.lk].shape ? LOOKS[d.e.lk].shape[0] : 1) : 1) : 1;
       this.drawShadow(ctx, this.sx(o.x), this.gy(o.z), this.sc(o.z), 24 * wide, o.y || 0, d.e && d.e.alpha != null ? d.e.alpha : 1);
     }
     for (const d of drawables) {

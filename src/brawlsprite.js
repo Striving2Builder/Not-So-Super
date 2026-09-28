@@ -9,16 +9,28 @@ import { quality } from './settings.js';
 
 export const SPAN = 2.6, LIFT = 0.12; // frame covers 2.6 m of height, feet 0.12 m above the bottom edge
 
-// Street-fight roles → model, scale, and a palette swap of the model's flat-colour texture (the robber's
-// atlas is stripes / trousers / skin, so crews get their own shirt colours and skin tones). Headgear and
-// faces are drawn on top in 2D at the baked head anchor (hat: cap | beanie | bandana | hood | none).
+// Crook looks → model, scale, shape (non-uniform [width, height] squash: fat bruiser, beanpole
+// knifeman, slim kicker), and a palette swap of the model's flat-colour texture (the robber's atlas is
+// stripes / trousers / skin). Headgear, faces and props are drawn on top in 2D at the baked anchors
+// (hat: cap | beanie | bandana | hood | ponytail | helmet | mask | shades | none). kick: strikes with the
+// kick clip. Stats come from the crook's type (brawldata EN); a look is purely how it reads.
 export const LOOKS = {
-  thug:     { model: 'robber', scale: 1, recolor: { stripe: '#f2f2f2', dark: '#1a1a22', pants: '#2a3550', skin: '#e8c49a' }, hat: 'cap', hatCol: '#d8122e' },
-  knife:    { model: 'robber', scale: 0.96, recolor: { stripe: '#e84a3a', dark: '#2a0e12', pants: '#1c1c20', skin: '#b57a55' }, hat: 'bandana', hatCol: '#d8122e' },
-  brute:    { model: 'robber', scale: 1.24, recolor: { stripe: '#9a6ae8', dark: '#1e1236', pants: '#2a2a34', skin: '#8a5a3b' }, hat: 'none', beard: true },
-  gunman:   { model: 'police', scale: 1, tint: 0x9a9ab8, hat: 'shades' },
-  arsonist: { model: 'robber', scale: 1, recolor: { stripe: '#ff9a1f', dark: '#3a1a08', pants: '#3a3a2a', skin: '#f1c7a5' }, hat: 'beanie', hatCol: '#2a2a30' },
-  boss:     { model: 'riddler', scale: 1.14 },
+  thug:      { model: 'robber', scale: 1, recolor: { stripe: '#f2f2f2', dark: '#1a1a22', pants: '#2a3550', skin: '#e8c49a' }, hat: 'cap', hatCols: ['#d8122e', '#1e3cff', '#1e7a4a'] },
+  hoodie:    { name: 'HOODIE', model: 'robber', scale: 0.98, shape: [0.94, 1], recolor: { stripe: '#5a6a4a', dark: '#3e4a34', pants: '#22262e', skin: '#c9946a' }, hat: 'hood', hatCols: ['#4a5a3c', '#5a3a6a', '#3a4a6a'] },
+  kicker:    { name: 'KICKER', model: 'robber', scale: 0.95, shape: [0.84, 0.98], kick: true, recolor: { stripe: '#ff5fa2', dark: '#3a0e2a', pants: '#1e2a4a', skin: '#f1c7a5' }, hat: 'ponytail', hatCols: ['#e8c040', '#1a1a1a', '#c8502a'] },
+  knife:     { model: 'robber', scale: 1, shape: [0.84, 1.13], recolor: { stripe: '#e84a3a', dark: '#2a0e12', pants: '#1c1c20', skin: '#b57a55' }, hat: 'bandana', hatCols: ['#d8122e', '#1e3cff', '#111111'] },
+  brute:     { model: 'robber', scale: 1.14, shape: [1.38, 1.04], kick: true, recolor: { stripe: '#9a6ae8', dark: '#1e1236', pants: '#2a2a34', skin: '#8a5a3b' }, hat: 'none', beard: true },
+  riot:      { name: 'RIOT COP', model: 'police', scale: 1.08, shape: [1.12, 1], tint: 0x7a8aa8, hat: 'helmet', shield: true },
+  gunman:    { model: 'police', scale: 1, tint: 0x9a9ab8, hat: 'shades' },
+  arsonist:  { model: 'robber', scale: 1, recolor: { stripe: '#ff9a1f', dark: '#3a1a08', pants: '#3a3a2a', skin: '#f1c7a5' }, hat: 'beanie', hatCols: ['#2a2a30', '#6a1a1a'] },
+  boss:      { model: 'riddler', scale: 1.14 },
+  bossBrute: { model: 'robber', scale: 1.2, shape: [1.42, 1.12], kick: true, recolor: { stripe: '#1c1c22', dark: '#d8122e', pants: '#141418', skin: '#d9a47f' }, hat: 'mask', hatCols: ['#d8122e'] },
+};
+// Which looks can stand in for each gameplay type; a wave deals them out round-robin so a fight never
+// shows two of the same look at once when it can avoid it.
+export const VARIANTS = {
+  thug: ['thug', 'hoodie', 'kicker'], knife: ['knife'], brute: ['brute', 'riot'], gunman: ['gunman'],
+  arsonist: ['arsonist'], boss: ['boss', 'bossBrute'],
 };
 
 // Clip sampling: loops get N evenly spaced frames; one-shots map u∈[0,1] onto [a,b] seconds in N steps.
@@ -87,6 +99,7 @@ function instance(type) {
   if (R.inst[type]) return R.inst[type];
   const L = LOOKS[type];
   const e = new Enemy(L.model, L.scale);
+  if (L.shape) e.model.scale.set(L.scale * L.shape[0], L.scale * L.shape[1], L.scale * L.shape[0]);
   e.model.traverse((o) => {
     if (!o.isMesh) return;
     o.material = Array.isArray(o.material) ? o.material.map((m) => m.clone()) : o.material.clone();
@@ -149,7 +162,7 @@ export function prewarm(types) {
   if (!R) { if (!types.some(spritesReady)) return false; setup(); }
   for (const anim of ['walk', 'idle', 'wind', 'strike', 'hit', 'fall', 'run', 'getup', 'kick', 'jump']) {
     for (const t of types) {
-      if (!spritesReady(t) || (anim === 'kick' && t !== 'brute')) continue;
+      if (!spritesReady(t) || (anim === 'kick' && !LOOKS[t].kick)) continue;
       const C = CLIPS[anim];
       for (let i = 0; i < C.n; i++) {
         if (R.cache.has(t + '|' + anim + '|' + i)) continue;
