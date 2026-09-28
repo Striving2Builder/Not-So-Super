@@ -39,6 +39,10 @@ sprites. The zone interiors are three.js.
 The 3D base class in special3d.js is shared by premade3d, selfbuilt3d, investigation (nightcase)
 and nightlife. selfbuilt3d owns it; others should add hooks/overrides in their own files.
 
+## Architecture
+Read docs/polish/ARCHITECTURE.md: module boundaries, the target folder layout (the director moves
+files between rounds; don't move files yourself), split files past ~800 lines, no cross-area imports.
+
 ## Harness
 `node tools/shots/shoot.js <area> --label <you>-r<N> --port <yourPort>` → `shots/<label>/<area>/`
 (PNGs + metrics.json with fps, draw calls, triangles, page errors). Look at your own screenshots
