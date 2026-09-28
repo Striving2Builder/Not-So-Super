@@ -142,7 +142,7 @@ export class ClubMood {
     }
     this.fixtures = pendants(picked.map((s) => ({ x: s.pos.x, y: s.hang, z: s.pos.z, color: s.color })), this.clip0);
     if (this.fixtures) this.z.scene.add(this.fixtures);
-    const glows = picked.map((s) => ({ pos: new THREE.Vector3(s.pos.x, s.hang - 0.16, s.pos.z), color: s.color.clone().lerp(new THREE.Color(1, 1, 1), 0.3), k: 0.9, size: 1.6 }));
+    const glows = picked.map((s) => ({ pos: new THREE.Vector3(s.pos.x, s.hang - 0.16, s.pos.z), color: s.color.clone().lerp(new THREE.Color(1, 1, 1), 0.3), k: 0.7, size: 0.9 }));
     for (const e of this.z.club.scene.userData.emitters || []) {
       if (e.pos.y > this.clip0 - 0.1 || Math.abs(e.pos.y - this.z.club.mainY) > 4) continue;
       glows.push({ pos: e.pos, color: e.color, k: THREE.MathUtils.clamp(0.25 + e.k * 0.08, 0.3, 0.6), size: THREE.MathUtils.clamp(e.size * 0.9, 0.7, 3.2) });

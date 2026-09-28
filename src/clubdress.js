@@ -7,7 +7,7 @@
 //   * fixtures: pendant lamps hanging just under the cut, plus glow halos on lamps and neon
 // Everything is a handful of draw calls; the floor/AO patch is a few ALU ops per pixel.
 import * as THREE from 'three';
-import { UP } from './clubgeo.js';
+import { DOWN, UP } from './clubgeo.js';
 
 // ---------------------------------------------------------------- emitters
 /** Emissive meshes (neon, sign boxes, bulbs) as { pos, size, color, k }, before the static merge. */
@@ -261,30 +261,37 @@ export class Poche {
   build(Y) {
     const C = 0.35, b = this.club.box, col = this.club.collider;
     const x0 = b.min.x - 1, z0 = b.min.z - 1, nx = Math.ceil((b.max.x + 1 - x0) / C), nz = Math.ceil((b.max.z + 1 - z0) / C);
-    const ray = new THREE.Raycaster(); ray.far = 20;
-    const o = new THREE.Vector3(), side = col.material.side;
-    col.material.side = THREE.DoubleSide; // count faces from inside solids too
-    // cells she can stand in (and their neighbours) always stay open
-    const keep = new Uint8Array(nx * nz), fy = Y - 2.7;
+    const ray = new THREE.Raycaster(); ray.firstHitOnly = true;
+    const o = new THREE.Vector3(), d = new THREE.Vector3(), side = col.material.side;
+    col.material.side = THREE.DoubleSide; // walls hit from either side
+    // Rooms = everything reachable from where she can stand without passing a wall at the cut
+    // (tested just under it, above the furniture) or leaving the roof. The rest gets capped.
+    const H = Y - 0.3, fy = Y - 2.7;
+    const open = new Uint8Array(nx * nz), queue = [];
+    const center = (k, v) => v.set(x0 + ((k % nx) + 0.5) * C, H, z0 + (Math.floor(k / nx) + 0.5) * C);
     for (const p of this.club.floor) {
       if (Math.abs(p.y - fy) > 0.8) continue;
-      const ci = Math.floor((p.x - x0) / C), cj = Math.floor((p.z - z0) / C);
-      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
-        const ii = ci + di, jj = cj + dj;
-        if (ii >= 0 && jj >= 0 && ii < nx && jj < nz) keep[jj * nx + ii] = 1;
+      const k = Math.floor((p.z - z0) / C) * nx + Math.floor((p.x - x0) / C);
+      if (k >= 0 && k < nx * nz && !open[k]) { open[k] = 1; queue.push(k); }
+    }
+    const roofed = (v) => { ray.set(v, UP); ray.far = 20; return !!ray.intersectObject(col)[0]; };
+    const STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    while (queue.length) {
+      const k = queue.pop(), i = k % nx, j = (k - i) / nx;
+      center(k, o);
+      for (const [di, dj] of STEPS) {
+        const ii = i + di, jj = j + dj;
+        if (ii < 0 || jj < 0 || ii >= nx || jj >= nz) continue;
+        const n = jj * nx + ii;
+        if (open[n]) continue;
+        ray.set(o, d.set(di, 0, dj)); ray.far = C;
+        if (ray.intersectObject(col)[0]) continue;           // a wall between the two cells
+        if (!roofed(center(n, d))) continue;                // out under the sky
+        open[n] = 1; queue.push(n);
       }
     }
-    const solid = new Uint8Array(nx * nz);
-    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
-      if (keep[j * nx + i]) continue;
-      // just under the cut (below any low ceiling slab): count surfaces straight up. None → open
-      // sky, outside the building; an odd number → inside something solid, i.e. a cut wall.
-      o.set(x0 + (i + 0.5) * C, Y - 0.3, z0 + (j + 0.5) * C);
-      ray.set(o, UP);
-      const n = ray.intersectObject(col).length;
-      solid[j * nx + i] = n === 0 || n % 2 ? 1 : 0;
-    }
     col.material.side = side;
+    const solid = open.map((v) => 1 - v);
     // one open cell alone (a thin gap in a wall, a hole in the roof) isn't a room: fill it
     for (let j = 1; j < nz - 1; j++) for (let i = 1; i < nx - 1; i++) {
       const k = j * nx + i;
@@ -354,7 +361,7 @@ export function glowPoints(list) {
 void main(){ vC = color; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv;
 gl_PointSize = min(size * scale / -mv.z, 256.0); }`,
     fragmentShader: `uniform sampler2D map; varying vec3 vC;
-void main(){ gl_FragColor = vec4(vC * texture2D(map, gl_PointCoord).r, 1.0); }`,
+void main(){ gl_FragColor = vec4(vC * texture2D(map, gl_PointCoord).a, 1.0); }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   });
   const p = new THREE.Points(geo, mat);
@@ -377,12 +384,13 @@ export function pendants(list, clipY) {
     for (const k of Object.keys(g.attributes)) if (!['position', 'color'].includes(k)) g.deleteAttribute(k);
     return g.index ? g.toNonIndexed() : g;
   };
-  const shadeC = new THREE.Color(0x141018), cordC = new THREE.Color(0x08060a);
+  const shadeC = new THREE.Color(0x2a2430), rimC = new THREE.Color(0x8a8078), cordC = new THREE.Color(0x08060a);
   for (const p of list) {
     const y = p.y;
     const bulb = p.color.clone().lerp(new THREE.Color(1, 1, 1), 0.55).multiplyScalar(1.6);
-    geos.push(tint(new THREE.CylinderGeometry(0.08, 0.34, 0.26, 10, 1, true).translate(p.x, y, p.z), shadeC));
-    geos.push(tint(new THREE.SphereGeometry(0.11, 8, 6).translate(p.x, y - 0.14, p.z), bulb));
+    geos.push(tint(new THREE.CylinderGeometry(0.05, 0.2, 0.18, 10, 1, true).translate(p.x, y, p.z), shadeC));
+    geos.push(tint(new THREE.CylinderGeometry(0.2, 0.2, 0.02, 10).translate(p.x, y - 0.09, p.z), rimC.clone().lerp(p.color, 0.5)));
+    geos.push(tint(new THREE.SphereGeometry(0.07, 8, 6).translate(p.x, y - 0.1, p.z), bulb));
     geos.push(tint(new THREE.BoxGeometry(0.025, clipY - y + 0.2, 0.025).translate(p.x, (clipY + y) / 2 + 0.1, p.z), cordC));
   }
   if (!geos.length) return null;
