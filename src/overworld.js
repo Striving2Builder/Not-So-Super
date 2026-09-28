@@ -1121,7 +1121,7 @@ export class Overworld {
       ctx.fill();
     }
     const tall = b.h >= 36 && !small && !b.house && !b.ship;
-    if (walls.length && V.rich && !small) {
+    if (walls.length && V.rich && !small && b.h * k > 14) { // (skipped where it'd be a sliver)
       // ambient occlusion: the foot of each wall darkens toward the street
       ctx.fillStyle = 'rgba(4,6,20,.3)'; ctx.beginPath();
       const pf = P(Math.min(b.h * 0.35, 30));
@@ -1158,7 +1158,6 @@ export class Overworld {
 
     // roof (with its inked crease against the walls)
     const rw = rx1 - rx0, rh = ry1 - ry0, u = k * s; // u: roof pixels per world unit
-    if (ink) { ctx.fillStyle = '#0b0b16'; ctx.fillRect(rx0 - lw * 0.8, ry0 - lw * 0.8, rw + lw * 1.6, rh + lw * 1.6); }
     if (b.house || b.barn) {
       ctx.fillStyle = b.roofCol; ctx.fillRect(rx0, ry0, rw, rh);
       // pitched roof: the half facing away from the sun is darker
@@ -1172,10 +1171,14 @@ export class Overworld {
       if (!small && V.rich && rw > 14) {
         // parapet: a lit rim, the roof deck inside it, and the rim's own shadow on the deck
         const i = clamp(Math.min(rw, rh) * 0.07, 1.2, 4 * u + 1);
-        ctx.fillStyle = shade(base, 0.32); ctx.fillRect(rx0, ry0, rw, rh);
-        ctx.fillStyle = b.gold ? '#c49a36' : shade(base, 0.02); ctx.fillRect(rx0 + i, ry0 + i, rw - i * 2, rh - i * 2);
-        ctx.fillStyle = 'rgba(0,0,10,.22)';
-        ctx.fillRect(rx0 + i, ry0 + i, rw - i * 2, i * 0.9); ctx.fillRect(rx0 + i, ry0 + i, i * 0.9, rh - i * 2);
+        // (thin strips over one deck fill: overdraw is what costs on phones)
+        ctx.fillStyle = b.gold ? '#c49a36' : shade(base, 0.02); ctx.fillRect(rx0, ry0, rw, rh);
+        ctx.fillStyle = shade(base, 0.32); ctx.beginPath();
+        ctx.rect(rx0, ry0, rw, i); ctx.rect(rx0, ry1 - i, rw, i); ctx.rect(rx0, ry0 + i, i, rh - 2 * i); ctx.rect(rx1 - i, ry0 + i, i, rh - 2 * i);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,10,.22)'; ctx.beginPath();
+        ctx.rect(rx0 + i, ry0 + i, rw - i * 2, i * 0.9); ctx.rect(rx0 + i, ry0 + i * 1.9, i * 0.9, rh - i * 2.9);
+        ctx.fill();
       } else { ctx.fillStyle = top; ctx.fillRect(rx0, ry0, rw, rh); }
       if (b.container || b.corrugated || b.sawtooth) {
         ctx.strokeStyle = b.sawtooth ? 'rgba(180,220,255,.45)' : 'rgba(0,0,0,.2)'; ctx.lineWidth = b.sawtooth ? 3 : 1;
@@ -1192,7 +1195,7 @@ export class Overworld {
         ctx.fillRect(rx0 + rw * 0.12, ry0 + rh * 0.2, rw * 0.12, rh * 0.18);
         ctx.fillRect(rx0 + rw * 0.7, ry0 + rh * 0.55, rw * 0.1, rh * 0.18);
         ctx.fillStyle = '#6b4a2a'; ctx.beginPath(); ctx.arc(rx0 + rw * 0.4, ry0 + rh * 0.5, Math.min(rw, rh) * 0.12, 0, Math.PI * 2); ctx.fill();
-      } else if (V.rich && tall && !b.sign && !b.helipad && !b.vents && !b.neon && b.w > 56 && b.d > 56) this.roofKit(ctx, b, rx0, ry0, rw, rh, u, V);
+      } else if (V.rich && tall && !b.sign && !b.helipad && !b.vents && !b.neon && b.w > 56 && b.d > 56 && rw > 34 && rh > 34) this.roofKit(ctx, b, rx0, ry0, rw, rh, u, V);
       if (b.skylight) { ctx.fillStyle = 'rgba(160,210,240,.6)'; ctx.fillRect(rx0 + rw * 0.2, ry0 + rh * 0.35, rw * 0.6, rh * 0.3); }
       if (b.helipad) {
         const r = Math.min(rw, rh) * 0.3;
@@ -1228,6 +1231,14 @@ export class Overworld {
         ctx.strokeText(b.sign, rx0 + rw / 2, ry0 + rh / 2);
         ctx.fillStyle = '#fff6d8'; ctx.fillText(b.sign, rx0 + rw / 2, ry0 + rh / 2);
       }
+    }
+    if (ink) {
+      // inked roof edge: four thin strips
+      const e = lw * 0.8;
+      ctx.fillStyle = '#0b0b16'; ctx.beginPath();
+      ctx.rect(rx0 - e, ry0 - e, rw + 2 * e, 2 * e); ctx.rect(rx0 - e, ry1 - e, rw + 2 * e, 2 * e);
+      ctx.rect(rx0 - e, ry0 + e, 2 * e, rh - 2 * e); ctx.rect(rx1 - e, ry0 + e, 2 * e, rh - 2 * e);
+      ctx.fill();
     }
     if (b.neon) V.lights.push({ t: 'neon', x: rx0, y: ry0, w: rw, h: rh, c: b.neon, c2: b.neon2, seed: b.x });
   }
