@@ -4,7 +4,6 @@ import { BLOCK, ROAD, LOT } from './city.js';
 import { DISTRICTS, STREET_CRIMES, CASES, VENUES, THEMES, BOSSES, HERO, NIGHT_DISTRICTS, ASYLUM } from './data.js';
 import { drawHeroTop } from './art.js'; // placeholder art until her model loads
 import { clamp, lerp, pick, chance, rand, dist, rgba, easeOut, easeInOut, fmtClock, fmtTime, wobble, $ } from './util.js';
-import { heroReady, HeroSprite } from './hero3d.js';
 import { loadClub, preloadClub } from './clubzone.js';
 import { quality, settings } from './settings.js';
 import { AirEvents } from './airevents.js';
@@ -15,7 +14,8 @@ import { stepFlight, stepAltitude, speedFraction, cameraZoom, cameraLead, FLIGHT
 import { Airspace } from './airspace.js';
 import { drawAtmosphere, FOG_Z } from './atmosphere.js';
 import { Sky, SpeedFX } from './sky.js';
-import { CityArt, TILE, SUN, grade, glow, InkSprite } from './cityart.js';
+import { CityArt, TILE, SUN, grade, glow } from './cityart.js';
+import { FlightHero } from './herofly.js';
 import { drawBuilding, drawLights } from './skyline.js';
 import { FlightAudio } from './flightaudio.js';
 import { nightCaseFields } from './nightcase.js';
@@ -62,7 +62,7 @@ export class Overworld {
     this.feed = new CityFeed();          // clips in the minimap corner
     this.frame = 0;
     this.kick = 0;                       // boost punch (0..1), widens the view for a beat
-    this.ink = new InkSprite();          // outlined, rim-lit copy of her sprite + her shadow
+    this.heroArt = new FlightHero();     // her inked 3/4 sprite, ground shadow, boost lettering
   }
 
   reset() {
@@ -444,7 +444,7 @@ export class Overworld {
     if (h.perch) this.updatePerch(dt);
     const frac = speedFraction(h);
     if (!this.attract) {
-      if (ev.boostStart) { sfx.boost(); this.shake = Math.max(this.shake, 5); this.kick = 1; }
+      if (ev.boostStart) { sfx.boost(); this.shake = Math.max(this.shake, 7); this.kick = 1; this.heroArt.whoosh(h.ang); }
       if (ev.sonic) { sfx.sonicBoom(); this.shake = 12; this.fx.sonicBoom(); }
     }
     // Camera: look further ahead and pull out as she speeds up (dive/rise animations own the zoom).
@@ -457,6 +457,7 @@ export class Overworld {
     if (this.rising === null) this.zoom += (cameraZoom(h) - this.zoom) * Math.min(1, dt * 2);
     this.shake = Math.max(0, this.shake - dt * 20);
     this.kick = Math.max(0, this.kick - dt * 1.8);
+    this.heroArt.update(dt);
     // Contrail at top speed.
     if (h.speed > FLIGHT.sonic && chance(dt * 40)) this.parts.push({ x: h.x - h.vx * 0.04, y: h.y - h.vy * 0.04, z: h.z, vx: 0, vy: 0, vz: 0, life: 0.6, max: 0.6, size: 5, col: '#dff4ff', glow: true });
     this.sky.update(dt);
@@ -856,7 +857,7 @@ export class Overworld {
       ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.stroke();
     }
 
-    const sprite = heroReady();
+    const sprite = this.heroArt.ready;
     if (!sprite) {
       // placeholder art: a plain shadow ellipse (sun from the north-west)
       ctx.fillStyle = 'rgba(0,0,0,.28)';
@@ -874,7 +875,7 @@ export class Overworld {
     // Her shadow, cast along the sun onto whatever is under it (street or rooftop): it slides
     // away from her and softens the higher she is above that surface, which reads as altitude.
     const HS = LOOK.heroScale;
-    if (sprite && this.sprite) this.drawHeroShadow(ctx, V, HS);
+    if (sprite) this.heroArt.drawShadow(ctx, V, h, HS, (x, y) => this.buildingAt(x, y));
 
     // smoke (under the night overlay)
     for (const p of this.parts) {
@@ -928,39 +929,8 @@ export class Overworld {
     this.fx.draw(ctx, SX(h.x, h.z), SY(h.y, h.z), hs);
     const hx = SX(h.x, h.z), hy = SY(h.y, h.z) + Math.sin(this.t * 2.2) * 2 * k;
     this.heroScreen = { x: hx, y: hy };
-    if (sprite) {
-      // Real rigged model rendered top-down with the Flying clip; heading is +x on the sprite.
-      const px = q.heroSprite;
-      // no MSAA: the ink outline hides the stair-steps, and MSAA is costly on weak phone GPUs
-      if (!this.sprite) this.sprite = new HeroSprite(px, px, { aa: false });
-      const sp = this.sprite;
-      sp.setSize(px, px);
-      if (h.perch) sp.hero.pose('idle', this.t); // standing on the roof (seen from above)
-      else {
-        sp.hero.pose(this.diving ? 'jump' : 'fly', this.diving ? 0.9 : this.t);
-        // Arms relax out of the punch-forward pose as she slows into a hover.
-        if (!this.diving) sp.hero.superFly(1 - 0.8 * h.hover);
-      }
-      // Airspeed drives the cape: it streams behind her (-z) and lifts a little off her back (+y).
-      // Airflow over her back holds the cape up against gravity (y ≈ 10) and streams it to her feet.
-      const air = 8 + h.speed / 50;
-      sp.hero.setWind(Math.sin(this.t * 2.3) * 1.8, 10.5 * (1 - 0.6 * h.hover), -air);
-      // Bank into turns, pitch up into a hover when slow, dip the head when accelerating.
-      const img = sp.render({ view: 'top', yaw: 0, span: 2.6, roll: h.perch ? 0 : h.bank * 0.45, pitch: h.perch ? 0 : h.hover * 1.15 - h.lean * 0.25 });
-      const size = 2.6 * 40 * hs; // 1 sprite metre ≈ 40 art units
-      // Ink outline + a warm rim on her sun side (the light's direction, turned into sprite space).
-      const art = this.ink.build(img, Math.atan2(-1, -1) - h.ang, rich, night);
-      const sc = size / img.width, pad = this.ink.pad * sc;
-      ctx.save();
-      ctx.translate(hx, hy); ctx.rotate(h.ang);
-      // a soft aura so she separates from busy neon rooftops
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 0.14 + 0.22 * night;
-      ctx.drawImage(glow('#9fd8ff'), -size * 0.55, -size * 0.55, size * 1.1, size * 1.1);
-      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
-      ctx.drawImage(art, -size / 2 - pad, -size / 2 - pad, size + pad * 2, size + pad * 2);
-      ctx.restore();
-    } else drawHeroTop(ctx, hx, hy, hs, h.ang, this.t, h.bank);
+    if (sprite) this.heroArt.draw(ctx, h, hx, hy, hs, { t: this.t, diving: !!this.diving, rich, night, px: q.heroSprite });
+    else drawHeroTop(ctx, hx, hy, hs, h.ang, this.t, h.bank);
     // super-hearing: sound rings pulsing out while perched
     if (h.perch) for (const r of this.hearRings || []) {
       const e = r.t / 1.6;
@@ -978,6 +948,7 @@ export class Overworld {
 
     // comic speed lines when she really moves
     if (rich) this.fx.drawComic(ctx, hx, hy, W, H, night);
+    this.heroArt.drawPops(ctx, hx, hy, Math.min(W, H) / 390);
 
     // off-screen zone arrows (screen space)
     if (!this.attract && !this.diving) this.drawArrows(ctx, V);
@@ -996,27 +967,6 @@ export class Overworld {
       grd.addColorStop(0, 'rgba(255,255,255,0)'); grd.addColorStop(1, `rgba(255,255,255,${e * 0.8})`);
       ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
     }
-  }
-
-  /** Her silhouette on the street or roof below, offset along the sun by her height above it. */
-  drawHeroShadow(ctx, V, HS) {
-    const h = this.hero, { SX, SY, k, P } = V;
-    let zr = 0, x = h.x + h.z * SUN.x, y = h.y + h.z * SUN.y;
-    const b = this.buildingAt(x, y);
-    if (b && b.h < h.z) { zr = b.h; x = h.x + (h.z - zr) * SUN.x; y = h.y + (h.z - zr) * SUN.y; }
-    const above = h.z - zr, sil = this.ink.shadow;
-    if (!sil) return;
-    const size = 2.6 * 40 * HS * k * P(zr) * (1 + above / 2400);
-    const sc = size / (sil.width - this.ink.pad * 2), full = sil.width * sc;
-    ctx.save();
-    ctx.translate(SX(x, zr), SY(y, zr)); ctx.rotate(h.ang);
-    const a = clamp(0.5 - above / 1400, 0.16, 0.5) * (1 - 0.35 * V.night);
-    // two offset passes fake a penumbra that widens with height
-    const blur = Math.min(6, 1 + above / 120) * k;
-    ctx.globalAlpha = a * 0.6; ctx.drawImage(sil, -full / 2 - blur, -full / 2 - blur, full + blur * 2, full + blur * 2);
-    ctx.globalAlpha = a * 0.7; ctx.drawImage(sil, -full / 2, -full / 2, full, full);
-    ctx.restore();
-    ctx.globalAlpha = 1;
   }
 
   drawIcon(ctx, x, y, r, z, locked, near) {
