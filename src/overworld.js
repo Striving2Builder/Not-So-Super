@@ -708,9 +708,8 @@ export class Overworld {
     const g = this.g, W = g.w, H = g.h, city = g.city, st = g.state;
     const night = st ? st.night : 0.8;
     const q = quality(), rich = q.id !== 'saver';
-    const DBG = window.__owx || {};
     this.frame++;
-    if (!this.art || this.art.city !== city) this.art = new CityArt(city, rich ? 160 : 96);
+    if (!this.art || this.art.city !== city) this.art = new CityArt(city, rich ? 144 : 96, 56);
     // The ground gets smaller as the camera climbs (true perspective); she stays the same size.
     // A boost kicks the view wider for a beat, like a camera FOV punch.
     const punch = this.kick > 0 ? Math.sin(this.kick * Math.PI) * 0.07 : 0;
@@ -723,7 +722,7 @@ export class Overworld {
     const P = (z) => camH / (camH - z);
     const SX = (x, z = 0) => cx + (x - camX) * k * P(z);
     const SY = (y, z = 0) => scy + (y - camY) * k * P(z) - (P(z) - 1) * T;
-    const V = { cx, cy, scy, k, P, SX, SY, night, lights: [], t: this.t, W, H, camH, rich: rich && !DBG.noRich, dbg: DBG };
+    const V = { cx, cy, scy, k, P, SX, SY, night, lights: [], t: this.t, W, H, camH, rich };
     this.V = V; // for things that place speech bubbles in world space
     const h = this.hero;
 
@@ -768,19 +767,18 @@ export class Overworld {
     const tx0 = Math.max(0, Math.floor((camX - W / 2 / k - margin) / TW)), tx1 = Math.floor((camX + W / 2 / k + margin) / TW);
     const ty0 = Math.max(0, Math.floor((camY - H / 2 / k - margin) / TW)), ty1 = Math.floor((camY + H / 2 / k + margin) / TW);
     const TS = TW * k + 0.6; // a hair of overlap hides seams between tiles
-    // Paint at most a couple of new tiles a frame (all of them on the first frames), one ring of
-    // tiles ahead of the view, so flying fast never stalls on painting.
-    if (DBG.nearest) ctx.imageSmoothingEnabled = false;
-    const art = this.art, limit = art.painted + (this.frame < 3 ? 99 : 2);
+    // Tiles in view are painted when needed; the ring just outside is pre-painted one tile per
+    // frame, so flying fast rarely has to paint on the spot. (Day/night tiles swap over at dusk.)
+    const art = this.art, limit = art.painted + 1;
     for (let ty = ty0 - 1; ty <= ty1 + 1; ty++) for (let tx = tx0 - 1; tx <= tx1 + 1; tx++) {
       if (tx < 0 || ty < 0 || tx * TILE >= city.cols || ty * TILE >= city.rows) continue;
       const inView = tx >= tx0 && tx <= tx1 && ty >= ty0 && ty <= ty1;
-      // visible tiles first claim the budget; the ring ahead only paints with budget to spare
-      const c = art.tile(tx, ty, this.frame, art.painted < limit - (inView ? 0 : 1), night > 0.45);
+      const c = art.tile(tx, ty, this.frame, inView || art.painted < limit, night > 0.45);
       if (!inView) continue;
-      if (c && !DBG.noGround) ctx.drawImage(c, SX(tx * TW), SY(ty * TW), TS, TS);
+      // not painted yet (e.g. dusk just flipped every tile): show the other variant meanwhile
+      const img = c || art.ground.get(art.key(tx, ty) * 2 + (night > 0.45 ? 0 : 1))?.c;
+      if (img) ctx.drawImage(img, SX(tx * TW), SY(ty * TW), TS, TS);
     }
-    ctx.imageSmoothingEnabled = true;
     const blds = [];
     for (let by = by0; by <= by1; by++) for (let bx = bx0; bx <= bx1; bx++) for (const o of city.block(bx, by).b) blds.push(o);
     // Aerial perspective: the higher she flies, the more the street sinks into haze under the roofs.
@@ -864,7 +862,7 @@ export class Overworld {
       b._d = (bx - camX) * (bx - camX) + (by - camY) * (by - camY);
     }
     blds.sort((a, b) => b._d - a._d);
-    if (!DBG.noBld) for (const b of blds) this.drawBuilding(ctx, b, V);
+    for (const b of blds) this.drawBuilding(ctx, b, V);
 
     // Her shadow, cast along the sun onto whatever is under it (street or rooftop): it slides
     // away from her and softens the higher she is above that surface, which reads as altitude.
@@ -879,7 +877,7 @@ export class Overworld {
     }
 
     // Night grade + vignette in one alpha blit (the street lights are baked into the night tiles).
-    if ((night > 0 || rich) && !DBG.noGrade) {
+    if ((night > 0 || rich)) {
       if (rich) ctx.drawImage(grade(night, 0.6 + 0.4 * speedFraction(h)), -130, -130, W + 260, H + 260);
       else { ctx.fillStyle = `rgba(6,10,32,${0.56 * night})`; ctx.fillRect(-120, -120, W + 240, H + 240); }
     }
@@ -926,7 +924,8 @@ export class Overworld {
     if (sprite) {
       // Real rigged model rendered top-down with the Flying clip; heading is +x on the sprite.
       const px = q.heroSprite;
-      if (!this.sprite || this.sprite.aaOff !== !!DBG.noAA) { this.sprite = new HeroSprite(px, px, { aa: !DBG.noAA }); this.sprite.aaOff = !!DBG.noAA; }
+      // no MSAA: the ink outline hides the stair-steps, and MSAA is costly on weak phone GPUs
+      if (!this.sprite) this.sprite = new HeroSprite(px, px, { aa: false });
       const sp = this.sprite;
       sp.setSize(px, px);
       if (h.perch) sp.hero.pose('idle', this.t); // standing on the roof (seen from above)
@@ -943,7 +942,7 @@ export class Overworld {
       const img = sp.render({ view: 'top', yaw: 0, span: 2.6, roll: h.perch ? 0 : h.bank * 0.45, pitch: h.perch ? 0 : h.hover * 1.15 - h.lean * 0.25 });
       const size = 2.6 * 40 * hs; // 1 sprite metre ≈ 40 art units
       // Ink outline + a warm rim on her sun side (the light's direction, turned into sprite space).
-      const art = DBG.noInk ? img : this.ink.build(img, Math.atan2(-1, -1) - h.ang, rich, night);
+      const art = this.ink.build(img, Math.atan2(-1, -1) - h.ang, rich, night);
       const sc = size / img.width, pad = this.ink.pad * sc;
       ctx.save();
       ctx.translate(hx, hy); ctx.rotate(h.ang);
@@ -1107,7 +1106,7 @@ export class Overworld {
     // Ink: comic outlines. Only fills (strokes and big overdraw are what mobile GPUs choke on):
     // thin quads up the wall corners here, and a dark rect under the roof for its rim.
     const small0 = b.container || b.truck;
-    const ink = (V.rich || b.h >= 36) && !V.dbg.noInkB, lw = small0 ? Math.max(0.5, 0.7 * k) : Math.max(0.9, 1.4 * k);
+    const ink = (V.rich || b.h >= 36), lw = small0 ? Math.max(0.5, 0.7 * k) : Math.max(0.9, 1.4 * k);
     for (const w of walls) { ctx.fillStyle = shade(base, TONE[w]); ctx.beginPath(); band(w, 1, s); ctx.fill(); }
     if (ink && walls.length && !small0) {
       ctx.fillStyle = '#0b0b16'; ctx.beginPath();
@@ -1119,7 +1118,7 @@ export class Overworld {
       ctx.fill();
     }
     const tall = b.h >= 36 && !small && !b.house && !b.ship;
-    if (walls.length && V.rich && !small && !V.dbg.noAO) {
+    if (walls.length && V.rich && !small) {
       // ambient occlusion: the foot of each wall darkens toward the street
       ctx.fillStyle = 'rgba(4,6,20,.3)'; ctx.beginPath();
       const pf = P(Math.min(b.h * 0.35, 30));
@@ -1167,7 +1166,7 @@ export class Overworld {
       if (b.barn) { ctx.strokeStyle = '#eee'; ctx.lineWidth = 1.5; ctx.strokeRect(rx0 + 2, ry0 + 2, rw - 4, rh - 4); }
     } else {
       const top = b.gold ? '#d8b24a' : shade(base, 0.12);
-      if (!small && V.rich && rw > 14 && !V.dbg.noPar) {
+      if (!small && V.rich && rw > 14) {
         // parapet: a lit rim, the roof deck inside it, and the rim's own shadow on the deck
         const i = clamp(Math.min(rw, rh) * 0.07, 1.2, 4 * u + 1);
         ctx.fillStyle = shade(base, 0.32); ctx.fillRect(rx0, ry0, rw, rh);
@@ -1190,7 +1189,7 @@ export class Overworld {
         ctx.fillRect(rx0 + rw * 0.12, ry0 + rh * 0.2, rw * 0.12, rh * 0.18);
         ctx.fillRect(rx0 + rw * 0.7, ry0 + rh * 0.55, rw * 0.1, rh * 0.18);
         ctx.fillStyle = '#6b4a2a'; ctx.beginPath(); ctx.arc(rx0 + rw * 0.4, ry0 + rh * 0.5, Math.min(rw, rh) * 0.12, 0, Math.PI * 2); ctx.fill();
-      } else if (V.rich && tall && !b.sign && !b.helipad && !b.vents && !b.neon && b.w > 56 && b.d > 56 && !V.dbg.noKit) this.roofKit(ctx, b, rx0, ry0, rw, rh, u, V);
+      } else if (V.rich && tall && !b.sign && !b.helipad && !b.vents && !b.neon && b.w > 56 && b.d > 56) this.roofKit(ctx, b, rx0, ry0, rw, rh, u, V);
       if (b.skylight) { ctx.fillStyle = 'rgba(160,210,240,.6)'; ctx.fillRect(rx0 + rw * 0.2, ry0 + rh * 0.35, rw * 0.6, rh * 0.3); }
       if (b.helipad) {
         const r = Math.min(rw, rh) * 0.3;

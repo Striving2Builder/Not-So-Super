@@ -81,16 +81,9 @@ export class CityArt {
       e = { c, f: frame };
       this.painted++;
       this.ground.set(k, e);
-      this.upload(e);
     }
     e.f = frame;
-    return e.bm || e.c;
-  }
-
-  /** Swap the canvas for an ImageBitmap once ready: a GPU-resident image blits much cheaper. */
-  upload(e) {
-    if (typeof createImageBitmap !== 'function' || !window.__owx?.bm) return;
-    createImageBitmap(e.c).then((bm) => { if (e.dead) bm.close(); else e.bm = bm; }).catch(() => {});
+    return e.c;
   }
 
   evict(map, frame, drop = false) {
@@ -100,7 +93,6 @@ export class CityArt {
       if (es[i][1].f >= frame) break;
       const e = es[i][1];
       map.delete(es[i][0]);
-      e.dead = true; if (e.bm) e.bm.close();
       if (!drop) this.pool.push(e.c);
     }
   }
