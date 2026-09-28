@@ -7,6 +7,9 @@ import { shade } from './util.js';
 
 export const LW = 1000, LH = 600, FLOOR = 380, CEIL = 14;
 export const VP = { x: 500, y: 200 }; // vanishing point
+export const INK = '#120a16';
+export const CAPTION = '"Bangers", Impact, "Arial Black", sans-serif';
+export const ease = (k) => 1 - Math.pow(1 - Math.min(1, Math.max(0, k)), 3);
 
 /** y where the ray from the vanishing point through (px, py) reaches x. */
 const rayY = (px, py, x) => VP.y + (py - VP.y) * (x - VP.x) / (px - VP.x);
@@ -405,7 +408,7 @@ export function paintSkeleton(g, x, y, s, t) {
 const rnd = (i, k = 1) => { const n = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return n - Math.floor(n); };
 
 /** Floor (and wall) details that say what happened here, per case type. (x, y) is a clear floor spot. */
-export function paintStory(g, id, x, y) {
+export function paintStory(g, id, x, y, wx = x) {
   g.save();
   g.lineJoin = 'round'; g.lineCap = 'round';
   const ink = 'rgba(18,10,22,.8)';
@@ -422,8 +425,10 @@ export function paintStory(g, id, x, y) {
       g.save(); g.translate(x, y); g.scale(1, 0.3); g.translate(-x, -y); g.fillStyle = gr; g.beginPath(); g.arc(x, y, 150, 0, Math.PI * 2); g.fill(); g.restore();
       gr = g.createLinearGradient(0, FLOOR, 0, CEIL + 40);
       gr.addColorStop(0, 'rgba(10,6,4,.75)'); gr.addColorStop(1, 'rgba(10,6,4,0)');
-      g.fillStyle = gr; g.beginPath(); g.moveTo(x - 90, FLOOR); g.bezierCurveTo(x - 60, FLOOR - 150, x - 130, FLOOR - 250, x - 40, CEIL + 40);
-      g.lineTo(x + 80, CEIL + 40); g.bezierCurveTo(x + 130, FLOOR - 230, x + 50, FLOOR - 140, x + 90, FLOOR); g.fill();
+      g.fillStyle = gr; g.beginPath(); g.moveTo(wx - 90, FLOOR); g.bezierCurveTo(wx - 60, FLOOR - 150, wx - 130, FLOOR - 250, wx - 40, CEIL + 40);
+      g.lineTo(wx + 80, CEIL + 40); g.bezierCurveTo(wx + 130, FLOOR - 230, wx + 50, FLOOR - 140, wx + 90, FLOOR); g.fill();
+      // blistered paint along the plume's edges
+      g.fillStyle = 'rgba(40,24,12,.6)'; for (let i = 0; i < 14; i++) { g.beginPath(); g.arc(wx - 70 + rnd(i, 9) * 150, FLOOR - 20 - rnd(i, 8) * 220, 3 + rnd(i, 7) * 6, 0, Math.PI * 2); g.fill(); }
       for (let i = 0; i < 9; i++) { // charred bits
         const bx = x - 90 + rnd(i) * 180, by = y - 14 + rnd(i, 2) * 30;
         g.fillStyle = '#140c08'; g.beginPath(); g.moveTo(bx, by); g.lineTo(bx + 14, by - 4); g.lineTo(bx + 18, by + 3); g.lineTo(bx + 4, by + 6); g.fill();
@@ -503,9 +508,9 @@ export function paintStory(g, id, x, y) {
 /** A near-black foreground silhouette at the frame's edge, per setting: depth, and a frame. */
 export function paintForeground(g, key, v) {
   const x0 = v.x0, y1 = v.y1;
-  const S = '#07040b', rim = 'rgba(255,220,170,.28)';
+  const S = '#07040b', rim = 'rgba(255,214,160,.55)';
   g.save();
-  g.fillStyle = S; g.strokeStyle = rim; g.lineWidth = 2;
+  g.fillStyle = S; g.strokeStyle = rim; g.lineWidth = 3;
   const fillRim = () => { g.fill(); g.stroke(); };
   switch (key) {
     case 'office': // an office chair's back and armrest, close to camera
