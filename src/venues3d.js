@@ -5,7 +5,7 @@
 // detail costs few draw calls. Textures are canvas-drawn in the comic style: flat pulp colour,
 // ink lines, stencils, a little grime.
 import * as THREE from 'three';
-import { toon, lightPool } from './look3d.js';
+import { toon, Particles } from './look3d.js';
 import { rand, chance } from './util.js';
 import { quality } from './settings.js';
 
@@ -72,6 +72,7 @@ export function venueMats(zn, k) {
       }
       g.fillStyle = '#141014'; g.fillRect(0, split - 4, w, 6);
       specks(g, w, h, 300);
+      wallAO(g, w, h);
     }, { repeat: true });
     M.wall = worldTile(toon(0xffffff, { map: wallT }, { halftone: 0.6 }), 3.4);
     M.skirt = worldTile(toon(0xffffff, { map: hazardTex() }, { halftone: 0 }), 1.2); M.skirtH = 0.2;
@@ -97,15 +98,14 @@ export function venueMats(zn, k) {
       for (const [x, z] of [[-9.5, -6.5], [9, 7.5], [-8.5, 7.5]]) g.strokeRect(px(x - 3), pz(z - 2.5), 6 * m2p, 5 * m2p);
       stencil(g, 'DOCK 7', px(-8), pz(1.2), 64, 'rgba(242,242,230,.55)');
       stencil(g, 'B-2', px(9), pz(-1.5), 48, 'rgba(242,194,26,.6)');
-      stencil(g, 'NO SMOKING', px(0), pz(9), 30, 'rgba(230,60,40,.7)');
-      g.strokeStyle = 'rgba(230,60,40,.7)'; g.lineWidth = 4; g.strokeRect(px(-3.2), pz(8.4), 6.4 * m2p, 1.2 * m2p);
+      stencil(g, 'NO SMOKING', px(9), pz(-9.5), 26, 'rgba(230,60,40,.6)');
     }, LIGHT.warehouse); }) }, { halftone: 0.5 });
     M.back = roomFloor(concreteTile('#4a4c52', '#2a2a30'), 12, 10, [[0, 0, 3.5, '#ffd9a0', 0.45]]);
     M.office = roomFloor(planks('#7a5838', '#4a321e'), 10, 10, [[0, 0, 3.2, '#ffe6c0', 0.45]]);
     M.mat = toon(0xffffff, { map: tex(128, 96, (g, w, h) => { g.fillStyle = '#232323'; g.fillRect(0, 0, w, h); g.strokeStyle = '#3a3a3a'; g.lineWidth = 3; for (let x = 4; x < w; x += 8) { g.beginPath(); g.moveTo(x, 4); g.lineTo(x, h - 4); g.stroke(); } hazardFill(g, 0, 0, w, 8, 6); hazardFill(g, 0, h - 8, w, 8, 6); }) });
     M.door = doorMat('#6a7480', 'RESTRICTED');
     M.hazard = toon(0xffffff, { map: hazardTex() }, { halftone: 0 });
-    M.lights = () => rig(zn, { sky: 0xc8d4ea, ground: 0x3a342c, hemi: 0.85, amb: 0.15, key: 0xffe2b8, keyK: 1.2 });
+    M.lights = () => rig(zn, { sky: 0xb0bcd8, ground: 0x2a2620, hemi: 0.7, amb: 0.1, key: 0xffd8a8, keyK: 1.05 });
   } else if (k === 'penthouse') {
     // floor-to-ceiling glass; bronze frames; the city far below
     M.wall = toon(0x9fd0ff, { transparent: true, opacity: 0.22, emissive: 0x0a1830 }, { halftone: 0 });
@@ -113,14 +113,11 @@ export function venueMats(zn, k) {
     M.rail = toon(0x8a6a3a, { emissive: 0x2a1a08 }, { halftone: 0 }); M.railY = 3.32;
     M.posts = { mat: toon(0x2a2018, {}, { halftone: 0 }), every: 2.6 };
     M.hall = toon(0xffffff, { map: tex(W, H, (g) => { lit(g, () => {
-      // cream marble slabs with gold joints, a black marble border, an art-deco medallion
-      g.fillStyle = '#e8dfcf'; g.fillRect(0, 0, W, H);
-      for (let i = 0; i < 40; i++) {
-        g.strokeStyle = `rgba(${chance(0.5) ? '150,130,110' : '110,110,120'},${rand(0.12, 0.3)})`; g.lineWidth = rand(0.6, 2.2);
-        g.beginPath(); let x = Math.random() * W, y = Math.random() * H; g.moveTo(x, y);
-        for (let j = 0; j < 5; j++) { x += rand(-60, 60); y += rand(-60, 60); g.lineTo(x, y); } g.stroke();
-      }
-      blotch(g, W, H, 30, 'rgba(200,180,150,A)', 40, 160, 0.25);
+      // polished dark marble slabs (soft clouding, no scratchy veins) with gold joints, a black
+      // border and an art-deco medallion
+      g.fillStyle = '#4a4552'; g.fillRect(0, 0, W, H);
+      blotch(g, W, H, 40, 'rgba(120,112,130,A)', 60, 200, 0.35);
+      blotch(g, W, H, 30, 'rgba(20,18,26,A)', 40, 140, 0.35);
       g.strokeStyle = '#b8903a'; g.lineWidth = 3;
       for (let x = -15; x <= 15; x += 2.5) { g.beginPath(); g.moveTo(px(x), 0); g.lineTo(px(x), H); g.stroke(); }
       for (let z = -12; z <= 12; z += 2.5) { g.beginPath(); g.moveTo(0, pz(z)); g.lineTo(W, pz(z)); g.stroke(); }
@@ -130,7 +127,7 @@ export function venueMats(zn, k) {
       g.strokeStyle = '#d0a848'; g.lineWidth = 4; g.strokeRect(b, b, W - 2 * b, H - 2 * b); g.lineWidth = 2; g.strokeRect(b + 8, b + 8, W - 2 * b - 16, H - 2 * b - 16);
       // medallion
       const cx = px(-4), cy = pz(0.5);
-      for (const [r, c] of [[3.1, '#1c1a20'], [2.9, '#d0a848'], [2.7, '#1c1a20'], [2.1, '#e8dfcf']]) { g.fillStyle = c; g.beginPath(); g.arc(cx, cy, r * m2p, 0, 7); g.fill(); }
+      for (const [r, c] of [[3.1, '#1c1a20'], [2.9, '#d0a848'], [2.7, '#1c1a20'], [2.1, '#6a6072']]) { g.fillStyle = c; g.beginPath(); g.arc(cx, cy, r * m2p, 0, 7); g.fill(); }
       g.fillStyle = '#d0a848';
       for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a - 0.07) * 2.1 * m2p, cy + Math.sin(a - 0.07) * 2.1 * m2p); g.lineTo(cx + Math.cos(a + 0.07) * 2.1 * m2p, cy + Math.sin(a + 0.07) * 2.1 * m2p); g.fill(); }
       g.fillStyle = '#1c1a20'; g.beginPath(); g.arc(cx, cy, 0.5 * m2p, 0, 7); g.fill();
@@ -140,7 +137,7 @@ export function venueMats(zn, k) {
     M.mat = toon(0x3a1420);
     M.door = doorMat('#2a2a34', 'PRIVATE', '#d0a848');
     M.hazard = toon(0xd0a848, { emissive: 0x3a2a08 }, { halftone: 0 });
-    M.lights = () => rig(zn, { sky: 0x9ab4e8, ground: 0x6a5a48, hemi: 0.8, amb: 0.12, key: 0xffe6c8, keyK: 1.1 });
+    M.lights = () => rig(zn, { sky: 0x8aa4f0, ground: 0x4a3a30, hemi: 0.75, amb: 0.1, key: 0xffd6a8, keyK: 1.0 });
   } else {
     // lair: riveted bunker panels, a toxic-green glow in the floor grates
     const wallT = tex(256, 256, (g, w, h) => {
@@ -152,7 +149,9 @@ export function venueMats(zn, k) {
       g.fillStyle = '#6a7a70';
       for (let y = 8; y < h; y += h / 3) for (let x = 8; x < w; x += 20) { g.beginPath(); g.arc(x, y, 2.2, 0, 7); g.fill(); }
       g.fillStyle = 'rgba(57,255,106,.25)'; g.fillRect(0, h * 0.62, w, 5);
+      g.fillStyle = 'rgba(255,58,208,.18)'; g.fillRect(0, h * 0.35, w, 3);
       specks(g, w, h, 300);
+      wallAO(g, w, h, 0.6);
     }, { repeat: true });
     M.wall = worldTile(toon(0xffffff, { map: wallT }, { halftone: 0.6 }), 3.4);
     M.skirt = worldTile(toon(0xffffff, { map: hazardTex('#a0ff39') }, { halftone: 0 }), 1.2); M.skirtH = 0.26;
@@ -187,7 +186,7 @@ export function venueMats(zn, k) {
     M.mat = toon(0x1a201c);
     M.door = doorMat('#2e3a34', 'LAB 0', '#a0ff39');
     M.hazard = toon(0xffffff, { map: hazardTex('#a0ff39') }, { halftone: 0 });
-    M.lights = () => rig(zn, { sky: 0xa8f0c0, ground: 0x0a1a10, hemi: 0.75, amb: 0.1, key: 0xd8ffe0, keyK: 1.0 });
+    M.lights = () => rig(zn, { sky: 0x9ff0b8, ground: 0x5a1048, hemi: 0.8, amb: 0.08, key: 0xb8ffc8, keyK: 0.95 });
   }
   return M;
 }
@@ -233,22 +232,55 @@ function doorMat(base, label, accent = '#f2c21a') {
   }) }, { halftone: 0.4 });
 }
 
-// Lamp positions over the hall (x, z) and their colours per venue. Their light is baked into the
-// floor texture (pools + contact darkening along the walls) rather than being dynamic point
-// lights: per-pixel lights are the most expensive thing a phone GPU does here.
-export const LAMPS = [[-8, -3], [8, -3], [0, 7]];
+// Each venue's light, baked into the hall floor (per-pixel point lights are the most expensive
+// thing a phone GPU does here). dark: how dark the floor is away from the lamps; lamps: pools of
+// light [x, z, radius m, colour, strength]; wash: a broad directional glow [edge, colour, k]
+// (moonlight through the glass). Particles float in the pools (see decorateVenue).
 const LIGHT = {
-  warehouse: { cols: ['#ffc27a', '#ffd9a0', '#9fc8ff'], k: 0.5, edge: 0.55 },
-  penthouse: { cols: ['#ffd6a0', '#ffe4b8', '#ffc890'], k: 0.35, edge: 0.3 },
-  lair: { cols: ['#39ff6a', '#a0ff39', '#39ffd0'], k: 0.45, edge: 0.6 },
+  warehouse: {
+    dark: 0.62, edge: 0.6,
+    lamps: [[-8, -4, 4.4, '#ffc27a', 0.55], [8, -4, 4.4, '#ffd9a0', 0.55], [0, 6.5, 4.6, '#ffd9a0', 0.6], [-9, 7, 3.6, '#ffb060', 0.45], [9, 6, 3.6, '#9fc8ff', 0.4], [0, -9.5, 3.2, '#ffc27a', 0.5]],
+  },
+  penthouse: {
+    dark: 0.5, edge: 0.35,
+    lamps: [[1.2, 6.6, 3.6, '#ffc890', 0.55], [9.2, 1, 3.4, '#ffc890', 0.5], [-11, 7.4, 3.4, '#ffc890', 0.5], [-12, -5, 3.8, '#ffb070', 0.45], [4, 3, 4.2, '#ffd6a0', 0.4], [0, 8.5, 3.2, '#ffd6a0', 0.45]],
+    wash: ['top', '#5a86ff', 0.38],
+  },
+  lair: {
+    dark: 0.55, edge: 0.65,
+    lamps: [[10, 6, 3.4, '#39ff6a', 0.6], [10, -4, 3.4, '#39ff6a', 0.6], [-10, 6, 3.4, '#39ff6a', 0.6], [-6, -8.8, 4.2, '#7aff9a', 0.5],
+      [0, -1, 4.2, '#ff3ad0', 0.45], [-9, -1, 3, '#ff3ad0', 0.35], [0, 6.5, 3.8, '#a0ffd0', 0.45]],
+  },
 };
+export const venueLight = (k) => LIGHT[k];
 
-/** Run `draw`, then bake the lamp pools and the darkening at the foot of the walls into the hall floor. */
+/** Run `draw`, then bake the venue's light into the hall floor: dark away from the lamps, pools, wash, wall AO. */
 function lit(g, draw, L) {
   draw();
   const W = g.canvas.width, H = g.canvas.height, px = (x) => ((x + 15) / 30) * W, pz = (z) => ((z + 12) / 24) * H, m = W / 30;
-  poolsOn(g, LAMPS.map(([x, z], i) => [px(x), pz(z), 6.5 * m, L.cols[i], L.k]));
-  edgeShade(g, W, H, 1.6 * m, L.edge);
+  bakeLight(g, W, H, L.lamps.map(([x, z, r, col, k]) => [px(x), pz(z), r * m, col, k]), L, 1.6 * m);
+}
+
+function bakeLight(g, W, H, pools, L, band) {
+  // darkness with holes punched where the lamps are: the floor reads as circles of light
+  const dk = document.createElement('canvas'); dk.width = W; dk.height = H;
+  const d = dk.getContext('2d');
+  d.fillStyle = `rgba(4,4,10,${L.dark})`; d.fillRect(0, 0, W, H);
+  d.globalCompositeOperation = 'destination-out';
+  for (const [x, y, r] of pools) {
+    const gr = d.createRadialGradient(x, y, r * 0.15, x, y, r);
+    gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(0.55, 'rgba(0,0,0,.8)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    d.fillStyle = gr; d.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  g.drawImage(dk, 0, 0);
+  poolsOn(g, pools.map(([x, y, r, col, k]) => [x, y, r * 0.85, col, k * 0.55]));
+  if (L.wash) {
+    const [edge, col, k] = L.wash, c = parseInt(col.slice(1), 16), rgb = `${c >> 16},${(c >> 8) & 255},${c & 255}`;
+    const gr = edge === 'top' ? g.createLinearGradient(0, 0, 0, H * 0.7) : g.createLinearGradient(0, 0, W * 0.6, 0);
+    gr.addColorStop(0, `rgba(${rgb},${k})`); gr.addColorStop(1, `rgba(${rgb},0)`);
+    g.save(); g.globalCompositeOperation = 'lighter'; g.fillStyle = gr; g.fillRect(0, 0, W, H); g.restore();
+  }
+  edgeShade(g, W, H, band, L.edge);
 }
 
 function poolsOn(g, pools) {
@@ -270,6 +302,13 @@ function edgeShade(g, W, H, band, k) {
   }
 }
 
+/** Darken the foot of a wall texture (ambient occlusion where it meets the floor). */
+function wallAO(g, w, h, k = 0.55) {
+  const gr = g.createLinearGradient(0, h, 0, h * 0.72);
+  gr.addColorStop(0, `rgba(0,0,0,${k})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = gr; g.fillRect(0, h * 0.72, w, h * 0.28);
+}
+
 /** A room floor (own UVs, w×d metres) tiled from a 2 m tile texture, with baked light pools. */
 function roomFloor(tile, w, d, pools, ppm = 32) {
   const t = tex(w * ppm, d * ppm, (g, W, H) => {
@@ -277,8 +316,7 @@ function roomFloor(tile, w, d, pools, ppm = 32) {
     const k = (2 * ppm) / tile.image.width;
     pat.setTransform(new DOMMatrix([k, 0, 0, k, 0, 0]));
     g.fillStyle = pat; g.fillRect(0, 0, W, H);
-    poolsOn(g, pools.map(([x, z, r, col, a]) => [W / 2 + x * ppm, H / 2 + z * ppm, r * ppm, col, a]));
-    edgeShade(g, W, H, 1.2 * ppm, 0.5);
+    bakeLight(g, W, H, pools.map(([x, z, r, col, a]) => [W / 2 + x * ppm, H / 2 + z * ppm, r * ppm, col, a]), { dark: 0.55, edge: 0.55 }, 1.2 * ppm);
   });
   return toon(0xffffff, { map: t });
 }
@@ -309,6 +347,30 @@ export function decorateVenue(zn, k, h) {
   if (k === 'warehouse') warehouse(zn, T);
   else if (k === 'penthouse') penthouse(zn, T, h);
   else lair(zn, T, h);
+  addParticles(zn, k);
+}
+
+// Particles per venue: [kind, regions ('lamps' = the light pools, or [[x, z, halfW, halfD]]), options].
+// Counts scale with the quality profile's look3d tier.
+const PARTICLES = {
+  warehouse: [['dust', 'lamps', { count: 90, color: 0xffd9a0, size: 0.07, opacity: 0.55 }]],
+  penthouse: [['dust', 'lamps', { count: 50, color: 0xffe6c0, size: 0.05, opacity: 0.4 }]],
+  lair: [
+    ['spark', [[-9, -9.3, 1, 0.3], [-3, -9.3, 1, 0.3]], { count: 40, color: 0xd8ffb0, size: 0.07, top: 1.2 }],
+    ['dust', [[10, 6, 1.2, 1.2], [10, -4, 1.2, 1.2], [-10, 6, 1.2, 1.2]], { count: 60, color: 0x39ff6a, size: 0.06, top: 3, opacity: 0.7 }],
+  ],
+};
+const PARTICLE_SCALE = { full: 1, lite: 0.6, min: 0 };
+
+function addParticles(zn, k) {
+  const scale = PARTICLE_SCALE[quality().look3d] ?? 0.6;
+  if (!scale) return;
+  for (const [kind, where, o] of PARTICLES[k] || []) {
+    const boxes = where === 'lamps' ? LIGHT[k].lamps.map(([x, z, r]) => [x, z, r * 0.45, r * 0.45]) : where;
+    const p = new Particles(kind, boxes, { ...o, count: Math.round(o.count * scale) });
+    zn.scene.add(p.mesh);
+    zn.particles.push(p);
+  }
 }
 
 const C = {}; // per-build material cache (shared across props so they merge)
@@ -571,7 +633,6 @@ function lair(zn, { add, spot }, h) {
     for (const a of [0, 1, 2, 3]) add(new THREE.BoxGeometry(0.1, 2.6, 0.1), dark, x + Math.cos(a * 1.57 + 0.78) * 1.02, 1.7, z + Math.sin(a * 1.57 + 0.78) * 1.02);
     add(new THREE.CapsuleGeometry(0.28, 0.9, 4, 10), specimen, x, 1.7, z, { rz: 0.2 });
     add(new THREE.SphereGeometry(0.22, 10, 8), specimen, x + 0.15, 2.45, z);
-    const pool = lightPool(0x39ff6a, 2.6, 0.35); pool.position.set(x, 0.015, z); zn.scene.add(pool);
     // cables snaking to the consoles
     const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(x, 0.05, z), new THREE.Vector3(x * 0.7, 0.05, z - 3 + rand(-1, 1)), new THREE.Vector3(x * 0.4, 0.05, -7), new THREE.Vector3(-6 + rand(0, 6), 0.05, -9.2)]);
     add(new THREE.TubeGeometry(curve, 24, 0.06, 5), pipeD, 0, 0, 0);
