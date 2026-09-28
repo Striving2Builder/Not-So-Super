@@ -3,13 +3,20 @@
 // "=== investigation ===". Reads a CaseFile, never changes it (the caller applies the verdict).
 import { ATTRS } from './data.js';
 import { dialog, openModal, closeModal } from './ui.js';
-import { portrait, HERO_LOOK } from './art.js';
+import { portrait, drawHumanoid, pose, HERO_LOOK } from './art.js';
 import { glyphURL } from './evidenceart.js';
 import { sfx } from './sfx.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 // Splash timing (ms): the panel slams in, the hero steps up, the verdict lands, the recap follows.
 const REVEAL = { hero: 320, stamp: 700, recap: 1250, close: 4200, tapAfter: 900 };
+
+/** A crisp head-and-shoulders render of a look, `h` px tall (portrait() is too small to blow up). */
+function bust(look, h, facing = 1, poseName = 'stand') {
+  const c = document.createElement('canvas'); c.height = h; c.width = Math.round(h * 0.8);
+  drawHumanoid(c.getContext('2d'), c.width / 2, h * 1.62, h / 70, facing, look, pose(poseName, 0), 0);
+  return c;
+}
 
 /**
  * The evidence card. `from` (screen px) is where the item was found: its drawing flies from there
@@ -79,7 +86,7 @@ export function caseBoard(cf, title, { accuse = false, hint = '', clues = 3 } = 
       const ax = a.left + a.width / 2 - R.left, ay = a.bottom - R.top - 6;
       el.querySelectorAll(`.chip.match[data-k="${c.key}"]`).forEach((chip) => {
         const b = chip.getBoundingClientRect();
-        const bx = b.left + Math.min(14, b.width / 2) - R.left, by = b.top - R.top - 3;
+        const bx = b.left - R.left + 3, by = b.top - R.top + 1; // the chip's top-left corner, clear of its words
         const sag = Math.min(26, Math.abs(bx - ax) * 0.12 + 8);
         out += `<path d="M${ax} ${ay} Q${(ax + bx) / 2} ${(ay + by) / 2 + sag} ${bx} ${by}"/><circle cx="${bx}" cy="${by}" r="4"/><circle class="hl" cx="${bx - 1.2}" cy="${by - 1.2}" r="1.3"/>`;
       });
@@ -122,8 +129,10 @@ export function accuseSplash(cf, s) {
       <div class="rv-recap">${recap}</div>
       <div class="rv-flash"></div>
     </div>`, 'reveal');
-  el.querySelector('.rv-mug').appendChild(portrait(s.look));
-  el.querySelector('.rv-hero').appendChild(portrait(HERO_LOOK, 'idle', -1));
+  el.querySelector('.rv-mug').appendChild(bust(s.look, 420));
+  const hero = document.createElement('canvas'); hero.height = 560; hero.width = 300;
+  drawHumanoid(hero.getContext('2d'), 150, 548, 2.5, -1, HERO_LOOK, pose('idle', 0), 0);
+  el.querySelector('.rv-hero').appendChild(hero);
   setTimeout(() => { sfx.pow(); el.querySelector('.rv2')?.classList.add('hit'); }, REVEAL.stamp);
   return new Promise((resolve) => {
     let done = false;

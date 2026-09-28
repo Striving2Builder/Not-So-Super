@@ -228,7 +228,7 @@ async function shootInvestigate(page, dir, name, setting, moments) {
     await page.waitForTimeout(900);
     await snap('8_suspects');
     await page.evaluate(() => { const m = window.__game.mode; const i = m.case.suspects.findIndex((s) => s.culprit); document.querySelectorAll('.cb-acc')[i].click(); });
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(2000);
     await snap('9_reveal');
   }
   return { shots, ...m };
