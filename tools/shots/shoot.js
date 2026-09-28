@@ -105,8 +105,9 @@ async function start3d(page, z) {
     let zone = null;
     if (z.kind === 'asylum') zone = ow.spawn('asylum', true);
     else if (z.kind === 'nightcase') {
-      for (let i = 0; i < 40 && !(zone && zone.mode === 'nightcase'); i++) { g.state.clock = 23 * 60; zone = ow.spawn('case', true); }
-      if (zone && z.venue && z.venue !== zone.venue) { zone.name = zone.name.replace(zone.venue, z.venue); zone.lockKey = z.venue; zone.venue = z.venue; }
+      // keep rolling until a night case lands in the wanted club (its name/caption carry the venue)
+      const ok = (q) => q && q.mode === 'nightcase' && (!z.venue || q.venue === z.venue);
+      for (let i = 0; i < 200 && !ok(zone); i++) { if (zone) ow.removeZone(zone); g.state.clock = 23 * 60; zone = ow.spawn('case', true); }
     } else zone = ow.spawn('special', true, z.venue);
     if (!zone) throw new Error('could not spawn ' + JSON.stringify(z));
     if ('boss' in z && z.kind === 'special') { zone.boss = z.boss; }
