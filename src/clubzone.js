@@ -672,7 +672,7 @@ export class ClubZone extends Special3D {
     const ev = this.evidence.every((e) => e.done), cap = this.captives.every((c) => c.freed);
     const list = [{ t: 'Get a tip from the informant', done: this.hasCode, target: this.informant.mesh.position }];
     if (this.zone.boss) list.push({ t: `Take down ${this.zone.boss}`, done: this.bossDone, target: this.boss.position });
-    list.push({ t: `${this.theme.verb}${this.captives.length ? ` (${this.captives.filter((c) => c.freed).length}/${this.captives.length} freed)` : ''}`, done: ev && cap, target: (this.evidence.find((e) => !e.done) || {}).mesh?.position || (this.captives.find((c) => !c.freed) || {}).person?.position });
+    list.push({ t: `${this.theme.verb}${this.captives.length ? ` (${this.captives.filter((c) => c.freed).length}/${this.captives.length} captives freed)` : ''}`, done: ev && cap, target: (this.evidence.find((e) => !e.done) || {}).mesh?.position || (this.captives.find((c) => !c.freed) || {}).person?.position });
     list.push({ t: 'Escape through the entrance', done: false, target: this.exitRing.position, final: true });
     return list;
   }
