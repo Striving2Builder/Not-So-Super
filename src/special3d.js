@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { quality } from './settings.js';
 import { HeroModel, heroReady } from './hero3d.js';
 import { Enemy, enemyReady, GUARD_KINDS, bossKind } from './enemies.js';
-import { NIGHTLIFE_KINDS, decorateNightlife, updateNightlife } from './nightlife.js';
+import { NIGHTLIFE_KINDS, decorateNightlife, updateNightlife, disposeNightlife } from './nightlife.js';
 import { VENUES, THEMES, INTOX_ITEMS, BAIT_ITEMS, HERO, FIRST_NAMES, LAST_NAMES } from './data.js';
 import { pick, shuffle, chance, clamp, rand, wobble, $ } from './util.js';
 import { dialog, toast, banner, qte, keypad, flash, avoidHud } from './ui.js';
@@ -216,6 +216,7 @@ export class Special3D {
     $('xray-tint').classList.remove('on');
     $('objectives').classList.remove('on');
     $('prompt').classList.remove('on');
+    disposeNightlife(this);
     if (this.scene) {
       this.scene.traverse((o) => {
         if (o.geometry) o.geometry.dispose();
