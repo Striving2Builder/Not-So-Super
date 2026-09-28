@@ -130,10 +130,11 @@ export class Batch {
 export class Atlas {
   constructor(W, H) { this.W = W; this.H = H; this.items = []; this.x = 0; this.y = 0; this.row = 0; }
   add(w, h, draw) {
-    if (this.x + w > this.W) { this.x = 0; this.y += this.row; this.row = 0; }
+    const pad = 12; // black gutter so neighbours don't bleed in through the mipmaps
+    if (this.x + w + pad > this.W) { this.x = 0; this.y += this.row; this.row = 0; }
     const r = { x: this.x, y: this.y, w, h, draw };
     r.uv = [r.x / this.W, 1 - (r.y + h) / this.H, (r.x + w) / this.W, 1 - r.y / this.H];
-    this.x += w; this.row = Math.max(this.row, h);
+    this.x += w + pad; this.row = Math.max(this.row, h + pad);
     this.items.push(r);
     return r;
   }

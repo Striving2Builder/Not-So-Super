@@ -110,7 +110,10 @@ export function nightclub(zn, X, h) {
 
   // signage
   const A = X.atlas;
-  const sVolt = X.sign('N', 8, 2.35, 1.0, A.add(512, 128, (c, w, hh) => { neonPath(c, '#ffe14d', 5, boltPath(c, 58, 64, 46)); neonText(c, 'CLUB VOLT', 290, 68, 84, '#27e0ff', { maxW: 400 }); }), 0x27e0ff);
+  const volt = A.add(512, 128, (c) => { neonPath(c, '#ffe14d', 5, boltPath(c, 58, 64, 46)); neonText(c, 'CLUB VOLT', 290, 68, 84, '#27e0ff', { maxW: 400 }); });
+  const sVolt = X.sign('N', 8, 2.35, 1.0, volt, 0x27e0ff);
+  // the signature sign, hung over the tables where the arrival camera frames it (clear of the HUD)
+  const sHang = X.hangSign(-3.2, 2.95, 8.1, 0.25, 0.8, volt, 0x27e0ff);
   const sBar = X.sign('W', -1, 2.85, 0.62, A.add(512, 110, (c) => neonText(c, 'Cocktails', 256, 58, 86, '#ff2fd0', { font: SCRIPT, weight: '700', maxW: 480 })), 0xff2fd0);
   const sVip = X.sign('E', 7, 2.55, 0.9, A.add(256, 128, (c) => { neonPath(c, '#ffe14d', 4, glassPath(c, 58, 64, 44)); neonText(c, 'VIP', 170, 68, 90, '#ffe14d'); }), 0xffe14d);
   const sDance = X.sign('E', -7, 2.55, 0.8, A.add(384, 110, (c) => neonText(c, 'DANCE', 192, 58, 84, '#9d4dff', { maxW: 360 })), 0x9d4dff);
@@ -132,6 +135,9 @@ export function nightclub(zn, X, h) {
     if ((gi === 1 && gj === 3) || (gi === 2 && gj === 1) || Math.random() < 0.12) continue;
     X.people.push({ x: -2.7 + gi * 1.8 + rnd(-0.35, 0.35), z: -2.2 + gj * 1.8 + rnd(-0.35, 0.35), rot: rnd(-3, 3), pose: 'dance', type: Math.random() < 0.5 ? 'dress' : 'suit', outfit: pickR(OUT) });
   }
+  // the pit spills off the floor's sides, and the bar is two deep
+  for (const x of [-4.5, 4.5]) for (const z of [-2.2, 0.6, 3.3]) X.people.push({ x: x + rnd(-0.3, 0.3), z: z + rnd(-0.3, 0.3), rot: x < 0 ? Math.PI / 2 : -Math.PI / 2, pose: 'dance', type: Math.random() < 0.5 ? 'dress' : 'suit', outfit: pickR(OUT) });
+  for (const z of [-1.8, 0.9]) X.people.push({ x: -11.8, z, rot: -Math.PI / 2 + rnd(-0.4, 0.4), pose: 'stand', type: Math.random() < 0.5 ? 'dress' : 'suit', outfit: pickR(OUT) });
   X.people.push(
     { x: -11.75, z: -4.3, rot: -Math.PI / 2, pose: 'stand', type: 'dress', outfit: '#ff2fd0' },
     { x: -11.8, z: 2.6, rot: -Math.PI / 2 + 0.3, pose: 'stand', type: 'suit', outfit: '#20203a' },
@@ -204,6 +210,7 @@ export function nightclub(zn, X, h) {
     tmpC.setHSL(hueBase, 1, 0.5); X.glow.set(ledHalo, 0.18 + 0.2 * e, tmpC);
     // signs: the bolt throbs to the kick, one tube buzzes
     X.signs.set(sVolt.s, 0.75 + 0.25 * e); X.glow.set(sVolt.h, 0.35 + 0.3 * e);
+    X.signs.set(sHang.s, 0.8 + 0.2 * e); X.glow.set(sHang.h, 0.25 + 0.25 * e);
     X.signs.set(sNoPh.s, flicker(t, 3)); X.glow.set(sNoPh.h, 0.45 * flicker(t, 3));
     X.signs.set(sDance.s, B.n % 2 ? 1 : 0.55);
     // the house lights cycle colour every bar

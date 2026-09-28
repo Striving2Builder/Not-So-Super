@@ -102,11 +102,21 @@ export function casino(zn, X, h) {
   // the bar and its bartender
   bar(11, 4, 7, true);
   X.pool(11, 4, 3, 0xffc070, 0.2);
+  for (const z of [1.2, 3.0, 5.0, 6.8]) X.tableTop(11.4, z, 1.16, ['glass', 'glass'], 0.12);
+  // cashier cage on the back wall: counter (a collider), brass bars, a warm lit window
+  zn.box(3.6, 1.1, 0.8, 8, 0.55, -10.6, lam(0x2a1206));
+  X.prop(new THREE.BoxGeometry(3.7, 0.06, 0.9).translate(8, 1.13, -10.6), 0xc09a34);
+  for (let i = 0; i <= 24; i++) X.prop(new THREE.CylinderGeometry(0.012, 0.012, 1.5, 4).translate(6.2 + i * 0.15, 1.9, -10.25), 0xd0a840);
+  X.prop(new THREE.BoxGeometry(3.7, 0.08, 0.08).translate(8, 2.66, -10.25), 0xc09a34);
+  X.halo('N', 8, 1.8, 4.2, 2.2, 0xffc070, 0.5);
+  X.pool(8, -9.6, 2.2, 0xffc070, 0.3);
   // signage
   const A = X.atlas;
-  const sHR = X.sign('N', -8, 2.45, 0.85, A.add(512, 128, (c) => neonText(c, 'HIGH ROLLER', 256, 66, 84, '#ffd84d', { maxW: 480 })), 0xffd84d);
+  const hr = A.add(512, 128, (c) => neonText(c, 'HIGH ROLLER', 256, 66, 84, '#ffd84d', { maxW: 480 }));
+  const sHR = X.sign('N', -8, 2.45, 0.85, hr, 0xffd84d);
+  const sHang = X.hangSign(-3.2, 2.95, 8.1, 0.25, 0.75, hr, 0xffd84d, { board: 0x160a04 });
   const hrBulbs = X.bulbFrame('N', -8, 2.45, 4.1, 1.15, 0xffe070);
-  X.sign('N', 8, 2.45, 0.75, A.add(512, 110, (c) => neonText(c, 'BLACKJACK', 256, 58, 80, '#ff4d4d', { maxW: 470 })), 0xff4d4d);
+  X.sign('N', 8, 3.0, 0.5, A.add(384, 100, (c) => neonText(c, 'CASHIER', 192, 52, 70, '#fff1c0', { maxW: 360 })), 0xfff1c0, { streak: 0 });
   const sJack = X.sign('W', -3, 2.72, 0.75, A.add(512, 128, (c) => { neonText(c, 'JACKPOT', 256, 66, 92, '#ff4d4d', { maxW: 470 }); }), 0xff4d4d, { streak: 0.15 });
   const jpBulbs = X.bulbFrame('W', -3, 2.72, 3.4, 0.95, 0xffe070);
   X.sign('E', 5, 2.6, 0.65, A.add(512, 110, (c) => neonText(c, 'Cocktails', 256, 58, 86, '#fff1c0', { font: SCRIPT, weight: '700', maxW: 480 })), 0xfff1c0);
@@ -125,6 +135,11 @@ export function casino(zn, X, h) {
     }
   }
   X.people.push(
+    { x: 8, z: -11.35, rot: 0, pose: 'deal', type: 'suit', outfit: '#e8e0d0', fixed: true },
+    { x: 7.3, z: -9.4, rot: Math.PI, pose: 'stand', type: 'suit', outfit: '#111114' },
+    { x: 3.6, z: -0.6, rot: 2.2, pose: 'stand', type: 'dress', outfit: '#101010' },
+    { x: -3.2, z: 7.4, rot: 0.8, pose: 'stand', type: 'dress', outfit: '#b01020' },
+    { x: -2.5, z: 8.1, rot: -2.4, pose: 'stand', type: 'suit', outfit: '#1a1a22' },
     { x: -12.55, z: -8, rot: -Math.PI / 2, pose: 'slot', type: 'dress', outfit: '#e0b040' },
     { x: -12.55, z: -4, rot: -Math.PI / 2, pose: 'slot', type: 'suit', outfit: '#3a3a4a' },
     { x: -12.55, z: 0, rot: -Math.PI / 2, pose: 'slot', type: 'dress', outfit: '#b01020' },
@@ -145,6 +160,7 @@ export function casino(zn, X, h) {
     crystals.forEach((b, i) => b.c.setScalar(Math.sin(t * 3 + i * 2.7) > 0.8 ? 1 : 0.3));
     X.signs.set(sJack.s, cyc < 2 ? (Math.floor(t * 6) % 2 ? 1 : 0.4) : 1);
     X.glow.set(sHR.h, 0.45 + 0.08 * Math.sin(t * 2));
+    X.glow.set(sHang.h, 0.3 + 0.08 * Math.sin(t * 2));
     X.room.hall.forEach((l, i) => { l.intensity = 26 + Math.sin(t * 0.7 + i) * 3; });
   });
 }

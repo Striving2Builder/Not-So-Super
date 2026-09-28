@@ -15,11 +15,12 @@ import { casino } from './nlcasino.js';
 
 export const NIGHTLIFE_KINDS = new Set(['club', 'gentlemens', 'redlight', 'casino']);
 
-// Per venue: tempo of the show, the builder, and the stock furniture's colours (bar venues).
+// Per venue: tempo of the show, the builder, the stock furniture's colours and what's on the
+// tables (bar venues).
 const VENUE = {
-  club: { bpm: 126, build: nightclub, sofa: 0x2a1a4a, table: 0x2a1a2a },
-  gentlemens: { bpm: 100, build: gentlemens, sofa: 0x4a1040, table: 0x1a0a0a },
-  redlight: { bpm: 96, build: redlight, sofa: 0x6a1020, table: 0x2a1a2a },
+  club: { bpm: 126, build: nightclub, sofa: 0x2a1a4a, table: 0x2a1a2a, dress: ['glass', 'candle', 'glass', 'bottle'] },
+  gentlemens: { bpm: 100, build: gentlemens, sofa: 0x4a1040, table: 0x1a0a0a, dress: ['bucket', 'glass', 'candle', 'glass'] },
+  redlight: { bpm: 96, build: redlight, sofa: 0x6a1020, table: 0x2a1a2a, dress: ['candle', 'glass', 'ashtray', 'bottle'] },
   casino: { bpm: 92, build: casino },
 };
 
@@ -35,7 +36,9 @@ export function decorateNightlife(zn, k, h) {
     v.build(zn, X, h);
     h.sofa(12, 7, 5, -1, v.sofa);
     h.sofa(12, -7, 4, -1, v.sofa);
-    for (let i = 0; i < 3; i++) h.table(-5 + i * 5, 7, v.table);
+    for (let i = 0; i < 3; i++) { h.table(-5 + i * 5, 7, v.table); X.tableTop(-5 + i * 5, 7, 0.82, v.dress); }
+    // glasses along the bar, clear of its three item spots
+    for (const z of [-5.6, -2.6, 0.6, 3.7]) X.tableTop(-12.75, z, 1.16, ['glass', 'glass'], 0.12);
   } else v.build(zn, X, h);
   paintFloorGlow(X.room, X.paint);
   buildKit(X);
