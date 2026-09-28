@@ -12,17 +12,32 @@ import { dialog, toast, banner, qte, keypad, flash } from './ui.js';
 import { drawEmblem, portrait, npcLook } from './art.js';
 import { sfx } from './sfx.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { toon, inkCharacter, BlobShadows, bakeStatic, gradeQuad, lookFrame } from './look3d.js';
+import { toon, inkCharacter, BlobShadows, bakeStatic, gradeQuad, lookFrame, comicScene, inkEdges, groundBackdrop } from './look3d.js';
 import { venueMats, decorateVenue, VENUE_KINDS } from './venues3d.js';
 
 const WALL_H = 3.4;
 const SPEED = 5.2;
 const GUARD_RANGE = 7.5;
 const GUARD_FOV = 1.05;
+const CONE_RAYS = 22; // rays per vision cone, re-cast against the walls every frame
 
 // Cel-shaded stand-in for Lambert (same call shape, so venue decor code needn't change).
 const lam = (c, extra = {}) => toon(c, extra);
 const basic = (c, extra = {}) => new THREE.MeshBasicMaterial({ color: c, ...extra });
+
+/** Where (0..1) the segment a→b first enters box c in x/z, or null. */
+function segEnter(ax, az, bx, bz, c) {
+  let t0 = 0, t1 = 1;
+  const dx = bx - ax, dz = bz - az;
+  for (const [p, d, mn, mx] of [[ax, dx, c.minX, c.maxX], [az, dz, c.minZ, c.maxZ]]) {
+    if (Math.abs(d) < 1e-9) { if (p < mn || p > mx) return null; continue; }
+    let ta = (mn - p) / d, tb = (mx - p) / d;
+    if (ta > tb) [ta, tb] = [tb, ta];
+    t0 = Math.max(t0, ta); t1 = Math.min(t1, tb);
+    if (t0 > t1) return null;
+  }
+  return t0 > 0.02 ? t0 : null;
+}
 
 function segHitsBox(ax, az, bx, bz, c) {
   let t0 = 0, t1 = 1;
@@ -40,8 +55,10 @@ function segHitsBox(ax, az, bx, bz, c) {
 }
 
 // Third-person camera: distance behind her, and the pitches it may use (the first is the normal view).
-export const CAM_DIST = 7.6;
-export const CAM_PITCHES = [0.86, 1.05, 1.25, 1.42];
+// ~43° over her shoulder and close enough that she fills ~1/6 of the screen height (the room
+// ahead still reads because the view is aimed a little past her: see render()).
+export const CAM_DIST = 6.3;
+export const CAM_PITCHES = [0.76, 0.92, 1.1, 1.32];
 
 function canvasTex(w, h, draw, repeat) {
   const c = document.createElement('canvas');
@@ -113,7 +130,9 @@ export class Special3D {
     this.key = new THREE.DirectionalLight(0xfff1dc, this.keyK ?? 1.1);
     this.key.position.set(-6, 14, 8);
     S.add(this.key);
+    this.particles = [];
     this.buildWorld();
+    this.finishLook();
     if (quality().look3d === 'full') { this.grade = gradeQuad(this.gradeTint ?? 0x07040c, this.gradeK ?? 0.6); S.add(this.grade); }
     this.heroModel = heroReady() ? new HeroModel() : null;
     this.keepAnimating = false;
@@ -177,10 +196,41 @@ export class Special3D {
     this.placeGameplay();
   }
 
-  spawnPoint() { return { pos: new THREE.Vector3(0, 0, 10), heading: Math.PI }; }
+  // (far enough in that the camera behind her hangs over the entrance, not the street)
+  spawnPoint() { return { pos: new THREE.Vector3(0, 0, 8.2), heading: Math.PI }; }
+
+  /**
+   * The shared comic finish for whatever buildWorld() made (own venues, premade clubs, nightlife):
+   * cel bands + halftone in the shade on every lit material, ink lines along a prebuilt
+   * building's hard edges (once per cached building), and ground out to the fog so no room
+   * floats in the void. Zones tune it with this.backdrop = false | { color, y }.
+   */
+  finishLook() {
+    const S = this.scene;
+    comicScene(S);
+    if (this.club && this.club.scene) inkEdges(this.club.scene);
+    const bd = this.backdrop ?? (this.vmats && this.vmats.backdrop);
+    if (bd === false) return;
+    const bg = S.background && S.background.isColor ? S.background.clone() : new THREE.Color(0x101014);
+    const color = bd && bd.color !== undefined ? new THREE.Color(bd.color) : bg.clone().lerp(new THREE.Color(0x3a3a44), 0.25);
+    const y = bd && bd.y !== undefined ? bd.y : this.club && this.club.box ? this.club.box.min.y - 0.06 : -0.04;
+    S.add(groundBackdrop(color, y));
+  }
 
   /** How far the camera may sit from her along `off` (club raids shorten it past obstacles). */
-  cameraReach(h, off) { return off.length(); }
+  cameraReach(h, off) {
+    // Box-built rooms: the sight line from her head to the camera may not pass through a wall
+    // below its top (else the camera sits outside the room looking at the back of a wall).
+    const len = off.length(), y0 = 1.3;
+    let reach = len;
+    for (const c of this.colliders) {
+      if (c.disabled || !(c.wall || c === this.doorCol)) continue;
+      const t = segEnter(h.x, h.z, h.x + off.x, h.z + off.z, c);
+      if (t === null) continue;
+      if (y0 + t * (off.y - y0) < (c.top ?? WALL_H) + 0.1) reach = Math.min(reach, t * len - 0.35);
+    }
+    return Math.max(1.8, reach);
+  }
 
   /** Camera offset from her at a given pitch (radians above horizontal), behind her along yaw. */
   cameraOffset(pitch, dist = CAM_DIST) {
@@ -994,14 +1044,14 @@ export class Special3D {
     const h = this.hero.position;
     for (const gd of this.guards) {
       gd.seeing = false;
-      if (gd.ko) continue;
+      if (gd.ko) { if (gd.bang) gd.bang.visible = false; continue; }
       const m = gd.mesh;
       gd.t += dt;
       const dx = h.x - m.position.x, dz = h.z - m.position.z, d = Math.hypot(dx, dz);
       const fx = Math.sin(m.rotation.y), fz = Math.cos(m.rotation.y);
       if (this.t > this.grace && d < GUARD_RANGE && d > 0.01 && (dx * fx + dz * fz) / d > Math.cos(GUARD_FOV / 2) && this.clearLOS(m.position, h)) {
         gd.seeing = true;
-        if (gd.look <= 0) { const s = this.screenOf(m.position, 2.1); if (s) this.g.commentary.guardShout(s.x, s.y); }
+        if (gd.look <= 0) { const s = this.screenOf(m.position, 2.1); if (s) this.g.commentary.guardShout(s.x, s.y); this.alarmBurst(gd); }
         gd.look = 1.2;
         this.alert = Math.min(100, this.alert + dt * (30 + (GUARD_RANGE - d) * 9));
       }
@@ -1024,38 +1074,119 @@ export class Special3D {
         m.legs[0].rotation.x = s; m.legs[1].rotation.x = -s;
       }
       if (!gd.cone.userData.comic) this.dressCone(gd.cone);
+      // walls clip the cone: re-cast every frame against our box walls, ~20×/s against a club's BVH
+      gd.shapeT = (gd.shapeT || 0) + dt;
+      if (!this.club || gd.shapeT > 0.05 || !gd.shaped) { gd.shapeT = 0; gd.shaped = true; this.shapeCone(gd); }
       const cu = gd.cone.material.uniforms;
       cu.col.value.set(gd.seeing ? 0xff2a2a : gd.look > 0 ? 0xffa020 : 0xffe040);
       cu.k.value += ((gd.seeing ? 1 : 0.62) - cu.k.value) * Math.min(1, dt * 8);
+      cu.alarm.value = gd.seeing ? 1 : 0;
       cu.t.value = this.t;
+      if (gd.bang) {
+        // pop in, hold while he's looking, shrink away
+        gd.bangT += dt;
+        const pop = gd.look > 0 ? Math.min(1, gd.bangT * 6) * (1 + 0.25 * Math.max(0, 1 - gd.bangT * 3)) : Math.max(0, gd.bang.scale.x / 0.9 - dt * 4);
+        gd.bang.scale.setScalar(0.9 * pop);
+        gd.bang.visible = pop > 0.02;
+        gd.bang.position.set(m.position.x, m.position.y + 2.45 + Math.sin(this.t * 10) * 0.04, m.position.z);
+      }
     }
   }
 
   /**
-   * Vision cones as comic "spotlight wedges": a soft fill that brightens toward the guard, an
-   * ink-dark rim and sweeping scan lines. Adopts whatever cone a zone built (same geometry).
+   * Vision cones as comic "spotlight wedges": a soft fill fading with distance, an inked leading
+   * edge that follows wherever walls cut the cone short, sweeping scan lines, and a red pulse
+   * while she's seen. Adopts whatever cone a zone built (replaces its geometry with a fan whose
+   * rays are clipped against the walls every frame).
    */
   dressCone(cone) {
-    const R = GUARD_RANGE;
+    const R = GUARD_RANGE, N = CONE_RAYS;
     cone.material.dispose();
+    cone.geometry.dispose();
+    const g = new THREE.BufferGeometry();
+    const pos = new Float32Array((N + 2) * 3), rim = new Float32Array(N + 2), idx = [];
+    rim.fill(1); rim[0] = 0;
+    for (let i = 0; i <= N; i++) idx.push(0, i + 1, i + 2);
+    idx.length = N * 3;
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('rim', new THREE.BufferAttribute(rim, 1));
+    g.setIndex(idx);
+    cone.geometry = g;
+    cone.frustumCulled = false;
     cone.material = new THREE.ShaderMaterial({
-      uniforms: { col: { value: new THREE.Color(0xffe040) }, k: { value: 0.62 }, t: { value: 0 }, R: { value: R } },
-      vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `uniform vec3 col; uniform float k, t, R; varying vec3 vP;
+      uniforms: { col: { value: new THREE.Color(0xffe040) }, k: { value: 0.62 }, t: { value: 0 }, R: { value: R }, alarm: { value: 0 } },
+      vertexShader: 'attribute float rim; varying vec3 vP; varying float vR; void main(){ vP = position; vR = rim; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `uniform vec3 col; uniform float k, t, R, alarm; varying vec3 vP; varying float vR;
 void main(){
   float d = length(vP.xz) / R;
   float a = atan(vP.x, vP.z);
-  float edge = smoothstep(0.9, 0.965, d) * (1.0 - smoothstep(0.985, 1.0, d));
-  float side = smoothstep(0.43, 0.51, abs(a));
-  float fill = (0.2 + 0.28 * (1.0 - d)) * (1.0 - smoothstep(0.97, 1.0, d));
-  float scan = smoothstep(0.93, 1.0, sin((d * 7.0 - t * 2.2) * 6.2832) * 0.5 + 0.5) * 0.18 * (1.0 - d);
-  float al = (fill + scan) * k + (edge + side * 0.6) * 0.55 * k;
-  gl_FragColor = vec4(mix(col, col * 0.35, edge * 0.6), al);
+  float edge = smoothstep(0.86, 0.95, vR);                       // leading edge (walls included)
+  float side = smoothstep(0.44, 0.515, abs(a));
+  float fill = (0.1 + 0.42 * (1.0 - d) * (1.0 - d)) * (1.0 - smoothstep(0.9, 1.0, vR) * 0.4);
+  float scan = smoothstep(0.93, 1.0, sin((d * 7.0 - t * 2.2) * 6.2832) * 0.5 + 0.5) * 0.16 * (1.0 - d);
+  float pulse = alarm * (0.5 + 0.5 * sin(t * 16.0));
+  float al = (fill + scan) * k * (1.0 + pulse * 0.6) + (edge * 0.85 + side * 0.45) * 0.6 * k;
+  vec3 c = mix(col, col * 0.25, edge * 0.75);
+  gl_FragColor = vec4(c, clamp(al, 0.0, 0.9));
 }`,
       transparent: true, depthWrite: false, side: THREE.DoubleSide,
     });
     cone.renderOrder = 2;
     cone.userData.comic = true;
+  }
+
+  /** How far a guard can see along world direction (dx, dz) from (x, y, z), up to R. */
+  sightReach(x, y, z, dx, dz, R) {
+    let best = R;
+    if (this.club && this.club.collider) {
+      const ray = this._sray || (this._sray = new THREE.Raycaster());
+      ray.firstHitOnly = true; ray.far = R;
+      ray.set(this._sv.set(x, y + 1.2, z), this._sd.set(dx, 0, dz));
+      const hit = ray.intersectObject(this.club.collider)[0];
+      if (hit) best = hit.distance;
+    }
+    for (const c of this.colliders) {
+      if (c.disabled || !(c.wall || c === this.doorCol) || (c === this.doorCol && this.doorOpen)) continue;
+      const t = segEnter(x, z, x + dx * best, z + dz * best, c);
+      if (t !== null) best *= t;
+    }
+    return best;
+  }
+
+  /** Re-cast the cone's rays (walls clip it) — every frame for her own guard's view. */
+  shapeCone(gd) {
+    const cone = gd.cone, m = gd.mesh, R = GUARD_RANGE, N = CONE_RAYS;
+    const pos = cone.geometry.attributes.position.array;
+    const sc = m.scale.x || 1, ry = m.rotation.y;
+    this._sv = this._sv || new THREE.Vector3(); this._sd = this._sd || new THREE.Vector3();
+    for (let i = 0; i <= N; i++) {
+      const a = -GUARD_FOV / 2 + (i / N) * GUARD_FOV;
+      const r = this.sightReach(m.position.x, m.position.y, m.position.z, Math.sin(a + ry), Math.cos(a + ry), R) / sc;
+      pos[(i + 1) * 3] = Math.sin(a) * r; pos[(i + 1) * 3 + 1] = 0; pos[(i + 1) * 3 + 2] = Math.cos(a) * r;
+    }
+    cone.geometry.attributes.position.needsUpdate = true;
+  }
+
+  /** A comic "!" burst over a guard's head the moment he spots her. */
+  alarmBurst(gd) {
+    if (!Special3D.bangTex) {
+      const c = document.createElement('canvas'); c.width = c.height = 128;
+      const g = c.getContext('2d');
+      g.translate(64, 64);
+      const star = (r0, r1, n) => { g.beginPath(); for (let i = 0; i < n * 2; i++) { const a = (i / (n * 2)) * Math.PI * 2, r = i % 2 ? r0 : r1; g.lineTo(Math.cos(a) * r, Math.sin(a) * r); } g.closePath(); };
+      star(34, 60, 11); g.fillStyle = '#141014'; g.fill();
+      star(28, 52, 11); g.fillStyle = '#ffe040'; g.fill();
+      g.font = '900 72px Impact, "Arial Black", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.lineWidth = 8; g.strokeStyle = '#141014'; g.strokeText('!', 0, 4); g.fillStyle = '#ff2a2a'; g.fillText('!', 0, 4);
+      Special3D.bangTex = new THREE.CanvasTexture(c);
+      Special3D.bangTex.colorSpace = THREE.SRGBColorSpace;
+    }
+    if (!gd.bang) {
+      gd.bang = new THREE.Sprite(new THREE.SpriteMaterial({ map: Special3D.bangTex, depthTest: false, transparent: true }));
+      gd.bang.renderOrder = 20;
+      this.scene.add(gd.bang);
+    }
+    gd.bangT = 0;
   }
 
   clearLOS(a, b) {
@@ -1145,13 +1276,17 @@ void main(){
     // smoothed follow that eases toward a look-ahead point in the direction she's heading
     const k = snap ? 1 : 1 - Math.pow(0.0005, this.frameDt || 1 / 60);
     if (snap) this.cam.position.copy(want); else this.cam.position.lerp(want, Math.max(0.12, k));
+    // Aim past her into the room (she sits below centre, the space ahead reads), plus a little
+    // look-ahead the way she's running.
     const la = this._look || (this._look = h.clone());
+    const ahead = 1.5, cx = -Math.sin(this.yaw) * ahead, cz = -Math.cos(this.yaw) * ahead;
     const fwdX = Math.sin(this.hero.rotation.y) * 0.9, fwdZ = Math.cos(this.hero.rotation.y) * 0.9;
-    if (snap) la.set(h.x, h.y, h.z);
-    la.x += (h.x + fwdX * (this.moving || 0) - la.x) * Math.max(0.1, k * 0.7);
-    la.z += (h.z + fwdZ * (this.moving || 0) - la.z) * Math.max(0.1, k * 0.7);
+    const tx = h.x + cx + fwdX * (this.moving || 0), tz = h.z + cz + fwdZ * (this.moving || 0);
+    if (snap) la.set(tx, h.y, tz);
+    la.x += (tx - la.x) * Math.max(0.1, k * 0.7);
+    la.z += (tz - la.z) * Math.max(0.1, k * 0.7);
     la.y = h.y;
-    this.cam.lookAt(la.x, la.y + 1.1, la.z);
+    this.cam.lookAt(la.x, la.y + 0.55, la.z);
     if (st.intox > 30) {
       const k = (st.intox - 30) / 70;
       this.cam.rotation.z += Math.sin(this.t * 1.3) * 0.08 * k;
@@ -1159,6 +1294,7 @@ void main(){
       this.cam.updateProjectionMatrix();
     }
     if (this.shadows) this.shadows.update();
+    for (const p of this.particles || []) p.update(this.t, this.renderer, this.cam);
     lookFrame(this.renderer);
     this.renderer.render(this.scene, this.cam);
   }

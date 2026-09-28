@@ -271,6 +271,7 @@ class Builder {
       root.add(new THREE.Mesh(merged, mat));
     }
     // ink lines along every wall edge and corner: one draw call (not a mesh, so not a collider)
+    root.userData.inked = true; // the shared inkEdges() pass needn't redo it
     const lines = new THREE.LineSegments(mergeGeometries(edges, false), new THREE.LineBasicMaterial({ color: 0x0e1210 }));
     lines.raycast = () => {};
     root.add(lines);
