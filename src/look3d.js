@@ -374,7 +374,7 @@ let groundTex = null;
  * The ground the building stands on, out to the fog: no room ever floats in black nothing.
  * Unlit (one cheap draw call), tinted per venue, fades into the scene fog.
  */
-export function groundBackdrop(color, y = -0.03, { size = 260, grid = true } = {}) {
+export function groundBackdrop(color, y = -0.03, { size = 140, grid = true } = {}) {
   if (!groundTex) {
     groundTex = (() => {
       const c = document.createElement('canvas'); c.width = c.height = 256;
@@ -399,7 +399,7 @@ export function groundBackdrop(color, y = -0.03, { size = 260, grid = true } = {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2),
     new THREE.MeshBasicMaterial({ color, map: grid ? map : null }));
   m.position.y = y;
-  m.renderOrder = -1;
+  m.renderOrder = 5; // after the rooms: depth rejects every pixel the floors already cover
   m.raycast = () => {};
   m.userData.backdrop = true;
   return m;

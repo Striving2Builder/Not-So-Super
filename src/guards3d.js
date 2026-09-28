@@ -2,7 +2,7 @@
 // and the comic vision cones, whose rays are clipped against the walls every frame. Mixed into
 // Special3D.prototype (zones may override clearLOS / sightReach).
 import * as THREE from 'three';
-import { GUARD_RANGE, GUARD_FOV, CONE_RAYS, segEnter, segHitsBox } from './zonekit.js';
+import { GUARD_RANGE, GUARD_FOV, CONE_RAYS, segEnter, segHitsBox, sightBlockers } from './zonekit.js';
 
 let bangTex = null; // the "!" burst, drawn once
 
@@ -113,8 +113,8 @@ void main(){
       const hit = ray.intersectObject(this.club.collider)[0];
       if (hit) best = hit.distance;
     }
-    for (const c of this.colliders) {
-      if (c.disabled || !(c.wall || c === this.doorCol) || (c === this.doorCol && this.doorOpen)) continue;
+    for (const c of sightBlockers(this)) {
+      if (c.disabled || (c === this.doorCol && this.doorOpen)) continue;
       const t = segEnter(x, z, x + dx * best, z + dz * best, c);
       if (t !== null) best *= t;
     }

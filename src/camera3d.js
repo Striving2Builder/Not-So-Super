@@ -2,7 +2,7 @@
 // ahead reads, swinging up (or pulling in) when a wall would come between them. Mixed into
 // Special3D.prototype; zones override cameraReach() for their own geometry (clubs use the BVH).
 import * as THREE from 'three';
-import { CAM_DIST, CAM_PITCHES, WALL_H, segEnter } from './zonekit.js';
+import { CAM_DIST, CAM_PITCHES, WALL_H, segEnter, sightBlockers } from './zonekit.js';
 import { lookFrame } from './look3d.js';
 
 
@@ -13,8 +13,8 @@ export const cameraMethods = {
     // below its top (else the camera sits outside the room looking at the back of a wall).
     const len = off.length(), y0 = 1.3;
     let reach = len;
-    for (const c of this.colliders) {
-      if (c.disabled || !(c.wall || c === this.doorCol)) continue;
+    for (const c of sightBlockers(this)) {
+      if (c.disabled) continue;
       const t = segEnter(h.x, h.z, h.x + off.x, h.z + off.z, c);
       if (t === null) continue;
       if (y0 + t * (off.y - y0) < (c.top ?? WALL_H) + 0.1) reach = Math.min(reach, t * len - 0.35);

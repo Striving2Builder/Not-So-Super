@@ -13,33 +13,35 @@ export const CONE_RAYS = 22; // rays per vision cone, re-cast against the walls 
 export const lam = (c, extra = {}) => toon(c, extra);
 export const basic = (c, extra = {}) => new THREE.MeshBasicMaterial({ color: c, ...extra });
 
+// Segment-vs-box slab tests in x/z. Allocation-free: they run a few thousand times a frame
+// (vision-cone rays, camera reach) and SwiftShader-class phones feel every bit of GC.
+let T0 = 0, T1 = 1;
+function slab(p, d, mn, mx) {
+  if (Math.abs(d) < 1e-9) return p >= mn && p <= mx;
+  let ta = (mn - p) / d, tb = (mx - p) / d;
+  if (ta > tb) { const t = ta; ta = tb; tb = t; }
+  if (ta > T0) T0 = ta;
+  if (tb < T1) T1 = tb;
+  return T0 <= T1;
+}
+
 /** Where (0..1) the segment a→b first enters box c in x/z, or null. */
 export function segEnter(ax, az, bx, bz, c) {
-  let t0 = 0, t1 = 1;
-  const dx = bx - ax, dz = bz - az;
-  for (const [p, d, mn, mx] of [[ax, dx, c.minX, c.maxX], [az, dz, c.minZ, c.maxZ]]) {
-    if (Math.abs(d) < 1e-9) { if (p < mn || p > mx) return null; continue; }
-    let ta = (mn - p) / d, tb = (mx - p) / d;
-    if (ta > tb) [ta, tb] = [tb, ta];
-    t0 = Math.max(t0, ta); t1 = Math.min(t1, tb);
-    if (t0 > t1) return null;
-  }
-  return t0 > 0.02 ? t0 : null;
+  T0 = 0; T1 = 1;
+  if (!slab(ax, bx - ax, c.minX, c.maxX) || !slab(az, bz - az, c.minZ, c.maxZ)) return null;
+  return T0 > 0.02 ? T0 : null;
 }
 
 export function segHitsBox(ax, az, bx, bz, c) {
-  let t0 = 0, t1 = 1;
-  const dx = bx - ax, dz = bz - az;
-  for (const [p, d, mn, mx] of [[ax, dx, c.minX, c.maxX], [az, dz, c.minZ, c.maxZ]]) {
-    if (Math.abs(d) < 1e-9) { if (p < mn || p > mx) return false; }
-    else {
-      let ta = (mn - p) / d, tb = (mx - p) / d;
-      if (ta > tb) [ta, tb] = [tb, ta];
-      t0 = Math.max(t0, ta); t1 = Math.min(t1, tb);
-      if (t0 > t1) return false;
-    }
-  }
-  return true;
+  T0 = 0; T1 = 1;
+  return slab(ax, bx - ax, c.minX, c.maxX) && slab(az, bz - az, c.minZ, c.maxZ);
+}
+
+/** The colliders that block sight (walls, the closed security door), cached per collider list. */
+export function sightBlockers(zn) {
+  if (zn._blk && zn._blkOf === zn.colliders && zn._blkN === zn.colliders.length) return zn._blk;
+  zn._blkOf = zn.colliders; zn._blkN = zn.colliders.length;
+  return (zn._blk = zn.colliders.filter((c) => c.wall || c === zn.doorCol));
 }
 
 // Third-person camera: distance behind her, and the pitches it may use (the first is the normal view).

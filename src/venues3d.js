@@ -595,9 +595,24 @@ function lair(zn, { add, spot }, h) {
   const pipeD = mat('pipD', () => toon(0x1e2a24));
   const metal = mat('mtl', () => toon(0x3a4640));
   const dark = mat('drk', () => toon(0x151a18));
-  const goo = mat('goo', () => toon(0x39ff6a, { transparent: true, opacity: 0.42, emissive: 0x0e6a24 }));
+  const goo = mat('goo', () => new THREE.MeshBasicMaterial({ color: 0x39ff6a }));
+  // Vats are opaque, self-lit glass with the specimen painted in: see-through cylinders this big
+  // cost a phone GPU more than the rest of the room.
+  const vat = mat('vat', () => new THREE.MeshBasicMaterial({ map: tex(256, 128, (g, w, h) => {
+    const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#0e5a24'); gr.addColorStop(0.5, '#27c44e'); gr.addColorStop(1, '#0a3a18');
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    for (const cx of [w * 0.25, w * 0.75]) {
+      // a floating figure, curled, in silhouette
+      g.fillStyle = 'rgba(4,24,10,.85)';
+      g.beginPath(); g.ellipse(cx, h * 0.3, 11, 13, 0, 0, 7); g.fill();
+      g.beginPath(); g.ellipse(cx + 3, h * 0.58, 16, 30, 0.15, 0, 7); g.fill();
+      g.fillRect(cx - 12, h * 0.42, 6, 34); g.fillRect(cx + 10, h * 0.45, 6, 30);
+    }
+    g.fillStyle = 'rgba(200,255,210,.55)';
+    for (let i = 0; i < 40; i++) { g.beginPath(); g.arc(Math.random() * w, Math.random() * h, rand(1, 3.5), 0, 7); g.fill(); }
+    g.fillStyle = 'rgba(255,255,255,.28)'; g.fillRect(w * 0.08, 0, 7, h); g.fillRect(w * 0.58, 0, 7, h);
+  }) }));
   const glow = mat('glw', () => new THREE.MeshBasicMaterial({ color: 0x39ff6a }));
-  const specimen = mat('spc', () => toon(0x0c2414, { emissive: 0x06200c }));
 
   // pipes: verticals along the back and left walls, a double run overhead along the walls
   for (let x = -13; x <= 13; x += 2.2) if (Math.abs(x) > 2) {
@@ -631,11 +646,9 @@ function lair(zn, { add, spot }, h) {
   // specimen vats: steel base and crown, glowing fluid, a shape floating inside
   for (const [x, z] of [[10, 6], [10, -4], [-10, 6]]) {
     add(new THREE.CylinderGeometry(1.2, 1.3, 0.4, 20), metal, x, 0.2, z);
-    add(new THREE.CylinderGeometry(1.0, 1.0, 2.6, 20), goo, x, 1.7, z, { collide: [1.1, 1.1] });
+    add(new THREE.CylinderGeometry(1.0, 1.0, 2.6, 20), vat, x, 1.7, z, { collide: [1.1, 1.1] });
     add(new THREE.CylinderGeometry(1.15, 1.15, 0.35, 20), metal, x, 3.15, z);
     for (const a of [0, 1, 2, 3]) add(new THREE.BoxGeometry(0.1, 2.6, 0.1), dark, x + Math.cos(a * 1.57 + 0.78) * 1.02, 1.7, z + Math.sin(a * 1.57 + 0.78) * 1.02);
-    add(new THREE.CapsuleGeometry(0.28, 0.9, 4, 10), specimen, x, 1.7, z, { rz: 0.2 });
-    add(new THREE.SphereGeometry(0.22, 10, 8), specimen, x + 0.15, 2.45, z);
     // cables snaking to the consoles
     const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(x, 0.05, z), new THREE.Vector3(x * 0.7, 0.05, z - 3 + rand(-1, 1)), new THREE.Vector3(x * 0.4, 0.05, -7), new THREE.Vector3(-6 + rand(0, 6), 0.05, -9.2)]);
     add(new THREE.TubeGeometry(curve, 24, 0.06, 5), pipeD, 0, 0, 0);
