@@ -3,6 +3,8 @@
 // Mixed into Investigate (uses its view/toScreen/clues/case).
 import { LW, LH, INK, CAPTION } from './crimescene.js';
 import { $ } from './util.js';
+import { drawClueGlyph } from './evidenceart.js';
+import { tent } from './sceneprops.js';
 
 export const LensFX = {
   /** Camera mode: a viewfinder with focus boxes on the evidence worth a front page. */
@@ -62,9 +64,9 @@ export const LensFX = {
 
   /** Grab the framed prop out of the finished frame and toss it on screen as a polaroid. */
   takeSnapshot(ctx, dpr) {
-    const { p, n } = this.snapReq; this.snapReq = null;
+    const { p, c: clue, n } = this.snapReq; this.snapReq = null;
     const layer = $('comic-layer'); if (!layer) return;
-    const pad = 30, a = this.toScreen(p.x - pad, p.y - pad), b = this.toScreen(p.x + p.w + pad, p.y + p.h + pad);
+    const pad = 12, a = this.toScreen(p.x - pad, p.y - pad), b = this.toScreen(p.x + p.w + pad, p.y + p.h + pad);
     let sw = (b.x - a.x) * dpr, shh = (b.y - a.y) * dpr;
     const aspect = 4 / 3;
     if (sw / shh > aspect) { const nh = sw / aspect; a.y -= (nh - shh) / 2 / dpr; shh = nh; } else { const nw = shh * aspect; a.x -= (nw - sw) / 2 / dpr; sw = nw; }
@@ -72,7 +74,15 @@ export const LensFX = {
     const g = c.getContext('2d');
     g.fillStyle = '#111'; g.fillRect(0, 0, 240, 180);
     try { g.drawImage(ctx.canvas, a.x * dpr, a.y * dpr, sw, shh, 0, 0, 240, 180); } catch (e) { /* tainted/unsupported: keep the black frame */ }
+    // the photo frames the evidence itself, lit by the flash, with its marker beside it
+    const fl = g.createRadialGradient(120, 92, 10, 120, 92, 150); fl.addColorStop(0, 'rgba(255,255,255,.28)'); fl.addColorStop(1, 'rgba(0,0,0,.35)');
+    g.fillStyle = fl; g.fillRect(0, 0, 240, 180);
+    g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 8; g.shadowOffsetY = 4;
+    drawClueGlyph(g, clue.key, clue.value, 120, 92, 104, 'ink');
+    g.shadowColor = 'transparent';
+    tent(g, 196, 164, n, false);
     g.fillStyle = 'rgba(255,220,160,.12)'; g.fillRect(0, 0, 240, 180); // warm print
+    try { clue.snap = c.toDataURL('image/jpeg', 0.8); } catch (e) { /* no snapshot on the board, the drawing stands in */ }
     const el = document.createElement('div');
     el.className = 'snap-polaroid';
     el.appendChild(c);

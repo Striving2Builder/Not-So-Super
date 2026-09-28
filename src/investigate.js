@@ -165,8 +165,8 @@ export class Investigate {
     if (this.camera) {
       if (c && c.found && !c.photo) {
         this.case.photograph(c); sfx.shutter(); flash('#fff');
-        this.snapReq = { p, n: this.case.num(c) };
-        this.burst('SNAP!', p, ['#ffffff', '#1e3cff']);
+        this.snapReq = { p, c, n: this.case.num(c) };
+        this.burst('KA-CHIK!', p, ['#ffffff', '#1e3cff']);
         toast(`📸 Evidence photo #${this.photos} — the Gazette will love this`, 'good');
       } else if (c && c.photo) toast('Already photographed.', 'info');
       else toast('Nothing newsworthy there… yet.', 'info');
@@ -180,10 +180,11 @@ export class Investigate {
       this.case.find(c); sfx.pickup();
       this.pulseAt = performance.now();
       await this.focusOn(p, async () => {
-        this.burst(c.method === 'xray' ? 'EUREKA!' : 'AHA!', p);
+        this.burst('!', p, ['#ffe600', '#ff2d2d']);
         await new Promise((r) => setTimeout(r, 520)); // let the burst land before the clue card
         const how = c.method === 'xray' ? `Your X-ray vision reveals something hidden inside the ${p.name.toLowerCase()}.` : `You search the ${p.name.toLowerCase()} and find something.`;
-        await this.case.reveal(c, how, 'Tip: switch on the camera and tap here to photograph it.');
+        const from = this.toScreenZ(p.x + p.w / 2, p.y + p.h / 2, fitScene(this.g.w, this.g.h, LW, LH), this.zoomK());
+        await this.case.reveal(c, how, 'Tip: switch on the camera and tap here to photograph it.', from);
       });
       return;
     }

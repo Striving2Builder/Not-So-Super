@@ -157,15 +157,15 @@ export class NightCase extends ClubZone {
   }
 
   // ------------------------------------------------------------------ interactions
-  async revealClue(c, how) {
+  async revealClue(c, how, at = null) {
     if (!this.case.find(c)) return;
     sfx.pickup();
-    const s = this.screenOf(this.hero.position, 2);
+    const s = this.screenOf(at || this.hero.position, at ? 0.3 : 2);
     if (s) this.g.commentary.hit(s.x, s.y, { big: false });
-    await this.case.reveal(c, how, 'Tip: USE it again to photograph it for the Gazette.');
+    await this.case.reveal(c, how, 'Tip: USE it again to photograph it for the Gazette.', s);
   }
 
-  searchClue(o) { return this.revealClue(o.clue, `You examine the ${o.name.toLowerCase()}.`); }
+  searchClue(o) { return this.revealClue(o.clue, `You examine the ${o.name.toLowerCase()}.`, o.pos); }
 
   async searchContainer(o) {
     if (!this.xray) {
@@ -174,7 +174,7 @@ export class NightCase extends ClubZone {
     }
     o.inner.visible = false;
     this.hidden = this.hidden.filter((h) => h !== o.inner);
-    await this.revealClue(o.clue, `Your X-ray vision spots something hidden inside the ${o.name.toLowerCase()}. You pop it open.`);
+    await this.revealClue(o.clue, `Your X-ray vision spots something hidden inside the ${o.name.toLowerCase()}. You pop it open.`, o.pos);
   }
 
   async photographClue(o) {
