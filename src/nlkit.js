@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { quality } from './settings.js';
+import { comic, gradMap } from './look3d.js';
 
 export const TAU = Math.PI * 2;
 export const WALL_H = 3.4;
@@ -231,7 +232,44 @@ export function makeKit(zn, k) {
     zn, k, lite: tier === 'min', rich: tier === 'full',
     glowT, glow: new Batch(['position', 'uv']), cones: new Batch(['position', 'normal', 'uv']),
     signs: new Batch(['position', 'uv']), atlas: new Atlas(1024, 1024),
+    props: new Batch(['position', 'normal']),
     bulbs: [], fx: [], people: [], paint: [],
+    /** A static prop (world-space geometry) in the one merged, cel-shaded props mesh. */
+    prop(geo, color) { return this.props.push(geo, color); },
+    /**
+     * Dress a table top (surface at height y) around its rim; the centre stays clear because
+     * gameplay items spawn there. set: glass · bottle · candle · bucket · ashtray · cards
+     */
+    tableTop(x, z, y, set, r = 0.42) {
+      set.forEach((kind, i) => {
+        const a = (i / set.length) * TAU + rnd(-0.2, 0.2), px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
+        const cy = (rt, rb, h, dy = 0, dx = 0) => new THREE.CylinderGeometry(rt, rb, h, 7).translate(px + dx, y + h / 2 + dy, pz);
+        if (kind === 'glass') this.prop(cy(0.035, 0.028, 0.12), 0xbfe6ff);
+        if (kind === 'bottle') { const c = pickR([0x1a6a2a, 0x8a4a10, 0x2a2a6a]); this.prop(cy(0.042, 0.045, 0.22), c); this.prop(cy(0.014, 0.02, 0.09, 0.22), c); }
+        if (kind === 'candle') { this.prop(cy(0.045, 0.045, 0.07), 0xc0203a); this.bulb(px, y + 0.13, pz, 0.35, 0xffb050).flame = true; }
+        if (kind === 'bucket') { this.prop(cy(0.1, 0.075, 0.2), 0xd0d0dc); this.prop(cy(0.02, 0.04, 0.14, 0.18, 0.02), 0xe0b040); }
+        if (kind === 'ashtray') this.prop(cy(0.07, 0.06, 0.025), 0x2a2a30);
+        if (kind === 'cards') this.prop(new THREE.BoxGeometry(0.1, 0.02, 0.14).rotateY(a).translate(px, y + 0.01, pz), 0xf4f0e8);
+      });
+    },
+    /**
+     * A signature sign hanging mid-room on chains, tilted up toward the camera, on a dark board so
+     * it reads from across the room. Returns entries for pulsing.
+     */
+    hangSign(x, y, z, yaw, h, rect, color, { tilt = 0.5, board = 0x0c070e } = {}) {
+      const w = (h * rect.w) / rect.h;
+      const n = [Math.sin(yaw) * Math.cos(tilt), Math.sin(tilt), Math.cos(yaw) * Math.cos(tilt)];
+      const at = (g, o) => g.rotateX(-tilt).rotateY(yaw).translate(x + n[0] * o, y + n[1] * o, z + n[2] * o);
+      this.prop(at(new THREE.BoxGeometry(w * 1.06, h * 1.12, 0.06), -0.04), board);
+      for (const s of [-1, 1]) {
+        const cx = x + Math.cos(yaw) * s * w * 0.45, cz = z - Math.sin(yaw) * s * w * 0.45, top = y + h * 0.5 * Math.cos(tilt);
+        this.prop(new THREE.CylinderGeometry(0.012, 0.012, 3.5 - top, 4).translate(cx, (3.5 + top) / 2, cz), 0x111111);
+      }
+      const e = { s: this.signs.push(uvRect(at(new THREE.PlaneGeometry(w, h), 0.01), rect.uv), 0xffffff) };
+      e.h = this.glow.push(at(new THREE.PlaneGeometry(w * 1.5, h * 2.6), 0.0), color, 0.35);
+      this.paint.push({ x: x + n[0] * 1.2, z: z + n[2] * 1.2, rx: w * 0.55, rz: w * 0.55, color, k: 0.28 });
+      return e;
+    },
     /** Additive light pool on the floor. */
     pool(x, z, r, color, k2 = 1, y) {
       if (y === undefined) { this.paint.push({ x, z, rx: r, rz: r, color, k: k2 }); return null; }
@@ -239,7 +277,7 @@ export function makeKit(zn, k) {
     },
     /** A glow on a wall (w x h), just off its face. */
     halo(side, a, y, w, h, color, k2 = 1) { const [x, yy, z] = onWall(side, a, y, 0.02); return this.glow.push(wallQ(x, yy, z, w, h, YAW[side]), color, k2); },
-    bulb(x, y, z, s, color, f) { const b = { p: [x, y, z], s, c: C(color), f }; this.bulbs.push(b); return b; },
+    bulb(x, y, z, s, color, f) { const b = { p: [x, y, z], s, c: C(color), f }; b.base = b.c.clone(); this.bulbs.push(b); return b; },
     /** A static beam from `from` to `to`, `r` wide where it lands. */
     cone(from, to, r, color, k2 = 1) {
       const m = aimMatrix(from, to), L = from.distanceTo(to);
@@ -277,6 +315,7 @@ export function buildKit(X) {
   X.glow.name = 'nl-glow'; X.cones.name = 'nl-cones'; X.signs.name = 'nl-signs';
   X.glow.build(S, new THREE.MeshBasicMaterial({ map: X.glowT, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide }));
   X.cones.build(S, coneMat());
+  X.props.build(S, comic(new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gradMap(3) }), { halftone: 0.35 }));
   if (X.atlas.items.length) {
     X.atlas.paint();
     X.atlas.tex = tex(X.atlas.canvas);

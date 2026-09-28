@@ -51,7 +51,9 @@ export function updateNightlife(zn, dt) {
   if (X.crowd) updateCrowd(X.crowd, zn, t, dt, B);
   if (X.bulbPts) {
     const a = X.bulbPts.geometry.attributes.color, arr = a.array;
-    X.bulbs.forEach((b, i) => { arr[i * 3] = b.c.r; arr[i * 3 + 1] = b.c.g; arr[i * 3 + 2] = b.c.b; });
+    X.bulbs.forEach((b, i) => {
+      if (b.flame) b.c.copy(b.base).multiplyScalar(0.7 + 0.2 * Math.sin(t * 13 + i * 5) + 0.1 * Math.sin(t * 31 + i));
+      arr[i * 3] = b.c.r; arr[i * 3 + 1] = b.c.g; arr[i * 3 + 2] = b.c.b; });
     a.needsUpdate = true;
   }
   X.glow.flush(); X.signs.flush();

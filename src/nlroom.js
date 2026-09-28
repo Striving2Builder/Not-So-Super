@@ -63,7 +63,7 @@ export const WALLS = {
       for (let r = -1; r * D / 2 < y1 - y0 + D; r++) for (let q = -1; q <= 8; q++) {
         const cx = q * D + ((r + 2) % 2) * D / 2, cy = y0 + r * D / 2;
         const g = c.createLinearGradient(cx - D / 4, cy - D / 4, cx + D / 4, cy + D / 4);
-        g.addColorStop(0, '#2a2150'); g.addColorStop(1, '#0d0a1c');
+        g.addColorStop(0, '#3e3278'); g.addColorStop(1, '#171230');
         c.fillStyle = g; c.beginPath(); c.moveTo(cx, cy - D / 2); c.lineTo(cx + D / 2, cy); c.lineTo(cx, cy + D / 2); c.lineTo(cx - D / 2, cy); c.closePath(); c.fill();
         c.strokeStyle = '#05030a'; c.lineWidth = 2; c.stroke();
         c.fillStyle = '#4a3f7a'; c.beginPath(); c.arc(cx, cy - D / 2, 2.5, 0, TAU); c.fill();
@@ -75,7 +75,12 @@ export const WALLS = {
     },
     (c) => {
       c.fillStyle = '#000'; c.fillRect(0, 0, 512, 512);
-      coveWash(c, 'rgba(255,47,208,A)', 2.86, 2.2, 0.28);
+      coveWash(c, 'rgba(255,47,208,A)', 2.86, 1.0, 0.34);
+      // vertical LED bars every 1.7 m: the walls are lit, never a black void
+      for (const [x, col] of [[64, '#27e0ff'], [320, '#9d4dff']]) {
+        c.save(); c.shadowColor = col; c.shadowBlur = 14; c.fillStyle = col; c.fillRect(x - 3, WY(2.7), 6, (2.7 - 0.3) * WS); c.restore();
+        c.fillStyle = 'rgba(255,255,255,.7)'; c.fillRect(x - 1, WY(2.7), 2, (2.7 - 0.3) * WS);
+      }
       neonLine(c, WY(2.86), '#ff2fd0', 5, 16);
       coveWash(c, 'rgba(39,224,255,A)', 0.1, 0.6, 0.22);
       neonLine(c, WY(0.1), '#27e0ff', 4, 14);
@@ -99,7 +104,7 @@ export const WALLS = {
     },
     (c) => {
       c.fillStyle = '#000'; c.fillRect(0, 0, 512, 512);
-      coveWash(c, 'rgba(255,34,68,A)', 2.95, 2.1, 0.3);
+      coveWash(c, 'rgba(255,34,68,A)', 2.95, 1.3, 0.34);
       neonLine(c, WY(2.95), '#ff2244', 5, 18);
     },
   ],
@@ -113,7 +118,7 @@ export const WALLS = {
     (c) => {
       c.fillStyle = '#000'; c.fillRect(0, 0, 512, 512);
       c.fillStyle = '#3a2a08'; c.fillRect(0, WY(1.12), 512, 0.07 * WS); c.fillRect(0, WY(2.92), 512, 0.07 * WS);
-      coveWash(c, 'rgba(255,68,204,A)', 3.3, 2.5, 0.35);
+      coveWash(c, 'rgba(255,68,204,A)', 3.3, 1.4, 0.3);
       neonLine(c, WY(3.3), '#ff44cc', 3, 12);
     },
   ],
@@ -137,7 +142,7 @@ export const WALLS = {
     (c) => {
       c.fillStyle = '#000'; c.fillRect(0, 0, 512, 512);
       c.fillStyle = '#4a3408'; c.fillRect(0, WY(1.12), 512, 0.07 * WS); c.fillRect(0, WY(2.92), 512, 0.07 * WS);
-      coveWash(c, 'rgba(255,200,100,A)', 3.4, 2.3, 0.42);
+      coveWash(c, 'rgba(255,200,100,A)', 3.4, 1.3, 0.4);
     },
   ],
 };
@@ -148,7 +153,7 @@ export const FLOORS = {
     c.fillStyle = '#000'; c.fillRect(0, 0, 512, 512);
     for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
       const x = i * 128, y = j * 128, g = c.createLinearGradient(x, y, x + 128, y + 128);
-      g.addColorStop(0, '#1c1830'); g.addColorStop(0.5, '#0e0c1a'); g.addColorStop(1, '#141124');
+      g.addColorStop(0, '#2c2650'); g.addColorStop(0.5, '#15122c'); g.addColorStop(1, '#1f1a3c');
       c.fillStyle = g; c.fillRect(x + 2, y + 2, 124, 124);
     }
     speckle(c, 512, 512, 900, 0.05);
@@ -169,33 +174,34 @@ export const FLOORS = {
     speckle(c, 512, 512, 800, 0.06);
   }],
   gentlemens: [3, (c) => {
-    c.fillStyle = '#220a1e'; c.fillRect(0, 0, 512, 512);
-    speckle(c, 512, 512, 4000, 0.05, 2);
-    c.strokeStyle = '#3e2412'; c.lineWidth = 3;
+    // plush plum carpet: a quiet lattice, no bright dots (characters must pop off it)
+    c.fillStyle = '#2a0c26'; c.fillRect(0, 0, 512, 512);
+    speckle(c, 512, 512, 4000, 0.04, 2);
+    c.strokeStyle = '#3a1432'; c.lineWidth = 3;
     for (let x = -512; x <= 512; x += 128) {
       c.beginPath(); c.moveTo(x, 0); c.lineTo(x + 512, 512); c.stroke();
       c.beginPath(); c.moveTo(x + 512, 0); c.lineTo(x, 512); c.stroke();
     }
-    c.fillStyle = '#4e123c';
+    c.fillStyle = '#3a1030';
     for (let x = 0; x <= 512; x += 128) for (let y = 0; y <= 512; y += 128) {
       for (const [dx, dy] of [[0, 0], [64, 64]]) { c.beginPath(); c.arc(x + dx, y + dy, 9, 0, TAU); c.fill(); }
     }
-    c.fillStyle = '#8a6a2a';
+    c.fillStyle = '#5a4020';
     for (let x = 0; x <= 512; x += 128) for (let y = 0; y <= 512; y += 128) for (const [dx, dy] of [[0, 0], [64, 64]]) { c.beginPath(); c.arc(x + dx, y + dy, 3, 0, TAU); c.fill(); }
   }],
   casino: [3.6, (c) => {
-    c.fillStyle = '#3e0710'; c.fillRect(0, 0, 512, 512);
+    c.fillStyle = '#360810'; c.fillRect(0, 0, 512, 512);
     speckle(c, 512, 512, 3000, 0.05, 2);
     for (let x = 0; x <= 512; x += 128) for (let y = 0; y <= 512; y += 128) {
       for (const [dx, dy] of [[0, 0], [64, 64]]) {
         const cx = x + dx, cy = y + dy;
-        c.strokeStyle = '#7a5a1e'; c.lineWidth = 4; c.beginPath(); c.arc(cx, cy, 26, 0, TAU); c.stroke();
-        c.strokeStyle = '#14504c'; c.lineWidth = 5; c.beginPath(); c.arc(cx, cy, 16, 0, TAU); c.stroke();
-        c.fillStyle = '#8a6a26'; for (let a = 0; a < 8; a++) { c.beginPath(); c.arc(cx + Math.cos(a * TAU / 8) * 38, cy + Math.sin(a * TAU / 8) * 38, 4, 0, TAU); c.fill(); }
+        c.strokeStyle = '#5a3a18'; c.lineWidth = 4; c.beginPath(); c.arc(cx, cy, 26, 0, TAU); c.stroke();
+        c.strokeStyle = '#1a3a36'; c.lineWidth = 5; c.beginPath(); c.arc(cx, cy, 16, 0, TAU); c.stroke();
+        c.fillStyle = '#5a4020'; for (let a = 0; a < 8; a++) { c.beginPath(); c.arc(cx + Math.cos(a * TAU / 8) * 38, cy + Math.sin(a * TAU / 8) * 38, 4, 0, TAU); c.fill(); }
         c.fillStyle = '#2a0408'; c.beginPath(); c.arc(cx, cy, 8, 0, TAU); c.fill();
       }
     }
-    c.strokeStyle = 'rgba(20,80,76,.5)'; c.lineWidth = 3;
+    c.strokeStyle = 'rgba(20,60,56,.35)'; c.lineWidth = 3;
     for (let x = 0; x <= 512; x += 64) { c.beginPath(); c.moveTo(x, 0); c.bezierCurveTo(x + 30, 128, x - 30, 384, x, 512); c.stroke(); }
   }],
 };
