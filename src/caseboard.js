@@ -14,8 +14,18 @@ const REVEAL = { hero: 320, stamp: 700, recap: 1250, close: 4200, tapAfter: 900 
 /** A crisp head-and-shoulders render of a look, `h` px tall (portrait() is too small to blow up). */
 function bust(look, h, facing = 1, poseName = 'stand') {
   const c = document.createElement('canvas'); c.height = h; c.width = Math.round(h * 0.8);
-  drawHumanoid(c.getContext('2d'), c.width / 2, h * 1.62, h / 70, facing, look, pose(poseName, 0), 0);
-  return c;
+  drawHumanoid(c.getContext('2d'), c.width / 2, h * 1.4, h / 70, facing, look, pose(poseName, 0), 0);
+  return inked(c, h / 90);
+}
+
+/** Put a weighted ink contour around whatever is drawn on a canvas (its silhouette, dilated). */
+function inked(src, r) {
+  const out = document.createElement('canvas'); out.width = src.width; out.height = src.height;
+  const g = out.getContext('2d');
+  for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; g.drawImage(src, Math.cos(a) * r, Math.sin(a) * r + r * 0.4); }
+  g.globalCompositeOperation = 'source-in'; g.fillStyle = '#120a16'; g.fillRect(0, 0, out.width, out.height);
+  g.globalCompositeOperation = 'source-over'; g.drawImage(src, 0, 0);
+  return out;
 }
 
 /**
@@ -130,9 +140,9 @@ export function accuseSplash(cf, s) {
       <div class="rv-flash"></div>
     </div>`, 'reveal');
   el.querySelector('.rv-mug').appendChild(bust(s.look, 420));
-  const hero = document.createElement('canvas'); hero.height = 560; hero.width = 300;
-  drawHumanoid(hero.getContext('2d'), 150, 548, 2.5, -1, HERO_LOOK, pose('idle', 0), 0);
-  el.querySelector('.rv-hero').appendChild(hero);
+  const hero = document.createElement('canvas'); hero.height = 560; hero.width = 360;
+  drawHumanoid(hero.getContext('2d'), 190, 700, 6, -1, HERO_LOOK, pose('idle', 0), 0);
+  el.querySelector('.rv-hero').appendChild(inked(hero, 6));
   setTimeout(() => { sfx.pow(); el.querySelector('.rv2')?.classList.add('hit'); }, REVEAL.stamp);
   return new Promise((resolve) => {
     let done = false;

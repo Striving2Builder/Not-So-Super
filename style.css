@@ -476,10 +476,10 @@ body.title-on #comic-layer { display: none; }
 .rv-hero canvas { height: 100%; width: auto; }
 .rv-word { position: absolute; left: 41%; top: 7%; font: clamp(44px, 16vh, 96px)/1 "Bangers", Impact, sans-serif; letter-spacing: .04em; color: #ffe600; -webkit-text-stroke: 3px #120a16; paint-order: stroke fill; text-shadow: 6px 6px 0 #d8122e, 10px 10px 0 #120a16; transform: rotate(-6deg); animation: rv-word .3s .7s cubic-bezier(.3, 1.8, .5, 1) both; }
 .rv2.bad .rv-word { color: #cfd4dc; text-shadow: 6px 6px 0 #4a4f5a, 10px 10px 0 #120a16; }
-.rv-stamp { position: absolute; left: 32%; top: 58%; font: clamp(30px, 11vh, 64px)/1 "Bangers", Impact, sans-serif; letter-spacing: .08em; padding: 6px 16px 0; border: 6px solid currentColor; color: #ff2d4a; background: rgba(255, 255, 255, .12); transform: translate(-50%, -50%) rotate(-14deg); white-space: nowrap; animation: rv-stamp .3s .7s cubic-bezier(.3, 1.6, .5, 1) both; }
+.rv-stamp { position: absolute; left: 40%; top: 44%; font: clamp(30px, 11vh, 64px)/1 "Bangers", Impact, sans-serif; letter-spacing: .08em; padding: 6px 16px 0; border: 6px solid currentColor; color: #ff2d4a; background: rgba(255, 255, 255, .12); transform: translate(-50%, -50%) rotate(-14deg); white-space: nowrap; animation: rv-stamp .3s .7s cubic-bezier(.3, 1.6, .5, 1) both; }
 .rv2.bad .rv-stamp { color: #aab0ba; }
-.rv-recap { position: absolute; left: 42%; bottom: 6%; display: flex; gap: 10px; }
-.rv-rc { position: relative; width: clamp(96px, 16vw, 132px); padding: 5px 5px 6px; background: #fbf7ea; border: 3px solid #120a16; box-shadow: 4px 4px 0 #120a16; text-align: center; animation: rv-in .3s var(--d) both; }
+.rv-recap { position: absolute; left: 36%; bottom: 5%; display: flex; gap: 10px; }
+.rv-rc { position: relative; width: clamp(88px, 13vw, 120px); padding: 5px 5px 6px; background: #fbf7ea; border: 3px solid #120a16; box-shadow: 4px 4px 0 #120a16; text-align: center; animation: rv-in .3s var(--d) both; }
 .rv-rc:nth-child(2) { transform: rotate(2deg); }
 .rv-rc:nth-child(3) { transform: rotate(-2deg); }
 .rv-rc img { width: 100%; height: clamp(44px, 12vh, 72px); object-fit: contain; }

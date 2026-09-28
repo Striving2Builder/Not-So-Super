@@ -7,7 +7,7 @@ import { $ } from './util.js';
 import { paintSkeleton } from './crimescene.js';
 import { SCAN, honey, scanGlyph, clueTag, pulseTag, drawScanTags } from './scanhud.js';
 
-const LOOK = { exposure: 0.55, filter: 'saturate(.18) contrast(1.12) brightness(.9)', tint: 'rgba(0,16,46,.34)', open: 420, sweep: 5.5, height: 1.75, bystanders: 2 };
+const LOOK = { exposure: 0.72, filter: 'saturate(.2) contrast(1.15)', tint: 'rgba(0,18,52,.26)', open: 420, sweep: 5.5, height: 1.75, bystanders: 2 };
 
 export class NightScan {
   constructor(zone) { this.z = zone; this.cv = null; this.on = false; this.exposure = null; }

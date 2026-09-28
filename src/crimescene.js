@@ -424,7 +424,7 @@ export function paintStory(g, id, x, y, wx = x) {
       gr.addColorStop(0, 'rgba(8,4,2,.92)'); gr.addColorStop(0.5, 'rgba(20,10,4,.6)'); gr.addColorStop(1, 'rgba(20,10,4,0)');
       g.save(); g.translate(x, y); g.scale(1, 0.3); g.translate(-x, -y); g.fillStyle = gr; g.beginPath(); g.arc(x, y, 150, 0, Math.PI * 2); g.fill(); g.restore();
       gr = g.createLinearGradient(0, FLOOR, 0, CEIL + 40);
-      gr.addColorStop(0, 'rgba(10,6,4,.75)'); gr.addColorStop(1, 'rgba(10,6,4,0)');
+      gr.addColorStop(0, 'rgba(10,6,4,.85)'); gr.addColorStop(0.55, 'rgba(10,6,4,.6)'); gr.addColorStop(1, 'rgba(10,6,4,.08)');
       g.fillStyle = gr; g.beginPath(); g.moveTo(wx - 90, FLOOR); g.bezierCurveTo(wx - 60, FLOOR - 150, wx - 130, FLOOR - 250, wx - 40, CEIL + 40);
       g.lineTo(wx + 80, CEIL + 40); g.bezierCurveTo(wx + 130, FLOOR - 230, wx + 50, FLOOR - 140, wx + 90, FLOOR); g.fill();
       // blistered paint along the plume's edges

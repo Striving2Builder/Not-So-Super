@@ -4,7 +4,6 @@
 import { LW, LH, INK, CAPTION } from './crimescene.js';
 import { $ } from './util.js';
 import { drawClueGlyph } from './evidenceart.js';
-import { tent } from './sceneprops.js';
 
 export const LensFX = {
   /** Camera mode: a viewfinder with focus boxes on the evidence worth a front page. */
@@ -80,7 +79,6 @@ export const LensFX = {
     g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 8; g.shadowOffsetY = 4;
     drawClueGlyph(g, clue.key, clue.value, 120, 92, 104, 'ink');
     g.shadowColor = 'transparent';
-    tent(g, 196, 164, n, false);
     g.fillStyle = 'rgba(255,220,160,.12)'; g.fillRect(0, 0, 240, 180); // warm print
     try { clue.snap = c.toDataURL('image/jpeg', 0.8); } catch (e) { /* no snapshot on the board, the drawing stands in */ }
     const el = document.createElement('div');
