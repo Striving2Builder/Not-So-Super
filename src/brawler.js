@@ -379,17 +379,19 @@ export class Brawler {
     e.hp -= dmg;
     sfx.hit();
     const heavy = knock || e.hp <= 0;
-    if (!silent) {
-      const s = this.screenOf(e.x, e.z, 80 * (e.look.size || 1));
-      this.g.commentary.hit(s.x, s.y, { big: heavy });
+    // Big SFX lettering is saved for finishers, lifted up-and-away from the heads; white card = readable ink.
+    if (!silent && heavy) {
+      const s = this.screenOf(e.x + p.facing * 40, e.z, 150);
+      comic.pow(pick(e.hp <= 0 ? ['KAPOW!', 'WHAM!', 'K-RACK!', 'BOOM!'] : ['POW!', 'BAM!', 'SMACK!', 'THWACK!']), s.x, s.y, { size: e.hp <= 0 ? 1.25 : 1, colors: ['#ffffff', pick(['#ff2d2d', '#ffe600', '#39c6ff', '#ff9a1f'])] });
     }
     // juice: freeze, shake along the blow, zoom punch, white flash on the victim, spark, number
-    this.hitstop = Math.max(this.hitstop, heavy ? 0.09 : 0.05);
+    this.hitstop = Math.max(this.hitstop, heavy ? 0.08 : 0.06);
     this.shake = Math.max(this.shake, heavy ? 9 : 4.5); this.shakeDir = p.facing;
     if (heavy) this.zoom = Math.max(this.zoom, 0.025);
     e.flash = 0.12; e.barT = 3;
-    const hy = 72 + rand(-12, 10) + (p.y > 0 ? 10 : 0);
-    this.fx.push({ kind: 'spark', x: e.x - p.facing * 12, y: hy, z: e.z + 0.001, t: 0, max: heavy ? 0.26 : 0.18, big: heavy, rot: rand(0, 6) });
+    // contact point: where the fist / boot meets the body
+    const hy = (p.st === 'flykick' ? 55 + p.y * 0.6 : p.combo === 3 ? 62 : 84) + rand(-5, 5);
+    this.fx.push({ kind: 'spark', x: e.x - p.facing * 16, y: hy, z: e.z + 0.001, t: 0, max: heavy ? 0.26 : 0.18, big: heavy, rot: rand(0, 6) });
     if (heavy) this.fx.push({ kind: 'ring', x: e.x - p.facing * 12, y: hy, z: e.z, t: 0, max: 0.3 });
     for (let i = 0; i < (heavy ? 7 : 4); i++) {
       const an = rand(-0.9, 0.9) + (p.facing > 0 ? 0 : Math.PI);
@@ -410,7 +412,7 @@ export class Brawler {
         const last = this.lock && e.wave === this.lock && !this.lock.queue.length && this.enemies.every((o) => o === e || o.wave !== this.lock || o.dead || o.hp <= 0);
         if (last) { this.slow = 0.7; this.zoom = 0.07; this.flash = 0.6; this.hitstop = 0.16; const s = this.screenOf(e.x, e.z, 110); comic.pow('K.O.!', s.x, s.y, { size: 1.5, colors: ['#ffe600', '#ff2d2d'] }); }
       }
-    } else { e.st = 'hurt'; e.st_t = 0; e.x += p.facing * 16; }
+    } else { e.st = 'hurt'; e.st_t = 0; e.x += p.facing * 5; }
   }
 
   smash(b, dir) {
@@ -455,7 +457,7 @@ export class Brawler {
     const e = {
       type, def, look, wave, x: cx + side * (vh + 60 + (i % 4) * 40), z: tz, y: 0, vy: 0, vx: 0,
       hp: def.hp, max: def.hp, facing: -side, st: 'enter', st_t: 0, cd: rand(0.6, 1.5), dead: false,
-      phase: rand(0, 1), flash: 0, barT: 0, entry: 'run', tx: cx + side * rand(120, vh - 60), tz,
+      phase: rand(0, 1), flash: 0, barT: 0, slot: wave.n % 3, zOff: ((wave.n % 4) - 1.5) * 0.18, entry: 'run', tx: cx + side * rand(120, vh - 60), tz,
     };
     wave.n++;
     // entrances: run in from the edge, drop from a fire escape, or step out of a doorway
@@ -524,10 +526,12 @@ export class Brawler {
         e.z += clamp(p.z - e.z, -1, 1) * 0.45 * dt;
         if (e.cd <= 0 && Math.abs(e.z - p.z) < 0.06 && adx < 700) { e.st = 'aim'; e.st_t = 0; }
       } else {
-        const hold = engaged >= 2 && e.def.spd < 200 ? 200 : e.def.reach * 0.8;
+        const waiting = engaged >= 2 && e.def.spd < 200;
+        const hold = waiting ? 170 + e.slot * 45 : e.def.reach * 0.8;
         const tx = p.x - Math.sign(dx || 1) * hold;
+        const tz = waiting ? clamp(p.z + e.zOff, 0.04, 1) : p.z;
         if (Math.abs(tx - e.x) > 8) e.x += Math.sign(tx - e.x) * e.def.spd * dt;
-        if (Math.abs(p.z - e.z) > 0.02) e.z += Math.sign(p.z - e.z) * 0.5 * dt;
+        if (Math.abs(tz - e.z) > 0.02) e.z += Math.sign(tz - e.z) * 0.5 * dt;
         if (e.cd <= 0 && adx < e.def.reach && Math.abs(e.z - p.z) < DZ && engaged < 2) {
           e.st = e.def.boss && chance(0.35) ? 'charge' : 'wind'; e.st_t = 0;
         }
@@ -591,10 +595,12 @@ export class Brawler {
       const a = L[i], b = L[j];
       if (a.dead || b.dead || a.st === 'down' || b.st === 'down') continue;
       const dx = b.x - a.x, dz = b.z - a.z;
-      if (Math.abs(dx) < 38 && Math.abs(dz) < 0.07) {
-        const push = (38 - Math.abs(dx)) * 3 * dt * (dx >= 0 ? 1 : -1);
-        a.x -= push; b.x += push;
-        const pz = 0.2 * dt * (dz >= 0 ? 1 : -1);
+      // bodies are ~46 units wide; keep screen overlap under ~30% (elliptical, depth counts too)
+      const d = Math.hypot(dx / 34, dz / 0.12);
+      if (d < 1) {
+        const f = (1 - d) * Math.min(1, dt * 9), ang = Math.atan2(dz / 0.12, dx / 34 || (i % 2 ? 0.01 : -0.01));
+        const px = Math.cos(ang) * 34 * f * 0.5, pz = Math.sin(ang) * 0.12 * f * 0.5;
+        a.x -= px; b.x += px;
         a.z = clamp(a.z - pz, 0.04, 1); b.z = clamp(b.z + pz, 0.04, 1);
       }
     }
@@ -1018,9 +1024,11 @@ export class Brawler {
       ctx.lineWidth = 4; ctx.strokeStyle = INK; ctx.strokeText('!', x, ty); ctx.fillStyle = '#ff3030'; ctx.fillText('!', x, ty);
     }
     if (e.st === 'aim') {
-      ctx.strokeStyle = 'rgba(255,40,40,.55)'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 5]);
-      const ay = hand ? hand[1] : fy - 72 * s;
-      ctx.beginPath(); ctx.moveTo(x + e.facing * 30 * s, ay); ctx.lineTo(x + e.facing * 700 * this.k, ay); ctx.stroke(); ctx.setLineDash([]);
+      // short telegraph from the muzzle + a glint that sharpens as the shot comes
+      const ay = hand ? hand[1] : fy - 72 * s, ax = (hand ? hand[0] : x) + e.facing * 14 * s, u = Math.min(1, e.st_t / 0.75);
+      const gr = ctx.createLinearGradient(ax, 0, ax + e.facing * 150, 0); gr.addColorStop(0, `rgba(255,60,40,${0.3 + u * 0.5})`); gr.addColorStop(1, 'rgba(255,60,40,0)');
+      ctx.strokeStyle = gr; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + e.facing * 150, ay); ctx.stroke();
+      ctx.globalCompositeOperation = 'lighter'; const gs = (6 + u * 14) * s; ctx.drawImage(glow('#ffffff'), ax - gs / 2, ay - gs / 2, gs, gs); ctx.globalCompositeOperation = 'source-over';
     }
     // health tag (SoR style): name + inked bar, shown for a while after taking a hit
     if (!e.def.boss && !e.dead && (e.barT > 0 || e.hp < e.max) && e.st !== 'enter') {
