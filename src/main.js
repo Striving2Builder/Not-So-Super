@@ -290,11 +290,19 @@ function updateHUD() {
   vb.style.width = st.vice + '%';
   ib.parentElement.classList.toggle('warn', st.intox >= INTOX_LIMIT);
   vb.parentElement.classList.toggle('warn', st.vice >= VICE_LIMIT);
+  // empty meters (and their labels) stay out of the way until they mean something
+  for (const [b, v] of [[ib, st.intox], [vb, st.vice]]) {
+    const row = b.parentElement, nil = v < 0.5;
+    if (row._nil !== nil) { row._nil = nil; row.classList.toggle('nil', nil); row.previousElementSibling.classList.toggle('nil', nil); }
+  }
   $('intox-tint').style.opacity = Math.max(0, (st.intox - 25) / 110);
   const lk = Object.entries(st.lockouts).map(([k, s]) => `<div>🔒 ${k} · ${fmtTime(s)}</div>`).join('');
   const el = $('lockouts');
   if (el._h !== lk) { el.innerHTML = lk; el._h = lk; }
 }
+
+// Objectives show just the current step on a phone; tap to see the whole list.
+$('objectives').addEventListener('click', () => $('objectives').classList.toggle('open'));
 
 let last = performance.now();
 function frame(now) {

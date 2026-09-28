@@ -47,9 +47,9 @@ body.three #c2d { display: none; }
 /* ---------- HUD ---------- */
 #hud { position: absolute; inset: 0; pointer-events: none; }
 body.title-on #hud, body.title-on #btns, body.title-on #touch { display: none !important; }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.panel { background: rgba(10, 10, 20, .74); border: 2px solid #050508; border-radius: 7px; box-shadow: 3px 3px 0 rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(255, 255, 255, .09); }
 #hud-left { position: absolute; left: calc(10px + var(--sl)); top: calc(10px + var(--st)); padding: 8px 11px 9px; width: 178px; }
-.rep { font-weight: 900; font-size: 22px; line-height: 1; letter-spacing: .02em; }
+.rep { font: 400 24px/1 "Bangers", Impact, sans-serif; letter-spacing: .05em; }
 .rep small { font-size: 11px; margin-left: 5px; opacity: .7; font-weight: 700; }
 .rank { font-size: 10px; opacity: .85; text-transform: uppercase; letter-spacing: .12em; margin-top: 3px; color: var(--gold); }
 .barlabel { font-size: 10px; opacity: .8; margin-top: 6px; display: flex; justify-content: space-between; text-transform: uppercase; letter-spacing: .06em; }
@@ -63,10 +63,11 @@ body.title-on #hud, body.title-on #btns, body.title-on #touch { display: none !i
 .b-boss { background: linear-gradient(90deg, #ff3030, #ff9a3a); }
 .bar.warn > i { animation: pulse .6s infinite alternate; }
 @keyframes pulse { from { opacity: 1; } to { opacity: .45; } }
+.barlabel.nil, .bar.nil { display: none; }
 #lockouts { margin-top: 6px; font-size: 11px; color: #ffb3c6; }
 #lockouts div { margin-top: 2px; }
 #hud-top { position: absolute; left: 50%; top: calc(10px + var(--st)); transform: translateX(-50%); text-align: center; padding: 6px 14px; min-width: 150px; max-width: 46vw; }
-#hud-title { font-weight: 800; font-size: 14px; letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#hud-title { font: 400 16px/1.1 "Bangers", Impact, sans-serif; letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #hud-sub { font-size: 11px; opacity: .8; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #hud-right { position: absolute; right: calc(10px + var(--sr)); top: calc(10px + var(--st)); display: flex; gap: 8px; align-items: flex-start; pointer-events: auto; }
 /* Minimap corner; grows into a 16:9 video panel while a city-feed clip plays (cityfeed.js),
@@ -87,7 +88,7 @@ body:not([data-mode="overworld"]) #mapbox { display: none; }
 #mapbox.feed-on #feed { opacity: 1; pointer-events: auto; }
 #mapbox.feed-on #minimap { width: 58px; height: 58px; top: calc(100% + 6px); right: 0; opacity: .92; }
 .iconbtn { width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); font-size: 13px; font-weight: 900; }
-#objectives { position: absolute; right: calc(10px + var(--sr)); top: calc(62px + var(--st)); padding: 8px 11px; font-size: 12px; max-width: 250px; display: none; }
+#objectives { position: absolute; right: calc(10px + var(--sr)); top: calc(62px + var(--st)); padding: 8px 11px; font-size: 12px; max-width: 250px; display: none; pointer-events: auto; cursor: pointer; }
 #objectives.on { display: block; }
 #objectives div { margin: 2px 0; opacity: .75; }
 #objectives div.cur { opacity: 1; color: var(--gold); font-weight: 700; }
@@ -285,6 +286,16 @@ body.title-on #title { display: flex; }
   #hud-top { padding: 4px 10px; min-width: 110px; }
   #hud-title { font-size: 12px; }
   #objectives { top: calc(54px + var(--st)); font-size: 11px; max-width: 190px; }
+  /* one line: the current step (first one only); tap the panel for the full list */
+  #objectives:not(.open):has(.cur) div:not(.cur), #objectives:not(.open) div.cur ~ div.cur { display: none; }
+  #objectives:not(.open):has(.cur)::after { content: "▾ tap for all"; display: block; font-size: 9px; opacity: .45; margin-top: 2px; letter-spacing: .05em; }
+  #hud-left { width: 128px; padding: 5px 8px 6px; }
+  .rank { font-size: 9px; margin-top: 1px; }
+  .barlabel { font-size: 9px; margin-top: 4px; }
+  .bar { height: 5px; margin-top: 2px; }
+  #hud-sub { font-size: 10px; }
+  #toasts { width: min(40vw, 380px); top: calc(50px + var(--st)); }
+  .toast { font-size: 11px; padding: 5px 10px; }
   .tbtn { width: 60px; height: 60px; font-size: 11px; }
   .tbtn.big { width: 74px; height: 74px; }
   .slot1 { right: 90px; } .slot2 { bottom: 100px; } .slot3 { right: 86px; bottom: 82px; } .slot4 { right: 164px; } .slot5 { right: 160px; bottom: 80px; }
