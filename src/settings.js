@@ -8,14 +8,16 @@ const KEY = 'supergirl-settings';
  * What each profile changes. Every renderer reads these through quality().
  * clubMaterials: 'full' as exported · 'standard' drops glass/clearcoat/sheen (no extra render
  * pass) · 'lambert' simple lit materials, no normal/roughness maps (fewest, cheapest shaders).
+ * flyDetail: flight-view extras (roof detail, ink rims, hero rim light, sway, grade, speed lines);
+ * flyTileRes: canvas pixels per city block in the flight view's baked ground tiles.
  */
 export const PROFILES = {
   // desktop: everything on
-  high: { id: 'high', label: 'High', fpsCap: 0, dpr2d: 2, dpr3d: 1.6, heroSprite: 192, clubTex: 'full', clubCache: 3, clubMaterials: 'full' },
+  high: { id: 'high', label: 'High', fpsCap: 0, dpr2d: 2, dpr3d: 1.6, heroSprite: 192, clubTex: 'full', clubCache: 3, clubMaterials: 'full', flyDetail: true, flyTileRes: 144 },
   // phones/tablets that keep up: full frame rate, but lite club textures (memory is what runs out)
-  balanced: { id: 'balanced', label: 'Balanced', fpsCap: 0, dpr2d: 2, dpr3d: 1.25, heroSprite: 192, clubTex: 'lite', clubCache: 1, clubMaterials: 'standard' },
+  balanced: { id: 'balanced', label: 'Balanced', fpsCap: 0, dpr2d: 2, dpr3d: 1.25, heroSprite: 192, clubTex: 'lite', clubCache: 1, clubMaterials: 'standard', flyDetail: true, flyTileRes: 144 },
   // older devices / low-power mode: 30 fps, 1× resolution, cheap club materials
-  saver: { id: 'saver', label: 'Battery saver', fpsCap: 30, dpr2d: 1, dpr3d: 1, heroSprite: 128, clubTex: 'lite', clubCache: 1, clubMaterials: 'lambert' },
+  saver: { id: 'saver', label: 'Battery saver', fpsCap: 30, dpr2d: 1, dpr3d: 1, heroSprite: 128, clubTex: 'lite', clubCache: 1, clubMaterials: 'lambert', flyDetail: false, flyTileRes: 96 },
 };
 
 export const GRAPHICS_MODES = ['auto', 'high', 'saver'];

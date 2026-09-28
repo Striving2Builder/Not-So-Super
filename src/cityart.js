@@ -8,8 +8,21 @@
 import { BLOCK, ROAD, LOT } from './city.js';
 import { DISTRICTS } from './data.js';
 import { hash2 } from './rng.js';
-import { shade } from './util.js';
-import { glow } from './art.js';
+
+const glowCache = new Map();
+/** A soft radial glow sprite in `color` (#rrggbb), built once per colour. */
+export function glow(color) {
+  let c = glowCache.get(color);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grd.addColorStop(0, color); grd.addColorStop(0.35, color + '88'); grd.addColorStop(1, color + '00');
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+  glowCache.set(color, c);
+  return c;
+}
 
 /** Shadow offset per unit of height (light from the upper left of the screen). */
 export const SUN = { x: 0.26, y: 0.36 };
@@ -356,4 +369,3 @@ export class InkSprite {
   }
 }
 
-export { shade };
