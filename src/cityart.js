@@ -77,7 +77,7 @@ export class CityArt {
       for (let j = 0; j < TILE; j++) for (let i = 0; i < TILE; i++) this.paintGround(g, tx * TILE + i, ty * TILE + j, tx * TILE * BLOCK, ty * TILE * BLOCK);
       // Night tiles have the street lights baked in (they switch on at dusk), pre-brightened to
       // survive the night veil drawn over the whole scene: no extra full-screen light pass.
-      if (lit) for (let j = 0; j < TILE; j++) for (let i = 0; i < TILE; i++) this.paintLights(g, tx * TILE + i, ty * TILE + j, tx * TILE * BLOCK, ty * TILE * BLOCK, 2.2);
+      if (lit) for (let j = 0; j < TILE; j++) for (let i = 0; i < TILE; i++) this.paintLights(g, tx * TILE + i, ty * TILE + j, tx * TILE * BLOCK, ty * TILE * BLOCK, 1.7);
       e = { c, f: frame };
       this.painted++;
       this.ground.set(k, e);
@@ -244,7 +244,7 @@ export class CityArt {
     g.setTransform(s, 0, 0, s, -ox * s, -oy * s);
     g.beginPath(); g.rect(X0, Y0, BLOCK, BLOCK); g.clip();
     g.globalCompositeOperation = 'lighter';
-    const lamp = glow('#ffcf7a'), cool = glow('#bfe0ff');
+    const lamp = glow('#ffb95a'), cool = glow('#d8e4ff');
     const put = (spr, x, y, r, a) => {
       for (let q = a * gain; q > 0.02; q -= 1) { g.globalAlpha = Math.min(1, q); g.drawImage(spr, x - r, y - r, r * 2, r * 2); }
     };
@@ -255,11 +255,11 @@ export class CityArt {
       if (b.d === 'farm') continue;
       const sub = b.d === 'suburb';
       // intersection pool + sodium lamps down both roads
-      put(lamp, x0 + ROAD / 2, y0 + ROAD / 2, 58, sub ? 0.35 : 0.55);
+      put(lamp, x0 + ROAD / 2, y0 + ROAD / 2, 40, sub ? 0.3 : 0.45);
       for (let i = 1; i <= 2; i++) {
         const t = ROAD + (LOT * i) / 3, alt = i % 2;
-        put(i % 2 ? lamp : cool, x0 + t, y0 + (alt ? 6 : ROAD - 6), 36, sub ? 0.3 : 0.42);
-        put(i % 2 ? cool : lamp, x0 + (alt ? ROAD - 6 : 6), y0 + t, 36, sub ? 0.3 : 0.42);
+        put(alt ? lamp : cool, x0 + t, y0 + (alt ? 5 : ROAD - 5), 24, sub ? 0.22 : alt ? 0.34 : 0.2);
+        put(alt ? cool : lamp, x0 + (alt ? ROAD - 5 : 5), y0 + t, 24, sub ? 0.22 : alt ? 0.2 : 0.34);
       }
       // neon + shopfront spill on the ground around the buildings
       for (const o of b.b) {
