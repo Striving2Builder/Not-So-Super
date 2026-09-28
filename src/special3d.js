@@ -8,7 +8,7 @@ import { Enemy, enemyReady, GUARD_KINDS, bossKind } from './enemies.js';
 import { NIGHTLIFE_KINDS, decorateNightlife, updateNightlife } from './nightlife.js';
 import { VENUES, THEMES, INTOX_ITEMS, BAIT_ITEMS, HERO, FIRST_NAMES, LAST_NAMES } from './data.js';
 import { pick, shuffle, chance, clamp, rand, wobble, $ } from './util.js';
-import { dialog, toast, banner, qte, keypad, flash } from './ui.js';
+import { dialog, toast, banner, qte, keypad, flash, avoidHud } from './ui.js';
 import { drawEmblem, portrait, npcLook } from './art.js';
 import { sfx } from './sfx.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -926,10 +926,7 @@ export class Special3D {
       { t: 'Get into the back room', done: this.doorOpen, target: new THREE.Vector3(2.1, 0, -11) },
     ];
     if (this.zone.boss) list.push({ t: `Take down ${this.zone.boss}`, done: this.bossDone, target: this.boss.position });
-    // evidence and captives are separate jobs: one line each ("Seize the spiking chemicals
-    // (0/1 freed)" read as nonsense)
-    list.push({ t: this.theme.verb, done: ev, target: (this.evidence.find((e) => !e.done) || {}).mesh?.position });
-    if (this.captives.length) list.push({ t: `Free the captives (${this.captives.filter((c) => c.freed).length}/${this.captives.length})`, done: cap, target: (this.captives.find((c) => !c.freed) || {}).person?.position });
+    list.push({ t: `${this.theme.verb}${this.captives.length ? ` (${this.captives.filter((c) => c.freed).length}/${this.captives.length} captives freed)` : ''}`, done: ev && cap, target: (this.evidence.find((e) => !e.done) || {}).mesh?.position || (this.captives.find((c) => !c.freed) || {}).person?.position });
     list.push({ t: 'Escape through the front entrance', done: false, target: this.exitRing.position, final: true });
     return list;
   }
@@ -1250,6 +1247,7 @@ void main(){
       let x = (v.x * 0.5 + 0.5) * this.g.w, y = (-v.y * 0.5 + 0.5) * this.g.h;
       if (v.z > 1) { x = this.g.w - x; y = this.g.h - 40; }
       x = clamp(x, 30, this.g.w - 30); y = clamp(y, 70, this.g.h - 40);
+      [x, y] = avoidHud(x, y); // never over HUD text or under a thumb button
       mk.style.transform = `translate(${x}px,${y}px)`;
       mk.querySelector('span').textContent = `${Math.round(Math.hypot(cur.target.x - this.hero.position.x, cur.target.z - this.hero.position.z))}m`;
       mk.classList.add('on');

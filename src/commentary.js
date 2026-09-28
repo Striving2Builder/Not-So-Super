@@ -2,7 +2,7 @@
 // and WHEN, based on where Supergirl is, what's happening, and how the city feels about her.
 // Rendering is done by comic.js.
 import { comic } from './comic.js';
-import { DISTRICTS, THEMES, NIGHT_CASES, ASYLUM_CASES, HERO } from './data.js';
+import { DISTRICTS, THEMES, NIGHT_CASES, ASYLUM_CASES, HERO, VENUES } from './data.js';
 import { pick, chance, rand } from './util.js';
 import { sfx } from './sfx.js';
 
@@ -63,9 +63,10 @@ const TIER_DOWN = { hero: 'THE SHINE WEARS OFF…', rookie: 'FROM HERO TO ZERO?'
 const ZONE_OPEN = {
   brawl: ['Meanwhile, down in {D}… {C}!', 'Danger in {D}! Thugs run wild!', 'Holy havoc! {C} in {D}!'],
   investigate: ['Meanwhile, at the scene of the crime…', 'A mystery in {D}! Who dunnit?', 'The plot thickens in {D}…'],
-  special: ['Meanwhile, inside the {V}… a sinister {T} plot unfolds!', 'Behind the velvet rope of the {V}… VILLAINY!', 'Deep inside the {V}… a trap awaits!'],
+  special: ['Meanwhile, inside {V}… a sinister {T} plot unfolds!', 'Deep inside {V}… a trap awaits!', 'Somewhere in {V}… VILLAINY!'],
+  vice: ['Meanwhile, inside {V}… a sinister {T} plot unfolds!', 'Behind the velvet rope of {V}… VILLAINY!', 'Deep inside {V}… a trap awaits!'],
   asylum: ['Behind the walls of {V}… nobody hears you scream.', 'Meanwhile, at {V}… the case of {T}!', 'The lights flicker at {V}. Somebody here is hiding something…'],
-  nightcase: ['Meanwhile, after hours at the {V}… the case of {T}!', 'Midnight at the {V}. The music is loud, the secrets louder…', 'The {V} after dark… somebody here knows something!'],
+  nightcase: ['Meanwhile, after hours at {V}… the case of {T}!', 'Midnight at {V}. The music is loud, the secrets louder…', '{V} after dark… somebody here knows something!'],
 };
 const THUG_TAUNT = ['Get her, boys!', 'It\'s the cape! Get her!', 'Ha! Just one girl!', 'Nobody messes with our turf!', 'You picked the wrong street, sister!'];
 const THUG_TAUNT_FRAUD = ['Relax boys, it\'s just the FAKE one!', 'Ha! The fraud showed up!', 'This\'ll be easy!'];
@@ -184,8 +185,12 @@ export class Commentary {
   }
 
   onZoneStart(zone) {
-    const v = { D: placeName(zone.district), C: zone.name.toUpperCase(), V: (zone.venue || '').toUpperCase(), T: ((zone.mode === 'nightcase' ? NIGHT_CASES : zone.mode === 'asylum' ? ASYLUM_CASES : THEMES)[zone.theme]?.name || '').toLowerCase() };
-    setTimeout(() => comic.caption(fill(pick(ZONE_OPEN[zone.mode]), v)), 1300);
+    // venue with its article: 'the Warehouse', but 'The Clubhouse' as named (no 'the The')
+    const venue = zone.venue || '', V = (/^the /i.test(venue) || zone.mode === 'asylum' ? venue : 'the ' + venue).toUpperCase();
+    const v = { D: placeName(zone.district), C: zone.name.toUpperCase(), V, T: ((zone.mode === 'nightcase' ? NIGHT_CASES : zone.mode === 'asylum' ? ASYLUM_CASES : THEMES)[zone.theme]?.name || '').toLowerCase() };
+    const nightlife = ['club', 'gentlemens', 'redlight', 'casino', 'premade'].includes(VENUES[zone.venue]?.kind);
+    const lines = zone.mode === 'special' && nightlife ? ZONE_OPEN.vice : ZONE_OPEN[zone.mode];
+    setTimeout(() => comic.caption(fill(pick(lines), v)), 1300);
   }
 
   onZoneEnd(outcome) {
