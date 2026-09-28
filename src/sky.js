@@ -128,12 +128,12 @@ export class SpeedFX {
       this.dealt = deal;
       this.lines = [];
       const n = 26 + Math.floor(f * 22);
-      for (let i = 0; i < n; i++) this.lines.push({ a: Math.random() * Math.PI * 2, in: 0.52 + Math.random() * 0.3, w: 2 + Math.random() * 7, ink: Math.random() < 0.3 });
+      for (let i = 0; i < n; i++) this.lines.push({ a: Math.random() * Math.PI * 2, in: 0.42 + Math.random() * 0.26, w: 4 + Math.random() * 12, ink: Math.random() < 0.35 });
     }
     const R = Math.hypot(W, H) * 0.62, ox = W / 2, oy = H / 2;
     ctx.save();
     for (const pass of [true, false]) {
-      ctx.fillStyle = pass ? `rgba(8,10,30,${0.5 * f})` : night > 0.5 ? `rgba(200,225,255,${0.55 * f})` : `rgba(255,255,255,${0.7 * f})`;
+      ctx.fillStyle = pass ? `rgba(8,10,30,${0.6 * f})` : night > 0.5 ? `rgba(215,235,255,${0.75 * f})` : `rgba(255,255,255,${0.85 * f})`;
       ctx.beginPath();
       for (const l of this.lines) {
         if (l.ink !== pass) continue;

@@ -444,9 +444,12 @@ export class Overworld {
       if (ev.sonic) { sfx.sonicBoom(); this.shake = 12; this.fx.sonicBoom(); }
     }
     // Camera: look further ahead and pull out as she speeds up (dive/rise animations own the zoom).
-    const lead = cameraLead(h);
-    this.cam.x += (h.x + h.vx * lead - this.cam.x) * Math.min(1, dt * 4);
-    this.cam.y += (h.y + h.vy * lead - this.tiltOffset() - this.cam.y) * Math.min(1, dt * 4);
+    // The look-ahead is capped on screen (a fifth of the half-width, an eighth of the height) so at
+    // full boost she never slides to the edge of a phone screen: she stays the centre of the shot.
+    const lead = cameraLead(h), kk = this.k || 0.5;
+    const lx = clamp(h.vx * lead, -0.2 * this.g.w / 2 / kk, 0.2 * this.g.w / 2 / kk), ly = clamp(h.vy * lead, -0.125 * this.g.h / kk, 0.125 * this.g.h / kk);
+    this.cam.x += (h.x + lx - this.cam.x) * Math.min(1, dt * 4);
+    this.cam.y += (h.y + ly - this.tiltOffset() - this.cam.y) * Math.min(1, dt * 4);
     if (this.rising === null) this.zoom += (cameraZoom(h) - this.zoom) * Math.min(1, dt * 2);
     this.shake = Math.max(0, this.shake - dt * 20);
     this.kick = Math.max(0, this.kick - dt * 1.8);
@@ -866,7 +869,7 @@ export class Overworld {
 
     // Her shadow, cast along the sun onto whatever is under it (street or rooftop): it slides
     // away from her and softens the higher she is above that surface, which reads as altitude.
-    const HS = 1.65; // on-screen size of her sprite relative to the world (she's the star)
+    const HS = 1.9; // on-screen size of her sprite relative to the world (she's the star)
     if (sprite && this.sprite) this.drawHeroShadow(ctx, V, HS);
 
     // smoke (under the night overlay)
