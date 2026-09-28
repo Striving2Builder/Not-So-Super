@@ -23,7 +23,9 @@ const EN = {
   boss:     { hp: 260, spd: 115, dmg: 16, reach: 96, boss: true, name: 'BOSS' },
 };
 const DZ = 0.11;  // depth tolerance for hits
-const M = 54;     // world units per metre (sprites are authored in metres)
+const M = 54;
+const HERO_SCALE = 1.12; // the star reads a head taller than the crooks
+const CROOK_SCALE = 0.95;     // world units per metre (sprites are authored in metres)
 const BREAK = { can: { w: 34, h: 50 }, crate: { w: 44, h: 44 }, barrel: { w: 36, h: 52 }, newsbox: { w: 30, h: 46 } };
 
 export class Brawler {
@@ -108,9 +110,10 @@ export class Brawler {
   /** Screen geometry: bigger fighters than a flat side view, lane in the lower half. */
   geom() {
     const H = this.g.h;
-    this.k = H / 300;
-    this.gt = H * 0.5;
-    this.gb = H * 0.985;
+    // fighters ~35% of the screen tall, feet in the 66–90% band; the strip below is foreground
+    this.k = H / 250;
+    this.gt = H * 0.66;
+    this.gb = H * 0.9;
   }
 
   get viewHalf() { return this.g.w / 2 / this.k; }
@@ -133,7 +136,7 @@ export class Brawler {
     this.hitPop = Math.max(0, this.hitPop - dt * 5);
     this.hitT += dt;
     if (this.hitT > 2.2 && this.hits) { this.hits = 0; }
-    if (this.cut) { this.cut.t += dt; if (this.cut.t > 0.46) this.cut = null; }
+    if (this.cut) { this.cut.t += dt; if (this.cut.t > 0.5) this.cut = null; }
     if (this.hitstop > 0) { this.hitstop -= dt; this.tickFx(dt * 0.35); return; }
     if (this.slow > 0) { this.slow -= dt; dt *= 0.35; }
     this.t += dt;
@@ -214,7 +217,7 @@ export class Brawler {
     const a = inp.axis();
     // Which way the 3D model should face: toward her movement while walking, side-on otherwise.
     const moving = !busy && p.y <= 0 && Math.hypot(a.x, a.y) > 0.15;
-    const targetYaw = moving ? Math.atan2(a.x, a.y) : (p.facing > 0 ? Math.PI / 2 : -Math.PI / 2);
+    const targetYaw = moving ? Math.atan2(a.x, a.y) : (p.facing > 0 ? Math.PI / 2 - 0.4 : -Math.PI / 2 + 0.4);
     let dyaw = targetYaw - (p.yaw ?? targetYaw);
     while (dyaw > Math.PI) dyaw -= Math.PI * 2;
     while (dyaw < -Math.PI) dyaw += Math.PI * 2;
@@ -261,30 +264,33 @@ export class Brawler {
     if (inp.pressed('special') && grounded && !busy) {
       if (this.fire) {
         if (p.en >= 15) {
-          p.st = 'breath'; p.st_t = 0; p.en -= 15; sfx.breath();
+          this.aimSpecial(300); p.st = 'breath'; p.st_t = 0; p.en -= 15; sfx.breath();
           this.superMove('frost');
           const s = this.screenOf(p.x + p.facing * 90, p.z, 90);
           this.g.commentary.frost(s.x, s.y);
         }
         else toast('Not enough power', 'bad');
-      } else if (p.en >= 30) { p.st = 'beam'; p.st_t = 0; p.en -= 30; p.hitSet.clear(); sfx.beam(); this.superMove('heat'); }
+      } else if (p.en >= 30) { this.aimSpecial(760); p.st = 'beam'; p.st_t = 0; p.en -= 30; p.hitSet.clear(); sfx.beam(); this.superMove('heat'); }
       else toast('Not enough power', 'bad');
     }
+    if ((p.st === 'beam' || p.st === 'breath') && p.aimZ != null) p.z += (p.aimZ - p.z) * Math.min(1, dt * 14); // aim assist onto the lane of the pack
     if (p.st === 'beam') {
-      this.shake = Math.max(this.shake, 2.5);
+      this.shake = Math.max(this.shake, 3.5);
       if (p.st_t > 0.1) for (const e of this.enemies) {
         if (e.dead || p.hitSet.has(e)) continue;
         const dx = (e.x - p.x) * p.facing;
         if (dx > 0 && dx < 760 && Math.abs(e.z - p.z) < DZ * 1.3) {
           if (!p.hitSet.size) { const s = this.screenOf(e.x, e.z, 85); this.g.commentary.beam(s.x, s.y); }
           p.hitSet.add(e); this.damage(e, 24, true, true);
+          e.scorch = 1.6; e.vx = p.facing * 520; e.vy = 360; // scorched and blasted off their feet
+          for (let i = 0; i < 6; i++) this.fx.push({ kind: 'smoke', x: e.x + rand(-14, 14), y: rand(50, 100), z: e.z, vy: rand(40, 90), vx: rand(-30, 30), t: 0, max: rand(0.8, 1.4), r: rand(8, 14), dark: true });
         }
       }
       if (p.st_t > 0.1) for (const b of this.breakables) {
         const dx = (b.x - p.x) * p.facing;
         if (!b.broken && dx > 0 && dx < 760 && Math.abs(b.z - p.z) < DZ * 1.3) this.smash(b, p.facing);
       }
-      if (p.st_t > 0.6) p.st = 'idle';
+      if (p.st_t > 0.85) p.st = 'idle'; // (hits land once per beam; the tail is the burn-out)
     }
     if (p.st === 'breath') {
       for (const f of this.fires) {
@@ -328,9 +334,42 @@ export class Brawler {
   }
 
   /** Special move kick-off: freeze-frame, darkened world and a comic cut-in panel. */
+  /**
+   * Specials turn to face the heaviest crowd (closer and in-lane counts more) and slide onto the lane
+   * of the nearest target, so the beam never fires down an empty street.
+   */
+  aimSpecial(range) {
+    const p = this.p;
+    const score = [0, 0];
+    let best = null, bd = 1e9;
+    const targets = this.enemies.filter((e) => !e.dead && e.st !== 'enter').map((e) => ({ x: e.x, z: e.z }));
+    if (this.fire) for (const f of this.fires) if (f.hp > 0) targets.push({ x: f.x, z: f.z, fire: true });
+    for (const t of targets) {
+      const dx = t.x - p.x, adx = Math.abs(dx);
+      if (adx > range * 1.2) continue;
+      const w = (1 / (1 + adx / 250)) * (Math.abs(t.z - p.z) < 0.25 ? 1 : 0.45) * (t.fire ? 1.5 : 1);
+      score[dx >= 0 ? 1 : 0] += w;
+    }
+    if (score[0] || score[1]) p.facing = score[1] >= score[0] ? 1 : -1;
+    for (const t of targets) {
+      const dx = (t.x - p.x) * p.facing;
+      if (dx > 0 && dx < range && Math.abs(t.z - p.z) < 0.3 && dx + Math.abs(t.z - p.z) * 900 < bd) { bd = dx + Math.abs(t.z - p.z) * 900; best = t; }
+    }
+    p.aimZ = best ? clamp(best.z, 0.04, 1) : null;
+  }
+
   superMove(kind) {
     this.cut = { t: 0, kind };
-    this.hitstop = 0.14;
+    this.hitstop = 0.3; // the super freeze: world holds while the cut-in slams across
+    // a near-frontal portrait for the cut-in panel (guard pose), rendered once per special
+    if (this.sprite) {
+      const H = this.sprite.hero;
+      H.pose('punch', 1.2);
+      const img = this.sprite.render({ view: 'side', yaw: 0.5, span: 2.6, lift: 0.12 });
+      if (!this.cutImg) { this.cutImg = document.createElement('canvas'); this.cutImg.width = img.width; this.cutImg.height = img.height; }
+      const g = this.cutImg.getContext('2d'); g.clearRect(0, 0, img.width, img.height); g.drawImage(img, 0, 0);
+      this.heroSt = null; // force her world sprite to re-render next frame
+    }
     this.zoom = Math.max(this.zoom, 0.05);
     this.flash = 0.5;
   }
@@ -436,6 +475,7 @@ export class Brawler {
     e.st_t += dt;
     e.flash = Math.max(0, e.flash - dt);
     e.barT = Math.max(0, e.barT - dt);
+    if (e.scorch > 0) { e.scorch -= dt; if (chance(dt * 8)) this.fx.push({ kind: 'smoke', x: e.x + rand(-10, 10), y: rand(20, 70), z: e.z, vy: rand(30, 60), vx: rand(-15, 15), t: 0, max: 0.9, r: rand(6, 10), dark: true }); }
     const x0 = e.x, z0 = e.z;
     if (e.dead) return;
     if (e.st !== 'enter' && (e.y > 0 || e.vy)) {
@@ -722,9 +762,10 @@ export class Brawler {
 
     // special move: world dims, beam burns over the top, then the cut-in panel
     if (this.cut || this.p.st === 'beam' || this.p.st === 'breath') {
-      const a = this.cut ? Math.min(1, this.cut.t / 0.1) * (this.cut.t > 0.32 ? Math.max(0, 1 - (this.cut.t - 0.32) / 0.14) : 1) : 0;
-      const dim = Math.max(a * 0.45, this.p.st === 'beam' || this.p.st === 'breath' ? 0.22 : 0);
+      const a = this.cut ? Math.min(1, this.cut.t / 0.06) * (this.cut.t > 0.36 ? Math.max(0, 1 - (this.cut.t - 0.36) / 0.14) : 1) : 0;
+      const dim = Math.max(a * 0.5, this.p.st === 'beam' || this.p.st === 'breath' ? 0.3 : 0);
       ctx.fillStyle = `rgba(10,4,24,${dim})`; ctx.fillRect(-20, -20, W + 40, H + 40);
+      if (this.cut) this.drawSpeedLines(ctx, W, H, a);
     }
     if (this.p.st === 'beam' && this.p.st_t > 0.06) this.drawBeam(ctx);
     ctx.restore();
@@ -794,15 +835,22 @@ export class Brawler {
       case 'flykick': H.pose('kick2', 0.67); break;
       case 'hurt': H.pose('hit', 0.15 + p.st_t * 1.6); break;
       case 'down': H.pose(p.hp > 0 && p.st_t > 0.5 ? 'getUp' : 'fallFlat', p.hp > 0 && p.st_t > 0.5 ? 4 + (p.st_t - 0.5) * 6 : 0.6 + p.st_t * 1.8); break;
-      case 'beam': case 'breath': H.pose('combatIdle', 1.2); break;
-      default: H.pose(p.y > 0 ? 'jump' : 'combatIdle', p.y > 0 ? 1.0 : this.t);
+      case 'beam': case 'breath': H.pose('punch', 1.2); break;
+      default:
+        // Guard up (fists raised, wide stance, chin up) while crooks are about; the hands-on-hips hero
+        // pose when the street is clear. (combatIdle hangs her head: it read as dejected.)
+        if (p.y > 0) H.pose('jump', 1.0);
+        else if (this.enemies.some((e) => !e.dead && Math.abs(e.x - p.x) < 520)) H.pose('punch', 1.16 + Math.sin(this.t * 3) * 0.04);
+        else H.pose('pose', 0.5 + this.t * 0.4);
     }
     // Cape wind: running pushes it out behind her; jumping/falling lifts it.
     const run = p.st === 'walk' ? 7 : p.st === 'attack' || p.st === 'flykick' ? 3 : 0.8;
     H.setWind(Math.sin(this.t * 1.7) * 0.8, p.y > 0 ? (p.vy < 0 ? 9 : -3) : 0.5, -run);
     // Fighting moves always face the enemy side-on; walking uses the smoothed movement heading.
     const sideOn = p.st !== 'walk' && p.st !== 'idle';
-    const yaw = sideOn ? (p.facing > 0 ? Math.PI / 2 : -Math.PI / 2) : (p.yaw ?? Math.PI / 2);
+    // three-quarter turn toward the viewer (emblem and face read) instead of flat profile
+    const q = p.facing > 0 ? Math.PI / 2 - 0.4 : -Math.PI / 2 + 0.4;
+    const yaw = sideOn ? q : (p.yaw ?? q);
     const img = this.sprite.render({ view: 'side', yaw, span: 2.6, lift: 0.12 });
     // one readback of the WebGL canvas into 2D, then outline from the copy (each WebGL drawImage is a readback)
     if (!this.heroCopy) { this.heroCopy = document.createElement('canvas'); this.heroCopy.width = img.width; this.heroCopy.height = img.height; this.hcx = this.heroCopy.getContext('2d'); }
@@ -813,7 +861,7 @@ export class Brawler {
     inkOutline(this.hix, this.heroCopy, img.width, img.height, 3, 4, 4);
     }
     // Sprite frame is 2.6 m tall at 54 units per metre.
-    const hpx = 2.6 * M * s, wpx = hpx * (220 / 300);
+    const hpx = 2.6 * M * s * HERO_SCALE, wpx = hpx * (220 / 300);
     const top = y - p.y * s - hpx * (1 - 0.12 / 2.6);
     // hero rim light: a warm back-glow so she pops off the set
     ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.18;
@@ -850,28 +898,47 @@ export class Brawler {
     ctx.restore();
   }
 
+  /** Radial comic speed lines converging on the heroine during the super freeze. */
+  drawSpeedLines(ctx, W, H, a) {
+    const c = this.screenOf(this.p.x, this.p.z, 90), R = Math.hypot(W, H);
+    ctx.save(); ctx.globalAlpha = a * 0.55; ctx.fillStyle = this.cut.kind === 'heat' ? '#fff2d0' : '#e8fbff';
+    for (let i = 0; i < 44; i++) {
+      const an = i * 0.1428 * Math.PI + (i % 3) * 0.05, w = 0.012 + (i % 4) * 0.006, r0 = R * (0.22 + ((i * 37) % 10) / 40);
+      ctx.beginPath(); ctx.moveTo(c.x + Math.cos(an) * r0, c.y + Math.sin(an) * r0);
+      ctx.lineTo(c.x + Math.cos(an - w) * R, c.y + Math.sin(an - w) * R); ctx.lineTo(c.x + Math.cos(an + w) * R, c.y + Math.sin(an + w) * R); ctx.fill();
+    }
+    ctx.restore();
+  }
+
   drawBeam(ctx) {
-    const p = this.p, s = this.sc(p.z);
+    const p = this.p, s = this.sc(p.z) * HERO_SCALE;
     const x = this.sx(p.x), y = this.gy(p.z);
-    const ey = y - p.y * s - 88 * s, x0 = x + p.facing * 10 * s, x1 = x + p.facing * 760 * this.k;
-    const wob = 1 + Math.sin(this.t * 60) * 0.12;
+    const ey = y - p.y * s - 90 * s, x0 = x + p.facing * 12 * s, x1 = x + p.facing * 780 * this.k;
+    const wob = 1 + Math.sin(this.t * 60) * 0.1, g = Math.min(1, p.st_t / 0.08);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round';
-    for (const [w, c] of [[30, 'rgba(255,30,20,.28)'], [16, 'rgba(255,70,30,.6)'], [8, 'rgba(255,170,80,.9)'], [3, '#fffbe8']]) {
-      ctx.strokeStyle = c; ctx.lineWidth = w * s * wob;
-      ctx.beginPath(); ctx.moveTo(x0, ey); ctx.lineTo(x1, ey + 3 * s); ctx.stroke();
+    // orange halo → red body → hot orange → white core, ~3x the old weight
+    for (const [w, c] of [[64, 'rgba(255,110,20,.22)'], [40, 'rgba(255,40,20,.5)'], [22, 'rgba(255,150,60,.9)'], [9, '#ffffff']]) {
+      ctx.strokeStyle = c; ctx.lineWidth = w * s * wob * 0.5 * g;
+      ctx.beginPath(); ctx.moveTo(x0, ey); ctx.lineTo(x1, ey + 4 * s); ctx.stroke();
     }
-    ctx.globalAlpha = 0.9; ctx.drawImage(glow('#ff5030'), x0 - 30 * s, ey - 30 * s, 60 * s, 60 * s);
+    ctx.globalAlpha = 1; ctx.drawImage(glow('#ff6030'), x0 - 44 * s, ey - 44 * s, 88 * s, 88 * s);
+    ctx.drawImage(glow('#ffffff'), x0 - 14 * s, ey - 14 * s, 28 * s, 28 * s);
     ctx.restore();
-    // scorch sparks where it touches crooks
+    // embers shed along the beam
+    for (let i = 0; i < 3; i++) this.fx.push({ kind: 'ember', x: p.x + p.facing * rand(30, 700), y: 90 + rand(-6, 6), z: p.z, vx: rand(-40, 40), vy: rand(40, 160), t: 0, max: rand(0.4, 0.8) });
+    // impact burst wherever it's burning a crook
     for (const e of this.enemies) {
       const dx = (e.x - p.x) * p.facing;
-      if (!e.dead && dx > 0 && dx < 760 && Math.abs(e.z - p.z) < DZ * 1.3 && chance(0.5)) this.fx.push({ kind: 'streak', x: e.x - p.facing * 8, y: 88, z: e.z, vx: -p.facing * rand(100, 300), vy: rand(-100, 300), t: 0, max: 0.2, hot: true });
+      if (e.dead || dx <= 0 || dx > 780 || Math.abs(e.z - p.z) > DZ * 1.3) continue;
+      if (chance(0.6)) this.fx.push({ kind: 'spark', x: e.x - p.facing * 10, y: 88, z: e.z + 0.001, t: 0, max: 0.1, big: true, hot: true, rot: rand(0, 6) });
+      if (chance(0.6)) this.fx.push({ kind: 'streak', x: e.x - p.facing * 8, y: 88, z: e.z, vx: -p.facing * rand(100, 300), vy: rand(-100, 300), t: 0, max: 0.2, hot: true });
     }
   }
 
   drawEnemy(ctx, e, x, y, s) {
+    s *= CROOK_SCALE;
     let alpha = e.alpha != null ? e.alpha : 1;
     if (e.dead) alpha *= Math.max(0, 1 - e.st_t / 0.9) * (Math.sin(e.st_t * 40) > 0 ? 1 : 0.35);
     if (alpha <= 0) return;
@@ -887,7 +954,9 @@ export class Brawler {
       const dir = e.st === 'down' || e.st === 'getup' || e.dead ? -e.facing : e.facing;
       const ox = -wpx / 2 - (f.shift || 0) * M * s;
       ctx.save(); ctx.translate(x + jitter, 0); ctx.scale(dir, 1);
+      if (e.scorch > 0) ctx.filter = `brightness(${0.35 + (1 - Math.min(1, e.scorch)) * 0.65}) sepia(0.5)`;
       ctx.drawImage(f.img, ox, top, wpx, hpx);
+      if (e.scorch > 0) ctx.filter = 'none';
       if (e.flash > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = alpha * 0.85; ctx.drawImage(f.img, ox, top, wpx, hpx); ctx.globalCompositeOperation = 'source-over'; }
       if (f.head && f.top) this.drawHeadgear(ctx, e, f, fy, s);
       ctx.restore();
@@ -1166,7 +1235,7 @@ export class Brawler {
           const n = f.big ? 10 : 8;
           for (let i = 0; i < n * 2; i++) { const an = (i / (n * 2)) * Math.PI * 2, rr = i % 2 ? r * 0.42 : r * (0.8 + ((i * 7) % 5) * 0.08); ctx.lineTo(Math.cos(an) * rr, Math.sin(an) * rr); }
           ctx.closePath();
-          ctx.fillStyle = f.hurt ? '#ff4a5a' : f.big ? '#ffe14a' : '#fff6b0'; ctx.fill();
+          ctx.fillStyle = f.hurt ? '#ff4a5a' : f.hot ? '#ff9a2a' : f.big ? '#ffe14a' : '#fff6b0'; ctx.fill();
           ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke();
           ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, r * 0.3, 0, Math.PI * 2); ctx.fill();
           ctx.restore();
@@ -1212,7 +1281,7 @@ export class Brawler {
           ctx.globalAlpha = 1;
           break;
         case 'smoke':
-          ctx.globalAlpha = a * 0.5; ctx.fillStyle = '#9aa0a8';
+          ctx.globalAlpha = a * 0.5; ctx.fillStyle = f.dark ? '#3a3238' : '#9aa0a8';
           ctx.beginPath(); ctx.arc(x, y, f.r * s * (0.6 + u), 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
           break;
         case 'chunk':
@@ -1245,7 +1314,7 @@ export class Brawler {
   /** Comic cut-in for specials: a slanted panel slams across with the heroine's close-up. */
   drawCutIn(ctx, W, H) {
     const t = this.cut.t, heat = this.cut.kind === 'heat';
-    const inT = Math.min(1, t / 0.1), outT = t > 0.32 ? (t - 0.32) / 0.14 : 0;
+    const inT = Math.min(1, t / 0.08), outT = t > 0.36 ? (t - 0.36) / 0.14 : 0;
     const slide = (1 - inT) * W - outT * W * 1.2;
     const y0 = H * 0.2, bh = H * 0.24, sl = bh * 0.5;
     ctx.save();
@@ -1259,16 +1328,15 @@ export class Brawler {
     ctx.strokeStyle = heat ? 'rgba(255,220,120,.45)' : 'rgba(230,250,255,.5)'; ctx.lineWidth = 2;
     for (let i = 0; i < 26; i++) { const yy = y0 + ((i * 37) % 100) / 100 * bh, xx = ((i * 211 + t * 3000) % (W + 200)) - 100; ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx + 120 + (i % 3) * 60, yy); ctx.stroke(); }
     // hero close-up, cropped from the live sprite (head & shoulders), slightly zoomed
-    const img = this.heroCopy;
+    const img = this.cutImg;
     if (img) {
-      const cw = 130, ch = 110, cx = 45, cy = 70; // head & shoulders in the 220x300 frame
+      const cw = 120, ch = 110, cx = 50, cy = 62; // head & shoulders in the 220x300 frame
       const dh = bh * 1.6, dw = dh * (cw / ch);
       const dx = W * 0.14 + t * 30, dy = y0 - bh * 0.1;
       ctx.save();
-      if (this.p.facing < 0) { ctx.translate(dx * 2 + dw, 0); ctx.scale(-1, 1); }
       inkOutline(ctx, cropOf(img, cx, cy, cw, ch), dw, dh, 2.5, dx, dy);
       ctx.restore();
-      if (heat) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.9; ctx.drawImage(glow('#ff2010'), dx + dw * 0.45, dy + dh * 0.1, dw * 0.5, dh * 0.4); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
+      if (heat) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.9; ctx.drawImage(glow('#ff2010'), dx + dw * 0.54 - dw * 0.2, dy + dh * 0.33 - dh * 0.12, dw * 0.4, dh * 0.24); ctx.drawImage(glow('#ffffff'), dx + dw * 0.54 - dw * 0.07, dy + dh * 0.33 - dh * 0.04, dw * 0.14, dh * 0.08); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
     }
     ctx.restore();
     ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.stroke();
@@ -1292,7 +1360,7 @@ export class Brawler {
     if (fade <= 0) return;
     const n = this.hits, pop = 1 + this.hitPop * 0.45;
     const col = n >= 25 ? '#ff3b3b' : n >= 10 ? '#ff9a1f' : '#ffe14a';
-    const x = W - 22, y = H * 0.43, fs = Math.min(64, H * 0.13);
+    const x = W * 0.92, y = H * 0.45, fs = Math.min(64, H * 0.13); // inside the 8% safe inset
     ctx.save(); ctx.globalAlpha = fade;
     ctx.translate(x, y); ctx.rotate(-0.08); ctx.scale(pop, pop);
     ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic'; ctx.lineJoin = 'round';

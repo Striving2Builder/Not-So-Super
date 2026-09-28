@@ -173,9 +173,11 @@ async function shootBrawl(page, dir, name, sc = {}) {
   await page.keyboard.up('KeyD');
   await page.screenshot({ path: path.join(dir, `${name}_2_fight.png`) });
   await page.keyboard.press('KeyK');
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(150); // the super freeze: comic cut-in panel
+  await page.screenshot({ path: path.join(dir, `${name}_3a_cutin.png`) });
+  await page.waitForTimeout(200);
   await page.screenshot({ path: path.join(dir, `${name}_3_special.png`) });
-  const shots = [`${name}_1_start.png`, `${name}_2_fight.png`, `${name}_3_special.png`];
+  const shots = [`${name}_1_start.png`, `${name}_2_fight.png`, `${name}_3a_cutin.png`, `${name}_3_special.png`];
   if (sc.crowd) {
     await page.waitForTimeout(600);
     for (let i = 0; i < 9; i++) { await page.keyboard.press('KeyJ'); await page.waitForTimeout(i % 3 === 2 ? 180 : 110); }
