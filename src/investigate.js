@@ -10,7 +10,7 @@ import { sfx } from './sfx.js';
 import { CaseFile } from './casefile.js';
 import { comic } from './comic.js';
 import { quality } from './settings.js';
-import { LW, LH, FLOOR, paintRoom, paintFixture, paintLight, paintDust, makeDust, makeGrade, scanPattern, paintXrayStructure, paintSkeleton } from './crimescene.js';
+import { LW, LH, FLOOR, paintRoom, paintFixture, paintLight, paintDust, makeDust, makeGrade, scanPattern, paintXrayStructure, paintSkeleton, paintStory, paintForeground } from './crimescene.js';
 import { drawClueGlyph } from './evidenceart.js';
 
 const SETTINGS = {
@@ -420,7 +420,14 @@ export class Investigate {
       B.save(); this.view(B, f, dpr, 0, true);
       paintLight(B, key, this.setting, night, v, t);
       if (!w.talked) this.bubble(B, w.x + 30, w.y - 250, '…?');
-      this.drawTape(B, v);
+      const id = this.zone.def.id;
+      if (id === 'arson') { // smoke still hanging under the ceiling
+        const hz = B.createLinearGradient(0, v.y0, 0, FLOOR);
+        hz.addColorStop(0, 'rgba(70,64,60,.55)'); hz.addColorStop(1, 'rgba(70,64,60,0)');
+        B.fillStyle = hz; B.fillRect(v.x0, v.y0, v.x1 - v.x0, FLOOR - v.y0);
+      }
+      if (key === 'apartment' || key === 'alley') this.drawTape(B, v); // outdoors/at a home the police tape up
+      paintForeground(B, key, v);
       B.restore();
       const c = this.toScreen(LW / 2, LH * 0.55);
       B.setTransform(1, 0, 0, 1, 0, 0);
@@ -495,32 +502,16 @@ export class Investigate {
     drawHumanoid(c, w.x, w.y, 2.1, -1, w.look, pose('stand', this.t), this.t);
   }
 
-  /** Chalk outline, scattered papers, a trail of prints: the floor tells a story. */
+  /** What happened here, told on the floor: per case type (scorch marks, ransom letters…). */
   drawFloorDressing(g) {
-    const ch = this.chalk;
-    g.save(); g.translate(ch.x, ch.y); g.scale(1, 0.36); g.rotate(ch.rot);
-    g.strokeStyle = 'rgba(245,245,240,.85)'; g.lineWidth = 5; g.lineJoin = 'round'; g.lineCap = 'round';
-    g.beginPath();
-    g.arc(0, -78, 20, 0, Math.PI * 2);
-    g.moveTo(-14, -58); g.lineTo(-58, -40); g.lineTo(-84, -70);
-    g.moveTo(14, -58); g.lineTo(52, -24); g.lineTo(70, 6);
-    g.moveTo(-14, -58); g.lineTo(-22, 10); g.lineTo(-50, 78);
-    g.moveTo(14, -58); g.lineTo(22, 10); g.lineTo(40, 80);
-    g.moveTo(-22, 10); g.lineTo(0, 2); g.lineTo(22, 10);
-    g.stroke();
-    g.restore();
-    // papers
-    for (const [dx, dy, a] of [[-120, 8, 0.3], [-96, 22, -0.5], [110, -6, 0.9]]) {
-      g.save(); g.translate(ch.x + dx, ch.y + dy); g.scale(1, 0.4); g.rotate(a);
-      g.fillStyle = '#efeadc'; g.fillRect(-16, -20, 32, 40); g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 2; g.strokeRect(-16, -20, 32, 40);
-      g.fillStyle = 'rgba(40,40,60,.35)'; for (let i = 0; i < 4; i++) g.fillRect(-11, -13 + i * 8, 22, 2);
-      g.restore();
-    }
-    // prints leading in from the side
-    g.fillStyle = 'rgba(20,10,8,.3)';
-    for (let i = 0; i < 6; i++) {
-      const x = -40 + i * 52, y = 590 - i * 9 + (i % 2) * 12;
-      g.beginPath(); g.ellipse(x, y, 11, 5, 0.2, 0, Math.PI * 2); g.ellipse(x + 15, y + 1, 5, 4, 0, 0, Math.PI * 2); g.fill();
+    const ch = this.chalk, id = this.zone.def.id;
+    paintStory(g, id, ch.x, ch.y);
+    if (id === 'missing' || id === 'smuggle' || id === 'spiked') { // a trail of prints leading out
+      g.fillStyle = 'rgba(20,10,8,.3)';
+      for (let i = 0; i < 6; i++) {
+        const x = -40 + i * 52, y = 590 - i * 9 + (i % 2) * 12;
+        g.beginPath(); g.ellipse(x, y, 11, 5, 0.2, 0, Math.PI * 2); g.ellipse(x + 15, y + 1, 5, 4, 0, 0, Math.PI * 2); g.fill();
+      }
     }
   }
 
@@ -808,7 +799,6 @@ export class Investigate {
     ctx.fillStyle = '#ff3030'; ctx.beginPath(); ctx.arc(72, LH - 60, 8 + Math.sin(t * 6) * 2, 0, Math.PI * 2); ctx.fill();
     ctx.font = `22px ${CAPTION}`; ctx.textBaseline = 'middle';
     ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.fillText('REC', 88, LH - 59);
-    ctx.fillText(`ISO 800  1/125  F2.8   ▮▮▮▯   ${this.photos} SHOTS`, 140, LH - 59);
     // focus boxes on evidence found but not yet photographed
     for (const c of this.clues) {
       if (!c.found || !c.host) continue;
@@ -950,9 +940,7 @@ function drawProp(ctx, p, t) {
         for (let j = 0; j < 7; j++) box(x + 10 + j * ((w - 20) / 7), sy + 8 + (j % 3) * 4, (w - 20) / 7 - 3, h / 4 - 22 - (j % 3) * 4, ['#a33', '#35a', '#3a5', '#aa3', '#737', '#a63'][(i + j) % 6]);
       }
       break;
-    case 'painting':
-      box(x, y, w, h, '#c9a24a'); box(x + 8, y + 8, w - 16, h - 16, '#2a4a3a');
-      ctx.fillStyle = '#e0c090'; ctx.beginPath(); ctx.arc(x + w / 2, y + h / 2, h * 0.22, 0, Math.PI * 2); ctx.fill(); break;
+    case 'painting': drawWallPiece(ctx, p, box); break;
     case 'coat':
       box(x + w / 2 - 4, y, 8, h, '#4a3020'); box(x + w / 2 - 25, y + h - 8, 50, 8, '#4a3020');
       ctx.fillStyle = '#6a2a2a'; ctx.beginPath(); ctx.moveTo(x + w / 2, y + 20); ctx.lineTo(x + w / 2 + 26, y + 120); ctx.lineTo(x + w / 2 - 6, y + 120); ctx.fill(); break;
@@ -975,8 +963,16 @@ function drawProp(ctx, p, t) {
       box(x + w / 2 - 3, y + 40, 6, h - 40, '#333'); box(x + w / 2 - 18, y + h - 6, 36, 6, '#333');
       ctx.fillStyle = '#f0e0b0'; ctx.beginPath(); ctx.moveTo(x - 6, y + 44); ctx.lineTo(x + w + 6, y + 44); ctx.lineTo(x + w - 6, y); ctx.lineTo(x + 6, y); ctx.fill(); break;
     case 'dumpster':
-      box(x, y + 20, w, h - 20, '#2f6a3a'); box(x - 6, y + 10, w + 12, 16, '#26562f');
-      ctx.fillStyle = '#fff'; ctx.font = '900 20px system-ui'; ctx.textAlign = 'center'; ctx.fillText('WASTE', x + w / 2, y + h / 2 + 18); break;
+      // bin bags spilling over, a lid propped open, ribs, wheels, grime
+      ctx.fillStyle = '#1a1a20'; for (const [bx, r] of [[x + 50, 34], [x + 110, 40], [x + 170, 30]]) { ctx.beginPath(); ctx.arc(bx, y + 22, r, Math.PI, 0); ctx.fill(); }
+      ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(x + 100, y - 6, 6, 18);
+      box(x, y + 20, w, h - 20, '#2f6a3a');
+      for (let i = 1; i < 5; i++) box(x + i * (w / 5) - 4, y + 24, 8, h - 34, '#26562f');
+      ctx.fillStyle = 'rgba(30,20,10,.35)'; ctx.fillRect(x, y + h - 40, w, 30);
+      ctx.save(); ctx.translate(x - 6, y + 12); ctx.rotate(-0.35); box(0, -8, w * 0.55, 12, '#26562f'); ctx.restore();
+      box(x - 6, y + 12, w + 12, 12, '#26562f');
+      ctx.fillStyle = '#111'; for (const wx of [x + 24, x + w - 24]) { ctx.beginPath(); ctx.arc(wx, y + h, 10, 0, Math.PI * 2); ctx.fill(); }
+      break;
     case 'crate':
       box(x, y, w, h, '#a8804a'); ctx.strokeStyle = '#7a5a2a'; ctx.lineWidth = 6; ctx.strokeRect(x + 3, y + 3, w - 6, h - 6);
       ctx.beginPath(); ctx.moveTo(x + 3, y + 3); ctx.lineTo(x + w - 3, y + h - 3); ctx.stroke(); break;
@@ -1021,6 +1017,55 @@ function drawProp(ctx, p, t) {
     default:
       box(x, y, w, h, '#777');
   }
+}
+
+/** Framed wall pieces: each one is its own thing, not the same painting everywhere. */
+function drawWallPiece(ctx, p, box) {
+  const { x, y, w, h, name } = p;
+  const line = (c = 'rgba(14,6,18,.7)', lw = 2) => { ctx.strokeStyle = c; ctx.lineWidth = lw; ctx.stroke(); };
+  if (name === 'Torn Poster') { // club flyer, corner peeling
+    ctx.fillStyle = '#f2e14a'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y + 6); ctx.lineTo(x + w - 6, y + h - 30); ctx.lineTo(x + w - 34, y + h); ctx.lineTo(x + 4, y + h - 4); ctx.closePath(); ctx.fill(); line();
+    ctx.fillStyle = '#d8122e'; ctx.font = '26px "Bangers", Impact, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('LADIES', x + w / 2, y + 34); ctx.fillText('NIGHT', x + w / 2, y + 62);
+    ctx.fillStyle = '#111'; ctx.font = '700 12px system-ui'; ctx.fillText('FREE DRINKS', x + w / 2, y + 92);
+    ctx.fillStyle = '#c8b030'; ctx.beginPath(); ctx.moveTo(x + w - 6, y + h - 30); ctx.lineTo(x + w - 34, y + h); ctx.lineTo(x + w - 30, y + h - 26); ctx.closePath(); ctx.fill(); line();
+    return;
+  }
+  if (name === 'Shift Board') { // cork board, rota sheets, darts
+    box(x, y, w, h, '#6a4a2a'); box(x + 6, y + 6, w - 12, h - 12, '#b8905a');
+    for (let i = 0; i < 4; i++) box(x + 14 + i * 38, y + 14 + (i % 2) * 8, 32, 44, '#f2ead8');
+    ctx.fillStyle = '#d8122e'; for (const [dx, dy] of [[30, 20], [100, 30], [140, 70]]) { ctx.beginPath(); ctx.arc(x + dx, y + dy, 4, 0, Math.PI * 2); ctx.fill(); }
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1.2; for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { ctx.beginPath(); ctx.moveTo(x + 18 + i * 38, y + 26 + j * 8 + (i % 2) * 8); ctx.lineTo(x + 40 + i * 38, y + 26 + j * 8 + (i % 2) * 8); ctx.stroke(); }
+    return;
+  }
+  if (name === 'Hayloft Door') { // big plank door, Z-brace, forced latch
+    box(x, y, w, h, '#7a4a2a'); for (let i = 1; i < 5; i++) box(x + i * (w / 5) - 1, y, 3, h, '#5a3218');
+    ctx.strokeStyle = '#5a3218'; ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(x + 10, y + 20); ctx.lineTo(x + w - 10, y + 20); ctx.lineTo(x + 10, y + h - 20); ctx.lineTo(x + w - 10, y + h - 20); ctx.stroke();
+    box(x + w - 30, y + h / 2 - 8, 22, 16, '#6a6a6a'); ctx.save(); ctx.translate(x + w - 14, y + h / 2 + 12); ctx.rotate(0.6); box(-3, 0, 6, 22, '#8a8a8a'); ctx.restore();
+    return;
+  }
+  // gilt frame, then the picture inside
+  box(x, y, w, h, '#c9a24a');
+  ctx.strokeStyle = '#8a6a20'; ctx.lineWidth = 2; ctx.strokeRect(x + 4, y + 4, w - 8, h - 8);
+  const ix = x + 10, iy = y + 10, iw = w - 20, ih = h - 20;
+  ctx.save(); ctx.beginPath(); ctx.rect(ix, iy, iw, ih); ctx.clip();
+  if (name === 'Framed Photo') { // family at the beach
+    const sky = ctx.createLinearGradient(0, iy, 0, iy + ih); sky.addColorStop(0, '#8cc8f0'); sky.addColorStop(0.6, '#cfe8f6'); sky.addColorStop(0.61, '#3a8ac8'); sky.addColorStop(0.75, '#3a8ac8'); sky.addColorStop(0.76, '#f0d8a0'); ctx.fillStyle = sky; ctx.fillRect(ix, iy, iw, ih);
+    for (const [fx, fh, c] of [[0.3, 0.5, '#d8122e'], [0.45, 0.62, '#1e3cff'], [0.6, 0.42, '#e8c21a'], [0.72, 0.3, '#2a8a3a']]) { ctx.fillStyle = '#e0b890'; ctx.beginPath(); ctx.arc(ix + iw * fx, iy + ih * (1 - fh) + 4, 5, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = c; ctx.fillRect(ix + iw * fx - 5, iy + ih * (1 - fh) + 9, 10, ih * fh); }
+  } else if (name === 'Gilded Mirror') { // silvered glass with a reflected lamp and streaks
+    const gl = ctx.createLinearGradient(ix, iy, ix + iw, iy + ih); gl.addColorStop(0, '#9aa6b4'); gl.addColorStop(0.5, '#56606e'); gl.addColorStop(1, '#2a3040'); ctx.fillStyle = gl; ctx.fillRect(ix, iy, iw, ih);
+    ctx.fillStyle = 'rgba(255,240,200,.7)'; ctx.beginPath(); ctx.arc(ix + iw * 0.62, iy + 16, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.moveTo(ix + 10, iy + ih); ctx.lineTo(ix + 40, iy); ctx.lineTo(ix + 56, iy); ctx.lineTo(ix + 26, iy + ih); ctx.fill();
+  } else { // oil portrait of a stern founder
+    ctx.fillStyle = '#2a2016'; ctx.fillRect(ix, iy, iw, ih);
+    const bg = ctx.createRadialGradient(ix + iw / 2, iy + ih * 0.4, 4, ix + iw / 2, iy + ih * 0.4, iw * 0.7); bg.addColorStop(0, '#6a4a2a'); bg.addColorStop(1, '#1a120a'); ctx.fillStyle = bg; ctx.fillRect(ix, iy, iw, ih);
+    ctx.fillStyle = '#141018'; ctx.beginPath(); ctx.ellipse(ix + iw / 2, iy + ih + 6, iw * 0.34, ih * 0.42, 0, 0, Math.PI * 2); ctx.fill(); // coat
+    ctx.fillStyle = '#e8e0d0'; ctx.beginPath(); ctx.moveTo(ix + iw / 2 - 8, iy + ih * 0.66); ctx.lineTo(ix + iw / 2 + 8, iy + ih * 0.66); ctx.lineTo(ix + iw / 2, iy + ih); ctx.fill(); // collar
+    ctx.fillStyle = '#d8a882'; ctx.beginPath(); ctx.ellipse(ix + iw / 2, iy + ih * 0.42, iw * 0.13, ih * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c8c8c8'; ctx.beginPath(); ctx.ellipse(ix + iw / 2, iy + ih * 0.24, iw * 0.14, ih * 0.08, 0, Math.PI, 0); ctx.fill();
+    ctx.strokeStyle = '#3a2010'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(ix + iw / 2 - 8, iy + ih * 0.4); ctx.lineTo(ix + iw / 2 - 3, iy + ih * 0.41); ctx.moveTo(ix + iw / 2 + 3, iy + ih * 0.41); ctx.lineTo(ix + iw / 2 + 8, iy + ih * 0.4); ctx.moveTo(ix + iw / 2 - 6, iy + ih * 0.54); ctx.lineTo(ix + iw / 2 + 6, iy + ih * 0.54); ctx.stroke();
+  }
+  ctx.restore();
 }
 
 /** Just the moving parts of a prop, drawn over its baked image every frame. */

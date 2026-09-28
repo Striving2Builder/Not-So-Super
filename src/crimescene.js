@@ -399,3 +399,146 @@ export function paintSkeleton(g, x, y, s, t) {
   g.fillStyle = `rgba(255,${120 + beat * 60 | 0},60,.9)`; g.beginPath(); g.arc(-5, -134, 5 + beat * 2.5, 0, Math.PI * 2); g.fill();
   g.restore();
 }
+
+// ------------------------------------------------------------------ the case's own story
+
+const rnd = (i, k = 1) => { const n = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return n - Math.floor(n); };
+
+/** Floor (and wall) details that say what happened here, per case type. (x, y) is a clear floor spot. */
+export function paintStory(g, id, x, y) {
+  g.save();
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  const ink = 'rgba(18,10,22,.8)';
+  const paper = (px, py, a, w = 30, h = 38, col = '#efeadc') => {
+    g.save(); g.translate(px, py); g.scale(1, 0.42); g.rotate(a);
+    g.fillStyle = col; g.fillRect(-w / 2, -h / 2, w, h); g.strokeStyle = ink; g.lineWidth = 2; g.strokeRect(-w / 2, -h / 2, w, h);
+    g.restore();
+  };
+  switch (id) {
+    case 'arson': {
+      // scorched floor, soot plume up the wall, charred debris, a gas can on its side
+      let gr = g.createRadialGradient(x, y, 6, x, y, 150);
+      gr.addColorStop(0, 'rgba(8,4,2,.92)'); gr.addColorStop(0.5, 'rgba(20,10,4,.6)'); gr.addColorStop(1, 'rgba(20,10,4,0)');
+      g.save(); g.translate(x, y); g.scale(1, 0.3); g.translate(-x, -y); g.fillStyle = gr; g.beginPath(); g.arc(x, y, 150, 0, Math.PI * 2); g.fill(); g.restore();
+      gr = g.createLinearGradient(0, FLOOR, 0, CEIL + 40);
+      gr.addColorStop(0, 'rgba(10,6,4,.75)'); gr.addColorStop(1, 'rgba(10,6,4,0)');
+      g.fillStyle = gr; g.beginPath(); g.moveTo(x - 90, FLOOR); g.bezierCurveTo(x - 60, FLOOR - 150, x - 130, FLOOR - 250, x - 40, CEIL + 40);
+      g.lineTo(x + 80, CEIL + 40); g.bezierCurveTo(x + 130, FLOOR - 230, x + 50, FLOOR - 140, x + 90, FLOOR); g.fill();
+      for (let i = 0; i < 9; i++) { // charred bits
+        const bx = x - 90 + rnd(i) * 180, by = y - 14 + rnd(i, 2) * 30;
+        g.fillStyle = '#140c08'; g.beginPath(); g.moveTo(bx, by); g.lineTo(bx + 14, by - 4); g.lineTo(bx + 18, by + 3); g.lineTo(bx + 4, by + 6); g.fill();
+        g.fillStyle = 'rgba(255,120,30,.8)'; g.fillRect(bx + 8, by, 3, 2); // embers
+      }
+      g.save(); g.translate(x + 120, y + 6); g.rotate(-0.25); // gas can
+      g.fillStyle = '#c0281c'; g.fillRect(-22, -16, 44, 30); g.strokeStyle = ink; g.lineWidth = 3; g.strokeRect(-22, -16, 44, 30);
+      g.fillStyle = '#e8c21a'; g.fillRect(14, -24, 8, 10); g.strokeRect(14, -24, 8, 10); g.restore();
+      g.fillStyle = 'rgba(40,30,20,.35)'; g.beginPath(); g.ellipse(x + 90, y + 18, 50, 8, 0, 0, Math.PI * 2); g.fill(); // spilled fuel
+      break;
+    }
+    case 'blackmail': { // cut-out ransom letters, an envelope, a pair of scissors
+      paper(x, y, 0.2, 60, 44, '#f4efdf');
+      const cols = ['#d8122e', '#1e3cff', '#111', '#e8c21a', '#2a8a3a'];
+      for (let i = 0; i < 12; i++) {
+        const lx = x - 110 + rnd(i) * 220, ly = y - 12 + rnd(i, 3) * 30;
+        g.save(); g.translate(lx, ly); g.scale(1, 0.5); g.rotate(rnd(i, 4) * 2);
+        g.fillStyle = '#fff'; g.fillRect(-7, -9, 14, 18); g.fillStyle = cols[i % 5]; g.font = '900 14px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText('PAYMEORELS'[i % 10], 0, 1); g.restore();
+      }
+      g.save(); g.translate(x + 80, y + 14); g.rotate(0.3); g.strokeStyle = '#555'; g.lineWidth = 4; g.beginPath(); g.moveTo(-20, 0); g.lineTo(18, -6); g.moveTo(-20, -8); g.lineTo(18, 2); g.stroke();
+      g.strokeStyle = '#d8122e'; g.lineWidth = 3; g.beginPath(); g.arc(-26, 2, 6, 0, Math.PI * 2); g.arc(-26, -10, 6, 0, Math.PI * 2); g.stroke(); g.restore();
+      break;
+    }
+    case 'insider': { // shredder spill + a trail of stock-ticker tape
+      for (let i = 0; i < 40; i++) { const sx = x - 70 + rnd(i) * 140, sy = y - 8 + rnd(i, 2) * 22; g.strokeStyle = i % 4 ? '#ece6d6' : '#9ab8e0'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(sx, sy); g.lineTo(sx + 10 + rnd(i, 5) * 14, sy + (rnd(i, 6) - 0.5) * 6); g.stroke(); }
+      g.strokeStyle = '#f2ead0'; g.lineWidth = 7; g.beginPath(); g.moveTo(x - 160, y + 30); g.bezierCurveTo(x - 90, y - 10, x - 40, y + 50, x + 40, y + 24); g.stroke();
+      g.strokeStyle = ink; g.lineWidth = 1; g.stroke();
+      break;
+    }
+    case 'rigged': { // spilled chips and a fan of cards
+      for (let i = 0; i < 16; i++) { const cx = x - 90 + rnd(i) * 180, cy = y - 10 + rnd(i, 2) * 28; g.fillStyle = ['#d8122e', '#1e3cff', '#111', '#2a8a3a'][i % 4]; g.beginPath(); g.ellipse(cx, cy, 9, 4, 0, 0, Math.PI * 2); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.setLineDash([3, 3]); g.stroke(); g.setLineDash([]); }
+      for (let i = 0; i < 5; i++) { g.save(); g.translate(x + 60 + i * 8, y + 16); g.scale(1, 0.45); g.rotate(-0.6 + i * 0.3); g.fillStyle = '#fff'; g.fillRect(-12, -17, 24, 34); g.strokeStyle = ink; g.lineWidth = 2; g.strokeRect(-12, -17, 24, 34); g.fillStyle = i % 2 ? '#d8122e' : '#111'; g.font = '900 16px Georgia'; g.textAlign = 'center'; g.fillText('A', 0, 6); g.restore(); }
+      break;
+    }
+    case 'sabotage': { // oil slick, a dropped wrench, scattered bolts, a cut cable sparking
+      g.fillStyle = 'rgba(10,10,14,.7)'; g.beginPath(); g.ellipse(x, y, 110, 20, 0, 0, Math.PI * 2); g.fill();
+      const og = g.createLinearGradient(x - 80, 0, x + 80, 0); og.addColorStop(0, 'rgba(255,60,200,.18)'); og.addColorStop(0.5, 'rgba(60,220,255,.2)'); og.addColorStop(1, 'rgba(255,230,60,.18)');
+      g.fillStyle = og; g.beginPath(); g.ellipse(x + 10, y - 2, 70, 10, 0, 0, Math.PI * 2); g.fill();
+      g.save(); g.translate(x - 40, y + 26); g.rotate(-0.3); g.fillStyle = '#8a929a'; g.fillRect(-34, -4, 60, 8); g.beginPath(); g.arc(30, 0, 10, 0, Math.PI * 2); g.fill(); g.strokeStyle = ink; g.lineWidth = 2; g.strokeRect(-34, -4, 60, 8); g.restore();
+      for (let i = 0; i < 8; i++) { g.fillStyle = '#9aa0a8'; g.beginPath(); g.arc(x + 60 + rnd(i) * 70, y - 6 + rnd(i, 2) * 26, 4, 0, Math.PI * 2); g.fill(); }
+      break;
+    }
+    case 'poison': { // tipped feed sack, green chemical seep, a dead crow
+      g.fillStyle = 'rgba(90,220,60,.45)'; g.beginPath(); g.ellipse(x, y + 4, 90, 14, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(200,255,120,.5)'; g.beginPath(); g.ellipse(x - 10, y + 1, 40, 5, 0, 0, Math.PI * 2); g.fill();
+      g.save(); g.translate(x - 70, y - 8); g.rotate(-0.2); g.fillStyle = '#c8b27a'; g.beginPath(); g.ellipse(0, 0, 36, 18, 0, 0, Math.PI * 2); g.fill(); g.strokeStyle = ink; g.lineWidth = 3; g.stroke();
+      g.fillStyle = '#1a1a1a'; g.font = '900 12px system-ui'; g.textAlign = 'center'; g.fillText('FEED', 0, 4); g.restore();
+      g.save(); g.translate(x + 80, y + 14); g.fillStyle = '#14121a'; g.beginPath(); g.ellipse(0, 0, 18, 7, 0.2, 0, Math.PI * 2); g.fill(); g.beginPath(); g.moveTo(16, -2); g.lineTo(28, 0); g.lineTo(16, 3); g.fill();
+      g.strokeStyle = '#14121a'; g.lineWidth = 2; g.beginPath(); g.moveTo(-4, 4); g.lineTo(-8, 14); g.moveTo(4, 4); g.lineTo(2, 14); g.stroke(); g.restore();
+      break;
+    }
+    case 'smuggle': { // a crate burst open: slats, straw, loose banknotes, a stencilled stamp
+      for (let i = 0; i < 5; i++) { g.save(); g.translate(x - 70 + i * 34, y - 4 + (i % 2) * 14); g.rotate(-0.5 + rnd(i) * 1.2); g.fillStyle = '#a8804a'; g.fillRect(-34, -5, 68, 10); g.strokeStyle = ink; g.lineWidth = 2; g.strokeRect(-34, -5, 68, 10); g.restore(); }
+      g.strokeStyle = 'rgba(230,200,110,.7)'; g.lineWidth = 2; g.beginPath(); for (let i = 0; i < 26; i++) { const sx = x - 90 + rnd(i) * 180, sy = y - 8 + rnd(i, 3) * 26; g.moveTo(sx, sy); g.lineTo(sx + 12, sy + (i % 2 ? 3 : -3)); } g.stroke();
+      for (let i = 0; i < 6; i++) paper(x + 70 + rnd(i) * 60, y + 10 + rnd(i, 2) * 20, rnd(i, 5) * 3, 30, 16, '#9ac89a');
+      break;
+    }
+    case 'spiked': { // broken glass and spilled pills
+      g.fillStyle = 'rgba(140,255,200,.25)'; g.beginPath(); g.ellipse(x, y + 4, 70, 11, 0, 0, Math.PI * 2); g.fill();
+      for (let i = 0; i < 10; i++) { const gx = x - 60 + rnd(i) * 120, gy = y - 4 + rnd(i, 2) * 20; g.fillStyle = 'rgba(210,245,255,.8)'; g.beginPath(); g.moveTo(gx, gy); g.lineTo(gx + 8, gy - 6); g.lineTo(gx + 12, gy + 2); g.closePath(); g.fill(); g.strokeStyle = 'rgba(40,60,80,.7)'; g.lineWidth = 1; g.stroke(); }
+      for (let i = 0; i < 9; i++) { g.fillStyle = i % 2 ? '#ff5aa8' : '#fff'; g.beginPath(); g.ellipse(x + 70 + rnd(i) * 50, y + 12 + rnd(i, 3) * 14, 5, 2.6, rnd(i, 4) * 3, 0, Math.PI * 2); g.fill(); }
+      break;
+    }
+    case 'missing': default: { // an overturned handbag, its contents, a dropped phone with a cracked screen
+      g.save(); g.translate(x - 30, y); g.rotate(0.5); g.fillStyle = '#8a2a4a'; g.beginPath(); g.moveTo(-26, -14); g.lineTo(26, -14); g.lineTo(32, 14); g.lineTo(-32, 14); g.closePath(); g.fill(); g.strokeStyle = ink; g.lineWidth = 3; g.stroke();
+      g.beginPath(); g.arc(0, -14, 14, Math.PI, 0); g.stroke(); g.restore();
+      g.fillStyle = '#e8c21a'; g.beginPath(); g.arc(x + 20, y + 14, 5, 0, Math.PI * 2); g.fill(); // compact
+      g.fillStyle = '#d8122e'; g.fillRect(x + 36, y + 4, 14, 4); // lipstick
+      g.save(); g.translate(x + 80, y + 10); g.rotate(-0.2); g.fillStyle = '#111'; g.fillRect(-12, -7, 24, 14); g.strokeStyle = '#9ad8ff'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(-6, -5); g.lineTo(2, 1); g.lineTo(-2, 5); g.moveTo(2, 1); g.lineTo(9, -3); g.stroke(); g.restore();
+      paper(x - 100, y + 16, -0.4);
+    }
+  }
+  g.restore();
+}
+
+/** A near-black foreground silhouette at the frame's edge, per setting: depth, and a frame. */
+export function paintForeground(g, key, v) {
+  const x0 = v.x0, y1 = v.y1;
+  const S = '#07040b', rim = 'rgba(255,220,170,.28)';
+  g.save();
+  g.fillStyle = S; g.strokeStyle = rim; g.lineWidth = 2;
+  const fillRim = () => { g.fill(); g.stroke(); };
+  switch (key) {
+    case 'office': // an office chair's back and armrest, close to camera
+      g.beginPath(); g.moveTo(x0 - 20, y1 + 10); g.lineTo(x0 - 20, 420); g.quadraticCurveTo(x0 + 20, 380, x0 + 110, 400); g.quadraticCurveTo(x0 + 160, 420, x0 + 150, 480);
+      g.lineTo(x0 + 140, y1 + 10); g.closePath(); fillRim();
+      g.beginPath(); g.rect(x0 + 130, 500, 90, 16); fillRim();
+      break;
+    case 'apartment': // the back of an armchair
+      g.beginPath(); g.moveTo(x0 - 20, y1 + 10); g.lineTo(x0 - 10, 440); g.quadraticCurveTo(x0 + 40, 400, x0 + 120, 420); g.quadraticCurveTo(x0 + 190, 440, x0 + 180, 520); g.lineTo(x0 + 200, y1 + 10); g.closePath(); fillRim();
+      break;
+    case 'alley': // fire-escape stair stringers and rails
+      g.lineWidth = 16; g.strokeStyle = S; g.beginPath(); g.moveTo(x0 - 10, 120); g.lineTo(x0 + 150, y1 + 20); g.moveTo(x0 + 30, 60); g.lineTo(x0 + 190, y1 + 20); g.stroke();
+      g.lineWidth = 8; g.beginPath(); for (let i = 0; i < 7; i++) { const k = i / 7; g.moveTo(x0 - 10 + k * 160, 120 + k * (y1 - 100)); g.lineTo(x0 + 30 + k * 160, 60 + k * (y1 - 40)); } g.stroke();
+      g.lineWidth = 2; g.strokeStyle = rim; g.beginPath(); g.moveTo(x0 + 38, 60); g.lineTo(x0 + 198, y1 + 20); g.stroke();
+      break;
+    case 'barn': // a timber post and a hanging pitchfork
+      g.beginPath(); g.rect(x0 - 10, -20, 70, y1 + 40); fillRim();
+      g.lineWidth = 5; g.strokeStyle = S; g.beginPath(); g.moveTo(x0 + 110, -10); g.lineTo(x0 + 110, 250); g.moveTo(x0 + 92, 250); g.lineTo(x0 + 128, 250);
+      for (const dx of [-18, -6, 6, 18]) { g.moveTo(x0 + 110 + dx, 250); g.lineTo(x0 + 110 + dx, 300); } g.stroke();
+      break;
+    case 'casino': // bar stools
+      for (const [sx, sy] of [[x0 + 40, 470], [x0 + 150, 510]]) {
+        g.beginPath(); g.ellipse(sx, sy, 50, 14, 0, 0, Math.PI * 2); fillRim();
+        g.beginPath(); g.rect(sx - 6, sy, 12, y1 - sy + 20); g.fill();
+        g.beginPath(); g.ellipse(sx, sy + 70, 30, 6, 0, 0, Math.PI * 2); g.lineWidth = 5; g.strokeStyle = S; g.stroke(); g.strokeStyle = rim; g.lineWidth = 2;
+      }
+      break;
+    case 'factory': // a safety railing and a hanging chain hook
+      g.lineWidth = 12; g.strokeStyle = S; g.beginPath(); g.moveTo(x0 - 20, 480); g.lineTo(x0 + 190, 500); g.moveTo(x0 - 20, 540); g.lineTo(x0 + 190, 555);
+      g.moveTo(x0 + 40, 480); g.lineTo(x0 + 40, y1 + 20); g.moveTo(x0 + 150, 495); g.lineTo(x0 + 150, y1 + 20); g.stroke();
+      g.lineWidth = 4; g.beginPath(); for (let y = -10; y < 300; y += 16) g.ellipse(x0 + 100, y, 5, 8, 0, 0, Math.PI * 2); g.stroke();
+      g.lineWidth = 9; g.beginPath(); g.arc(x0 + 100, 320, 16, -Math.PI / 2, Math.PI * 0.9); g.stroke();
+      break;
+  }
+  g.restore();
+}
