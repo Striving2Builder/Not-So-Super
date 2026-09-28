@@ -235,7 +235,9 @@ function worldUV(mesh, su, sv) {
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i) + o.x, y = p.getY(i) + o.y, z = p.getZ(i) + o.z;
     const nx = Math.abs(n.getX(i)), nz = Math.abs(n.getZ(i));
-    uv.setXY(i, (nx > 0.5 ? z : x) / su, nx > 0.5 || nz > 0.5 ? y / sv : z / sv);
+    // wall tops read as an ink-black cap (the texture's top rows), like the comic floor plan
+    if (nx < 0.5 && nz < 0.5) uv.setXY(i, 0.5, 0.997);
+    else uv.setXY(i, (nx > 0.5 ? z : x) / su, Math.min(y / sv, 0.985));
   }
   uv.needsUpdate = true;
 }
@@ -427,15 +429,17 @@ function styleRoom(zn, k) {
   const [wallAlb, wallEm] = WALLS[k];
   const wm = zn.wallMat;
   wm.color.set(0xffffff);
-  wm.map = tex(cnv(512, 512, wallAlb), { repeat: true });
-  wm.emissive = C(0xffffff); wm.emissiveMap = tex(cnv(512, 512, wallEm), { repeat: true });
+  const cap = (c, col) => { c.fillStyle = col; c.fillRect(0, 0, 512, 5); };
+  wm.map = tex(cnv(512, 512, (c) => { wallAlb(c); cap(c, '#0c070c'); }), { repeat: true });
+  wm.emissive = C(0xffffff); wm.emissiveMap = tex(cnv(512, 512, (c) => { wallEm(c); cap(c, '#000'); }), { repeat: true });
   wm.needsUpdate = true;
   for (const c of zn.colliders) if (c.wall && c.mesh) worldUV(c.mesh, WALL_H, WALL_H);
   const [T, paint] = FLOORS[k];
   let floorMat = null;
+  const floors = [];
   zn.scene.traverse((o) => {
-    if (!o.isMesh || o.geometry.type !== 'PlaneGeometry' || !o.material.map || o.position.y !== 0 || Math.abs(o.rotation.x + Math.PI / 2) > 1e-3) return;
-    floorMat = o.material;
+    if (!o.isMesh || o.geometry.type !== 'PlaneGeometry' || !o.material.map || o.position.y > 0.01 || Math.abs(o.rotation.x + Math.PI / 2) > 1e-3) return;
+    floorMat = o.material; floors.push(o);
     const uv = o.geometry.attributes.uv, p = o.geometry.attributes.position;
     for (let i = 0; i < p.count; i++) uv.setXY(i, (p.getX(i) + o.position.x) / T, (p.getY(i) - o.position.z) / T);
     uv.needsUpdate = true;
@@ -452,6 +456,52 @@ function styleRoom(zn, k) {
     if (o.isHemisphereLight) o.intensity = amb[0];
     else if (o.isAmbientLight) o.intensity = amb[1];
   }
+  // Three point lights, not five: every lit pixel pays for each one. Two light the hall (driven
+  // by the show); the third follows her, so wherever she goes (back room, office) she's in the neon.
+  const pl = [];
+  zn.scene.traverse((o) => { if (o.isPointLight) pl.push(o); });
+  for (const l of pl) if (!zn.plights.includes(l) || zn.plights.indexOf(l) > 2) l.visible = false;
+  const follow = zn.plights[2];
+  follow.distance = 11; follow.decay = 1.2; follow.intensity = 16; follow.color = C(zn.V.lights[0]);
+  // no black void past the walls: a deep neon-tinted night instead
+  const bg = { club: 0x1c0d38, redlight: 0x2a0a12, gentlemens: 0x260b28, casino: 0x22120a }[k];
+  zn.scene.background = C(bg); zn.scene.fog.color = C(bg);
+  return { floorMat, floors, follow, hall: zn.plights.slice(0, 2) };
+}
+
+// Static light pools and sign reflections are painted into one glow texture on the floor
+// (emissive, second UV set spanning the whole building), so they cost no overdraw at all.
+const LM = { x0: -15, z0: -22, w: 40, d: 36, px: 512 };
+function paintFloorGlow(room, list) {
+  if (!room.floorMat || !list.length) return;
+  const c = cnv(LM.px, LM.px), g = c.getContext('2d'), sx = LM.px / LM.w, sz = LM.px / LM.d;
+  g.fillStyle = '#000'; g.fillRect(0, 0, LM.px, LM.px);
+  g.globalCompositeOperation = 'lighter';
+  for (const p of list) {
+    const col = C(p.color).convertLinearToSRGB();
+    const rgb = `${Math.round(col.r * 255)},${Math.round(col.g * 255)},${Math.round(col.b * 255)}`;
+    g.save();
+    g.translate((p.x - LM.x0) * sx, (p.z - LM.z0) * sz);
+    g.rotate(p.rot || 0);
+    g.scale(p.rx * sx, p.rz * sz);
+    const gr = g.createRadialGradient(0, 0, 0, 0, 0, 1);
+    gr.addColorStop(0, `rgba(${rgb},${Math.min(1, p.k * 1.6)})`); gr.addColorStop(0.3, `rgba(${rgb},${p.k * 0.8})`); gr.addColorStop(1, `rgba(${rgb},0)`);
+    g.fillStyle = gr; g.fillRect(-1, -1, 2, 2);
+    g.restore();
+  }
+  const t = tex(c);
+  t.channel = 1;
+  for (const f of room.floors) {
+    const pos = f.geometry.attributes.position, uv1 = new Float32Array(pos.count * 2);
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i) + f.position.x, z = -pos.getY(i) + f.position.z;
+      uv1[i * 2] = (x - LM.x0) / LM.w; uv1[i * 2 + 1] = 1 - (z - LM.z0) / LM.d;
+    }
+    f.geometry.setAttribute('uv1', new THREE.BufferAttribute(uv1, 2));
+  }
+  const m = room.floorMat;
+  m.emissive = C(0xffffff); m.emissiveMap = t; m.emissiveIntensity = 1;
+  m.needsUpdate = true;
 }
 
 // ------------------------------------------------------------------ the crowd (instanced)
@@ -590,9 +640,12 @@ function makeKit(zn, k) {
     zn, k, lite: q.id === 'saver', rich: q.id === 'high',
     glowT, glow: new Batch(['position', 'uv']), cones: new Batch(['position', 'normal', 'uv']),
     signs: new Batch(['position', 'uv']), atlas: new Atlas(1024, 1024),
-    bulbs: [], fx: [], people: [], np: 0,
+    bulbs: [], fx: [], people: [], paint: [],
     /** Additive light pool on the floor. */
-    pool(x, z, r, color, k2 = 1, y) { return this.glow.push(floorQ(x, z, r * 2, r * 2, y ?? 0.022 + (this.np++ % 10) * 0.002), color, k2); },
+    pool(x, z, r, color, k2 = 1, y) {
+      if (y === undefined) { this.paint.push({ x, z, rx: r, rz: r, color, k: k2 }); return null; }
+      return this.glow.push(floorQ(x, z, r * 2, r * 2, y), color, k2);
+    },
     /** A glow on a wall (w x h), just off its face. */
     halo(side, a, y, w, h, color, k2 = 1) { const [x, yy, z] = onWall(side, a, y, 0.02); return this.glow.push(wallQ(x, yy, z, w, h, YAW[side]), color, k2); },
     bulb(x, y, z, s, color, f) { const b = { p: [x, y, z], s, c: C(color), f }; this.bulbs.push(b); return b; },
@@ -610,8 +663,8 @@ function makeKit(zn, k) {
       const e = { s: this.signs.push(uvRect(wallQ(x, yy, z, w, h, YAW[side]), rect.uv), 0xffffff) };
       if (halo) e.h = this.halo(side, a, y, w * 1.25, h * 2.4, color, halo);
       if (streak) {
-        const [nx, nz] = NORMAL[side], d = 2.2;
-        e.r = this.glow.push(new THREE.PlaneGeometry(w * 0.9, d).rotateX(-Math.PI / 2).rotateY(YAW[side]).translate(x + nx * d * 0.5, 0.024, z + nz * d * 0.5), color, streak);
+        const [nx, nz] = NORMAL[side];
+        this.paint.push({ x: x + nx * 1.0, z: z + nz * 1.0, rx: nx ? 1.3 : w * 0.55, rz: nx ? w * 0.55 : 1.3, color, k: streak });
       }
       return e;
     },
@@ -630,6 +683,7 @@ function makeKit(zn, k) {
 
 function buildKit(X) {
   const { zn } = X, S = zn.scene;
+  paintFloorGlow(X.room, X.paint);
   X.glow.name = 'nl-glow'; X.cones.name = 'nl-cones'; X.signs.name = 'nl-signs';
   X.glow.build(S, new THREE.MeshBasicMaterial({ map: X.glowT, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide }));
   X.cones.build(S, coneMat());
@@ -895,7 +949,7 @@ function nightclub(zn, X, h) {
     X.signs.set(sNoPh.s, flicker(t, 3)); X.glow.set(sNoPh.h, 0.45 * flicker(t, 3));
     X.signs.set(sDance.s, B.n % 2 ? 1 : 0.55);
     // the house lights cycle colour every bar
-    zn.plights.forEach((l, i) => { l.color.setHSL((hueBase + i * 0.3) % 1, 1, 0.55); l.intensity = 14 + 26 * e; });
+    X.room.hall.forEach((l, i) => { l.color.setHSL((hueBase + i * 0.3) % 1, 1, 0.55); l.intensity = 14 + 26 * e; });
   });
 }
 
@@ -978,7 +1032,7 @@ function gentlemens(zn, X, h) {
     X.signs.set(sLive.s, 0.8 + 0.2 * e); X.glow.set(sLive.h, 0.4 + 0.2 * e);
     X.signs.set(sNoCam.s, flicker(t, 5));
     X.glow.set(sLily.h, 0.45 + 0.1 * Math.sin(t * 2));
-    zn.plights.forEach((l, i) => { l.intensity = 24 + Math.sin(t * 1.2 + i * 2) * 6 + e * 4; });
+    X.room.hall.forEach((l, i) => { l.intensity = 24 + Math.sin(t * 1.2 + i * 2) * 6 + e * 4; });
   });
 }
 
@@ -1018,7 +1072,6 @@ function redlight(zn, X, h) {
     const v = [0, 1, 2, 1, 0, 2][i];
     wins.push(uvRect(wallQ(x, 1.55, 11.59, 1.45, 2.7, Math.PI), [v / 3, 0, (v + 1) / 3, 1]));
     X.pool(x, 10.7, 1.9, 0xff2244, 0.4);
-    X.glow.push(wallQ(x, 1.6, 11.57, 2.6, 3.6, Math.PI), 0xff2244, 0.25);
   }
   S.add(new THREE.Mesh(mergeGeometries(wins), new THREE.MeshBasicMaterial({ map: winT })));
   for (let i = 0; i < 3; i++) table(4 + i * 3.2, -6, 0x5a0a1a);
@@ -1093,7 +1146,7 @@ function redlight(zn, X, h) {
     X.signs.set(sOpen.s, flicker(t, 1)); X.glow.set(sOpen.h, 0.5 * flicker(t, 1));
     X.signs.set(sHeart.s, 0.7 + 0.3 * e); X.glow.set(sHeart.h, 0.35 + 0.35 * e);
     X.signs.set(sDen.s, flicker(t, 9));
-    zn.plights.forEach((l, i) => { l.intensity = 24 + Math.sin(t * 0.9 + i * 2) * 5 + (i === 1 ? (flicker(t, 2) - 1) * 14 : 0); });
+    X.room.hall.forEach((l, i) => { l.intensity = 24 + Math.sin(t * 0.9 + i * 2) * 5 + (i === 1 ? (flicker(t, 2) - 1) * 14 : 0); });
   });
 }
 
@@ -1241,7 +1294,7 @@ function casino(zn, X, h) {
     crystals.forEach((b, i) => b.c.setScalar(Math.sin(t * 3 + i * 2.7) > 0.8 ? 1 : 0.3));
     X.signs.set(sJack.s, cyc < 2 ? (Math.floor(t * 6) % 2 ? 1 : 0.4) : 1);
     X.glow.set(sHR.h, 0.45 + 0.08 * Math.sin(t * 2));
-    zn.plights.forEach((l, i) => { l.intensity = 26 + Math.sin(t * 0.7 + i) * 3; });
+    X.room.hall.forEach((l, i) => { l.intensity = 26 + Math.sin(t * 0.7 + i) * 3; });
   });
 }
 function wheelT() {
@@ -1263,7 +1316,7 @@ export function decorateNightlife(zn, k, h) {
   const { table, sofa, bar } = h;
   const X = makeKit(zn, k);
   X.nl = zn.nl = { k, X, bpm: BPM[k] };
-  styleRoom(zn, k);
+  X.room = styleRoom(zn, k);
   if (k !== 'casino') {
     bar(-13, -1, 11, true);
     if (k === 'club') nightclub(zn, X, h);
@@ -1290,6 +1343,8 @@ export function updateNightlife(zn, dt) {
     a.needsUpdate = true;
   }
   X.glow.flush(); X.signs.flush();
+  const fl = X.room.follow, hp = zn.hero && zn.hero.position;
+  if (hp) fl.position.set(hp.x, 2.6, hp.z + 0.6);
   // points are sized in world units: pixels per unit at distance 1
   if (X.pmat && zn.renderer) X.pmat.uniforms.uScale.value = zn.renderer.domElement.height / (2 * Math.tan((zn.cam.fov * Math.PI) / 360));
 }
