@@ -1,7 +1,7 @@
 // Mood for the premade clubs: coloured lighting from the club's own light list, fake light pools
-// and beams, neon that glows, haze, a grade, and characters that pop off the room (rim light,
-// contact shadows). Everything here is cheap on a phone: the pools, beams and shadows are one
-// draw call each, and only a few real lights exist; they follow her round the club.
+// and beams, haze and a grade. Characters' shadows/rim/ink come from the shared look (look3d.js):
+// the club only lends it a rim colour. Cheap on a phone: pools and beams are one draw call each,
+// and only a few real lights exist; they follow her round the club.
 import * as THREE from 'three';
 import { quality } from './settings.js';
 import { DOWN } from './clubgeo.js';
@@ -15,8 +15,6 @@ const MOODS = {
 };
 const DEFAULT_MOOD = MOODS.triangle;
 
-// real point lights (besides her own key light), by profile
-const LIGHTS = { high: 5, balanced: 3, saver: 2 };
 
 let _radial = null, _beam = null;
 const _top = new THREE.Vector3(), _buf = new THREE.Vector2();
@@ -102,12 +100,13 @@ export class ClubMood {
       s.floor = h && h.face.normal.y > 0.6 ? h.point.clone() : null;
     }
     this.buildFixtures(src.filter((s) => s.floor));
-    this.buildPools(src.filter((s) => s.floor));
+    // (uplights set into a stage or floor light the room, not a pool on the floor under them)
+    this.buildPools(src.filter((s) => s.floor && s.pos.y - s.floor.y > 1));
     this.buildBeams(src.filter((s) => s.floor && s.pos.y - s.floor.y > 1.8 && (s.spot || s.power >= 150)).slice(0, 8));
 
     // a few real lights: they move to the strongest sources near her as she walks the club
     this.slots = [];
-    for (let i = 0; i < (LIGHTS[q.id] || 3); i++) {
+    for (let i = 0; i < (q.clubLights ?? 3); i++) {
       const l = new THREE.PointLight(0xffffff, 0, 13, 1.5);
       S.add(l);
       this.slots.push({ l, src: null, want: null });
@@ -120,11 +119,7 @@ export class ClubMood {
 
     // The shared 3D look (look3d.js) already gives every character a contact shadow and an inked
     // rim; then the club only lends it its rim colour instead of stacking a second set on top.
-    this.coreLook = !!zone.shadows;
-    if (this.coreLook) zone.castRim = M.rim;
-    else this.buildBlobs();
-    this.rimU = { value: new THREE.Color(M.rim) };
-    this.rimmed = new WeakSet();
+    zone.castRim = M.rim;
     if (q.look3d !== 'full') this.vignette(); // (the core look draws its own on High)
   }
 
@@ -135,12 +130,12 @@ export class ClubMood {
   buildFixtures(src) {
     const hang = this.clip0 - 0.55, picked = [];
     for (const s of src) {
-      if (s.neon || s.pos.y < this.z.club.mainY + 2 || picked.length >= 10) continue;
+      if (s.neon || s.pos.y < this.z.club.mainY + 2 || picked.length >= 8) continue;
       if (picked.some((p) => p.pos.distanceTo(s.pos) < 2.5)) continue;
       picked.push(s);
       s.hang = Math.min(s.pos.y, hang);
     }
-    this.fixtures = pendants(picked.map((s) => ({ x: s.pos.x, y: s.hang, z: s.pos.z, color: s.color })), this.clip0);
+    this.fixtures = pendants(picked.map((s) => ({ x: s.pos.x, y: s.hang, z: s.pos.z, color: s.color })));
     if (this.fixtures) this.z.scene.add(this.fixtures);
     const glows = picked.map((s) => ({ pos: new THREE.Vector3(s.pos.x, s.hang - 0.16, s.pos.z), color: s.color.clone().lerp(new THREE.Color(1, 1, 1), 0.3), k: 0.7, size: 0.9 }));
     for (const e of this.z.club.scene.userData.emitters || []) {
@@ -217,53 +212,6 @@ export class ClubMood {
     p.needsUpdate = true;
   }
 
-  /** Contact shadows under everyone: one instanced mesh. */
-  buildBlobs() {
-    const mat = new THREE.MeshBasicMaterial({ color: 0x000000, alphaMap: null, map: radialTex(), transparent: true, opacity: 0.7, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
-    this.blobs = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), mat, 24);
-    this.blobs.frustumCulled = false;
-    this.blobs.renderOrder = 1;
-    this.blobs.count = 0;
-    this.z.scene.add(this.blobs);
-  }
-
-  /** Everyone who needs a shadow and a rim: her, guards, boss, informant, captives. */
-  people() {
-    const z = this.z, out = [z.hero];
-    for (const g of z.guards) out.push(g.mesh);
-    if (z.boss) out.push(z.boss);
-    if (z.informant) out.push(z.informant.mesh);
-    for (const c of z.captives) out.push(c.person);
-    for (const x of z.extraPeople ? z.extraPeople() : []) out.push(x);
-    return out.filter((o) => o && o.visible !== false);
-  }
-
-  // ---------------------------------------------------------------- rim light
-  /** Fresnel rim in the club's colour on a character's materials (cloned: models share them). */
-  rim(root) {
-    if (this.rimmed.has(root)) return;
-    this.rimmed.add(root);
-    const U = this.rimU, done = new Map();
-    root.traverse((o) => {
-      if (!o.isMesh) return;
-      const patch = (m) => {
-        if (!m || !(m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial || m.isMeshToonMaterial)) return m;
-        if (done.has(m)) return done.get(m);
-        const c = m.clone(), prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey;
-        c.onBeforeCompile = (sh, r) => {
-          if (prev) prev.call(c, sh, r);
-          sh.uniforms.uRim = U;
-          sh.fragmentShader = 'uniform vec3 uRim;\n' + sh.fragmentShader.replace('#include <opaque_fragment>',
-            '{ float rimF = 1.0 - abs(dot(normalize(normal), normalize(vViewPosition))); outgoingLight += uRim * (rimF * rimF * rimF); }\n#include <opaque_fragment>');
-        };
-        c.customProgramCacheKey = () => (prevKey ? prevKey.call(m) : '') + '|clubrim';
-        done.set(m, c);
-        return c;
-      };
-      o.material = Array.isArray(o.material) ? o.material.map(patch) : patch(o.material);
-    });
-  }
-
   // ---------------------------------------------------------------- per frame
   update(dt) {
     const z = this.z, h = z.hero.position;
@@ -298,20 +246,6 @@ export class ClubMood {
     this.key.position.set(h.x + dx / d * 1.6, h.y + 1.7, h.z + dz / d * 1.6);
 
     this.updateBeams(cam);
-    if (this.coreLook) return;
-    // rim everyone (new cast members get patched the first time they show up) + contact shadows
-    const ppl = this.people(), mtx = new THREE.Matrix4(), s = new THREE.Vector3(), q = new THREE.Quaternion(), p = new THREE.Vector3();
-    let n = 0;
-    for (const o of ppl) {
-      this.rim(o);
-      if (n >= 24) continue;
-      const w = o.getWorldPosition(p);
-      const k = o === z.hero ? 1.25 : 1.1;
-      mtx.compose(p.set(w.x, w.y + 0.025, w.z), q, s.set(k, 1, k));
-      this.blobs.setMatrixAt(n++, mtx);
-    }
-    this.blobs.count = n;
-    this.blobs.instanceMatrix.needsUpdate = true;
   }
 
   /** Skip merged chunks lying wholly above the slice plane (ceilings, upper floors). */
@@ -336,7 +270,7 @@ export class ClubMood {
     if (r) [r.toneMapping, r.toneMappingExposure] = this.prevTone;
     if (this.vig) this.vig.remove();
     for (const m of this.chunks) m.visible = true;
-    for (const o of [this.pools, this.beams, this.blobs, this.fixtures, this.glows]) if (o) { o.geometry.dispose(); o.material.dispose(); }
+    for (const o of [this.pools, this.beams, this.fixtures, this.glows]) if (o) { o.geometry.dispose(); o.material.dispose(); }
     this.poche.dispose();
   }
 }

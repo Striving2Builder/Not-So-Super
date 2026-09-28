@@ -39,12 +39,29 @@ export function captureEmitters(scene) {
   return merged.slice(0, 80);
 }
 
+/**
+ * Drop the meshes a club's DRESS entry lists. The Velvet Lounge outlines every wall box and floor
+ * edge with hair-thin neon tubing that shimmers into dashed pink lines on a phone screen and reads
+ * as debug wireframe (40k triangles of it); its signs and stage ring keep their neon.
+ */
+export function dropMeshes(scene, key) {
+  const names = new Set((DRESS[key] || {}).drop || []), gone = [];
+  if (!names.size) return 0;
+  scene.traverse((o) => { if (o.isMesh && names.has(o.name)) gone.push(o); });
+  for (const o of gone) { o.removeFromParent(); o.geometry.dispose(); }
+  return gone.length;
+}
+
 // ---------------------------------------------------------------- materials
-// Per club: floor pattern scale, floor contrast, floor tint, padded walls (material name → colour).
+// Per club: floor pattern scale, floor contrast, floor tint, AO strength, padded walls (material
+// name → colour), meshes to drop (node names).
 const DRESS = {
   triangle: { floorScale: 1.6, contrast: 0.7, floorTint: 0xffffff, ao: 0.5 },
   clubhouse: { floorScale: 2.8, contrast: 0.45, floorTint: 0x8a6048, ao: 0.45 },
-  stripclub: { floorScale: 2.8, contrast: 0.5, floorTint: 0xb07868, ao: 0.45, padded: { 'BLISTERED PAINT': 0x1d4a2c } },
+  stripclub: {
+    floorScale: 2.8, contrast: 0.5, floorTint: 0xb07868, ao: 0.45, padded: { 'BLISTERED PAINT': 0x1d4a2c },
+    drop: ['walls002', 'walls003', 'walls005', 'Cube002', 'Cube_3'],
+  },
 };
 
 /** Club-wide AO map: dark where the floor bake found no room to stand (walls, bars, booths). */
@@ -110,8 +127,10 @@ function paddedTex() {
 }
 
 /** Mean colour of a texture (tiny canvas read), linear. */
+const averages = new WeakMap(); // (by image: texture clones share it)
 export function texAverage(tex) {
-  if (tex.userData.avg) return tex.userData.avg;
+  const img0 = tex.source || tex;
+  if (averages.has(img0)) return averages.get(img0);
   let c = new THREE.Color(0.5, 0.5, 0.5);
   const img = tex.image;
   if (img && img.width) {
@@ -125,7 +144,8 @@ export function texAverage(tex) {
       c = new THREE.Color().setRGB(r / 16 / 255, g / 16 / 255, b / 16 / 255, THREE.SRGBColorSpace);
     } catch (e) { /* unreadable: mid-grey */ }
   }
-  return (tex.userData.avg = c);
+  averages.set(img0, c);
+  return c;
 }
 
 /**
@@ -372,10 +392,11 @@ void main(){ gl_FragColor = vec4(vC * texture2D(map, gl_PointCoord).a, 1.0); }`,
 }
 
 /**
- * Pendant lamps hanging from the cut ceiling over the club's main lights: a dark conical shade,
- * a bright bulb and a cord up into the slice. One merged, unlit mesh (vertex colours).
+ * Lamps hanging just under the cut over the club's main lights. Seen from above a dark shade on a
+ * cord reads as a floor lamp on a pole, so they are glowing shades with an inked rim instead.
+ * One merged, unlit mesh (vertex colours).
  */
-export function pendants(list, clipY) {
+export function pendants(list) {
   const geos = [];
   const tint = (g, c) => {
     const n = g.attributes.position.count, a = new Float32Array(n * 3);
@@ -384,14 +405,12 @@ export function pendants(list, clipY) {
     for (const k of Object.keys(g.attributes)) if (!['position', 'color'].includes(k)) g.deleteAttribute(k);
     return g.index ? g.toNonIndexed() : g;
   };
-  const shadeC = new THREE.Color(0x2a2430), rimC = new THREE.Color(0x8a8078), cordC = new THREE.Color(0x08060a);
+  const ink = new THREE.Color(0x140c16), white = new THREE.Color(1, 1, 1);
   for (const p of list) {
-    const y = p.y;
-    const bulb = p.color.clone().lerp(new THREE.Color(1, 1, 1), 0.55).multiplyScalar(1.6);
-    geos.push(tint(new THREE.CylinderGeometry(0.05, 0.2, 0.18, 10, 1, true).translate(p.x, y, p.z), shadeC));
-    geos.push(tint(new THREE.CylinderGeometry(0.2, 0.2, 0.02, 10).translate(p.x, y - 0.09, p.z), rimC.clone().lerp(p.color, 0.5)));
-    geos.push(tint(new THREE.SphereGeometry(0.07, 8, 6).translate(p.x, y - 0.1, p.z), bulb));
-    geos.push(tint(new THREE.BoxGeometry(0.025, clipY - y + 0.2, 0.025).translate(p.x, (clipY + y) / 2 + 0.1, p.z), cordC));
+    const shade = p.color.clone().lerp(white, 0.35);
+    geos.push(tint(new THREE.CylinderGeometry(0.07, 0.24, 0.2, 12, 1, true).translate(p.x, p.y, p.z), shade));
+    geos.push(tint(new THREE.TorusGeometry(0.24, 0.018, 4, 16).rotateX(Math.PI / 2).translate(p.x, p.y - 0.1, p.z), ink));
+    geos.push(tint(new THREE.TorusGeometry(0.07, 0.015, 4, 10).rotateX(Math.PI / 2).translate(p.x, p.y + 0.1, p.z), ink));
   }
   if (!geos.length) return null;
   const merged = mergeAll(geos);
