@@ -65,7 +65,7 @@ if (rimK > 0.0) {
     // dots only in real shade, growing as it darkens (not a screen-door over everything)
     float htL = dot(reflectedLight.directDiffuse + reflectedLight.indirectDiffuse, LW) / base;
     vec2 htP = mat2(0.7071, -0.7071, 0.7071, 0.7071) * gl_FragCoord.xy / (4.0 * dpr);
-    float htR = clamp((0.42 - htL) * 1.3, 0.0, 0.6);
+    float htR = clamp((0.3 - htL) * 1.7, 0.0, 0.6);
     float htD = 1.0 - smoothstep(htR - 0.08, htR + 0.08, length(fract(htP) - 0.5) * 1.414);
     outgoingLight *= 1.0 - htD * htK * 0.6;
   }

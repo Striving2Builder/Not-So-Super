@@ -105,6 +105,7 @@ export function venueMats(zn, k) {
     M.mat = toon(0xffffff, { map: tex(128, 96, (g, w, h) => { g.fillStyle = '#232323'; g.fillRect(0, 0, w, h); g.strokeStyle = '#3a3a3a'; g.lineWidth = 3; for (let x = 4; x < w; x += 8) { g.beginPath(); g.moveTo(x, 4); g.lineTo(x, h - 4); g.stroke(); } hazardFill(g, 0, 0, w, 8, 6); hazardFill(g, 0, h - 8, w, 8, 6); }) });
     M.door = doorMat('#6a7480', 'RESTRICTED');
     M.hazard = toon(0xffffff, { map: hazardTex() }, { halftone: 0 });
+    M.backdrop = { color: 0x2c2e33 }; // the yard outside: asphalt
     M.lights = () => rig(zn, { sky: 0xb0bcd8, ground: 0x2a2620, hemi: 0.7, amb: 0.1, key: 0xffd8a8, keyK: 1.05 });
   } else if (k === 'penthouse') {
     // floor-to-ceiling glass; bronze frames; the city far below
@@ -137,6 +138,7 @@ export function venueMats(zn, k) {
     M.mat = toon(0x3a1420);
     M.door = doorMat('#2a2a34', 'PRIVATE', '#d0a848');
     M.hazard = toon(0xd0a848, { emissive: 0x3a2a08 }, { halftone: 0 });
+    M.backdrop = false; // forty floors up: the skyline band and the city lights below
     M.lights = () => rig(zn, { sky: 0x8aa4f0, ground: 0x4a3a30, hemi: 0.75, amb: 0.1, key: 0xffd6a8, keyK: 1.0 });
   } else {
     // lair: riveted bunker panels, a toxic-green glow in the floor grates
@@ -186,6 +188,7 @@ export function venueMats(zn, k) {
     M.mat = toon(0x1a201c);
     M.door = doorMat('#2e3a34', 'LAB 0', '#a0ff39');
     M.hazard = toon(0xffffff, { map: hazardTex('#a0ff39') }, { halftone: 0 });
+    M.backdrop = { color: 0x1a2016 }; // cave rock
     M.lights = () => rig(zn, { sky: 0x9ff0b8, ground: 0x5a1048, hemi: 0.8, amb: 0.08, key: 0xb8ffc8, keyK: 0.95 });
   }
   return M;

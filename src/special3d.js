@@ -68,7 +68,7 @@ export class Special3D {
       code: String(1000 + Math.floor(Math.random() * 9000)),
       colliders: [], inter: [], guards: [], anims: [], hidden: [], itemSpots: [], evidence: [], captives: [], cast: [],
       // per-zone references: this object is reused for every zone, so nothing may carry over
-      boss: null, informant: null, near: null, _lastGood: null, nl: null, castRim: null,
+      boss: null, informant: null, near: null, _lastGood: null, nl: null, castRim: null, backdrop: null, particles: [],
     });
     const S = (this.scene = new THREE.Scene());
     S.background = new THREE.Color(this.V.bg);
