@@ -16,6 +16,7 @@ import { sfx } from './sfx.js';
 import { quality } from './settings.js';
 import { STEP, DOWN, capsulePush, buildCollider, scanFloor, unpackFloor, mergeStatic } from './clubgeo.js';
 import { ClubMood } from './clubmood.js';
+import { captureEmitters } from './clubdress.js';
 
 // Premade clubs. Add more by exporting another .blend with tools/export_club.py, then run
 // tools/bake_clubs.js to make the lite (512 px textures) copy and bake the walkable floor.
@@ -92,6 +93,7 @@ function entryFor(key) {
         o.frustumCulled = true;
         if (q.clubMaterials !== 'full') o.material = Array.isArray(o.material) ? o.material.map(simple) : simple(o.material);
       });
+      scene.userData.emitters = captureEmitters(scene); // where the neon is, before merging blurs it
       collapseDetail(scene, q.clubMaterials);
       scene.userData.chunks = mergeStatic(scene); // hundreds of props → a few dozen draw calls
       e.stage = 'Building the club';
@@ -206,6 +208,9 @@ function collapseDetail(scene, level) {
     const g = o.geometry.clone();
     const col = m.color.clone();
     if (textured) col.multiply(avgColor(m.map));
+    // untextured white (doors, plinths, the pole stage) blows out under club lights: tone it down
+    const lum = col.r * 0.3 + col.g * 0.59 + col.b * 0.11;
+    if (lum > 0.45) col.multiplyScalar(0.45 / lum);
     const n = g.attributes.position.count, arr = new Float32Array(n * 3), old = g.attributes.color;
     for (let i = 0; i < n; i++) {
       const k = old ? [old.getX(i), old.getY(i), old.getZ(i)] : [1, 1, 1];
