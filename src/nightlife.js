@@ -6,7 +6,8 @@
 //   nlcrowd.js  instanced patrons
 //   nlclub.js / nlgents.js / nlredlight.js / nlcasino.js   one venue each
 import { makeKit, buildKit, beat } from './nlkit.js';
-import { styleRoom, paintFloorGlow } from './nlroom.js';
+import { toon } from './look3d.js';
+import { styleRoom, paintFloorGlow, officeProps, dressOffice } from './nlroom.js';
 import { buildCrowd, updateCrowd } from './nlcrowd.js';
 import { nightclub } from './nlclub.js';
 import { gentlemens } from './nlgents.js';
@@ -40,6 +41,7 @@ export function decorateNightlife(zn, k, h) {
     // glasses along the bar, clear of its three item spots
     for (const z of [-5.6, -2.6, 0.6, 3.7]) X.tableTop(-12.75, z, 1.16, ['glass', 'glass'], 0.12);
   } else v.build(zn, X, h);
+  officeProps(X);
   paintFloorGlow(X.room, X.paint);
   buildKit(X);
   X.crowd = buildCrowd(zn, X.people);
@@ -50,13 +52,15 @@ export function updateNightlife(zn, dt) {
   const nl = zn.nl;
   if (!nl || !nl.X) return;
   const X = nl.X, t = zn.t, B = beat(t, nl.bpm);
+  if (!nl.officeDressed) { nl.officeDressed = true; dressOffice(zn, toon); }
   for (const f of X.fx) f(t, dt, B);
   if (X.crowd) updateCrowd(X.crowd, zn, t, dt, B);
   if (X.bulbPts) {
     const a = X.bulbPts.geometry.attributes.color, arr = a.array;
     X.bulbs.forEach((b, i) => {
       if (b.flame) b.c.copy(b.base).multiplyScalar(0.7 + 0.2 * Math.sin(t * 13 + i * 5) + 0.1 * Math.sin(t * 31 + i));
-      arr[i * 3] = b.c.r; arr[i * 3 + 1] = b.c.g; arr[i * 3 + 2] = b.c.b; });
+      arr[i * 3] = b.c.r; arr[i * 3 + 1] = b.c.g; arr[i * 3 + 2] = b.c.b;
+    });
     a.needsUpdate = true;
   }
   X.glow.flush(); X.signs.flush();

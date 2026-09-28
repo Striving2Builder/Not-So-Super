@@ -284,3 +284,56 @@ export function paintFloorGlow(room, list) {
   m.emissive = C(0xffffff); m.emissiveMap = t; m.emissiveIntensity = 1;
   m.needsUpdate = true;
 }
+
+// ------------------------------------------------------------------ the back office
+/** Office set dressing that's static (decorate time): a banker's lamp on the desk, a rug. */
+export function officeProps(X) {
+  X.prop(new THREE.BoxGeometry(4.2, 0.012, 2.8).translate(20, 0.006, 0.2), 0x3a0c14);
+  X.prop(new THREE.BoxGeometry(3.8, 0.014, 2.4).translate(20, 0.008, 0.2), 0x6a1a24);
+  X.prop(new THREE.CylinderGeometry(0.08, 0.1, 0.04, 8).translate(19.1, 0.82, 0.3), 0xc09a34);
+  X.prop(new THREE.CylinderGeometry(0.012, 0.012, 0.3, 4).translate(19.1, 0.98, 0.3), 0xc09a34);
+  X.prop(new THREE.CylinderGeometry(0.05, 0.14, 0.1, 10, 1, true).rotateZ(Math.PI / 2).translate(19.2, 1.14, 0.3), 0x0e5a2a);
+  X.bulb(19.25, 1.1, 0.3, 0.6, 0xffe0a0);
+  X.pool(19.4, 0.4, 1.3, 0xffd890, 0.3);
+  X.prop(new THREE.BoxGeometry(0.34, 0.012, 0.24).rotateY(0.3).translate(20.6, 0.81, 0.35), 0xf0ead8);
+}
+
+// The office's gameplay furniture (built by the zone after decoration) gets real faces on its
+// first frame: a CCTV monitor, a wood desk, and a front for each searchable container.
+const FACES = {
+  'Filing Cabinet': (c, w) => { for (let i = 0; i < 4; i++) { const y = 8 + i * 62; c.strokeStyle = 'rgba(0,0,0,.5)'; c.lineWidth = 4; c.strokeRect(10, y, w - 20, 54); c.fillStyle = '#d8d8d8'; c.fillRect(w / 2 - 18, y + 22, 36, 8); } },
+  'Staff Locker': (c, w, h) => { c.strokeStyle = 'rgba(0,0,0,.5)'; c.lineWidth = 4; c.strokeRect(8, 8, w - 16, h - 16); for (let i = 0; i < 5; i++) { c.fillStyle = 'rgba(0,0,0,.55)'; c.fillRect(30, 20 + i * 10, w - 60, 4); } c.fillStyle = '#d0d0d0'; c.fillRect(w - 30, h / 2, 8, 30); },
+  'Wall Safe': (c, w, h) => { c.strokeStyle = 'rgba(0,0,0,.6)'; c.lineWidth = 6; c.strokeRect(10, 40, w - 20, h - 80); c.fillStyle = '#a0a0a8'; c.beginPath(); c.arc(w / 2, h / 2, 26, 0, TAU); c.fill(); c.fillStyle = '#333'; c.beginPath(); c.arc(w / 2, h / 2, 16, 0, TAU); c.fill(); c.fillStyle = '#c09a34'; c.fillRect(w - 34, h / 2 - 4, 20, 8); },
+  'Desk Drawer Unit': (c, w) => { for (let i = 0; i < 3; i++) { const y = 10 + i * 80; c.strokeStyle = 'rgba(0,0,0,.5)'; c.lineWidth = 4; c.strokeRect(10, y, w - 20, 72); c.fillStyle = '#c09a34'; c.fillRect(w / 2 - 14, y + 32, 28, 8); } },
+};
+export function dressOffice(zn, toon) {
+  for (const o of zn.containers || []) {
+    const face = FACES[o.name];
+    if (!face) continue;
+    const base = '#' + o.mesh.material.color.getHexString();
+    o.mesh.material.dispose();
+    o.mesh.material = toon(0xffffff, { map: tex(cnv(128, 256, (c, w, h) => { c.fillStyle = base; c.fillRect(0, 0, w, h); speckle(c, w, h, 300, 0.06); face(c, w, h); })) });
+  }
+  zn.scene.traverse((m) => {
+    if (!m.isMesh || m.geometry.type !== 'BoxGeometry' || Math.abs(m.position.x - 20) > 0.01) return;
+    const old = m.material;
+    if (Math.abs(m.position.y - 0.4) < 0.01) { // the desk: wood with a green leather top
+      m.material = toon(0xffffff, { map: tex(cnv(128, 64, (c, w, h) => {
+        c.fillStyle = '#4a2410'; c.fillRect(0, 0, w, h);
+        c.strokeStyle = 'rgba(0,0,0,.25)'; for (let y = 2; y < h; y += 5) { c.beginPath(); c.moveTo(0, y + rnd(-1, 1)); c.lineTo(w, y + rnd(-1, 1)); c.stroke(); }
+        c.fillStyle = '#1e6a3a'; c.fillRect(8, 8, w - 16, h - 16);
+      })) });
+    } else if (Math.abs(m.position.y - 1.0) < 0.01) { // the monitor: a CCTV wall
+      m.material = new THREE.MeshBasicMaterial({ map: tex(cnv(128, 96, (c, w, h) => {
+        c.fillStyle = '#050a08'; c.fillRect(0, 0, w, h);
+        for (let i = 0; i < 4; i++) {
+          const x = (i % 2) * 64 + 3, y = Math.floor(i / 2) * 48 + 3, g = c.createLinearGradient(x, y, x + 58, y + 42);
+          g.addColorStop(0, '#2a5a4a'); g.addColorStop(1, '#0a2a20'); c.fillStyle = g; c.fillRect(x, y, 58, 42);
+          c.fillStyle = '#ff3030'; c.fillRect(x + 4, y + 4, 4, 4);
+        }
+        c.fillStyle = 'rgba(0,0,0,.35)'; for (let y = 0; y < h; y += 3) c.fillRect(0, y, w, 1);
+      })) });
+    }
+    if (m.material !== old) old.dispose();
+  });
+}
