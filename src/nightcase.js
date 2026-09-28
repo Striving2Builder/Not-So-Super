@@ -13,6 +13,7 @@ import { dialog, toast, banner, flash } from './ui.js';
 import { npcLook, portrait } from './art.js';
 import { sfx } from './sfx.js';
 import { quality } from './settings.js';
+import { NightScan } from './nightscan.js';
 import { randomPerson } from './casefile.js';
 
 const CONTAINERS = ['Locked Cash Box', 'Staff Locker', 'Sealed Crate', 'Floor Safe', 'DJ Flight Case'];
@@ -258,6 +259,22 @@ export class NightCase extends ClubZone {
     this.tipGiven = true;
     await dialog({ speaker: inf.name, portrait: portrait(inf.look), text: '"Word is there\'s another job going down tonight. I\'ll mark it on your map."' });
     unlockLead(this.g, 'Informant tip');
+  }
+
+  // ------------------------------------------------------------------ detective vision
+  setXray(on) {
+    super.setXray(on);
+    if (this.xray || this.scan) (this.scan || (this.scan = new NightScan(this))).set(this.xray);
+  }
+
+  render() {
+    super.render();
+    if (this.scan) this.scan.draw(this.t);
+  }
+
+  exit() {
+    if (this.scan) { this.scan.dispose(); this.scan = null; }
+    super.exit();
   }
 
   // ------------------------------------------------------------------ flow
