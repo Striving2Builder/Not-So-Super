@@ -36,10 +36,11 @@ export const CLIPS = {
 };
 
 let R = null; // shared renderer state, built on first use
+const MAX_FRAMES = 360; // ~8 crook looks' worth of frames; older zones' bakes are evicted first
 
 function setup() {
   const q = quality();
-  const H = q.id === 'saver' ? 180 : 256, W = H; // square: lying bodies and kicks need the width
+  const H = q.brawlSprite || 256, W = H; // square: lying bodies and kicks need the width
   const canvas = document.createElement('canvas');
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(1);
@@ -136,6 +137,7 @@ export function frame(type, anim, u) {
   }
   f = bake(type, C, i);
   R.cache.set(key, f);
+  if (R.cache.size > MAX_FRAMES) R.cache.delete(R.cache.keys().next().value); // bounded: oldest bake goes first
   return f;
 }
 
