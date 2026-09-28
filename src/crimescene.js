@@ -369,10 +369,6 @@ export function paintXrayStructure(g, key, v, t) {
   g.fillStyle = 'rgba(200,255,230,.9)';
   for (let k = 0; k < 6; k++) { const px = ((t * 160 + k * 230) % 1400) - 200; g.fillRect(px - 5, jy - 2, 10, 4); }
   for (const ox of L.outlets) { g.strokeStyle = 'rgba(140,255,200,.8)'; g.lineWidth = 2; g.strokeRect(ox - 9, FLOOR - 46, 18, 24); }
-  // water pipe
-  g.strokeStyle = 'rgba(90,150,255,.45)'; g.lineWidth = 6; g.beginPath();
-  g.moveTo(-200, FLOOR - 60); g.lineTo(90, FLOOR - 60); g.lineTo(90, CEIL); g.moveTo(90, FLOOR - 60); g.lineTo(900, FLOOR - 60); g.lineTo(900, FLOOR + 400);
-  g.stroke();
   g.restore();
 }
 

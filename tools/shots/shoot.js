@@ -55,9 +55,10 @@ const AREAS = {
     shops: { type: 'brawl', crime: 'robbery', district: 'retail', clock: 13 * 60, crowd: true, god: true },
   },
   investigation: {
-    daycase: { type: 'investigate', setting: 'casino' },
-    dayoffice: { type: 'investigate', setting: 'office', moments: true },
-    dayalley: { type: 'investigate', setting: 'alley' },
+    daycase: { type: 'investigate', setting: 'rigged' },          // setting = case id (data.js CASES)
+    dayoffice: { type: 'investigate', setting: 'blackmail', moments: true },
+    dayalley: { type: 'investigate', setting: 'smuggle' },
+    dayarson: { type: 'investigate', setting: 'arson' },
     nightcase: { ...Z3('nightcase', 'Triangle Club'), clues: true },
   },
   nightlife: {
@@ -105,7 +106,7 @@ async function start3d(page, z) {
     if (z.kind === 'asylum') zone = ow.spawn('asylum', true);
     else if (z.kind === 'nightcase') {
       for (let i = 0; i < 40 && !(zone && zone.mode === 'nightcase'); i++) { g.state.clock = 23 * 60; zone = ow.spawn('case', true); }
-      if (zone) zone.venue = z.venue || zone.venue;
+      if (zone && z.venue && z.venue !== zone.venue) { zone.name = zone.name.replace(zone.venue, z.venue); zone.lockKey = z.venue; zone.venue = z.venue; }
     } else zone = ow.spawn('special', true, z.venue);
     if (!zone) throw new Error('could not spawn ' + JSON.stringify(z));
     if ('boss' in z && z.kind === 'special') { zone.boss = z.boss; }
@@ -186,11 +187,11 @@ async function shootBrawl(page, dir, name, sc = {}) {
 }
 
 async function shootInvestigate(page, dir, name, setting, moments) {
-  await page.evaluate((setting) => {
+  await page.evaluate(async (caseId) => {
     const g = window.__game; g.setMode('overworld');
     let z = null;
     for (let i = 0; i < 40 && !(z && z.mode === 'investigate'); i++) { g.state.clock = 12 * 60; z = g.overworld.spawn('case', true); }
-    if (setting) z.def = { ...z.def, setting };
+    if (caseId) { const def = (await import('/src/data.js')).CASES.find((c) => c.id === caseId); if (def) { z.def = def; z.name = def.name; } }
     g.startZone(z);
   }, setting);
   await page.waitForTimeout(2500);
