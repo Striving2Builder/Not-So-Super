@@ -10,7 +10,7 @@ import { AirEvents } from './airevents.js';
 import { Paparazzi } from './paparazzi.js';
 import { Navigator } from './nav.js';
 import { CityFeed } from './cityfeed.js';
-import { stepFlight, stepAltitude, speedFraction, cameraZoom, cameraLead, FLIGHT, BANDS, CRUISE_BAND, CAM_ABOVE } from './flight.js';
+import { stepFlight, stepAltitude, speedFraction, cameraZoom, cameraLead, FLIGHT, BANDS, CRUISE_BAND, CAM_ABOVE, camAbove } from './flight.js';
 import { Airspace } from './airspace.js';
 import { drawAtmosphere, FOG_Z } from './atmosphere.js';
 import { Sky, SpeedFX } from './sky.js';
@@ -397,7 +397,7 @@ export class Overworld {
       h.x = lerp(d.sx, d.z.x + d.ox * (1 - f * 0.3), e); h.y = lerp(d.sy, d.z.y + d.oy * (1 - f * 0.3), e);
       h.z = lerp(d.z0, 30, f * f);
       this.zoom = lerp(d.zoom0, 1.6, e);
-      this.camH = h.z + CAM_ABOVE;
+      this.camH = h.z + camAbove(h.z);
       this.cam.x = h.x; this.cam.y = h.y - this.tiltOffset();
       this.fx.setRush(f);
       if (f > 0.88 && !d.impact) {
@@ -415,7 +415,7 @@ export class Overworld {
       const e = easeOut(Math.min(1, this.rising / 1.1));
       h.z = lerp(40, BANDS[h.band].z, e);
       this.zoom = lerp(1.6, 1, e);
-      this.camH = h.z + CAM_ABOVE;
+      this.camH = h.z + camAbove(h.z);
       if (this.rising >= 1.1) this.rising = null;
     }
 
@@ -436,7 +436,7 @@ export class Overworld {
     if (!this.attract) this.altitudeInput(inp, a);
     const ev = stepFlight(h, h.perch ? { x: 0, y: 0 } : a, boost && !h.perch, dt, BANDS[h.band].speedMul);
     if (this.rising === null) stepAltitude(h, dt);
-    this.camH += (h.z + CAM_ABOVE - this.camH) * Math.min(1, dt * 4);
+    this.camH += (h.z + camAbove(h.z) - this.camH) * Math.min(1, dt * 4);
     // perched = standing on the roof; rising out of a zone = the camera move owns her position
     if (h.z < 300 && !h.perch && this.rising === null) this.collideBuildings(h);
     h.x = clamp(h.x, 0, city.W);
