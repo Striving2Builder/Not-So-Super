@@ -8,6 +8,7 @@
 import { BLOCK, ROAD, LOT } from './city.js';
 import { DISTRICTS } from './data.js';
 import { hash2 } from './rng.js';
+import { shade } from './util.js';
 
 const glowCache = new Map();
 /** A soft radial glow sprite in `color` (#rrggbb), built once per colour. */
@@ -90,6 +91,7 @@ export class CityArt {
       for (let j = 0; j < TILE; j++) for (let i = 0; i < TILE; i++) this.paintGround(g, tx * TILE + i, ty * TILE + j, tx * TILE * BLOCK, ty * TILE * BLOCK);
       // Night tiles have the street lights baked in (they switch on at dusk), pre-brightened to
       // survive the night veil drawn over the whole scene: no extra full-screen light pass.
+      if (lit) { g.fillStyle = 'rgba(4,6,24,.35)'; g.fillRect(0, 0, c.width, c.height); }
       if (lit) for (let j = 0; j < TILE; j++) for (let i = 0; i < TILE; i++) this.paintLights(g, tx * TILE + i, ty * TILE + j, tx * TILE * BLOCK, ty * TILE * BLOCK, 1.7);
       e = { c, f: frame };
       this.painted++;
@@ -181,11 +183,19 @@ export class CityArt {
       if (nb) for (const o of nb.b) if (!o.truck) shadowPath(g, o);
     }
     g.save();
-    g.fillStyle = 'rgba(8,10,34,.34)'; g.fill();
+    g.fillStyle = 'rgba(6,8,32,.5)'; g.fill();
     g.clip();
     g.setTransform(1, 0, 0, 1, 0, 0); // halftone in canvas pixels, so the dots stay crisp and even
     g.fillStyle = g.createPattern(halftone(), 'repeat'); g.fillRect(0, 0, g.canvas.width, g.canvas.height);
     g.restore();
+    // Trees are baked in too (they barely lean at their height): inked canopies over their shadows.
+    for (const o of b.b) {
+      if (o.kind !== 'tree') continue;
+      g.fillStyle = shade(o.col, -0.25); g.beginPath(); g.arc(o.x, o.y, o.rad, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = '#0b1a0e'; g.lineWidth = 1.2; g.stroke();
+      g.fillStyle = o.col; g.beginPath(); g.arc(o.x - o.rad * 0.2, o.y - o.rad * 0.2, o.rad * 0.72, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(255,255,220,.18)'; g.beginPath(); g.arc(o.x - o.rad * 0.35, o.y - o.rad * 0.35, o.rad * 0.3, 0, Math.PI * 2); g.fill();
+    }
     if (farm) {
       // tractor tracks: a dirt road edge instead of a curb
       g.strokeStyle = 'rgba(90,70,40,.5)'; g.lineWidth = 3; g.strokeRect(x0 - 3, y0 - 3, LOT + 6, LOT + 6);

@@ -788,7 +788,7 @@ export class Overworld {
       if (img) ctx.drawImage(img, SX(tx * TW), SY(ty * TW), TS, TS);
     }
     const blds = [];
-    for (let by = by0; by <= by1; by++) for (let bx = bx0; bx <= bx1; bx++) for (const o of city.block(bx, by).b) blds.push(o);
+    for (let by = by0; by <= by1; by++) for (let bx = bx0; bx <= bx1; bx++) for (const o of city.block(bx, by).b) if (o.kind !== 'tree') blds.push(o); // trees are baked into the ground tiles
     // Aerial perspective: the higher she flies, the more the street sinks into haze under the roofs.
     const haze = clamp((camH - 950) / 700, 0, 1) * (rich ? LOOK.haze : LOOK.hazeSaver);
     if (haze > 0.01) {
