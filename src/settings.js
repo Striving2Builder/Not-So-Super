@@ -25,6 +25,7 @@ export const PROFILES = {
     look3d: 'full',
     flyDetail: true, flyTileRes: 144,
     scanFilter: true,
+    brawlSprite: 256, brawlBakeMs: 900,
   },
   // phones/tablets that keep up: full frame rate, but lite club textures (memory is what runs out)
   balanced: {
@@ -33,6 +34,7 @@ export const PROFILES = {
     look3d: 'lite',
     flyDetail: true, flyTileRes: 144,
     scanFilter: true,
+    brawlSprite: 256, brawlBakeMs: 900,
   },
   // older devices / low-power mode: 30 fps, 1× resolution, cheap club materials
   saver: {
@@ -41,6 +43,7 @@ export const PROFILES = {
     look3d: 'min',
     flyDetail: false, flyTileRes: 96,
     scanFilter: false,
+    brawlSprite: 180, brawlBakeMs: 250,
   },
 };
 
