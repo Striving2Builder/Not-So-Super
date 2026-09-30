@@ -11,7 +11,7 @@ import { banner, toast } from './ui.js';
 import { comic } from './comic.js';
 import { quality } from './settings.js';
 import { Stage } from './brawlstage.js';
-import { spriteBudget, prewarm, LOOKS, VARIANTS } from './brawlsprite.js';
+import { spriteBudget, prewarm, CORE_ANIMS, LOOKS, VARIANTS } from './brawlsprite.js';
 import { EN, DZ } from './brawldata.js';
 import { actorDraw } from './brawlactors.js';
 import { fxDraw } from './brawlfx.js';
@@ -88,7 +88,8 @@ export class Brawler {
     // left over trickles in during the banner.
     this.warm = this.bossWarm = false;
     spriteBudget(quality().brawlBakeMs || 900);
-    this.warm = prewarm(this.firstLooks) && prewarm(this.looks.filter((l) => LOOKS[l].model !== 'riddler'));
+    this.warm = false;
+    this.coreWarm = prewarm(this.firstLooks, CORE_ANIMS);
 
     g.input.setStick(true);
     g.input.setButtons([
@@ -728,11 +729,12 @@ export class Brawler {
     this.geom();
     const k = this.k;
     const night = g.state.night;
-    // sprite bakes: a burst while the first wave piles in, then a trickle
-    // Sprite bakes: a big burst while the banner plays and the first wave piles in, then ~one per frame.
-    // The boss (a heavy model) is baked on the walk between waves, never mid-fight.
+    // Sprite bakes (time-budgeted): the first wave's core clips during the intro; the rest (falls,
+    // get-ups, later crews, the heavy boss model) on the walk between fights. Mid-fight only a frame
+    // that's actually on screen gets baked.
     spriteBudget(this.t < 3 ? 45 : 3);
-    if (!this.warm) this.warm = prewarm(this.firstLooks) && prewarm(this.looks.filter((l) => LOOKS[l].model !== 'riddler'));
+    if (!this.coreWarm && this.t < 3) this.coreWarm = prewarm(this.firstLooks, CORE_ANIMS);
+    else if (!this.warm && !this.lock) this.warm = prewarm(this.looks.filter((l) => LOOKS[l].model !== 'riddler'));
     else if (!this.bossWarm && !this.lock) this.bossWarm = prewarm(this.looks);
     ctx.save();
     if (this.shake > 0) {

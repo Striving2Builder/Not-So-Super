@@ -35,15 +35,15 @@ export const VARIANTS = {
 
 // Clip sampling: loops get N evenly spaced frames; one-shots map u∈[0,1] onto [a,b] seconds in N steps.
 export const CLIPS = {
-  walk:   { clip: 'walk', loop: true, n: 8 },
-  run:    { clip: 'run', loop: true, n: 6 },
+  walk:   { clip: 'walk', loop: true, n: 6 },
+  run:    { clip: 'run', loop: true, n: 5 },
   idle:   { clip: 'combatIdle', loop: true, n: 4 },
   wind:   { clip: 'punch', a: 0.95, b: 1.3, n: 2 },
   strike: { clip: 'punch', a: 1.4, b: 1.7, n: 2 },
   kick:   { clip: 'kick2', a: 0.3, b: 1.0, n: 3 },
   hit:    { clip: 'hit', a: 0.15, b: 0.6, n: 2 },
-  fall:   { clip: 'fallFlat', a: 0.02, b: 0.9, n: 5, shift: 0.5 },
-  getup:  { clip: 'getUp', a: 0.6, b: 4.3, n: 4, shift: 0.5 },
+  fall:   { clip: 'fallFlat', a: 0.02, b: 0.9, n: 4, shift: 0.5 },
+  getup:  { clip: 'getUp', a: 0.6, b: 4.3, n: 3, shift: 0.5 },
   jump:   { clip: 'jump', a: 0.3, b: 1.2, n: 2 },
 };
 
@@ -158,9 +158,11 @@ export function frame(type, anim, u) {
  * Bake ahead within this frame's budget, breadth-first (every type's walk and idle before anyone's
  * getup) so the first wave never shows stand-ins. Returns true once everything listed is baked.
  */
-export function prewarm(types) {
+export const CORE_ANIMS = ['walk', 'idle', 'wind', 'strike', 'hit'];
+const ALL_ANIMS = [...CORE_ANIMS, 'fall', 'run', 'getup', 'kick', 'jump'];
+export function prewarm(types, anims = ALL_ANIMS) {
   if (!R) { if (!types.some(spritesReady)) return false; setup(); }
-  for (const anim of ['walk', 'idle', 'wind', 'strike', 'hit', 'fall', 'run', 'getup', 'kick', 'jump']) {
+  for (const anim of anims) {
     for (const t of types) {
       if (!spritesReady(t) || (anim === 'kick' && !LOOKS[t].kick)) continue;
       const C = CLIPS[anim];
