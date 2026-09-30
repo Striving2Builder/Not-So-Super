@@ -63,6 +63,8 @@ const venue = argv[0] || 'Warehouse';
       key: (on) => { window.__game.mode.key.visible = on; },
       office: (on) => { const m = window.__game.mode; m.scene.traverse((o) => { if (o.isPointLight && !m.plights.includes(o)) o.visible = on; }); },
       floorTex: (on) => { const m = window.__game.mode; m.scene.traverse((o) => { const x = o.material; if (x && x.map && x.map.image && x.map.image.width === 1024) { x.userData._m = x.userData._m || [x.map, x.emissiveMap]; x.map = on ? x.userData._m[0] : null; x.emissiveMap = on ? x.userData._m[1] : null; x.needsUpdate = true; } }); },
+      coneShape: (on) => { const m = window.__game.mode; if (on) delete m.shapeCone; else m.shapeCone = () => {}; },
+      heroHull: (on) => window.__game.mode.hero.traverse((o) => { if (o.userData.ink) o.visible = on; }),
       particles: (on) => window.__game.mode.particles.forEach((p) => { p.mesh.visible = on; }),
       backdrop: (on) => window.__game.mode.scene.traverse((o) => { if (o.userData.backdrop) o.visible = on; }),
       glass: (on) => window.__game.mode.scene.traverse((o) => { if (o.isMesh && o.material && o.material.transparent && !o.userData.ink && o.material.type !== 'ShaderMaterial') o.visible = on; }),

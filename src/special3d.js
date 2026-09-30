@@ -21,6 +21,9 @@ import { venueMats, VENUE_KINDS } from './venues3d.js';
 
 export { CAM_DIST, CAM_PITCHES } from './zonekit.js';
 
+// The code-built venues' floor plan bounds (main hall, back room, office; see rooms3d.js).
+const FOOTPRINT = { min: { x: -15, z: -22 }, max: { x: 25, z: 12 } };
+
 export class Special3D {
   constructor(g) { this.g = g; }
 
@@ -165,7 +168,10 @@ export class Special3D {
     const bg = S.background && S.background.isColor ? S.background.clone() : new THREE.Color(0x101014);
     const color = bd && bd.color !== undefined ? new THREE.Color(bd.color) : bg.clone().lerp(new THREE.Color(0x3a3a44), 0.25);
     const y = bd && bd.y !== undefined ? bd.y : this.club && this.club.box ? this.club.box.min.y - 0.06 : -0.04;
-    S.add(groundBackdrop(color, y));
+    // leave out what the building's own floors cover (inset so no seam shows at the walls)
+    const fp = this.club && this.club.box ? this.club.box : this.vmats ? FOOTPRINT : null;
+    const hole = fp ? [fp.min.x + 0.6, fp.max.x - 0.6, fp.min.z + 0.6, fp.max.z - 0.6] : null;
+    S.add(groundBackdrop(color, y, { hole }));
   }
 
   /** Should the boss confrontation start now? */

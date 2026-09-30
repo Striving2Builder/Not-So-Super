@@ -374,7 +374,7 @@ let groundTex = null;
  * The ground the building stands on, out to the fog: no room ever floats in black nothing.
  * Unlit (one cheap draw call), tinted per venue, fades into the scene fog.
  */
-export function groundBackdrop(color, y = -0.03, { size = 140, grid = true } = {}) {
+export function groundBackdrop(color, y = -0.03, { size = 140, grid = true, hole = null } = {}) {
   if (!groundTex) {
     groundTex = (() => {
       const c = document.createElement('canvas'); c.width = c.height = 256;
@@ -396,8 +396,22 @@ export function groundBackdrop(color, y = -0.03, { size = 140, grid = true } = {
     })();
   }
   const map = groundTex.clone(); map.needsUpdate = true; map.repeat.set(size / 8, size / 8);
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ color, map: grid ? map : null }));
+  // `hole` = [minX, maxX, minZ, maxZ]: the building's footprint is left out, so the ground is
+  // only rasterised where it can actually show (a full-screen plane under the floors cost ~15%
+  // on software-rendered phones even with the depth test rejecting it).
+  const h = size / 2, [x0, x1, z0, z1] = hole || [0, 0, 0, 0];
+  const quads = hole ? [[-h, h, -h, z0], [-h, h, z1, h], [-h, x0, z0, z1], [x1, h, z0, z1]] : [[-h, h, -h, h]];
+  const pos = [], uv = [], idx = [];
+  for (const [a, b, c, d] of quads) {
+    const n = pos.length / 3;
+    for (const [x, z] of [[a, c], [b, c], [b, d], [a, d]]) { pos.push(x, 0, z); uv.push(x / size + 0.5, z / size + 0.5); }
+    idx.push(n, n + 2, n + 1, n, n + 3, n + 2);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, map: grid ? map : null }));
   m.position.y = y;
   m.renderOrder = 5; // after the rooms: depth rejects every pixel the floors already cover
   m.raycast = () => {};
