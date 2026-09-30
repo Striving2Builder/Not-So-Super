@@ -1,23 +1,23 @@
 // Mood for the premade clubs: coloured lighting from the club's own light list, fake light pools
-// and beams, neon that glows, haze, a grade, and characters that pop off the room (rim light,
-// contact shadows). Everything here is cheap on a phone: the pools, beams and shadows are one
-// draw call each, and only a few real lights exist; they follow her round the club.
+// and beams, haze and a grade. Characters' shadows/rim/ink come from the shared look (look3d.js):
+// the club only lends it a rim colour. Cheap on a phone: pools and beams are one draw call each,
+// and only a few real lights exist; they follow her round the club.
 import * as THREE from 'three';
 import { quality } from './settings.js';
 import { DOWN } from './clubgeo.js';
+import { dressMaterials, Poche, glowPoints, pendants } from './clubdress.js';
 
 // Per club: grade (exposure), haze colour/density, ambient fill, rim colour, pool/beam/neon strength.
 const MOODS = {
-  triangle: { exposure: 1.25, haze: 0x12081e, density: 0.03, sky: 0x5a6cff, ground: 0x3a1638, hemi: 0.55, amb: 0.1, rim: 0x8fe0ff, pools: 0.8, beams: 0.5, neon: 3, light: 1 },
-  clubhouse: { exposure: 1.05, haze: 0x0c0608, density: 0.035, sky: 0x8a90ff, ground: 0x2a0e0a, hemi: 0.3, amb: 0.05, rim: 0xffc070, pools: 0.7, beams: 0.45, neon: 3, light: 1 },
-  stripclub: { exposure: 1.2, haze: 0x1a0614, density: 0.032, sky: 0xff4fb0, ground: 0x2a0a1a, hemi: 0.45, amb: 0.08, rim: 0xff90e0, pools: 0.85, beams: 0.55, neon: 2.5, light: 1.1 },
+  triangle: { exposure: 1.25, haze: 0x12081e, density: 0.03, sky: 0x5a6cff, ground: 0x3a1638, hemi: 0.55, amb: 0.1, rim: 0x8fe0ff, pools: 0.8, beams: 0.5, light: 1, poche: 0x1a0f22 },
+  clubhouse: { exposure: 1.05, haze: 0x0c0608, density: 0.035, sky: 0x8a90ff, ground: 0x2a0e0a, hemi: 0.3, amb: 0.05, rim: 0xffc070, pools: 0.7, beams: 0.45, light: 1, poche: 0x1c1310 },
+  stripclub: { exposure: 1.2, haze: 0x1a0614, density: 0.032, sky: 0xff4fb0, ground: 0x2a0a1a, hemi: 0.45, amb: 0.08, rim: 0xff90e0, pools: 0.85, beams: 0.55, light: 1.1, poche: 0x200e18 },
 };
 const DEFAULT_MOOD = MOODS.triangle;
 
-// real point lights (besides her own key light), by profile
-const LIGHTS = { high: 5, balanced: 3, saver: 2 };
 
 let _radial = null, _beam = null;
+const _top = new THREE.Vector3(), _buf = new THREE.Vector2();
 /** Soft round spot: white centre fading to transparent. */
 function radialTex() {
   if (_radial) return _radial;
@@ -46,20 +46,12 @@ function beamTex() {
 }
 
 /** Club lights (metadata) plus glowing neon, merged where they bunch up. */
-function lightSources(club, chunks) {
+function lightSources(club) {
   const raw = club.meta.lights.map((l) => ({ pos: new THREE.Vector3(...l.pos), color: new THREE.Color(...l.color), power: l.power, spot: l.type === 'SPOT' }));
   // neon/emissive surfaces light the room too (the Velvet Lounge's pink tubes have no lamp of their own)
-  const box = new THREE.Box3(), c = new THREE.Vector3();
-  for (const m of chunks) {
-    const mat = m.material, e = mat.emissive;
-    if (!e || Math.max(e.r, e.g, e.b) * (mat.emissiveIntensity || 1) < 0.15) continue;
-    box.copy(m.geometry.boundingBox);
-    const size = box.getSize(c).length();
-    if (size < 0.4) continue;
-    box.getCenter(c);
-    const col = e.clone();
-    if (Math.max(col.r, col.g, col.b) > 0.9 && Math.min(col.r, col.g, col.b) > 0.8 && mat.color) col.lerp(mat.color, 0.6); // white × texture: guess from the base colour
-    raw.push({ pos: c.clone(), color: col, power: 40 * Math.min(size, 5), spot: false, neon: true });
+  for (const e of club.scene.userData.emitters || []) {
+    if (e.size < 0.4) continue;
+    raw.push({ pos: e.pos.clone(), color: e.color.clone(), power: 40 * Math.min(e.size, 5), spot: false, neon: true });
   }
   raw.sort((a, b) => b.power - a.power);
   const out = [];
@@ -88,19 +80,18 @@ export class ClubMood {
     S.background = new THREE.Color(M.haze);
     S.fog = new THREE.FogExp2(M.haze, M.density);
 
-    // neon glows (once per cached building)
-    for (const m of this.chunks) {
-      const mat = m.material;
-      if (mat.userData.neon || !mat.emissive || mat.emissive.getHex() === 0) continue;
-      mat.userData.neon = true;
-      mat.emissiveIntensity = (mat.emissiveIntensity || 1) * M.neon;
-    }
+    // calmer floors, contact AO, neon that glows without blowing out (once per cached building)
+    dressMaterials(club, key);
+    // the cut: walls and the world outside the rooms read as a dark section, not a void
+    this.clip0 = club.mainY + 2.7;
+    this.poche = new Poche(S, club, M.poche);
+    this.poche.update(this.clip0);
 
     // low fill so the pools and lamps carry the room; hemisphere gives walls a coloured gradient
     S.add(new THREE.HemisphereLight(M.sky, M.ground, M.hemi));
     S.add(new THREE.AmbientLight(0xffffff, M.amb));
 
-    const src = (this.sources = lightSources(club, this.chunks));
+    const src = (this.sources = lightSources(club));
     // where each source lands on the floor below it
     const ray = new THREE.Raycaster(); ray.firstHitOnly = true; ray.far = 14;
     for (const s of src) {
@@ -108,12 +99,14 @@ export class ClubMood {
       const h = ray.intersectObject(club.collider)[0];
       s.floor = h && h.face.normal.y > 0.6 ? h.point.clone() : null;
     }
-    this.buildPools(src.filter((s) => s.floor));
+    this.buildFixtures(src.filter((s) => s.floor));
+    // (uplights set into a stage or floor light the room, not a pool on the floor under them)
+    this.buildPools(src.filter((s) => s.floor && s.pos.y - s.floor.y > 1));
     this.buildBeams(src.filter((s) => s.floor && s.pos.y - s.floor.y > 1.8 && (s.spot || s.power >= 150)).slice(0, 8));
 
     // a few real lights: they move to the strongest sources near her as she walks the club
     this.slots = [];
-    for (let i = 0; i < (LIGHTS[q.id] || 3); i++) {
+    for (let i = 0; i < (q.clubLights ?? 3); i++) {
       const l = new THREE.PointLight(0xffffff, 0, 13, 1.5);
       S.add(l);
       this.slots.push({ l, src: null, want: null });
@@ -126,12 +119,30 @@ export class ClubMood {
 
     // The shared 3D look (look3d.js) already gives every character a contact shadow and an inked
     // rim; then the club only lends it its rim colour instead of stacking a second set on top.
-    this.coreLook = !!zone.shadows;
-    if (this.coreLook) zone.castRim = M.rim;
-    else this.buildBlobs();
-    this.rimU = { value: new THREE.Color(M.rim) };
-    this.rimmed = new WeakSet();
-    this.vignette();
+    zone.castRim = M.rim;
+    if (q.look3d !== 'full') this.vignette(); // (the core look draws its own on High)
+  }
+
+  /**
+   * Lights you can see: pendant lamps hanging just under the cut over the strongest lamps (their
+   * beams start at the shade), and glow halos on every lamp and neon sign below the cut.
+   */
+  buildFixtures(src) {
+    const hang = this.clip0 - 0.55, picked = [];
+    for (const s of src) {
+      if (s.neon || s.pos.y < this.z.club.mainY + 2 || picked.length >= 8) continue;
+      if (picked.some((p) => p.pos.distanceTo(s.pos) < 2.5)) continue;
+      picked.push(s);
+      s.hang = Math.min(s.pos.y, hang);
+    }
+    this.fixtures = pendants(picked.map((s) => ({ x: s.pos.x, y: s.hang, z: s.pos.z, color: s.color })));
+    if (this.fixtures) this.z.scene.add(this.fixtures);
+    const glows = picked.map((s) => ({ pos: new THREE.Vector3(s.pos.x, s.hang - 0.16, s.pos.z), color: s.color.clone().lerp(new THREE.Color(1, 1, 1), 0.3), k: 0.7, size: 0.9 }));
+    for (const e of this.z.club.scene.userData.emitters || []) {
+      if (e.pos.y > this.clip0 - 0.1 || Math.abs(e.pos.y - this.z.club.mainY) > 4) continue;
+      glows.push({ pos: e.pos, color: e.color, k: THREE.MathUtils.clamp(0.25 + e.k * 0.08, 0.3, 0.6), size: THREE.MathUtils.clamp(e.size * 0.9, 0.7, 3.2) });
+    }
+    if (glows.length) { this.glows = glowPoints(glows); this.z.scene.add(this.glows); }
   }
 
   // ---------------------------------------------------------------- fake lighting
@@ -192,60 +203,13 @@ export class ClubMood {
       // a shaft right by the camera would wash the whole screen (and cost a screenful of fill)
       const near = THREE.MathUtils.smoothstep(Math.hypot(to.x, to.z), 2.5, 5);
       const top = 0.18 * near, bot = THREE.MathUtils.clamp(Math.sqrt(s.power) * 0.06, 0.9, 2.2) * near;
-      const T = s.pos, B = s.floor, k = i * 12;
+      const T = s.hang !== undefined ? _top.set(s.pos.x, s.hang - 0.1, s.pos.z) : s.pos, B = s.floor, k = i * 12;
       a[k] = T.x - side.x * top; a[k + 1] = T.y; a[k + 2] = T.z - side.z * top;
       a[k + 3] = T.x + side.x * top; a[k + 4] = T.y; a[k + 5] = T.z + side.z * top;
       a[k + 6] = B.x + side.x * bot; a[k + 7] = B.y + 0.05; a[k + 8] = B.z + side.z * bot;
       a[k + 9] = B.x - side.x * bot; a[k + 10] = B.y + 0.05; a[k + 11] = B.z - side.z * bot;
     });
     p.needsUpdate = true;
-  }
-
-  /** Contact shadows under everyone: one instanced mesh. */
-  buildBlobs() {
-    const mat = new THREE.MeshBasicMaterial({ color: 0x000000, alphaMap: null, map: radialTex(), transparent: true, opacity: 0.7, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
-    this.blobs = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), mat, 24);
-    this.blobs.frustumCulled = false;
-    this.blobs.renderOrder = 1;
-    this.blobs.count = 0;
-    this.z.scene.add(this.blobs);
-  }
-
-  /** Everyone who needs a shadow and a rim: her, guards, boss, informant, captives. */
-  people() {
-    const z = this.z, out = [z.hero];
-    for (const g of z.guards) out.push(g.mesh);
-    if (z.boss) out.push(z.boss);
-    if (z.informant) out.push(z.informant.mesh);
-    for (const c of z.captives) out.push(c.person);
-    for (const x of z.extraPeople ? z.extraPeople() : []) out.push(x);
-    return out.filter((o) => o && o.visible !== false);
-  }
-
-  // ---------------------------------------------------------------- rim light
-  /** Fresnel rim in the club's colour on a character's materials (cloned: models share them). */
-  rim(root) {
-    if (this.rimmed.has(root)) return;
-    this.rimmed.add(root);
-    const U = this.rimU, done = new Map();
-    root.traverse((o) => {
-      if (!o.isMesh) return;
-      const patch = (m) => {
-        if (!m || !(m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial || m.isMeshToonMaterial)) return m;
-        if (done.has(m)) return done.get(m);
-        const c = m.clone(), prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey;
-        c.onBeforeCompile = (sh, r) => {
-          if (prev) prev.call(c, sh, r);
-          sh.uniforms.uRim = U;
-          sh.fragmentShader = 'uniform vec3 uRim;\n' + sh.fragmentShader.replace('#include <opaque_fragment>',
-            '{ float rimF = 1.0 - abs(dot(normalize(normal), normalize(vViewPosition))); outgoingLight += uRim * (rimF * rimF * rimF); }\n#include <opaque_fragment>');
-        };
-        c.customProgramCacheKey = () => (prevKey ? prevKey.call(m) : '') + '|clubrim';
-        done.set(m, c);
-        return c;
-      };
-      o.material = Array.isArray(o.material) ? o.material.map(patch) : patch(o.material);
-    });
   }
 
   // ---------------------------------------------------------------- per frame
@@ -282,25 +246,15 @@ export class ClubMood {
     this.key.position.set(h.x + dx / d * 1.6, h.y + 1.7, h.z + dz / d * 1.6);
 
     this.updateBeams(cam);
-    if (this.coreLook) return;
-    // rim everyone (new cast members get patched the first time they show up) + contact shadows
-    const ppl = this.people(), mtx = new THREE.Matrix4(), s = new THREE.Vector3(), q = new THREE.Quaternion(), p = new THREE.Vector3();
-    let n = 0;
-    for (const o of ppl) {
-      this.rim(o);
-      if (n >= 24) continue;
-      const w = o.getWorldPosition(p);
-      const k = o === z.hero ? 1.25 : 1.1;
-      mtx.compose(p.set(w.x, w.y + 0.025, w.z), q, s.set(k, 1, k));
-      this.blobs.setMatrixAt(n++, mtx);
-    }
-    this.blobs.count = n;
-    this.blobs.instanceMatrix.needsUpdate = true;
   }
 
   /** Skip merged chunks lying wholly above the slice plane (ceilings, upper floors). */
   cull(clipY) {
-    for (const m of this.chunks) m.visible = m.userData.minY < clipY;
+    // also the storeys under her floor (the Clubhouse basement): the floor hides them anyway
+    const low = clipY - 2.7 - 1.2;
+    for (const m of this.chunks) m.visible = m.userData.minY < clipY && !(m.userData.maxY < low);
+    this.poche.update(clipY);
+    if (this.glows) { const r = this.z.renderer, cam = this.z.cam; this.glows.material.uniforms.scale.value = r.getDrawingBufferSize(_buf).y / (2 * Math.tan(cam.fov * Math.PI / 360)); }
   }
 
   vignette() {
@@ -316,6 +270,7 @@ export class ClubMood {
     if (r) [r.toneMapping, r.toneMappingExposure] = this.prevTone;
     if (this.vig) this.vig.remove();
     for (const m of this.chunks) m.visible = true;
-    for (const o of [this.pools, this.beams, this.blobs]) if (o) { o.geometry.dispose(); o.material.dispose(); }
+    for (const o of [this.pools, this.beams, this.fixtures, this.glows]) if (o) { o.geometry.dispose(); o.material.dispose(); }
+    this.poche.dispose();
   }
 }
