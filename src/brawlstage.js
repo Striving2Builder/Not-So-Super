@@ -145,8 +145,8 @@ export class Stage {
     const gaps = [];
     let cx = 0;
     const tall = this.facades
-      .map((f) => ({ x0: W / 2 + (f.x - cam) * k, x1: W / 2 + (f.x + f.w - cam) * k, top: gt - (f.h + (f.kind === 'factory' ? 0 : 4)) * k }))
-      .filter((f) => f.top <= 0 && f.x1 > 0 && f.x0 < W)
+      .map((f) => ({ x0: W / 2 + (f.x - cam) * k, x1: W / 2 + (f.x + f.w - cam) * k, top: gt - (f.h + (f.kind === 'factory' ? 0 : 4)) * k, solid: !['farm', 'houses', 'docks'].includes(f.kind) })) // barns, gabled houses and container stacks don't fill their box
+      .filter((f) => f.top <= 0 && f.solid && f.x1 > 0 && f.x0 < W)
       .sort((a, c) => a.x0 - c.x0);
     for (const f of tall) { if (f.x0 > cx + 1) gaps.push([cx, f.x0 + 1]); cx = Math.max(cx, f.x1 - 1); }
     if (cx < W) gaps.push([cx, W]);
