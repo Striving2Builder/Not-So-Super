@@ -90,4 +90,5 @@ export function stepFlight(h, a, boosting, dt, speedMul = 1) {
 /** Camera helpers derived from the flight state. */
 export function speedFraction(h) { return clamp((h.speed || 0) / FLIGHT.boost, 0, 1); }
 export function cameraZoom(h) { return 1 - 0.24 * speedFraction(h); }       // pull out with speed
-export function cameraLead(h) { return 0.25 + 0.3 * speedFraction(h); }       // seconds of look-ahead
+// seconds of look-ahead: kept modest on a phone so she stays near the middle of the frame
+export function cameraLead(h) { return 0.18 + 0.2 * speedFraction(h); }
