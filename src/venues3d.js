@@ -363,7 +363,7 @@ const PARTICLES = {
     ['dust', [[10, 6, 1.2, 1.2], [10, -4, 1.2, 1.2], [-10, 6, 1.2, 1.2]], { count: 60, color: 0x39ff6a, size: 0.06, top: 3, opacity: 0.7 }],
   ],
 };
-const PARTICLE_SCALE = { full: 1, lite: 0.6, min: 0 };
+const PARTICLE_SCALE = { full: 1, lite: 0.45, min: 0 };
 
 function addParticles(zn, k) {
   const scale = PARTICLE_SCALE[quality().look3d] ?? 0.6;

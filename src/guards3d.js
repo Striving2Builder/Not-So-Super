@@ -42,9 +42,9 @@ export const guardMethods = {
         m.legs[0].rotation.x = s; m.legs[1].rotation.x = -s;
       }
       if (!gd.cone.userData.comic) this.dressCone(gd.cone);
-      // walls clip the cone: re-cast every frame against our box walls, ~20×/s against a club's BVH
+      // walls clip the cone: its rays are re-cast ~20×/s (plenty for a patrol walking at 1.7 m/s)
       gd.shapeT = (gd.shapeT || 0) + dt;
-      if (!this.club || gd.shapeT > 0.05 || !gd.shaped) { gd.shapeT = 0; gd.shaped = true; this.shapeCone(gd); }
+      if (gd.shapeT > 0.05 || !gd.shaped) { gd.shapeT = 0; gd.shaped = true; this.shapeCone(gd); }
       const cu = gd.cone.material.uniforms;
       cu.col.value.set(gd.seeing ? 0xff2a2a : gd.look > 0 ? 0xffa020 : 0xffe040);
       cu.k.value += ((gd.seeing ? 1 : 0.62) - cu.k.value) * Math.min(1, dt * 8);
