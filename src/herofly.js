@@ -11,6 +11,7 @@ const LOOK = {
   unit: 40,         // art units per sprite metre
   tilt: 1.0,        // camera tilt from vertical (rad): matches the city's oblique lean
   aura: '#9fd8ff',
+  pool: '#8fb8ff',   // the light pool around her shadow
   shadowA: 0.62,    // shadow opacity right under her; fades and softens with height
   pop: 0.9,         // seconds the WHOOSH! lettering stays up
 };
@@ -89,10 +90,16 @@ export class FlightHero {
     if (b && b.h < h.z) { zr = b.h; x = h.x + (h.z - zr) * SUN.x; y = h.y + (h.z - zr) * SUN.y; }
     const above = h.z - zr;
     const full = this.size(k * P(zr) * scale) * (1 - clamp(above / 1500, 0, 0.4)) * sil.width / (sil.width - this.ink.pad);
-    const a = LOOK.shadowA * clamp(1 - above / 1400, 0.45, 1) * (1 - 0.25 * V.night);
+    const a = LOOK.shadowA * clamp(1 - above / 1400, 0.45, 1);
     const blur = Math.min(8, 1 + above / 90) * k;
     ctx.save();
     ctx.translate(SX(x, zr), SY(y, zr)); ctx.scale(1, 0.8); // she's seen at an angle, the shadow isn't
+    // A pool of pale light around the shadow (her aura on the surface below) so the dark shape
+    // still reads on a night street; both shrink as she climbs.
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = (0.16 + 0.3 * V.night) * clamp(1 - above / 1600, 0.4, 1);
+    ctx.drawImage(glow(LOOK.pool), -full * 0.62, -full * 0.62, full * 1.24, full * 1.24);
+    ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = a * 0.45; ctx.drawImage(sil, -full / 2 - blur, -full / 2 - blur, full + blur * 2, full + blur * 2);
     ctx.globalAlpha = a * 0.75; ctx.drawImage(sil, -full / 2, -full / 2, full, full);
     ctx.restore();
