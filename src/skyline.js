@@ -11,7 +11,7 @@ const INK = '#0b0b16';
 const TONE = { s: -0.36, n: -0.08, e: -0.5, w: -0.18 };
 /** Lit window colours: warm tungsten, cool office light (glass towers). */
 /** Roofs smaller than this (screen px) on both sides drop their detail passes. */
-const LOD_PX = 18;
+const LOD_PX = 22;
 const WINDOW = { warm: [255, 212, 120, 0.85], cool: [170, 215, 255, 0.8] };
 
 export function drawBuilding(ctx, b, V) {

@@ -28,6 +28,16 @@ export function glow(color) {
 /** Shadow offset per unit of height (light from the upper left of the screen). */
 export const SUN = { x: 0.26, y: 0.36 };
 const ASPHALT = '#2a2d35';
+const SHADOW = 'rgba(6,8,32,.5)';        // cast shadows (plus halftone dots on top)
+const NIGHT_STREET = 'rgba(4,6,24,.35)'; // night tiles: the street sinks so lit roofs stand out
+
+/** A tree seen from above: inked canopy, lit crown. */
+function tree(g, o) {
+  g.fillStyle = shade(o.col, -0.25); g.beginPath(); g.arc(o.x, o.y, o.rad, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#0b1a0e'; g.lineWidth = 1.2; g.stroke();
+  g.fillStyle = o.col; g.beginPath(); g.arc(o.x - o.rad * 0.2, o.y - o.rad * 0.2, o.rad * 0.72, 0, Math.PI * 2); g.fill();
+  g.fillStyle = 'rgba(255,255,220,.18)'; g.beginPath(); g.arc(o.x - o.rad * 0.35, o.y - o.rad * 0.35, o.rad * 0.3, 0, Math.PI * 2); g.fill();
+}
 const URBAN_X = new Set(['farm', 'suburb']); // no crosswalks out in the sticks
 
 let dots = null;
@@ -87,12 +97,7 @@ export class CityArt {
       if (this.ground.size >= this.max) this.evict(this.ground, frame);
       const c = this.pool.pop() || document.createElement('canvas');
       c.width = c.height = this.res * TILE;
-      const g = c.getContext('2d');
-      for (let j = 0; j < TILE; j++) for (let i = 0; i < TILE; i++) this.paintGround(g, tx * TILE + i, ty * TILE + j, tx * TILE * BLOCK, ty * TILE * BLOCK);
-      // Night tiles have the street lights baked in (they switch on at dusk), pre-brightened to
-      // survive the night veil drawn over the whole scene: no extra full-screen light pass.
-      if (lit) { g.fillStyle = 'rgba(4,6,24,.35)'; g.fillRect(0, 0, c.width, c.height); }
-      if (lit) for (let j = 0; j < TILE; j++) for (let i = 0; i < TILE; i++) this.paintLights(g, tx * TILE + i, ty * TILE + j, tx * TILE * BLOCK, ty * TILE * BLOCK, 1.7);
+      this.paintTile(c.getContext('2d'), tx, ty, lit);
       e = { c, f: frame };
       this.painted++;
       this.ground.set(k, e);
@@ -113,19 +118,46 @@ export class CityArt {
   }
 
   // ---------------------------------------------------------------- ground
-  /** Paint block cell (bx, by) into a tile whose world origin is (ox, oy), clipped to the cell. */
-  paintGround(g, bx, by, ox, oy) {
-    const s = this.res / BLOCK, X0 = bx * BLOCK, Y0 = by * BLOCK;
-    const city = this.city, b = city.block(bx, by);
+  /**
+   * One tile, in passes over the whole tile (each pass once, not once per block): the cells'
+   * streets and lots, then every cast shadow as one halftoned shape, then the trees, and for
+   * night tiles the street lights (pre-brightened to survive the night veil over the scene).
+   */
+  paintTile(g, tx, ty, lit) {
+    const s = this.res / BLOCK, B0x = tx * TILE, B0y = ty * TILE, city = this.city;
+    g.setTransform(s, 0, 0, s, -B0x * BLOCK * s, -B0y * BLOCK * s);
+    for (let j = 0; j < TILE; j++) for (let i = 0; i < TILE; i++) {
+      const bx = B0x + i, by = B0y + j;
+      this.paintCell(g, city.block(bx, by), bx, by, bx * BLOCK, by * BLOCK);
+    }
+    // cast shadows (they fall down-right, so blocks up/left of the tile reach into it)
+    g.beginPath();
+    for (let by = B0y - 1; by < B0y + TILE; by++) for (let bx = B0x - 1; bx < B0x + TILE; bx++) {
+      const b = city.block(bx, by);
+      if (b) for (const o of b.b) if (!o.truck) shadowPath(g, o);
+    }
     g.save();
-    g.setTransform(s, 0, 0, s, -ox * s, -oy * s);
-    g.beginPath(); g.rect(X0, Y0, BLOCK, BLOCK); g.clip();
-    this.paintCell(g, b, bx, by, X0, Y0);
+    g.fillStyle = SHADOW; g.fill();
+    g.clip();
+    g.setTransform(1, 0, 0, 1, 0, 0); // halftone in canvas pixels, so the dots stay crisp and even
+    g.fillStyle = g.createPattern(halftone(), 'repeat'); g.fillRect(0, 0, g.canvas.width, g.canvas.height);
     g.restore();
+    // trees are baked in too (they barely lean at their height): inked canopies over their shadows
+    for (let j = 0; j < TILE; j++) for (let i = 0; i < TILE; i++) {
+      const b = city.block(B0x + i, B0y + j);
+      if (b) for (const o of b.b) if (o.kind === 'tree') tree(g, o);
+    }
+    if (!lit) return;
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.fillStyle = NIGHT_STREET; g.fillRect(0, 0, g.canvas.width, g.canvas.height);
+    g.restore();
+    g.globalCompositeOperation = 'lighter';
+    for (let by = B0y - 1; by <= B0y + TILE; by++) for (let bx = B0x - 1; bx <= B0x + TILE; bx++) this.paintLights(g, bx, by, 1.7);
+    g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
   }
 
   paintCell(g, b, bx, by, X0, Y0) {
-    const city = this.city;
     if (!b) return; // past the coast / edge: the land fill underneath shows through
     g.fillStyle = ASPHALT; g.fillRect(X0, Y0, BLOCK, BLOCK);
     const D = DISTRICTS[b.d], farm = b.d === 'farm', urban = !URBAN_X.has(b.d);
@@ -176,26 +208,6 @@ export class CityArt {
     g.beginPath();
     for (const o of b.b) if (o.kind === 'box') g.rect(o.x, o.y, o.w, o.d);
     g.stroke();
-    // cast shadows from this block and the ones up/left of it (shadows fall down-right)
-    g.beginPath();
-    for (let dy = -1; dy <= 0; dy++) for (let dx = -1; dx <= 0; dx++) {
-      const nb = city.block(bx + dx, by + dy);
-      if (nb) for (const o of nb.b) if (!o.truck) shadowPath(g, o);
-    }
-    g.save();
-    g.fillStyle = 'rgba(6,8,32,.5)'; g.fill();
-    g.clip();
-    g.setTransform(1, 0, 0, 1, 0, 0); // halftone in canvas pixels, so the dots stay crisp and even
-    g.fillStyle = g.createPattern(halftone(), 'repeat'); g.fillRect(0, 0, g.canvas.width, g.canvas.height);
-    g.restore();
-    // Trees are baked in too (they barely lean at their height): inked canopies over their shadows.
-    for (const o of b.b) {
-      if (o.kind !== 'tree') continue;
-      g.fillStyle = shade(o.col, -0.25); g.beginPath(); g.arc(o.x, o.y, o.rad, 0, Math.PI * 2); g.fill();
-      g.strokeStyle = '#0b1a0e'; g.lineWidth = 1.2; g.stroke();
-      g.fillStyle = o.col; g.beginPath(); g.arc(o.x - o.rad * 0.2, o.y - o.rad * 0.2, o.rad * 0.72, 0, Math.PI * 2); g.fill();
-      g.fillStyle = 'rgba(255,255,220,.18)'; g.beginPath(); g.arc(o.x - o.rad * 0.35, o.y - o.rad * 0.35, o.rad * 0.3, 0, Math.PI * 2); g.fill();
-    }
     if (farm) {
       // tractor tracks: a dirt road edge instead of a curb
       g.strokeStyle = 'rgba(90,70,40,.5)'; g.lineWidth = 3; g.strokeRect(x0 - 3, y0 - 3, LOT + 6, LOT + 6);
@@ -252,44 +264,34 @@ export class CityArt {
   }
 
   // ---------------------------------------------------------------- night light map
-  /** Lamps and spill that touch cell (bx, by): its own and its neighbours' (glows cross cell edges). */
-  paintLights(g, bx, by, ox, oy, gain = 1) {
-    const s = this.res / BLOCK, X0 = bx * BLOCK, Y0 = by * BLOCK;
-    g.save();
-    g.setTransform(s, 0, 0, s, -ox * s, -oy * s);
-    g.beginPath(); g.rect(X0, Y0, BLOCK, BLOCK); g.clip();
-    g.globalCompositeOperation = 'lighter';
+  /** Lamps and spill of block (bx, by), in world units (the tile's transform is already set). */
+  paintLights(g, bx, by, gain = 1) {
+    const b = this.city.block(bx, by);
+    if (!b || b.d === 'farm') return;
     const lamp = glow('#ffb95a'), cool = glow('#d8e4ff');
     const put = (spr, x, y, r, a) => {
       for (let q = a * gain; q > 0.02; q -= 1) { g.globalAlpha = Math.min(1, q); g.drawImage(spr, x - r, y - r, r * 2, r * 2); }
     };
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      const cx = bx + dx, cy = by + dy, b = this.city.block(cx, cy);
-      const x0 = cx * BLOCK, y0 = cy * BLOCK;
-      if (!b) continue;
-      if (b.d === 'farm') continue;
-      const sub = b.d === 'suburb';
-      // intersection pool + sodium lamps down both roads
-      put(lamp, x0 + ROAD / 2, y0 + ROAD / 2, 40, sub ? 0.3 : 0.45);
-      for (let i = 1; i <= 2; i++) {
-        const t = ROAD + (LOT * i) / 3, alt = i % 2;
-        put(alt ? lamp : cool, x0 + t, y0 + (alt ? 5 : ROAD - 5), 24, sub ? 0.22 : alt ? 0.34 : 0.2);
-        put(alt ? cool : lamp, x0 + (alt ? ROAD - 5 : 5), y0 + t, 24, sub ? 0.22 : alt ? 0.2 : 0.34);
-      }
-      // neon + shopfront spill on the ground around the buildings
-      for (const o of b.b) {
-        if (o.kind !== 'box') continue;
-        if (o.neon) put(glow(o.neon), o.x + o.w / 2, o.y + o.d / 2, Math.max(o.w, o.d) * 0.85, 0.3);
-        if (o.neon2) put(glow(o.neon2), o.x + o.w / 2, o.y + o.d / 2, Math.max(o.w, o.d) * 0.6, 0.18);
-        if (o.awning) {
-          const fx = o.face === 'e' ? o.x + o.w + 6 : o.face === 'w' ? o.x - 6 : o.x + o.w / 2;
-          const fy = o.face === 's' ? o.y + o.d + 6 : o.face === 'n' ? o.y - 6 : o.y + o.d / 2;
-          put(lamp, fx, fy, 22, 0.4);
-        }
-        if (o.house && hash2(o.x | 0, o.y | 0, 9) > 0.4) put(lamp, o.x + o.w / 2, o.y + o.d + 4, 14, 0.35);
-      }
+    const x0 = bx * BLOCK, y0 = by * BLOCK, sub = b.d === 'suburb';
+    // intersection pool + sodium lamps down both roads; some lamps are out
+    put(lamp, x0 + ROAD / 2, y0 + ROAD / 2, 40, sub ? 0.3 : 0.45);
+    for (let i = 1; i <= 2; i++) {
+      const t = ROAD + (LOT * i) / 3, alt = i % 2;
+      if (hash2(bx, by, 60 + i) > 0.18) put(alt ? lamp : cool, x0 + t, y0 + (alt ? 5 : ROAD - 5), 24, sub ? 0.22 : alt ? 0.34 : 0.2);
+      if (hash2(bx, by, 70 + i) > 0.18) put(alt ? cool : lamp, x0 + (alt ? ROAD - 5 : 5), y0 + t, 24, sub ? 0.22 : alt ? 0.2 : 0.34);
     }
-    g.restore();
+    // neon + shopfront spill on the ground around the buildings (neon districts paint the street)
+    for (const o of b.b) {
+      if (o.kind !== 'box') continue;
+      if (o.neon) put(glow(o.neon), o.x + o.w / 2, o.y + o.d / 2, Math.max(o.w, o.d) * 1.1, 0.45);
+      if (o.neon2) put(glow(o.neon2), o.x + o.w / 2, o.y + o.d / 2, Math.max(o.w, o.d) * 0.6, 0.18);
+      if (o.awning) {
+        const fx = o.face === 'e' ? o.x + o.w + 6 : o.face === 'w' ? o.x - 6 : o.x + o.w / 2;
+        const fy = o.face === 's' ? o.y + o.d + 6 : o.face === 'n' ? o.y - 6 : o.y + o.d / 2;
+        put(lamp, fx, fy, 22, 0.4);
+      }
+      if (o.house && hash2(o.x | 0, o.y | 0, 9) > 0.4) put(lamp, o.x + o.w / 2, o.y + o.d + 4, 14, 0.35);
+    }
   }
 }
 
