@@ -84,11 +84,14 @@ export function avoidHud(x, y, pad = 18) {
 export function toast(msg, kind = 'info') {
   const host = $('toasts');
   if (!host) return;
+  // the same message twice just refreshes the one on screen
+  for (const old of host.children) if (old.textContent === msg && !old.classList.contains('out')) old.remove();
   const d = document.createElement('div');
   d.className = 'toast ' + kind;
   d.textContent = msg;
   host.appendChild(d);
-  while (host.children.length > 4) host.firstChild.remove();
+  const max = innerHeight < 480 ? 2 : 4; // phones: don't stack a wall of toasts over the view
+  while (host.children.length > max) host.firstChild.remove();
   setTimeout(() => d.classList.add('out'), 2600);
   setTimeout(() => d.remove(), 3100);
 }
