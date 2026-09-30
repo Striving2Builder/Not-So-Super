@@ -3,7 +3,7 @@
 import { drawHumanoid, pose, HERO_LOOK, glow } from './art.js';
 import { rand } from './util.js';
 import { heroReady, HeroSprite } from './hero3d.js';
-import { INK } from './brawlstage.js';
+import { INK, halftone as halftonePat } from './brawlpaint.js';
 import { frame as spriteFrame, inkOutline, SPAN, LIFT, LOOKS } from './brawlsprite.js';
 import { M, HERO_SCALE, CROOK_SCALE, BREAK } from './brawldata.js';
 
@@ -381,6 +381,7 @@ export const actorDraw = {
   drawBreakable(ctx, b, x, y, s) {
     const d = BREAK[b.kind], w = d.w * s, h = d.h * s;
     ctx.save(); ctx.translate(x, y);
+    if (b.wob > 0) ctx.rotate(Math.sin(b.wob * 45) * 0.12 * b.wob / 0.35); // rocked by the first hit
     ctx.lineJoin = 'round'; ctx.strokeStyle = INK; ctx.lineWidth = 2;
     const L = -w / 2, T = -h;
     if (b.kind === 'can') {
@@ -390,10 +391,22 @@ export const actorDraw = {
       ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.fillStyle = '#8a949c'; ctx.beginPath(); ctx.ellipse(0, T + 5 * s, w / 2 + 1 * s, 5 * s, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#5c666e'; ctx.fillRect(-4 * s, T - 1 * s, 8 * s, 4 * s);
     } else if (b.kind === 'crate') {
-      ctx.fillStyle = '#b07a44'; ctx.fillRect(L, T, w, h); ctx.strokeRect(L, T, w, h);
-      ctx.fillStyle = '#8a5a2c'; ctx.fillRect(L, T, w, 5 * s); ctx.fillRect(L, -5 * s, w, 5 * s);
-      ctx.beginPath(); ctx.moveTo(L + 3 * s, T + 5 * s); ctx.lineTo(L + w - 3 * s, -5 * s); ctx.moveTo(L + w - 3 * s, T + 5 * s); ctx.lineTo(L + 3 * s, -5 * s); ctx.stroke();
-      ctx.strokeRect(L, T, w, h);
+      // slatted wooden crate: planks with gaps and grain, corner battens, one brace, nail heads
+      ctx.fillStyle = '#3a2412'; ctx.fillRect(L, T, w, h);
+      const pl = h / 3;
+      for (let i = 0; i < 3; i++) {
+        ctx.fillStyle = i % 2 ? '#c08a4e' : '#b27c42'; ctx.fillRect(L, T + i * pl + 1.2 * s, w, pl - 2.4 * s);
+        ctx.strokeStyle = 'rgba(80,44,16,.55)'; ctx.lineWidth = 0.9;
+        ctx.beginPath(); ctx.moveTo(L + 4 * s, T + i * pl + pl * 0.45); ctx.quadraticCurveTo(L + w * 0.5, T + i * pl + pl * 0.3, L + w - 4 * s, T + i * pl + pl * 0.55); ctx.stroke();
+      }
+      ctx.fillStyle = '#8a5a2c'; ctx.fillRect(L, T, 6 * s, h); ctx.fillRect(L + w - 6 * s, T, 6 * s, h);
+      ctx.save(); ctx.beginPath(); ctx.rect(L + 6 * s, T, w - 12 * s, h); ctx.clip();
+      ctx.fillStyle = '#9a6a38'; ctx.beginPath(); ctx.moveTo(L + 6 * s, -2 * s); ctx.lineTo(L + 6 * s, -9 * s); ctx.lineTo(L + w - 6 * s, T + 2 * s); ctx.lineTo(L + w - 6 * s, T + 9 * s); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.globalAlpha = 0.28; ctx.fillStyle = halftonePat(ctx); ctx.fillRect(L + w * 0.62, T, w, h); ctx.restore();
+      ctx.fillStyle = '#2a2a30'; for (const [nx, ny] of [[3, 4], [3, h - 4], [w - 3, 4], [w - 3, h - 4], [3, h / 2], [w - 3, h / 2]]) { ctx.beginPath(); ctx.arc(L + nx * 1, T + ny, 1.1 * s, 0, Math.PI * 2); ctx.fill(); }
+      ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRect(L, T, w, h);
+      ctx.beginPath(); ctx.moveTo(L + 6 * s, T); ctx.lineTo(L + 6 * s, 0); ctx.moveTo(L + w - 6 * s, T); ctx.lineTo(L + w - 6 * s, 0); ctx.stroke();
     } else if (b.kind === 'barrel') {
       const gr = ctx.createLinearGradient(L, 0, L + w, 0); gr.addColorStop(0, '#8a2a20'); gr.addColorStop(0.35, '#e0503a'); gr.addColorStop(1, '#6a1a14');
       ctx.fillStyle = gr; ctx.beginPath(); ctx.roundRect(L, T, w, h, 5 * s); ctx.fill(); ctx.stroke();
@@ -403,6 +416,12 @@ export const actorDraw = {
       ctx.fillStyle = '#1e3cff'; ctx.fillRect(L, T, w, h - 6 * s); ctx.strokeRect(L, T, w, h - 6 * s);
       ctx.fillStyle = '#dfe8f0'; ctx.fillRect(L + 3 * s, T + 4 * s, w - 6 * s, 12 * s); ctx.strokeRect(L + 3 * s, T + 4 * s, w - 6 * s, 12 * s);
       ctx.fillStyle = INK; ctx.fillRect(L + 3 * s, -6 * s, 3 * s, 6 * s); ctx.fillRect(L + w - 6 * s, -6 * s, 3 * s, 6 * s);
+    }
+    if (b.cracked) {
+      // first hit splits it: jagged ink cracks
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(L + w * 0.35, T); ctx.lineTo(L + w * 0.5, T + h * 0.3); ctx.lineTo(L + w * 0.38, T + h * 0.5); ctx.lineTo(L + w * 0.58, T + h * 0.8);
+      ctx.moveTo(L + w * 0.5, T + h * 0.3); ctx.lineTo(L + w * 0.72, T + h * 0.38); ctx.stroke();
     }
     ctx.restore();
   },

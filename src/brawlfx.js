@@ -2,7 +2,7 @@
 // debris, the heat-vision beam, the super-move speed lines and cut-in panel, combo counter, GO arrow.
 import { glow } from './art.js';
 import { rand, chance } from './util.js';
-import { INK } from './brawlstage.js';
+import { INK } from './brawlpaint.js';
 import { inkOutline } from './brawlsprite.js';
 import { HERO_SCALE, DZ } from './brawldata.js';
 
@@ -48,8 +48,11 @@ export const fxDraw = {
 
   // ------------------------------------------------------------------ effects
   drawFx(ctx) {
+    const W = this.g.w;
     for (const f of this.fx) {
-      const s = this.sc(f.z), x = this.sx(f.x), y = this.gy(f.z) - f.y * s, u = f.t / f.max, a = 1 - u;
+      const s = this.sc(f.z), y = this.gy(f.z) - f.y * s, u = f.t / f.max, a = 1 - u;
+      // lettering stays inside the 8% safe inset; everything else sits where it happened
+      const x = f.kind === 'num' || f.kind === 'text' ? Math.max(W * 0.08, Math.min(W * 0.92, this.sx(f.x))) : this.sx(f.x);
       switch (f.kind) {
         case 'spark': {
           // inked starburst: pops big then shrinks
@@ -111,7 +114,7 @@ export const fxDraw = {
         case 'chunk':
           ctx.save(); ctx.translate(x, y); ctx.rotate(f.rot || 0); ctx.globalAlpha = Math.min(1, a * 3);
           ctx.fillStyle = f.col; ctx.strokeStyle = INK; ctx.lineWidth = 1.2;
-          ctx.fillRect(-f.s * s / 2, -f.s * s / 3, f.s * s, f.s * s * 0.66); ctx.strokeRect(-f.s * s / 2, -f.s * s / 3, f.s * s, f.s * s * 0.66);
+          { const cw = f.s * s * (f.plank ? 2.4 : 1), ch = f.s * s * (f.plank ? 0.5 : 0.66); ctx.fillRect(-cw / 2, -ch / 2, cw, ch); ctx.strokeRect(-cw / 2, -ch / 2, cw, ch); }
           ctx.restore(); ctx.globalAlpha = 1;
           break;
         case 'muzzle':

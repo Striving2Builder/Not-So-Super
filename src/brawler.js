@@ -61,8 +61,9 @@ export class Brawler {
     this.len = this.waves[nWaves - 1].x + 600;
     const nCap = zone.def.captives || 0;
     for (let i = 0; i < nCap; i++) {
-      const x = 420 + ((this.len - 740) * (i + 0.6)) / nCap;
-      const c = { x, z: rand(0.15, 0.45), freed: 0, done: false, run: 0, look: zone.id === 'rustlers' ? npcLook('farmer') : npcLook('civilian') };
+      // staged inside a fight's camera (back of the pavement, right of centre) so they're seen, not just listed
+      const x = this.waves[i % this.waves.length].x + 250 - Math.floor(i / this.waves.length) * 90;
+      const c = { x, z: rand(0.06, 0.18), freed: 0, done: false, run: 0, look: zone.id === 'rustlers' ? npcLook('farmer') : npcLook('civilian') };
       this.captives.push(c);
       if (this.fire) this.fires.push({ x: x - 110, z: c.z + 0.1, w: 150, hp: 100 });
     }
@@ -71,7 +72,8 @@ export class Brawler {
     const kinds = this.D.style === 'docks' || this.D.style === 'warehouses' || this.D.style === 'factory' ? ['barrel', 'crate', 'barrel'] : this.D.style === 'farm' ? ['crate', 'barrel'] : ['can', 'can', 'crate', 'newsbox'];
     for (let x = 470; x < this.len - 200; x += this.rng.range(230, 380)) {
       if (this.captives.some((c) => Math.abs(c.x - x) < 90)) continue;
-      this.breakables.push({ x, z: this.rng.range(0.1, 0.85), kind: this.rng.pick(kinds), broken: false, wob: 0 });
+      const kind = this.rng.pick(kinds);
+      this.breakables.push({ x, z: this.rng.range(0.1, 0.85), kind, hp: kind === 'crate' || kind === 'barrel' ? 2 : 1, broken: false, wob: 0 });
     }
 
     this.p = { x: 400, z: 0.5, y: 0, vy: 0, hp: 100, en: 100, facing: 1, st: 'idle', st_t: 0, combo: 0, queued: false, inv: 0, hitSet: new Set() };
@@ -327,7 +329,7 @@ export class Brawler {
     for (const b of this.breakables) {
       if (b.broken || p.hitSet.has(b)) continue;
       const dx = (b.x - p.x) * p.facing;
-      if (dx > -10 && dx < reach + 10 && Math.abs(b.z - p.z) < DZ * 1.2 && p.y < 60) { p.hitSet.add(b); this.smash(b, p.facing); }
+      if (dx > -10 && dx < reach + 10 && Math.abs(b.z - p.z) < DZ * 1.2 && p.y < 60) { p.hitSet.add(b); this.hitBreakable(b, p.facing); }
     }
   }
 
@@ -413,11 +415,23 @@ export class Brawler {
     } else { e.st = 'hurt'; e.st_t = 0; e.x += p.facing * 5; }
   }
 
+  /** Sturdy props take two blows: the first cracks and rocks them, the second smashes. */
+  hitBreakable(b, dir) {
+    if (--b.hp > 0) {
+      b.cracked = true; b.wob = 0.35; sfx.punch(); this.hitstop = Math.max(this.hitstop, 0.05); this.shake = Math.max(this.shake, 3);
+      this.fx.push({ kind: 'spark', x: b.x - dir * 14, y: 30, z: b.z + 0.001, t: 0, max: 0.15, big: false, rot: rand(0, 6) });
+      for (let i = 0; i < 3; i++) this.fx.push({ kind: 'chunk', x: b.x, y: 30, z: b.z, vx: dir * rand(40, 140), vy: rand(120, 260), g: 1400, t: 0, max: 0.8, spin: rand(-10, 10), col: '#b27c42', s: rand(3, 5) });
+      return;
+    }
+    this.smash(b, dir);
+  }
+
   smash(b, dir) {
     b.broken = true; b.t = 0;
     sfx.hit(); this.shake = Math.max(this.shake, 5); this.hitstop = Math.max(this.hitstop, 0.04);
     const cols = { can: ['#8a949c', '#5c666e', '#3a3a40'], crate: ['#b07a44', '#8a5a2c', '#6a4420'], barrel: ['#c0392b', '#8a2a20', '#333'], newsbox: ['#1e3cff', '#dfe8f0', '#152a9a'] }[b.kind];
     for (let i = 0; i < 9; i++) this.fx.push({ kind: 'chunk', x: b.x + rand(-12, 12), y: rand(10, 40), z: b.z, vx: dir * rand(60, 300) + rand(-80, 80), vy: rand(220, 480), g: 1400, t: 0, max: rand(0.8, 1.3), spin: rand(-14, 14), col: pick(cols), s: rand(5, 10) });
+    if (b.kind === 'crate') for (let i = 0; i < 4; i++) this.fx.push({ kind: 'chunk', plank: true, x: b.x + rand(-10, 10), y: rand(15, 40), z: b.z, vx: dir * rand(80, 320) + rand(-60, 60), vy: rand(260, 520), g: 1400, t: 0, max: rand(1, 1.4), spin: rand(-12, 12), col: pick(['#c08a4e', '#b27c42', '#8a5a2c']), s: rand(8, 11) });
     if (b.kind === 'can') for (let i = 0; i < 4; i++) this.fx.push({ kind: 'chunk', x: b.x, y: 30, z: b.z, vx: rand(-120, 120), vy: rand(150, 320), g: 1300, t: 0, max: 1.1, spin: rand(-8, 8), col: pick(['#e8e0c0', '#6a8a3a', '#c9c2a8']), s: rand(3, 6) });
     this.dust(b.x, b.z, 5);
     const s = this.screenOf(b.x, b.z, 60);
@@ -430,6 +444,7 @@ export class Brawler {
 
   updatePickups(dt) {
     const p = this.p;
+    for (const b of this.breakables) if (b.wob > 0) b.wob = Math.max(0, b.wob - dt);
     for (const k of this.pickups) {
       k.t += dt;
       if (!k.got && k.t > 0.35 && Math.abs(k.x - p.x) < 34 && Math.abs(k.z - p.z) < 0.1 && p.y < 30) {
@@ -595,10 +610,13 @@ export class Brawler {
       if (a.dead || b.dead || a.st === 'down' || b.st === 'down') continue;
       const dx = b.x - a.x, dz = b.z - a.z;
       // bodies are ~46 units wide; keep screen overlap under ~30% (elliptical, depth counts too)
-      const d = Math.hypot(dx / 34, dz / 0.12);
+      const wa = LOOKS[a.lk] ? LOOKS[a.lk].scale * (LOOKS[a.lk].shape ? LOOKS[a.lk].shape[0] : 1) : 1;
+      const wb = LOOKS[b.lk] ? LOOKS[b.lk].scale * (LOOKS[b.lk].shape ? LOOKS[b.lk].shape[0] : 1) : 1;
+      const R = 16 * (wa + wb); // centre spacing for <30% overlap of ~46-unit bodies, wider for the bulky ones
+      const d = Math.hypot(dx / R, dz / 0.12);
       if (d < 1) {
-        const f = (1 - d) * Math.min(1, dt * 9), ang = Math.atan2(dz / 0.12, dx / 34 || (i % 2 ? 0.01 : -0.01));
-        const px = Math.cos(ang) * 34 * f * 0.5, pz = Math.sin(ang) * 0.12 * f * 0.5;
+        const f = (1 - d) * Math.min(1, dt * 9), ang = Math.atan2(dz / 0.12, dx / R || (i % 2 ? 0.01 : -0.01));
+        const px = Math.cos(ang) * R * f * 0.5, pz = Math.sin(ang) * 0.12 * f * 0.5;
         a.x -= px; b.x += px;
         a.z = clamp(a.z - pz, 0.04, 1); b.z = clamp(b.z + pz, 0.04, 1);
       }

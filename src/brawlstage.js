@@ -4,27 +4,15 @@
 // when they scroll away) so a frame is mostly drawImage calls: cheap on phones.
 import { SIGN_WORDS } from './data.js';
 import { glow } from './art.js';
-import { shade, rgba, clamp } from './util.js';
+import { shade, rgba } from './util.js';
 import { RNG } from './rng.js';
 import { quality } from './settings.js';
+import { INK, mk, halftone, pen } from './brawlpaint.js';
+import { paintFacade, TAGS, POSTERS } from './brawlfacades.js';
 
-export const INK = '#15111c';
-const TAGS = ['ZAP!', 'KRASH', 'CREW', 'BOOM', 'RATZ', 'WHAM', 'SK8', 'B-BOYZ', 'NO $$$', 'VANDL'];
-const POSTERS = [['WANTED', '#f2e6c4', '#7a1f1f'], ['VOTE!', '#2a5ab8', '#fff'], ['LIVE!', '#e0402a', '#ffe14a'], ['SALE', '#ffe14a', '#d8122e'], ['LOST CAT', '#fff', '#222']];
+export { INK };
+
 const BILLBOARDS = [['DAILY CAPE', '#f2ead8', '#1e3cff'], ['FIZZ COLA', '#d8122e', '#fff'], ['HOT DOGS', '#ffe14a', '#d8122e'], ['CITY BANK', '#1a3a6a', '#ffd23f'], ['CAPE-TV', '#111', '#39c6ff']];
-
-function mk(w, h) { const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; }
-
-let dots = null;
-/** Comic halftone dot pattern (tiny tile; the drawing transform scales it). */
-function halftone(ctx) {
-  if (!dots) {
-    dots = mk(4, 4);
-    const g = dots.getContext('2d');
-    g.fillStyle = '#000'; g.beginPath(); g.arc(2, 2, 0.95, 0, Math.PI * 2); g.fill();
-  }
-  return ctx.createPattern(dots, 'repeat');
-}
 
 export class Stage {
   constructor(b) {
@@ -57,7 +45,8 @@ export class Stage {
       if (st === 'docks') { f.h = r.range(60, 120); f.stack = r.int(1, 3); }
       if (st === 'warehouses' || st === 'factory') f.h = r.range(150, 220);
       f.escape = (st === 'apartments' || st === 'mixed') && r.chance(0.55);
-      f.tag = r.chance(0.45) ? r.pick(TAGS) : null;
+      f.tag = (st === 'warehouses' || st === 'factory') && r.chance(0.6) ? r.pick(TAGS) : null;
+      if (f.sign === 'NEON') f.sign = 'NOVA';
       f.tagCol = r.pick(['#ff3fa4', '#39e0ff', '#7dff4a', '#ffe14a', '#ff7a1a']);
       f.poster = r.chance(0.5) ? r.pick(POSTERS) : null;
       f.seed = r.int(1, 1e6);
@@ -82,6 +71,10 @@ export class Stage {
       this.fg.push({ x: cx + (i % 2 ? -1 : 1) * r.range(190, 215), kind: r.pick(['pole', 'pole', 'sign']) });
       this.fg.push({ x: cx + 330, kind: 'pole' });
     });
+    // bottom strip of street clutter in the foreground (parallax 1.2): parked car hoods, bags, hydrants
+    const STRIP = st === 'farm' ? ['hay', 'fencefg'] : st === 'houses' ? ['carhood', 'bin', 'hydrant', 'cone'] : ['carhood', 'bags', 'hydrant', 'cone', 'barrier', 'bags'];
+    this.strip = [];
+    for (let sx = -200; sx < len + 900; sx += r.range(170, 330)) this.strip.push({ x: sx, kind: r.pick(STRIP), hue: r.pick(['#c0392b', '#2a5ab8', '#e0a020', '#3a8a5a', '#d8d8d0', '#6a3a8a']) });
     this.skySeed = r.int(1, 1e6);
   }
 
@@ -257,7 +250,13 @@ export class Stage {
 
   /** Dark occluders that pass in front of the fight (parallax 1.4), faded when someone's behind them. */
   drawFront(ctx, W, H, cam, actors) {
-    const k = this.b.k, par = 1.4, ks = k * par;
+    const k = this.b.k, par = 1.4, ks = k * par, k2 = k * 1.2;
+    for (const o of this.strip) {
+      const x = W / 2 + (o.x - cam) * k2;
+      if (x < -120 * k2 || x > W + 120 * k2) continue;
+      const spr = this.propSprite('st_' + o.kind + (o.kind === 'carhood' ? o.hue : ''), k2, o);
+      ctx.drawImage(spr, x - spr.cssW / 2, H + 4 * k2 - spr.cssH, spr.cssW, spr.cssH);
+    }
     for (const o of this.fg) {
       const x = W / 2 + (o.x - cam) * ks;
       if (x < -60 * ks || x > W + 60 * ks) continue;
@@ -456,6 +455,16 @@ export class Stage {
       g.strokeStyle = 'rgba(255,255,255,.12)'; g.lineWidth = 1;
       for (let j = -2; j <= 2; j++) { g.beginPath(); g.moveTo(mx - 20 * k, my + j * 2.6 * k); g.lineTo(mx + 20 * k, my + j * 2.6 * k); g.stroke(); }
       g.fillStyle = 'rgba(60,20,90,.18)'; g.beginPath(); g.ellipse(r.range(0, TW), ry + (h - ry) * 0.45, 30 * k, 7 * k, 0, 0, Math.PI * 2); g.fill();
+      // litter: flyers, crushed cans, a burger wrapper, cigarette butts along the gutter
+      for (let i = 0; i < 14; i++) {
+        const lx = r.range(0, TW), ly = i < 6 ? r.range(4, walk - 4) : r.range(ry + 4, ry + 26 * k), kind = r.int(0, 3);
+        g.save(); g.translate(lx, ly); g.rotate(r.range(-0.8, 0.8));
+        if (kind === 0) { g.fillStyle = r.pick(['#f2ead8', '#ffe14a', '#e8e8f0']); g.fillRect(-4 * k, -2.5 * k, 8 * k, 5 * k); g.strokeStyle = 'rgba(20,12,24,.6)'; g.lineWidth = 0.8; g.strokeRect(-4 * k, -2.5 * k, 8 * k, 5 * k); g.fillStyle = 'rgba(20,12,24,.4)'; g.fillRect(-2.5 * k, -1 * k, 5 * k, 0.8); }
+        else if (kind === 1) { g.fillStyle = r.pick(['#d8122e', '#2a8a4a', '#c9ccd4']); g.fillRect(-3 * k, -1.4 * k, 6 * k, 2.8 * k); g.fillStyle = 'rgba(255,255,255,.5)'; g.fillRect(-3 * k, -1.4 * k, 6 * k, 0.8); }
+        else if (kind === 2) { g.fillStyle = '#e8c070'; g.beginPath(); g.ellipse(0, 0, 4 * k, 2.4 * k, 0, 0, Math.PI * 2); g.fill(); g.strokeStyle = 'rgba(20,12,24,.5)'; g.lineWidth = 0.8; g.stroke(); }
+        else { g.fillStyle = '#f2ead8'; g.fillRect(0, 0, 2.4 * k, 0.9 * k); g.fillStyle = '#d88a3a'; g.fillRect(2.4 * k, 0, 0.8 * k, 0.9 * k); }
+        g.restore();
+      }
       // lane dashes at z≈0.64 with an ink edge
       const dy = (b.gb - b.gt) * 0.64, dash = 70 * k;
       for (let x = 0; x < TW; x += dash * 2) {
@@ -474,10 +483,35 @@ export class Stage {
     const key = 'p_' + kind + k.toFixed(3) + '_' + nb;
     const S = {
       lamp: [70, 206], hydrant: [26, 34], newsbox: [26, 40], bags: [44, 26], bench: [70, 30], meter: [12, 46], tree: [70, 150], mailbox: [22, 44], bin: [26, 36], hay: [60, 40], fence: [90, 34], bollard: [22, 24], crate: [40, 40],
+      st_bags: [70, 34], st_hydrant: [34, 46], st_cone: [30, 40], st_barrier: [96, 40], st_bin: [36, 48], st_hay: [80, 44], st_fencefg: [120, 44],
       fg_pole: [34, 330], fg_hydrant: [50, 70], fg_cone: [40, 52], fg_sign: [60, 330], fg_post: [26, 120],
-    }[kind] || [30, 30];
+    }[kind] || (kind.startsWith('st_carhood') ? [180, 56] : [30, 30]);
     const w = S[0] * k, h = S[1] * k;
-    return this.cached(key, w, h, (g) => { g.save(); g.scale(k, k); g.lineJoin = 'round'; this.paintProp(g, kind, S[0], S[1]); g.restore(); this.tint(g, nb); });
+    return this.cached(key, w, h, (g) => {
+      g.save(); g.scale(k, k); g.lineJoin = 'round';
+      if (kind.startsWith('st_')) {
+        // foreground clutter: the same props, larger, sitting in the shade under the camera
+        const base = kind.slice(3);
+        if (base.startsWith('carhood')) this.paintCarHood(g, S[0], S[1], base.slice(7));
+        else if (base === 'cone' || base === 'barrier') this.paintProp(g, 'x_' + base, S[0], S[1]);
+        else this.paintProp(g, base === 'fencefg' ? 'fence' : base, S[0], S[1]);
+      } else this.paintProp(g, kind, S[0], S[1]);
+      g.restore();
+      if (kind.startsWith('st_')) { g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(12,8,28,.3)'; g.fillRect(0, 0, g.canvas.width, g.canvas.height); g.restore(); }
+      this.tint(g, nb);
+    });
+  }
+
+  /** The nose of a parked car poking into frame: bonnet, grille, headlight, bumper, a hard highlight. */
+  paintCarHood(g, w, h, col) {
+    const { ink } = pen(g);
+    g.beginPath(); g.moveTo(0, h); g.lineTo(0, 18); g.quadraticCurveTo(4, 8, 30, 6); g.lineTo(w - 44, 4); g.quadraticCurveTo(w - 14, 6, w - 6, 22); g.lineTo(w - 2, h); g.closePath();
+    g.fillStyle = col; g.fill(); ink(2);
+    g.fillStyle = 'rgba(255,255,255,.35)'; g.beginPath(); g.moveTo(24, 10); g.lineTo(w - 50, 8); g.lineTo(w - 62, 13); g.lineTo(30, 15); g.fill();
+    g.save(); g.globalAlpha = 0.3; g.fillStyle = halftone(g); g.fillRect(0, 30, w, h - 30); g.restore();
+    g.fillStyle = '#1a1a20'; g.fillRect(w - 58, 26, 44, 12); g.strokeStyle = '#6a6a74'; g.lineWidth = 1; for (let x = w - 56; x < w - 14; x += 5) { g.beginPath(); g.moveTo(x, 27); g.lineTo(x, 37); g.stroke(); }
+    g.fillStyle = '#fff6c8'; g.beginPath(); g.ellipse(w - 70, 30, 9, 6, 0, 0, Math.PI * 2); g.fill(); ink(1.4);
+    g.fillStyle = '#c9ccd4'; g.fillRect(4, h - 12, w - 8, 7); g.beginPath(); g.rect(4, h - 12, w - 8, 7); ink(1.4);
   }
 
   paintProp(g, kind, w, h) {
@@ -547,6 +581,16 @@ export class Stage {
         g.fillStyle = fgc; g.beginPath(); g.moveTo(cx - 5, 0); g.lineTo(cx + 5, 0); g.lineTo(cx + 16, h - 8); g.lineTo(cx - 16, h - 8); g.fill(); g.fillRect(0, h - 8, w, 8);
         g.fillStyle = 'rgba(255,140,40,.45)'; g.fillRect(cx - 9, h * 0.45, 18, 5);
         break;
+      case 'x_cone':
+        g.beginPath(); g.moveTo(cx - 4, 2); g.lineTo(cx + 4, 2); g.lineTo(cx + 12, h - 6); g.lineTo(cx - 12, h - 6); g.closePath(); g.fillStyle = '#ff7a1a'; g.fill(); ink(1.6);
+        g.fillStyle = '#fff'; g.fillRect(cx - 7.5, h * 0.42, 15, 5); box(1, h - 7, w - 2, 7, '#e0601a', 1.4);
+        break;
+      case 'x_barrier':
+        box(4, 6, w - 8, 14, '#f2f2ea', 1.6);
+        g.save(); g.beginPath(); g.rect(4, 6, w - 8, 14); g.clip(); g.fillStyle = '#d8122e'; for (let x = -10; x < w; x += 16) { g.beginPath(); g.moveTo(x, 20); g.lineTo(x + 8, 6); g.lineTo(x + 14, 6); g.lineTo(x + 6, 20); g.fill(); } g.restore();
+        g.beginPath(); g.rect(4, 6, w - 8, 14); ink(1.6);
+        box(10, 20, 5, h - 20, '#555', 1.2); box(w - 15, 20, 5, h - 20, '#555', 1.2); box(4, h - 4, 18, 4, '#333', 1); box(w - 22, h - 4, 18, 4, '#333', 1);
+        break;
       case 'fg_post': g.fillStyle = fgc; g.fillRect(cx - 6, 0, 12, h); g.fillRect(0, 20, w, 6); break;
     }
   }
@@ -563,190 +607,9 @@ export class Stage {
     g.setTransform(k * dpr, 0, 0, k * dpr, padX * k * dpr, top * k * dpr);
     g.lineJoin = 'round';
     const out = { c, padX, top, lit, nb, neon: null };
-    this.paintFacade(g, f, lit, out);
+    paintFacade(g, f, lit, out);
     this.tint(g, nb);
     return out;
   }
 
-  paintFacade(g, f, lit, out) {
-    const w = f.w, h = f.h, st = f.kind, r = new RNG(f.seed);
-    const ink = (lw = 1.6) => { g.strokeStyle = INK; g.lineWidth = lw; g.stroke(); };
-    const box = (x, y, bw, bh, col, lw = 1.6) => { g.beginPath(); g.rect(x, y, bw, bh); g.fillStyle = col; g.fill(); if (lw) ink(lw); };
-    const tone = (x, y, bw, bh, a = 0.22) => { g.save(); g.globalAlpha = a; g.fillStyle = halftone(g); g.fillRect(x, y, bw, bh); g.restore(); };
-    const win = (x, y, ww, wh, on) => {
-      box(x - 1.5, y - 1.5, ww + 3, wh + 3, shade(f.col, 0.25), 1.2);
-      if (on) { g.fillStyle = r.pick(['#ffd98a', '#ffe7b0', '#ffc070']); g.fillRect(x, y, ww, wh); if (r.chance(0.3)) { g.fillStyle = 'rgba(60,30,40,.55)'; g.beginPath(); g.arc(x + ww * 0.5, y + wh * 0.62, ww * 0.18, 0, Math.PI * 2); g.fillRect(x + ww * 0.3, y + wh * 0.72, ww * 0.4, wh * 0.3); g.fill(); } }
-      else {
-        const gl = g.createLinearGradient(x, y, x, y + wh);
-        gl.addColorStop(0, lit ? '#2a3050' : '#bfe0f8'); gl.addColorStop(1, lit ? '#141828' : '#5a86b8');
-        g.fillStyle = gl; g.fillRect(x, y, ww, wh);
-        g.fillStyle = 'rgba(255,255,255,.35)'; g.beginPath(); g.moveTo(x + ww * 0.15, y + wh); g.lineTo(x + ww * 0.45, y); g.lineTo(x + ww * 0.6, y); g.lineTo(x + ww * 0.3, y + wh); g.fill();
-      }
-      if (r.chance(0.35)) { g.fillStyle = rgba(r.pick(['#d8122e', '#ffffff', '#2a5ab8', '#e0a020']), 0.75); g.fillRect(x, y, ww, wh * 0.28); } // blinds/curtain
-      g.beginPath(); g.rect(x, y, ww, wh); ink(1.2);
-      g.beginPath(); g.moveTo(x + ww / 2, y); g.lineTo(x + ww / 2, y + wh); g.strokeStyle = shade(f.col, 0.25); g.lineWidth = 1.2; g.stroke();
-      box(x - 3, y + wh + 1.5, ww + 6, 3, shade(f.col, 0.35), 1);
-    };
-
-    if (st === 'houses') {
-      box(-20, -18, w + 60, 18, '#5f8a4a', 0); // lawn strip
-      box(0, -h * 0.65, w, h * 0.65 - 18, f.col);
-      tone(0, -h * 0.65, w * 0.18, h * 0.65 - 18, 0.18);
-      g.beginPath(); g.moveTo(-14, -h * 0.63); g.lineTo(w / 2, -h); g.lineTo(w + 14, -h * 0.63); g.closePath(); g.fillStyle = '#6a3a2a'; g.fill(); ink(1.8);
-      g.save(); g.clip(); tone(w / 2, -h, w, h * 0.4, 0.25); g.restore();
-      win(w * 0.14, -h * 0.5, w * 0.2, h * 0.17, lit && r.chance(0.7)); win(w * 0.66, -h * 0.5, w * 0.2, h * 0.17, lit && r.chance(0.6));
-      box(w * 0.43, -h * 0.42, w * 0.14, h * 0.42 - 18, '#6b3a24'); g.fillStyle = '#e8c04a'; g.beginPath(); g.arc(w * 0.54, -h * 0.2, 1.8, 0, Math.PI * 2); g.fill();
-      for (let i = -20; i < w + 40; i += 11) box(i, -15, 4, 15, '#f2f2ea', 1); // picket fence
-      box(-20, -11, w + 60, 3, '#f2f2ea', 1);
-      return;
-    }
-    if (st === 'farm') {
-      if (f.barn) {
-        box(0, -h * 0.7, w * 0.7, h * 0.7, '#a8322d');
-        for (let x = 6; x < w * 0.7; x += 8) { g.fillStyle = 'rgba(0,0,0,.14)'; g.fillRect(x, -h * 0.7, 1.4, h * 0.7); }
-        g.beginPath(); g.moveTo(-10, -h * 0.68); g.lineTo(w * 0.35, -h); g.lineTo(w * 0.7 + 10, -h * 0.68); g.closePath(); g.fillStyle = '#6a2a24'; g.fill(); ink(1.8);
-        g.strokeStyle = '#eee'; g.lineWidth = 3; g.strokeRect(w * 0.2, -h * 0.45, w * 0.3, h * 0.45);
-        g.beginPath(); g.moveTo(w * 0.2, -h * 0.45); g.lineTo(w * 0.5, 0); g.moveTo(w * 0.5, -h * 0.45); g.lineTo(w * 0.2, 0); g.stroke();
-        box(w * 0.78, -h - 20, w * 0.16, h + 20, '#c9c9c0'); g.beginPath(); g.arc(w * 0.86, -h - 20, w * 0.08, Math.PI, 0); g.fillStyle = '#9aa0a8'; g.fill(); ink();
-        tone(w * 0.78, -h - 20, w * 0.05, h + 20, 0.25);
-      } else {
-        box(-40, -50, w + 80, 50, '#c9b25a');
-        for (let i = 0; i < 6; i++) { g.fillStyle = '#b89e48'; g.fillRect(-40, -50 + i * 9, w + 80, 3); }
-      }
-      g.strokeStyle = '#8a6a3a'; g.lineWidth = 3; g.beginPath(); g.moveTo(-60, -18); g.lineTo(w + 60, -18); g.moveTo(-60, -8); g.lineTo(w + 60, -8); g.stroke();
-      for (let x = -60; x < w + 60; x += 30) box(x, -24, 4, 24, '#7a5a30', 1);
-      return;
-    }
-    if (st === 'docks') {
-      for (let i = 0; i < f.stack; i++) {
-        const cw = w * 0.9, ch = 40, cy = -ch * (i + 1), col = shade(f.col, -i * 0.1);
-        box(0, cy, cw, ch - 2, col, 1.8);
-        for (let j = 4; j < cw; j += 7) { g.fillStyle = 'rgba(0,0,0,.2)'; g.fillRect(j, cy + 2, 2, ch - 6); }
-        tone(cw * 0.75, cy, cw * 0.25, ch - 2, 0.25);
-        g.fillStyle = 'rgba(255,255,255,.75)'; g.font = '900 9px Impact, system-ui'; g.textAlign = 'left'; g.fillText(r.pick(['CARGO', 'MAERK', 'EVERG', 'PORT 9']), 8, cy + 14);
-      }
-      return;
-    }
-
-    // ---- city block building
-    const wall = g.createLinearGradient(0, -h, 0, 0);
-    wall.addColorStop(0, shade(f.col, 0.1)); wall.addColorStop(1, shade(f.col, -0.12));
-    g.beginPath(); g.rect(0, -h, w, h); g.fillStyle = wall; g.fill();
-    if (st === 'towers') {
-      // curtain wall: sky reflection bands + mullions
-      const gl = g.createLinearGradient(0, -h, w, 0);
-      gl.addColorStop(0, lit ? '#1c2a48' : '#a8d4f4'); gl.addColorStop(0.5, lit ? '#101a30' : '#5a8ec8'); gl.addColorStop(1, lit ? '#22335a' : '#8ab8e8');
-      g.fillStyle = gl; g.fillRect(4, -h + 6, w - 8, h - 60);
-      g.strokeStyle = shade(f.col, -0.3); g.lineWidth = 1.4;
-      for (let x = 4; x < w - 4; x += 22) { g.beginPath(); g.moveTo(x, -h + 6); g.lineTo(x, -54); g.stroke(); }
-      for (let y = -h + 6; y < -54; y += 18) { g.beginPath(); g.moveTo(4, y); g.lineTo(w - 4, y); g.stroke(); }
-      if (lit) for (let y = -h + 8; y < -56; y += 18) for (let x = 6; x < w - 6; x += 22) if (r.chance(0.35)) { g.fillStyle = 'rgba(255,220,140,.8)'; g.fillRect(x, y, 18, 14); }
-      g.fillStyle = 'rgba(255,255,255,.18)'; g.beginPath(); g.moveTo(w * 0.2, -54); g.lineTo(w * 0.55, -h); g.lineTo(w * 0.7, -h); g.lineTo(w * 0.35, -54); g.fill();
-    } else if (st === 'warehouses' || st === 'factory') {
-      for (let x = 3; x < w; x += 7) { g.fillStyle = 'rgba(0,0,0,.13)'; g.fillRect(x, -h, 2.2, h); g.fillStyle = 'rgba(255,255,255,.06)'; g.fillRect(x + 2.2, -h, 1.2, h); }
-      // clerestory windows
-      for (let x = 10; x < w - 30; x += 34) box(x, -h + 14, 24, 12, lit ? '#e8c060' : '#6a8aa0', 1.2);
-      // roll-up door + hazard stripes
-      box(w * 0.18, -h * 0.55, w * 0.46, h * 0.55, '#5a5d62');
-      for (let y = -h * 0.55 + 5; y < 0; y += 6) { g.fillStyle = 'rgba(0,0,0,.28)'; g.fillRect(w * 0.18, y, w * 0.46, 1.6); }
-      g.save(); g.beginPath(); g.rect(w * 0.18, -h * 0.55 - 7, w * 0.46, 6); g.clip();
-      g.fillStyle = '#f2c21a'; g.fillRect(w * 0.18, -h * 0.55 - 7, w * 0.46, 6); g.fillStyle = INK;
-      for (let x = w * 0.18 - 8; x < w * 0.64; x += 10) { g.beginPath(); g.moveTo(x, -h * 0.55 - 1); g.lineTo(x + 5, -h * 0.55 - 7); g.lineTo(x + 10, -h * 0.55 - 7); g.lineTo(x + 5, -h * 0.55 - 1); g.fill(); }
-      g.restore();
-      if (st === 'factory') { box(w * 0.78, -h - 120, 22, 120, '#7a5a4a'); g.fillStyle = '#d8d0c0'; g.fillRect(w * 0.78, -h - 110, 22, 5); g.fillRect(w * 0.78, -h - 80, 22, 5); }
-    } else {
-      if (st === 'apartments' || st === 'mixed') for (let y = -h + 4; y < -56; y += 6) { g.fillStyle = 'rgba(0,0,0,.07)'; g.fillRect(0, y, w, 1); }
-      // window grid
-      const cols = Math.max(2, Math.floor(w / 42)), ww = w / cols;
-      const rows = Math.max(1, Math.floor((h - 76) / 40));
-      for (let rr = 0; rr < rows; rr++) for (let cc = 0; cc < cols; cc++) {
-        const on = lit && r.chance(st === 'clubs' || st === 'lair' ? 0.35 : 0.55);
-        win(cc * ww + ww * 0.22, -h + 20 + rr * 40, ww * 0.56, 24, on);
-        if (!lit && r.chance(0.12)) box(cc * ww + ww * 0.3, -h + 20 + rr * 40 + 25, ww * 0.4, 9, '#b8bcc0', 1.2); // AC unit
-      }
-      if (f.escape && cols >= 2) {
-        const ex = ww * 0.12, ew = ww * 1.76;
-        g.strokeStyle = INK; g.lineWidth = 1.6;
-        for (let rr = 0; rr < rows; rr++) {
-          const py = -h + 20 + rr * 40 + 30;
-          g.fillStyle = '#23202a'; g.fillRect(ex, py, ew, 3);
-          g.beginPath(); for (let x = ex; x <= ex + ew; x += 5) { g.moveTo(x, py); g.lineTo(x, py - 10); } g.moveTo(ex, py - 10); g.lineTo(ex + ew, py - 10); g.lineWidth = 1; g.stroke();
-          if (rr < rows - 1) { g.beginPath(); g.moveTo(ex + (rr % 2 ? ew * 0.2 : ew * 0.8), py); g.lineTo(ex + (rr % 2 ? ew * 0.8 : ew * 0.2), py + 40); g.lineWidth = 2; g.stroke(); }
-        }
-      }
-    }
-    // cornice + its shadow
-    box(-3, -h - 4, w + 6, 8, shade(f.col, 0.28), 1.6);
-    tone(0, -h + 4, w, 8, 0.3);
-    // ground floor
-    const gf = 58;
-    if (st !== 'warehouses' && st !== 'factory') {
-      box(0, -gf, w, gf, shade(f.col, -0.32));
-      // shop window with display + reflection
-      const sx0 = w * 0.08, sw0 = w * 0.5, sy0 = -gf * 0.82, sh0 = gf * 0.6;
-      g.beginPath(); g.rect(sx0, sy0, sw0, sh0);
-      const sg = g.createLinearGradient(0, sy0, 0, sy0 + sh0);
-      sg.addColorStop(0, lit ? '#ffe7b0' : '#a8d0ec'); sg.addColorStop(1, lit ? '#e8a860' : '#5a7a98');
-      g.fillStyle = sg; g.fill();
-      for (let i = 0; i < 4; i++) { g.fillStyle = r.pick(['#d8122e', '#2a5ab8', '#e0a020', '#3a8a5a', '#8a3ab8']); g.fillRect(sx0 + 6 + i * (sw0 / 4.4), sy0 + sh0 - 14 - r.range(0, 10), sw0 / 6, 14 + r.range(0, 10)); }
-      g.fillStyle = 'rgba(255,255,255,.4)'; g.beginPath(); g.moveTo(sx0 + sw0 * 0.1, sy0 + sh0); g.lineTo(sx0 + sw0 * 0.35, sy0); g.lineTo(sx0 + sw0 * 0.48, sy0); g.lineTo(sx0 + sw0 * 0.23, sy0 + sh0); g.fill();
-      g.beginPath(); g.rect(sx0, sy0, sw0, sh0); ink(2);
-      // door
-      box(w * 0.66, -gf * 0.86, w * 0.19, gf * 0.86, '#3a2418', 1.8);
-      box(w * 0.69, -gf * 0.76, w * 0.13, gf * 0.3, lit ? '#ffd98a' : '#6a90b0', 1.2);
-      g.fillStyle = '#e8c04a'; g.beginPath(); g.arc(w * 0.82, -gf * 0.4, 1.6, 0, Math.PI * 2); g.fill();
-      out.door = w * 0.755;
-    } else out.door = w * 0.41;
-    // awning: stripes, scalloped edge, halftone underside shadow
-    if (f.awn) {
-      const ay = -gf - 4, ah = 16;
-      g.save(); g.beginPath(); g.moveTo(2, ay - ah); g.lineTo(w - 2, ay - ah); g.lineTo(w + 6, ay); g.lineTo(-6, ay); g.closePath(); g.clip();
-      g.fillStyle = f.awn; g.fillRect(-6, ay - ah, w + 12, ah);
-      g.fillStyle = 'rgba(255,255,255,.75)'; for (let x = -6; x < w + 6; x += 14) g.fillRect(x, ay - ah, 7, ah);
-      g.restore();
-      g.beginPath(); g.moveTo(2, ay - ah); g.lineTo(w - 2, ay - ah); g.lineTo(w + 6, ay); g.lineTo(-6, ay); g.closePath(); ink(1.6);
-      g.beginPath(); for (let x = -6; x < w + 6; x += 10) g.arc(x + 5, ay, 5, 0, Math.PI); g.fillStyle = f.awn; g.fill(); ink(1.3);
-      tone(0, ay + 5, w, 12, 0.3);
-    }
-    // sign
-    if (f.sign) {
-      const neon = f.neon && (st === 'clubs' || st === 'casino' || st === 'venues' || st === 'lair');
-      const sy = -gf - (f.awn ? 34 : 20), sw = w * 0.72, sh = 24;
-      if (neon) {
-        box(w / 2 - sw / 2, sy - sh / 2, sw, sh, '#120e1a', 2);
-        g.font = `900 ${Math.min(18, (sw / f.sign.length) * 1.5)}px system-ui`; g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.lineWidth = 4; g.strokeStyle = rgba(f.neon, 0.45); g.strokeText(f.sign, w / 2, sy + 1);
-        g.fillStyle = lit ? '#ffffff' : f.neon; g.fillText(f.sign, w / 2, sy + 1);
-        g.lineWidth = 1; g.strokeStyle = f.neon; g.strokeText(f.sign, w / 2, sy + 1);
-        out.neon = { x: w / 2 + 0, y: sy, w: sw };
-      } else {
-        box(w / 2 - sw / 2, sy - sh / 2, sw, sh, '#f2ead8', 2);
-        box(w / 2 - sw / 2 + 3, sy - sh / 2 + 3, sw - 6, sh - 6, 'rgba(0,0,0,0)', 1);
-        g.font = `900 ${Math.min(17, (sw / f.sign.length) * 1.45)}px Georgia, serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.fillStyle = f.awn || '#d8122e'; g.fillText(f.sign, w / 2 + 1, sy + 2); g.fillStyle = INK; g.fillText(f.sign, w / 2, sy + 1);
-      }
-    }
-    // street-level grime: poster, graffiti tag
-    if (f.poster) {
-      const [txt, bg, fg] = f.poster, px = w * 0.58, py = -gf - (f.awn ? 0 : 0) + 12;
-      if (st === 'warehouses' || st === 'factory') {
-        g.save(); g.translate(w * 0.8, -40); g.rotate(r.range(-0.08, 0.08)); box(-12, -16, 24, 30, bg, 1.2); g.fillStyle = fg; g.font = '900 6px Impact, system-ui'; g.textAlign = 'center'; g.fillText(txt, 0, -6); g.fillRect(-7, -2, 14, 12); g.restore();
-      } else { g.save(); g.translate(px - 60 < 0 ? px : w * 0.03 + 12, py - 44); g.rotate(r.range(-0.1, 0.1)); box(-10, -13, 20, 26, bg, 1.2); g.fillStyle = fg; g.font = '900 5px Impact, system-ui'; g.textAlign = 'center'; g.fillText(txt, 0, -5); g.fillRect(-6, -1, 12, 10); g.restore(); }
-    }
-    if (f.tag) {
-      g.save(); g.translate(w * (st === 'warehouses' || st === 'factory' ? 0.84 : 0.37), -14); g.rotate(r.range(-0.18, 0.1));
-      g.font = `900 ${r.range(13, 18)}px Impact, system-ui`; g.textAlign = 'center';
-      g.lineWidth = 4; g.strokeStyle = INK; g.strokeText(f.tag, 0, 0);
-      g.fillStyle = f.tagCol; g.fillText(f.tag, 0, 0);
-      g.fillStyle = rgba('#ffffff', 0.6); g.fillRect(-10, -9, 6, 2);
-      g.restore();
-    }
-    // building side shade (halftone) + outline
-    tone(0, -h, 7, h, 0.35);
-    g.beginPath(); g.rect(0, -h, w, h); ink(2.2);
-    // ground grime
-    const gr = g.createLinearGradient(0, -14, 0, 0); gr.addColorStop(0, 'rgba(20,12,20,0)'); gr.addColorStop(1, 'rgba(20,12,20,.4)');
-    g.fillStyle = gr; g.fillRect(0, -14, w, 14);
-    void clamp;
-  }
 }
