@@ -198,12 +198,22 @@ export class HeroSprite {
    * view 'top':  camera straight down, heading = +x on the sprite.
    * yaw rotates the character about the vertical axis (side view: PI/2 faces right).
    */
-  /** roll = bank about her forward axis; pitch > 0 lifts her head (upright hover). Radians. */
-  render({ view = 'side', yaw = Math.PI / 2, span = 2.6, lift = 0.12, roll = 0, pitch = 0 } = {}) {
+  /** roll = bank about her forward axis; pitch > 0 lifts her head (upright hover). Radians.
+   *  view 'aerial': three-quarter from above, tilted `tilt` rad from vertical; yaw = PI/2 - heading. */
+  render({ view = 'side', yaw = Math.PI / 2, span = 2.6, lift = 0.12, roll = 0, pitch = 0, tilt = 0.6 } = {}) {
     const a = this.w / this.h;
     const c = this.cam;
-    this.pivot.rotation.set(-pitch, yaw, roll);
-    if (view === 'top') {
+    this.pivot.rotation.set(-pitch, yaw, roll, 'XYZ');
+    if (view === 'aerial') {
+      // Three-quarter view from above and behind the screen's bottom edge (matching the flight
+      // camera's oblique lean): she keeps visible volume, so flying north reads as flying away,
+      // not as a figure standing up. yaw = heading (world); roll/pitch are in her own frame.
+      this.pivot.rotation.set(-pitch, yaw, roll, 'YXZ');
+      const half = span / 2;
+      c.left = -half * a; c.right = half * a; c.top = half; c.bottom = -half;
+      c.position.set(0, 20 * Math.cos(tilt), 20 * Math.sin(tilt)); c.up.set(0, 1, 0); c.lookAt(0, 0, 0);
+      this.pivot.position.set(0, -0.9, 0); // her body sits ~0.9 m up in the clips: centre it
+    } else if (view === 'top') {
       const half = span / 2;
       c.left = -half * a; c.right = half * a; c.top = half; c.bottom = -half;
       c.position.set(0, 20, 0); c.up.set(1, 0, 0); c.lookAt(0, 0, 0);

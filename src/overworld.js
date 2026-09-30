@@ -4,19 +4,20 @@ import { BLOCK, ROAD, LOT } from './city.js';
 import { DISTRICTS, STREET_CRIMES, CASES, VENUES, THEMES, BOSSES, HERO, NIGHT_DISTRICTS, ASYLUM } from './data.js';
 import { drawHeroTop } from './art.js'; // placeholder art until her model loads
 import { clamp, lerp, pick, chance, rand, dist, rgba, easeOut, easeInOut, fmtClock, fmtTime, wobble, $ } from './util.js';
-import { heroReady, HeroSprite } from './hero3d.js';
 import { loadClub, preloadClub } from './clubzone.js';
 import { quality, settings } from './settings.js';
 import { AirEvents } from './airevents.js';
 import { Paparazzi } from './paparazzi.js';
 import { Navigator } from './nav.js';
 import { CityFeed } from './cityfeed.js';
-import { stepFlight, stepAltitude, speedFraction, cameraZoom, cameraLead, FLIGHT, BANDS, CRUISE_BAND, CAM_ABOVE } from './flight.js';
+import { stepFlight, stepAltitude, speedFraction, cameraZoom, cameraLead, FLIGHT, BANDS, CRUISE_BAND, CAM_ABOVE, camAbove } from './flight.js';
 import { Airspace } from './airspace.js';
 import { drawAtmosphere, FOG_Z } from './atmosphere.js';
 import { Sky, SpeedFX } from './sky.js';
-import { CityArt, TILE, SUN, grade, glow, InkSprite } from './cityart.js';
+import { CityArt, TILE, SUN, grade, glow } from './cityart.js';
+import { FlightHero } from './herofly.js';
 import { drawBuilding, drawLights } from './skyline.js';
+import { drawEdgeMarkers } from './flightmarks.js';
 import { FlightAudio } from './flightaudio.js';
 import { nightCaseFields } from './nightcase.js';
 import { asylumFields } from './asylum.js';
@@ -62,7 +63,7 @@ export class Overworld {
     this.feed = new CityFeed();          // clips in the minimap corner
     this.frame = 0;
     this.kick = 0;                       // boost punch (0..1), widens the view for a beat
-    this.ink = new InkSprite();          // outlined, rim-lit copy of her sprite + her shadow
+    this.heroArt = new FlightHero();     // her inked 3/4 sprite, ground shadow, boost lettering
   }
 
   reset() {
@@ -292,11 +293,13 @@ export class Overworld {
     if (!V || !hs || !this.peds?.length) return null;
     const near = this.peds.filter((p) => {
       const d = dist(V.SX(p.x), V.SY(p.y), hs.x, hs.y);
-      return d > 110 && d < 340;
+      const sx = V.SX(p.x), sy = V.SY(p.y);
+      return d > 110 && d < 340 && sx > 70 && sx < V.W - 70 && sy > 90 && sy < V.H - 80;
     });
     if (!near.length) return null;
     const p = pick(near);
-    const anchor = () => (this.g.modeName === 'overworld' && this.V ? { x: this.V.SX(p.x), y: this.V.SY(p.y) } : null);
+    // the tail follows them as the street scrolls, but the bubble never leaves the safe area
+    const anchor = () => (this.g.modeName === 'overworld' && this.V ? { x: clamp(this.V.SX(p.x), 70, this.V.W - 70), y: clamp(this.V.SY(p.y), 90, this.V.H - 80) } : null);
     return { ...anchor(), anchor };
   }
 
@@ -397,7 +400,7 @@ export class Overworld {
       h.x = lerp(d.sx, d.z.x + d.ox * (1 - f * 0.3), e); h.y = lerp(d.sy, d.z.y + d.oy * (1 - f * 0.3), e);
       h.z = lerp(d.z0, 30, f * f);
       this.zoom = lerp(d.zoom0, 1.6, e);
-      this.camH = h.z + CAM_ABOVE;
+      this.camH = h.z + camAbove(h.z);
       this.cam.x = h.x; this.cam.y = h.y - this.tiltOffset();
       this.fx.setRush(f);
       if (f > 0.88 && !d.impact) {
@@ -415,7 +418,7 @@ export class Overworld {
       const e = easeOut(Math.min(1, this.rising / 1.1));
       h.z = lerp(40, BANDS[h.band].z, e);
       this.zoom = lerp(1.6, 1, e);
-      this.camH = h.z + CAM_ABOVE;
+      this.camH = h.z + camAbove(h.z);
       if (this.rising >= 1.1) this.rising = null;
     }
 
@@ -436,7 +439,7 @@ export class Overworld {
     if (!this.attract) this.altitudeInput(inp, a);
     const ev = stepFlight(h, h.perch ? { x: 0, y: 0 } : a, boost && !h.perch, dt, BANDS[h.band].speedMul);
     if (this.rising === null) stepAltitude(h, dt);
-    this.camH += (h.z + CAM_ABOVE - this.camH) * Math.min(1, dt * 4);
+    this.camH += (h.z + camAbove(h.z) - this.camH) * Math.min(1, dt * 4);
     // perched = standing on the roof; rising out of a zone = the camera move owns her position
     if (h.z < 300 && !h.perch && this.rising === null) this.collideBuildings(h);
     h.x = clamp(h.x, 0, city.W);
@@ -444,19 +447,21 @@ export class Overworld {
     if (h.perch) this.updatePerch(dt);
     const frac = speedFraction(h);
     if (!this.attract) {
-      if (ev.boostStart) { sfx.boost(); this.shake = Math.max(this.shake, 5); this.kick = 1; }
+      if (ev.boostStart) { sfx.boost(); this.shake = Math.max(this.shake, 7); this.kick = 1; this.heroArt.whoosh(h.ang); }
       if (ev.sonic) { sfx.sonicBoom(); this.shake = 12; this.fx.sonicBoom(); }
     }
     // Camera: look further ahead and pull out as she speeds up (dive/rise animations own the zoom).
     // The look-ahead is capped on screen (a fifth of the half-width, an eighth of the height) so at
     // full boost she never slides to the edge of a phone screen: she stays the centre of the shot.
     const lead = cameraLead(h), kk = this.k || 0.5;
-    const lx = clamp(h.vx * lead, -0.2 * this.g.w / 2 / kk, 0.2 * this.g.w / 2 / kk), ly = clamp(h.vy * lead, -0.125 * this.g.h / kk, 0.125 * this.g.h / kk);
+    const reach = 0.1 + 0.05 * clamp((frac - 0.5) * 2, 0, 1); // fraction of the screen, more at boost
+    const lx = clamp(h.vx * lead, -reach * this.g.w / kk, reach * this.g.w / kk), ly = clamp(h.vy * lead, -reach * this.g.h / kk, reach * this.g.h / kk);
     this.cam.x += (h.x + lx - this.cam.x) * Math.min(1, dt * 4);
     this.cam.y += (h.y + ly - this.tiltOffset() - this.cam.y) * Math.min(1, dt * 4);
     if (this.rising === null) this.zoom += (cameraZoom(h) - this.zoom) * Math.min(1, dt * 2);
     this.shake = Math.max(0, this.shake - dt * 20);
     this.kick = Math.max(0, this.kick - dt * 1.8);
+    this.heroArt.update(dt);
     // Contrail at top speed.
     if (h.speed > FLIGHT.sonic && chance(dt * 40)) this.parts.push({ x: h.x - h.vx * 0.04, y: h.y - h.vy * 0.04, z: h.z, vx: 0, vy: 0, vz: 0, life: 0.6, max: 0.6, size: 5, col: '#dff4ff', glow: true });
     this.sky.update(dt);
@@ -787,7 +792,7 @@ export class Overworld {
       if (img) ctx.drawImage(img, SX(tx * TW), SY(ty * TW), TS, TS);
     }
     const blds = [];
-    for (let by = by0; by <= by1; by++) for (let bx = bx0; bx <= bx1; bx++) for (const o of city.block(bx, by).b) blds.push(o);
+    for (let by = by0; by <= by1; by++) for (let bx = bx0; bx <= bx1; bx++) for (const o of city.block(bx, by).b) if (o.kind !== 'tree') blds.push(o); // trees are baked into the ground tiles
     // Aerial perspective: the higher she flies, the more the street sinks into haze under the roofs.
     const haze = clamp((camH - 950) / 700, 0, 1) * (rich ? LOOK.haze : LOOK.hazeSaver);
     if (haze > 0.01) {
@@ -856,7 +861,7 @@ export class Overworld {
       ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.stroke();
     }
 
-    const sprite = heroReady();
+    const sprite = this.heroArt.ready;
     if (!sprite) {
       // placeholder art: a plain shadow ellipse (sun from the north-west)
       ctx.fillStyle = 'rgba(0,0,0,.28)';
@@ -874,7 +879,6 @@ export class Overworld {
     // Her shadow, cast along the sun onto whatever is under it (street or rooftop): it slides
     // away from her and softens the higher she is above that surface, which reads as altitude.
     const HS = LOOK.heroScale;
-    if (sprite && this.sprite) this.drawHeroShadow(ctx, V, HS);
 
     // smoke (under the night overlay)
     for (const p of this.parts) {
@@ -888,6 +892,7 @@ export class Overworld {
       if (rich) ctx.drawImage(grade(night, 0.6 + 0.4 * speedFraction(h)), -130, -130, W + 260, H + 260);
       else { ctx.fillStyle = `rgba(6,10,32,${0.56 * night})`; ctx.fillRect(-120, -120, W + 240, H + 240); }
     }
+    if (sprite) this.heroArt.drawShadow(ctx, V, h, HS, (x, y) => this.buildingAt(x, y));
     drawLights(ctx, V);
 
     for (const p of this.parts) {
@@ -928,39 +933,8 @@ export class Overworld {
     this.fx.draw(ctx, SX(h.x, h.z), SY(h.y, h.z), hs);
     const hx = SX(h.x, h.z), hy = SY(h.y, h.z) + Math.sin(this.t * 2.2) * 2 * k;
     this.heroScreen = { x: hx, y: hy };
-    if (sprite) {
-      // Real rigged model rendered top-down with the Flying clip; heading is +x on the sprite.
-      const px = q.heroSprite;
-      // no MSAA: the ink outline hides the stair-steps, and MSAA is costly on weak phone GPUs
-      if (!this.sprite) this.sprite = new HeroSprite(px, px, { aa: false });
-      const sp = this.sprite;
-      sp.setSize(px, px);
-      if (h.perch) sp.hero.pose('idle', this.t); // standing on the roof (seen from above)
-      else {
-        sp.hero.pose(this.diving ? 'jump' : 'fly', this.diving ? 0.9 : this.t);
-        // Arms relax out of the punch-forward pose as she slows into a hover.
-        if (!this.diving) sp.hero.superFly(1 - 0.8 * h.hover);
-      }
-      // Airspeed drives the cape: it streams behind her (-z) and lifts a little off her back (+y).
-      // Airflow over her back holds the cape up against gravity (y ≈ 10) and streams it to her feet.
-      const air = 8 + h.speed / 50;
-      sp.hero.setWind(Math.sin(this.t * 2.3) * 1.8, 10.5 * (1 - 0.6 * h.hover), -air);
-      // Bank into turns, pitch up into a hover when slow, dip the head when accelerating.
-      const img = sp.render({ view: 'top', yaw: 0, span: 2.6, roll: h.perch ? 0 : h.bank * 0.45, pitch: h.perch ? 0 : h.hover * 1.15 - h.lean * 0.25 });
-      const size = 2.6 * 40 * hs; // 1 sprite metre ≈ 40 art units
-      // Ink outline + a warm rim on her sun side (the light's direction, turned into sprite space).
-      const art = this.ink.build(img, Math.atan2(-1, -1) - h.ang, rich, night);
-      const sc = size / img.width, pad = this.ink.pad * sc;
-      ctx.save();
-      ctx.translate(hx, hy); ctx.rotate(h.ang);
-      // a soft aura so she separates from busy neon rooftops
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 0.14 + 0.22 * night;
-      ctx.drawImage(glow('#9fd8ff'), -size * 0.55, -size * 0.55, size * 1.1, size * 1.1);
-      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
-      ctx.drawImage(art, -size / 2 - pad, -size / 2 - pad, size + pad * 2, size + pad * 2);
-      ctx.restore();
-    } else drawHeroTop(ctx, hx, hy, hs, h.ang, this.t, h.bank);
+    if (sprite) this.heroArt.draw(ctx, h, hx, hy, hs, { t: this.t, diving: !!this.diving, rich, night, px: q.heroSprite });
+    else drawHeroTop(ctx, hx, hy, hs, h.ang, this.t, h.bank);
     // super-hearing: sound rings pulsing out while perched
     if (h.perch) for (const r of this.hearRings || []) {
       const e = r.t / 1.6;
@@ -978,6 +952,7 @@ export class Overworld {
 
     // comic speed lines when she really moves
     if (rich) this.fx.drawComic(ctx, hx, hy, W, H, night);
+    this.heroArt.drawPops(ctx, hx, hy, Math.min(W, H) / 390);
 
     // off-screen zone arrows (screen space)
     if (!this.attract && !this.diving) this.drawArrows(ctx, V);
@@ -998,27 +973,6 @@ export class Overworld {
     }
   }
 
-  /** Her silhouette on the street or roof below, offset along the sun by her height above it. */
-  drawHeroShadow(ctx, V, HS) {
-    const h = this.hero, { SX, SY, k, P } = V;
-    let zr = 0, x = h.x + h.z * SUN.x, y = h.y + h.z * SUN.y;
-    const b = this.buildingAt(x, y);
-    if (b && b.h < h.z) { zr = b.h; x = h.x + (h.z - zr) * SUN.x; y = h.y + (h.z - zr) * SUN.y; }
-    const above = h.z - zr, sil = this.ink.shadow;
-    if (!sil) return;
-    const size = 2.6 * 40 * HS * k * P(zr) * (1 + above / 2400);
-    const sc = size / (sil.width - this.ink.pad * 2), full = sil.width * sc;
-    ctx.save();
-    ctx.translate(SX(x, zr), SY(y, zr)); ctx.rotate(h.ang);
-    const a = clamp(0.5 - above / 1400, 0.16, 0.5) * (1 - 0.35 * V.night);
-    // two offset passes fake a penumbra that widens with height
-    const blur = Math.min(6, 1 + above / 120) * k;
-    ctx.globalAlpha = a * 0.6; ctx.drawImage(sil, -full / 2 - blur, -full / 2 - blur, full + blur * 2, full + blur * 2);
-    ctx.globalAlpha = a * 0.7; ctx.drawImage(sil, -full / 2, -full / 2, full, full);
-    ctx.restore();
-    ctx.globalAlpha = 1;
-  }
-
   drawIcon(ctx, x, y, r, z, locked, near) {
     ctx.fillStyle = locked ? '#555' : z.color;
     ctx.strokeStyle = near ? '#fff' : 'rgba(0,0,0,.6)'; ctx.lineWidth = near ? 3 : 2;
@@ -1028,25 +982,11 @@ export class Overworld {
   }
 
   drawArrows(ctx, V) {
-    const W = this.g.w, H = this.g.h, m = 34;
     const marks = [...this.zones, ...this.events.markers()];
     if (this.nav.target) marks.push({ ...this.nav.target, color: '#78ffc8', waypoint: true });
-    for (const z of marks) {
-      const sx = V.SX(z.x), sy = V.SY(z.y);
-      if (sx > m && sx < W - m && sy > m + 50 && sy < H - m) continue;
-      const a = Math.atan2(sy - V.scy, sx - V.cx);
-      const tx = Math.cos(a), ty = Math.sin(a);
-      const s = Math.min((W / 2 - m) / Math.abs(tx || 1e-6), (H / 2 - m - 20) / Math.abs(ty || 1e-6));
-      const ax = V.cx + tx * s, ay = V.scy + ty * s;
-      ctx.save(); ctx.translate(ax, ay); ctx.rotate(a);
-      ctx.fillStyle = z.color; ctx.strokeStyle = z.waypoint ? '#fff' : 'rgba(0,0,0,.6)'; ctx.lineWidth = z.waypoint ? 3 : 2;
-      const sc = z.waypoint ? 1.4 : 1;
-      ctx.beginPath(); ctx.moveTo(14 * sc, 0); ctx.lineTo(-4 * sc, -9 * sc); ctx.lineTo(-4 * sc, 9 * sc); ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.restore();
-      ctx.fillStyle = '#fff'; ctx.font = '700 10px system-ui'; ctx.textAlign = 'center';
-      ctx.fillText(`${Math.round(dist(z.x, z.y, this.hero.x, this.hero.y) / 10)}m`, ax - tx * 18, ay - ty * 18 + 3);
-    }
+    drawEdgeMarkers(ctx, V, marks, this.hero, this.g.w, this.g.h);
   }
+
 }
 
 export { ALT };
