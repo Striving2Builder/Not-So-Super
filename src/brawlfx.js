@@ -157,7 +157,7 @@ export const fxDraw = {
     // hero close-up, cropped from the live sprite (head & shoulders), slightly zoomed
     const img = this.cutImg;
     if (img) {
-      const cw = 120, ch = 110, cx = 50, cy = 62; // head & shoulders in the 220x300 frame
+      const cw = 108, ch = 104, cx = 58, cy = 64; // head & shoulders in the 220x300 frame
       const dh = bh * 1.6, dw = dh * (cw / ch);
       const dx = W * 0.14 + t * 30, dy = y0 - bh * 0.1;
       ctx.save();
