@@ -17,6 +17,7 @@ import { Sky, SpeedFX } from './sky.js';
 import { CityArt, TILE, SUN, grade, glow } from './cityart.js';
 import { FlightHero } from './herofly.js';
 import { drawBuilding, drawLights } from './skyline.js';
+import { drawEdgeMarkers } from './flightmarks.js';
 import { FlightAudio } from './flightaudio.js';
 import { nightCaseFields } from './nightcase.js';
 import { asylumFields } from './asylum.js';
@@ -292,11 +293,13 @@ export class Overworld {
     if (!V || !hs || !this.peds?.length) return null;
     const near = this.peds.filter((p) => {
       const d = dist(V.SX(p.x), V.SY(p.y), hs.x, hs.y);
-      return d > 110 && d < 340;
+      const sx = V.SX(p.x), sy = V.SY(p.y);
+      return d > 110 && d < 340 && sx > 70 && sx < V.W - 70 && sy > 90 && sy < V.H - 80;
     });
     if (!near.length) return null;
     const p = pick(near);
-    const anchor = () => (this.g.modeName === 'overworld' && this.V ? { x: this.V.SX(p.x), y: this.V.SY(p.y) } : null);
+    // the tail follows them as the street scrolls, but the bubble never leaves the safe area
+    const anchor = () => (this.g.modeName === 'overworld' && this.V ? { x: clamp(this.V.SX(p.x), 70, this.V.W - 70), y: clamp(this.V.SY(p.y), 90, this.V.H - 80) } : null);
     return { ...anchor(), anchor };
   }
 
@@ -451,7 +454,8 @@ export class Overworld {
     // The look-ahead is capped on screen (a fifth of the half-width, an eighth of the height) so at
     // full boost she never slides to the edge of a phone screen: she stays the centre of the shot.
     const lead = cameraLead(h), kk = this.k || 0.5;
-    const lx = clamp(h.vx * lead, -0.2 * this.g.w / 2 / kk, 0.2 * this.g.w / 2 / kk), ly = clamp(h.vy * lead, -0.125 * this.g.h / kk, 0.125 * this.g.h / kk);
+    const reach = 0.1 + 0.05 * clamp((frac - 0.5) * 2, 0, 1); // fraction of the screen, more at boost
+    const lx = clamp(h.vx * lead, -reach * this.g.w / kk, reach * this.g.w / kk), ly = clamp(h.vy * lead, -reach * this.g.h / kk, reach * this.g.h / kk);
     this.cam.x += (h.x + lx - this.cam.x) * Math.min(1, dt * 4);
     this.cam.y += (h.y + ly - this.tiltOffset() - this.cam.y) * Math.min(1, dt * 4);
     if (this.rising === null) this.zoom += (cameraZoom(h) - this.zoom) * Math.min(1, dt * 2);
@@ -875,7 +879,6 @@ export class Overworld {
     // Her shadow, cast along the sun onto whatever is under it (street or rooftop): it slides
     // away from her and softens the higher she is above that surface, which reads as altitude.
     const HS = LOOK.heroScale;
-    if (sprite) this.heroArt.drawShadow(ctx, V, h, HS, (x, y) => this.buildingAt(x, y));
 
     // smoke (under the night overlay)
     for (const p of this.parts) {
@@ -889,6 +892,7 @@ export class Overworld {
       if (rich) ctx.drawImage(grade(night, 0.6 + 0.4 * speedFraction(h)), -130, -130, W + 260, H + 260);
       else { ctx.fillStyle = `rgba(6,10,32,${0.56 * night})`; ctx.fillRect(-120, -120, W + 240, H + 240); }
     }
+    if (sprite) this.heroArt.drawShadow(ctx, V, h, HS, (x, y) => this.buildingAt(x, y));
     drawLights(ctx, V);
 
     for (const p of this.parts) {
@@ -978,25 +982,11 @@ export class Overworld {
   }
 
   drawArrows(ctx, V) {
-    const W = this.g.w, H = this.g.h, m = 34;
     const marks = [...this.zones, ...this.events.markers()];
     if (this.nav.target) marks.push({ ...this.nav.target, color: '#78ffc8', waypoint: true });
-    for (const z of marks) {
-      const sx = V.SX(z.x), sy = V.SY(z.y);
-      if (sx > m && sx < W - m && sy > m + 50 && sy < H - m) continue;
-      const a = Math.atan2(sy - V.scy, sx - V.cx);
-      const tx = Math.cos(a), ty = Math.sin(a);
-      const s = Math.min((W / 2 - m) / Math.abs(tx || 1e-6), (H / 2 - m - 20) / Math.abs(ty || 1e-6));
-      const ax = V.cx + tx * s, ay = V.scy + ty * s;
-      ctx.save(); ctx.translate(ax, ay); ctx.rotate(a);
-      ctx.fillStyle = z.color; ctx.strokeStyle = z.waypoint ? '#fff' : 'rgba(0,0,0,.6)'; ctx.lineWidth = z.waypoint ? 3 : 2;
-      const sc = z.waypoint ? 1.4 : 1;
-      ctx.beginPath(); ctx.moveTo(14 * sc, 0); ctx.lineTo(-4 * sc, -9 * sc); ctx.lineTo(-4 * sc, 9 * sc); ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.restore();
-      ctx.fillStyle = '#fff'; ctx.font = '700 10px system-ui'; ctx.textAlign = 'center';
-      ctx.fillText(`${Math.round(dist(z.x, z.y, this.hero.x, this.hero.y) / 10)}m`, ax - tx * 18, ay - ty * 18 + 3);
-    }
+    drawEdgeMarkers(ctx, V, marks, this.hero, this.g.w, this.g.h);
   }
+
 }
 
 export { ALT };
