@@ -13,6 +13,7 @@ import { dialog, toast, banner, flash } from './ui.js';
 import { npcLook, portrait } from './art.js';
 import { sfx } from './sfx.js';
 import { quality } from './settings.js';
+import { NightScan } from './nightscan.js';
 import { randomPerson } from './casefile.js';
 
 const CONTAINERS = ['Locked Cash Box', 'Staff Locker', 'Sealed Crate', 'Floor Safe', 'DJ Flight Case'];
@@ -157,15 +158,15 @@ export class NightCase extends ClubZone {
   }
 
   // ------------------------------------------------------------------ interactions
-  async revealClue(c, how) {
+  async revealClue(c, how, at = null) {
     if (!this.case.find(c)) return;
     sfx.pickup();
-    const s = this.screenOf(this.hero.position, 2);
+    const s = this.screenOf(at || this.hero.position, at ? 0.3 : 2);
     if (s) this.g.commentary.hit(s.x, s.y, { big: false });
-    await this.case.reveal(c, how, 'Tip: USE it again to photograph it for the Gazette.');
+    await this.case.reveal(c, how, 'Tip: USE it again to photograph it for the Gazette.', s);
   }
 
-  searchClue(o) { return this.revealClue(o.clue, `You examine the ${o.name.toLowerCase()}.`); }
+  searchClue(o) { return this.revealClue(o.clue, `You examine the ${o.name.toLowerCase()}.`, o.pos); }
 
   async searchContainer(o) {
     if (!this.xray) {
@@ -174,7 +175,7 @@ export class NightCase extends ClubZone {
     }
     o.inner.visible = false;
     this.hidden = this.hidden.filter((h) => h !== o.inner);
-    await this.revealClue(o.clue, `Your X-ray vision spots something hidden inside the ${o.name.toLowerCase()}. You pop it open.`);
+    await this.revealClue(o.clue, `Your X-ray vision spots something hidden inside the ${o.name.toLowerCase()}. You pop it open.`, o.pos);
   }
 
   async photographClue(o) {
@@ -258,6 +259,22 @@ export class NightCase extends ClubZone {
     this.tipGiven = true;
     await dialog({ speaker: inf.name, portrait: portrait(inf.look), text: '"Word is there\'s another job going down tonight. I\'ll mark it on your map."' });
     unlockLead(this.g, 'Informant tip');
+  }
+
+  // ------------------------------------------------------------------ detective vision
+  setXray(on) {
+    super.setXray(on);
+    if (this.xray || this.scan) (this.scan || (this.scan = new NightScan(this))).set(this.xray);
+  }
+
+  render() {
+    super.render();
+    if (this.scan) this.scan.draw(this.t);
+  }
+
+  exit() {
+    if (this.scan) { this.scan.dispose(); this.scan = null; }
+    super.exit();
   }
 
   // ------------------------------------------------------------------ flow

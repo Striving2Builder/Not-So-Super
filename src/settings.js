@@ -12,14 +12,34 @@ const KEY = 'supergirl-settings';
  * outlines on the heroine and procedural people only, no grade · 'min' heroine only, no light pools.
  * flyDetail: flight-view extras (roof detail, ink rims, hero rim light, sway, grade, speed lines);
  * flyTileRes: canvas pixels per city block in the flight view's baked ground tiles.
+ * scanFilter: night-case detective vision darkens the 3D view with a CSS filter.
+ * (One line per area's keys, so each area's additions merge cleanly.)
  */
 export const PROFILES = {
   // desktop: everything on
-  high: { id: 'high', label: 'High', fpsCap: 0, dpr2d: 2, dpr3d: 1.6, heroSprite: 192, clubTex: 'full', clubCache: 3, clubMaterials: 'full', look3d: 'full', flyDetail: true, flyTileRes: 144 },
+  high: {
+    id: 'high', label: 'High', fpsCap: 0, dpr2d: 2, dpr3d: 1.6, heroSprite: 192,
+    clubTex: 'full', clubCache: 3, clubMaterials: 'full',
+    look3d: 'full',
+    flyDetail: true, flyTileRes: 144,
+    scanFilter: true,
+  },
   // phones/tablets that keep up: full frame rate, but lite club textures (memory is what runs out)
-  balanced: { id: 'balanced', label: 'Balanced', fpsCap: 0, dpr2d: 2, dpr3d: 1.25, heroSprite: 192, clubTex: 'lite', clubCache: 1, clubMaterials: 'standard', look3d: 'lite', flyDetail: true, flyTileRes: 144 },
+  balanced: {
+    id: 'balanced', label: 'Balanced', fpsCap: 0, dpr2d: 2, dpr3d: 1.25, heroSprite: 192,
+    clubTex: 'lite', clubCache: 1, clubMaterials: 'standard',
+    look3d: 'lite',
+    flyDetail: true, flyTileRes: 144,
+    scanFilter: true,
+  },
   // older devices / low-power mode: 30 fps, 1× resolution, cheap club materials
-  saver: { id: 'saver', label: 'Battery saver', fpsCap: 30, dpr2d: 1, dpr3d: 1, heroSprite: 128, clubTex: 'lite', clubCache: 1, clubMaterials: 'lambert', look3d: 'min', flyDetail: false, flyTileRes: 96 },
+  saver: {
+    id: 'saver', label: 'Battery saver', fpsCap: 30, dpr2d: 1, dpr3d: 1, heroSprite: 128,
+    clubTex: 'lite', clubCache: 1, clubMaterials: 'lambert',
+    look3d: 'min',
+    flyDetail: false, flyTileRes: 96,
+    scanFilter: false,
+  },
 };
 
 export const GRAPHICS_MODES = ['auto', 'high', 'saver'];
