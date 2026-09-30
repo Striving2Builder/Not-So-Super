@@ -164,9 +164,10 @@ export class HeroModel {
 
 /** Offscreen renderer that turns the 3D heroine into a 2D sprite. */
 export class HeroSprite {
-  constructor(w = 256, h = 256) {
+  /** aa: false skips MSAA (the flight view inks her outline itself, and MSAA is costly on weak GPUs). */
+  constructor(w = 256, h = 256, { aa = true } = {}) {
     this.canvas = document.createElement('canvas');
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: aa, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(1);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.setClearColor(0x000000, 0);

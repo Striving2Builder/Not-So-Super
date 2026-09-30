@@ -5,53 +5,24 @@ import * as THREE from 'three';
 import { quality } from './settings.js';
 import { HeroModel, heroReady } from './hero3d.js';
 import { Enemy, enemyReady, GUARD_KINDS, bossKind } from './enemies.js';
-import { NIGHTLIFE_KINDS, decorateNightlife, updateNightlife, disposeNightlife } from './nightlife.js';
+import { updateNightlife } from './nightlife.js';
 import { VENUES, THEMES, INTOX_ITEMS, BAIT_ITEMS, HERO, FIRST_NAMES, LAST_NAMES } from './data.js';
 import { pick, shuffle, chance, clamp, rand, wobble, $ } from './util.js';
 import { dialog, toast, banner, qte, keypad, flash, avoidHud } from './ui.js';
-import { drawEmblem, portrait, npcLook } from './art.js';
+import { portrait, npcLook } from './art.js';
 import { sfx } from './sfx.js';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { toon, inkCharacter, BlobShadows, bakeStatic, gradeQuad, lookFrame } from './look3d.js';
-import { venueMats, decorateVenue, VENUE_KINDS } from './venues3d.js';
+import { SPEED, GUARD_RANGE, GUARD_FOV, lam, basic } from './zonekit.js';
+import { cameraMethods } from './camera3d.js';
+import { guardMethods } from './guards3d.js';
+import { peopleMethods } from './people3d.js';
+import { roomMethods } from './rooms3d.js';
+import { inkCharacter, BlobShadows, bakeStatic, gradeQuad, comicScene, inkEdges, groundBackdrop } from './look3d.js';
+import { venueMats, VENUE_KINDS } from './venues3d.js';
 
-const WALL_H = 3.4;
-const SPEED = 5.2;
-const GUARD_RANGE = 7.5;
-const GUARD_FOV = 1.05;
+export { CAM_DIST, CAM_PITCHES } from './zonekit.js';
 
-// Cel-shaded stand-in for Lambert (same call shape, so venue decor code needn't change).
-const lam = (c, extra = {}) => toon(c, extra);
-const basic = (c, extra = {}) => new THREE.MeshBasicMaterial({ color: c, ...extra });
-
-function segHitsBox(ax, az, bx, bz, c) {
-  let t0 = 0, t1 = 1;
-  const dx = bx - ax, dz = bz - az;
-  for (const [p, d, mn, mx] of [[ax, dx, c.minX, c.maxX], [az, dz, c.minZ, c.maxZ]]) {
-    if (Math.abs(d) < 1e-9) { if (p < mn || p > mx) return false; }
-    else {
-      let ta = (mn - p) / d, tb = (mx - p) / d;
-      if (ta > tb) [ta, tb] = [tb, ta];
-      t0 = Math.max(t0, ta); t1 = Math.min(t1, tb);
-      if (t0 > t1) return false;
-    }
-  }
-  return true;
-}
-
-// Third-person camera: distance behind her, and the pitches it may use (the first is the normal view).
-export const CAM_DIST = 7.6;
-export const CAM_PITCHES = [0.86, 1.05, 1.25, 1.42];
-
-function canvasTex(w, h, draw, repeat) {
-  const c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  draw(c.getContext('2d'), w, h);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat[0], repeat[1]); }
-  return t;
-}
+// The code-built venues' floor plan bounds (main hall, back room, office; see rooms3d.js).
+const FOOTPRINT = { min: { x: -15, z: -22 }, max: { x: 25, z: 12 } };
 
 export class Special3D {
   constructor(g) { this.g = g; }
@@ -100,7 +71,7 @@ export class Special3D {
       code: String(1000 + Math.floor(Math.random() * 9000)),
       colliders: [], inter: [], guards: [], anims: [], hidden: [], itemSpots: [], evidence: [], captives: [], cast: [],
       // per-zone references: this object is reused for every zone, so nothing may carry over
-      boss: null, informant: null, near: null, _lastGood: null, nl: null, castRim: null,
+      boss: null, informant: null, near: null, _lastGood: null, nl: null, castRim: null, backdrop: null, particles: [],
     });
     const S = (this.scene = new THREE.Scene());
     S.background = new THREE.Color(this.V.bg);
@@ -113,7 +84,9 @@ export class Special3D {
     this.key = new THREE.DirectionalLight(0xfff1dc, this.keyK ?? 1.1);
     this.key.position.set(-6, 14, 8);
     S.add(this.key);
+    this.particles = [];
     this.buildWorld();
+    this.finishLook();
     if (quality().look3d === 'full') { this.grade = gradeQuad(this.gradeTint ?? 0x07040c, this.gradeK ?? 0.6); S.add(this.grade); }
     this.heroModel = heroReady() ? new HeroModel() : null;
     this.keepAnimating = false;
@@ -177,29 +150,28 @@ export class Special3D {
     this.placeGameplay();
   }
 
-  spawnPoint() { return { pos: new THREE.Vector3(0, 0, 10), heading: Math.PI }; }
-
-  /** How far the camera may sit from her along `off` (club raids shorten it past obstacles). */
-  cameraReach(h, off) { return off.length(); }
-
-  /** Camera offset from her at a given pitch (radians above horizontal), behind her along yaw. */
-  cameraOffset(pitch, dist = CAM_DIST) {
-    return new THREE.Vector3(Math.sin(this.yaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist, Math.cos(this.yaw) * Math.cos(pitch) * dist);
-  }
+  // (far enough in that the camera behind her hangs over the entrance, not the street)
+  spawnPoint() { return { pos: new THREE.Vector3(0, 0, 8.2), heading: Math.PI }; }
 
   /**
-   * The lowest camera pitch with a clear view of her. When a wall blocks the usual angle the
-   * camera swings up toward top-down (club ceilings are sliced away above her head, so from
-   * overhead the view is nearly always clear) instead of squashing in against her back.
+   * The shared comic finish for whatever buildWorld() made (own venues, premade clubs, nightlife):
+   * cel bands + halftone in the shade on every lit material, ink lines along a prebuilt
+   * building's hard edges (once per cached building), and ground out to the fog so no room
+   * floats in the void. Zones tune it with this.backdrop = false | { color, y }.
    */
-  cameraPitch(h) {
-    let best = CAM_PITCHES[0], bestReach = -1;
-    for (const p of CAM_PITCHES) {
-      const reach = this.cameraReach(h, this.cameraOffset(p));
-      if (reach >= CAM_DIST * 0.75) return p;
-      if (reach > bestReach) { bestReach = reach; best = p; }
-    }
-    return best;
+  finishLook() {
+    const S = this.scene;
+    comicScene(S);
+    if (this.club && this.club.scene) inkEdges(this.club.scene);
+    const bd = this.backdrop ?? (this.vmats && this.vmats.backdrop);
+    if (bd === false) return;
+    const bg = S.background && S.background.isColor ? S.background.clone() : new THREE.Color(0x101014);
+    const color = bd && bd.color !== undefined ? new THREE.Color(bd.color) : bg.clone().lerp(new THREE.Color(0x3a3a44), 0.25);
+    const y = bd && bd.y !== undefined ? bd.y : this.club && this.club.box ? this.club.box.min.y - 0.06 : -0.04;
+    // leave out what the building's own floors cover (inset so no seam shows at the walls)
+    const fp = this.club && this.club.box ? this.club.box : this.vmats ? FOOTPRINT : null;
+    const hole = fp ? [fp.min.x + 0.6, fp.max.x - 0.6, fp.min.z + 0.6, fp.max.z - 0.6] : null;
+    S.add(groundBackdrop(color, y, { hole }));
   }
 
   /** Should the boss confrontation start now? */
@@ -216,7 +188,6 @@ export class Special3D {
     $('xray-tint').classList.remove('on');
     $('objectives').classList.remove('on');
     $('prompt').classList.remove('on');
-    disposeNightlife(this);
     if (this.scene) {
       this.scene.traverse((o) => {
         if (o.geometry) o.geometry.dispose();
@@ -225,289 +196,6 @@ export class Special3D {
       this.scene = null;
     }
     this.renderer && this.renderer.renderLists.dispose();
-  }
-
-  // ------------------------------------------------------------------ building
-  /**
-   * A box in the scene. While the room is being built (buildRooms/decorate) it's registered as
-   * static and merged into one mesh per material afterwards: pass live: true to keep your own
-   * mesh (anything you move, recolour or hide later).
-   */
-  box(w, h, d, x, y, z, mat, { collide = true, wall = false, live = false } = {}) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-    m.position.set(x, y, z);
-    this.scene.add(m);
-    if (this._static && !live) this._static.push(m);
-    if (collide) this.colliders.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, wall, mesh: m });
-    return m;
-  }
-
-  cyl(rt, rb, h, x, y, z, mat, collide = false, live = false) {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, 16), mat);
-    m.position.set(x, y, z);
-    this.scene.add(m);
-    if (this._static && !live) this._static.push(m);
-    if (collide) this.colliders.push({ minX: x - rb, maxX: x + rb, minZ: z - rb, maxZ: z + rb, mesh: m });
-    return m;
-  }
-
-  wall(x1, z1, x2, z2) {
-    const t = 0.4;
-    const w = Math.abs(x2 - x1) || t, d = Math.abs(z2 - z1) || t, x = (x1 + x2) / 2, z = (z1 + z2) / 2;
-    this.box(w, WALL_H, d, x, WALL_H / 2, z, this.wallMat, { wall: true });
-    const M = this.vmats;
-    if (!M) return;
-    // an ink-black cap (the cutaway reads like a comic floor plan) and skirting on both faces
-    this.box(w + 0.06, 0.1, d + 0.06, x, WALL_H + 0.05, z, M.cap, { collide: false });
-    if (M.skirt) this.box(w + 0.08, M.skirtH || 0.22, d + 0.08, x, (M.skirtH || 0.22) / 2, z, M.skirt, { collide: false });
-    if (M.rail) this.box(w + 0.07, 0.09, d + 0.07, x, M.railY || 1.1, z, M.rail, { collide: false });
-    if (M.posts) {
-      const len = Math.max(w, d), n = Math.max(1, Math.round(len / M.posts.every));
-      for (let i = 0; i <= n; i++) {
-        const t = -len / 2 + (i * len) / n;
-        this.box(0.14, WALL_H, 0.14, w > d ? x + t : x, WALL_H / 2, w > d ? z : z + t, M.posts.mat, { collide: false });
-      }
-    }
-  }
-
-  buildLights() {
-    if (this.vmats) return this.vmats.lights();
-    const S = this.scene, V = this.V;
-    const bright = V.kind === 'penthouse';
-    S.add(new THREE.HemisphereLight(0xffffff, new THREE.Color(V.floor), bright ? 0.55 : 1.0));
-    S.add(new THREE.AmbientLight(0xffffff, bright ? 0.15 : 0.35));
-    const pos = [[-8, 3, -3], [8, 3, -3], [0, 3, 7], [0, 3, -17]];
-    this.plights = pos.map((p, i) => {
-      const l = new THREE.PointLight(V.lights[i % V.lights.length], bright ? 14 : 30, 26, 1.3);
-      l.position.set(...p);
-      S.add(l);
-      return l;
-    });
-    const office = new THREE.PointLight(0xfff0d0, 18, 14, 1.3);
-    office.position.set(20, 3, 0);
-    S.add(office);
-  }
-
-  buildRooms() {
-    const V = this.V;
-    const tile = V.kind === 'warehouse' || V.kind === 'lair' ? 'concrete' : V.kind === 'penthouse' ? 'marble' : 'tile';
-    const floorTex = canvasTex(256, 256, (c, w, h) => {
-      c.fillStyle = V.floor; c.fillRect(0, 0, w, h);
-      if (tile === 'concrete') {
-        for (let i = 0; i < 400; i++) { c.fillStyle = `rgba(${Math.random() < 0.5 ? '0,0,0' : '255,255,255'},.05)`; c.fillRect(Math.random() * w, Math.random() * h, 4, 4); }
-        c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = 3; c.strokeRect(0, 0, w, h);
-      } else if (tile === 'marble') {
-        c.strokeStyle = 'rgba(120,110,100,.35)'; c.lineWidth = 2;
-        for (let i = 0; i < 6; i++) { c.beginPath(); c.moveTo(Math.random() * w, 0); c.bezierCurveTo(Math.random() * w, h / 3, Math.random() * w, (2 * h) / 3, Math.random() * w, h); c.stroke(); }
-        c.strokeStyle = 'rgba(0,0,0,.2)'; c.strokeRect(0, 0, w, h);
-      } else {
-        c.fillStyle = 'rgba(255,255,255,.05)'; c.fillRect(0, 0, w / 2, h / 2); c.fillRect(w / 2, h / 2, w / 2, h / 2);
-        c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = 2; c.strokeRect(0, 0, w, h);
-      }
-    }, [8, 8]);
-    const floorMat = lam(0xffffff, { map: floorTex });
-    const M = this.vmats;
-    const floor = (w, d, x, z, mat = floorMat, y = 0) => {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
-      m.rotation.x = -Math.PI / 2; m.position.set(x, y, z);
-      this.scene.add(m);
-      if (this._static) this._static.push(m);
-    };
-    floor(30, 24, 0, 0, M ? M.hall : floorMat);
-    floor(12, 10, 0, -17, M ? M.back : floorMat);
-    floor(10, 10, 20, 0, M ? M.office : floorMat);
-    floor(4.4, 3, 0, 13, M ? M.mat : floorMat, 0.004); // entrance mat
-    // main hall
-    this.wall(-15, -12, -1.6, -12); this.wall(1.6, -12, 15, -12);
-    this.wall(-15, 12, -2.2, 12); this.wall(2.2, 12, 15, 12);
-    this.wall(-15, -12, -15, 12);
-    this.wall(15, -12, 15, -1.8); this.wall(15, 1.8, 15, 12);
-    // back room
-    this.wall(-6, -22, -6, -12); this.wall(6, -22, 6, -12); this.wall(-6, -22, 6, -22);
-    // office
-    this.wall(15, -5, 25, -5); this.wall(15, 5, 25, 5); this.wall(25, -5, 25, 5);
-    // entrance blocker (invisible) — you leave by finishing or aborting
-    this.colliders.push({ minX: -2.2, maxX: 2.2, minZ: 13.6, maxZ: 14.2 });
-    // security door + keypad
-    this.door = this.box(3.2, 3.2, 0.3, 0, 1.6, -12, M ? M.door : lam(0x5a6270), { live: true });
-    this.doorCol = this.colliders[this.colliders.length - 1];
-    const stripe = this.box(3.2, 0.25, 0.32, 0, 2.6, -12, M ? M.hazard : basic(0xf2c21a), { collide: false, live: true });
-    this.door.add(stripe); stripe.position.set(0, 1, 0);
-    this.keypadMesh = this.box(0.35, 0.5, 0.12, 2.1, 1.45, -11.75, basic(0x39ff6a), { collide: false, live: true });
-    // exit ring
-    this.exitRing = new THREE.Mesh(new THREE.RingGeometry(1.1, 1.5, 32), basic(0x3ee08a, { transparent: true, opacity: 0.25, side: THREE.DoubleSide }));
-    this.exitRing.rotation.x = -Math.PI / 2; this.exitRing.position.set(0, 0.03, 10.8);
-    this.scene.add(this.exitRing);
-    // venue sign above the door
-    const sign = canvasTex(512, 96, (c, w, h) => {
-      c.fillStyle = '#000'; c.fillRect(0, 0, w, h);
-      c.font = '900 56px system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.shadowColor = '#' + this.V.lights[0].toString(16).padStart(6, '0'); c.shadowBlur = 20;
-      c.fillStyle = c.shadowColor; c.fillText('PRIVATE — STAFF ONLY', w / 2, h / 2);
-    });
-    const sm = new THREE.Mesh(new THREE.PlaneGeometry(4, 0.75), new THREE.MeshBasicMaterial({ map: sign }));
-    sm.position.set(0, 3.0, -11.78); this.scene.add(sm);
-  }
-
-  decorate() {
-    const V = this.V, k = V.kind;
-    const spot = (x, y, z) => this.itemSpots.push(new THREE.Vector3(x, y, z));
-    const table = (x, z, top = 0x3a2a1a) => {
-      this.cyl(0.6, 0.6, 0.08, x, 0.78, z, lam(top));
-      this.cyl(0.08, 0.1, 0.78, x, 0.39, z, lam(0x222222), true);
-      spot(x, 0.86, z);
-    };
-    const sofa = (x, z, w, rot, col) => {
-      const m = this.box(rot ? 1 : w, 0.6, rot ? w : 1, x, 0.3, z, lam(col));
-      const back = this.box(rot ? 0.3 : w, 0.7, rot ? w : 0.3, x + (rot ? rot * 0.35 : 0), 0.85, z + (rot ? 0 : 0.35), lam(col), { collide: false });
-      return [m, back];
-    };
-    const bar = (x, z, len, vertical) => {
-      this.box(vertical ? 1.2 : len, 1.1, vertical ? len : 1.2, x, 0.55, z, lam(0x3a1a0a));
-      this.box(vertical ? 1.4 : len + 0.2, 0.08, vertical ? len + 0.2 : 1.4, x, 1.12, z, lam(0x8a5a2a), { collide: false });
-      for (let i = 0; i < 8; i++) {
-        const t = (i / 7 - 0.5) * (len - 1);
-        const bx = vertical ? x - 0.9 : x + t, bz = vertical ? z + t : z - 0.9;
-        this.cyl(0.06, 0.06, 0.35, bx, 1.35, bz, basic([0x3aff8a, 0xffc040, 0xff5a5a, 0x5ab0ff][i % 4]));
-      }
-      for (let i = 0; i < 3; i++) spot(vertical ? x : x + (i - 1) * len * 0.3, 1.2, vertical ? z + (i - 1) * len * 0.3 : z);
-    };
-
-    if (NIGHTLIFE_KINDS.has(k)) decorateNightlife(this, k, { table, sofa, bar, spot, lam, basic });
-    else if (VENUE_KINDS.has(k)) return decorateVenue(this, k, { table, sofa, bar, spot, lam, basic, canvasTex, WALL_H });
-    // everywhere: some plants/columns for cover
-    for (const [x, z] of [[-14, 11], [14, 11], [-14, -11], [14, -11]]) this.cyl(0.35, 0.35, WALL_H, x, WALL_H / 2, z, lam(0x333333), true);
-    // office furniture
-    this.box(2.6, 0.8, 1.2, 20, 0.4, 0, lam(0x5a3a1a));
-    this.box(0.5, 0.35, 0.05, 20, 1.0, -0.3, basic(0x6ab0ff), { collide: false });
-    spot(20.8, 0.82, 0.2);
-    // back room
-    this.box(12, 0.02, 10, 0, 0.01, -17, lam(0x222222, { transparent: true, opacity: 0.5 }), { collide: false });
-  }
-
-  // ------------------------------------------------------------------ characters
-  emblemTex() {
-    return canvasTex(128, 128, (c) => { c.translate(64, 60); drawEmblem(c, 44); });
-  }
-
-  makeHero() {
-    const G = new THREE.Group();
-    const skin = lam(0xf6d1b3), blue = lam(0x7ec8f4), red = lam(0xd82630), boots = lam(0xc91f2b), gold = lam(0xf7d31e), hair = lam(0xf5d442);
-    const add = (geo, mat, x, y, z, parent = G) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
-    const leg = (x) => {
-      const p = new THREE.Group(); p.position.set(x, 0.92, 0); G.add(p);
-      add(new THREE.CylinderGeometry(0.085, 0.075, 0.44, 10), skin, 0, -0.22, 0, p);
-      add(new THREE.CylinderGeometry(0.08, 0.065, 0.48, 10), boots, 0, -0.67, 0, p);
-      add(new THREE.BoxGeometry(0.12, 0.07, 0.2), boots, 0, -0.9, 0.05, p);
-      return p;
-    };
-    this.legL = leg(-0.1); this.legR = leg(0.1);
-    add(new THREE.CylinderGeometry(0.19, 0.28, 0.22, 16), red, 0, 0.93, 0);
-    add(new THREE.CylinderGeometry(0.195, 0.195, 0.06, 16), gold, 0, 1.05, 0);
-    const torso = add(new THREE.CylinderGeometry(0.2, 0.16, 0.52, 14), blue, 0, 1.33, 0);
-    torso.scale.z = 0.8;
-    add(new THREE.SphereGeometry(0.085, 10, 8), blue, -0.075, 1.43, 0.1);
-    add(new THREE.SphereGeometry(0.085, 10, 8), blue, 0.075, 1.43, 0.1);
-    const em = add(new THREE.PlaneGeometry(0.2, 0.2), new THREE.MeshBasicMaterial({ map: this.emblemTex(), transparent: true }), 0, 1.42, 0.19);
-    em.rotation.x = -0.1;
-    const arm = (x) => {
-      const p = new THREE.Group(); p.position.set(x, 1.55, 0); G.add(p);
-      add(new THREE.CylinderGeometry(0.055, 0.05, 0.56, 8), blue, 0, -0.28, 0, p);
-      add(new THREE.SphereGeometry(0.058, 8, 6), skin, 0, -0.58, 0, p);
-      return p;
-    };
-    this.armL = arm(-0.26); this.armR = arm(0.26);
-    add(new THREE.CylinderGeometry(0.05, 0.055, 0.12, 8), skin, 0, 1.63, 0);
-    add(new THREE.SphereGeometry(0.14, 14, 12), skin, 0, 1.78, 0.01);
-    const h1 = add(new THREE.SphereGeometry(0.155, 14, 12), hair, 0, 1.81, -0.025); h1.scale.set(1, 0.95, 1);
-    add(new THREE.BoxGeometry(0.28, 0.42, 0.08), hair, 0, 1.6, -0.13);
-    for (const x of [-0.05, 0.05]) add(new THREE.SphereGeometry(0.018, 6, 4), lam(0x1a4aa8), x, 1.79, 0.135);
-    this.cape = new THREE.Group(); this.cape.position.set(0, 1.56, -0.17); G.add(this.cape);
-    add(new THREE.PlaneGeometry(0.52, 1.0), lam(0xc11d27, { side: THREE.DoubleSide }), 0, -0.5, 0, this.cape);
-    return G;
-  }
-
-  /**
-   * A procedural person (civilians, informants, patients, orderlies): a stylised figure in the
-   * same proportions as the rigged cast, built as five vertex-coloured meshes (body, 2 legs,
-   * 2 arms) so a crowd stays cheap. Keeps the old API: G.legs / G.arms pivot groups to swing.
-   */
-  makeNPC(look, size = 1) {
-    const G = new THREE.Group();
-    const C = (c, d = '#333333') => new THREE.Color(c || d);
-    const skin = C(look.skin, '#e0b08a'), top = C(look.top), bottom = C(look.bottom || look.skirt, '#333333');
-    const hair = C(look.hair, '#2a1a10'), shoe = C(look.boots, '#151515'), ink = new THREE.Color(0x141014);
-    const gown = look.gown;
-    const parts = () => [];
-    const put = (list, geo, col, x, y, z, { sx = 1, sy = 1, sz = 1, rx = 0, rz = 0 } = {}) => {
-      geo.scale(sx, sy, sz); if (rx) geo.rotateX(rx); if (rz) geo.rotateZ(rz); geo.translate(x, y, z);
-      const n = geo.attributes.position.count, a = new Float32Array(n * 3);
-      for (let i = 0; i < n; i++) { a[i * 3] = col.r; a[i * 3 + 1] = col.g; a[i * 3 + 2] = col.b; }
-      geo.setAttribute('color', new THREE.BufferAttribute(a, 3));
-      list.push(geo);
-    };
-    const mat = this.npcMat || (this.npcMat = lam(0xffffff, { vertexColors: true }));
-    mat.userData.comic.rimK.value = 0.55; mat.userData.comic.rimCol.value.set(0xfff0d0);
-    const mesh = (list, parent) => { const m = new THREE.Mesh(mergeGeometries(list, false), mat); parent.add(m); return m; };
-    const Sph = (r, w = 12, h = 10, ...rest) => new THREE.SphereGeometry(r, w, h, ...rest);
-    const Cyl = (a, b, h, n = 10) => new THREE.CylinderGeometry(a, b, h, n);
-
-    // body: pelvis/skirt, torso, neck, head, face, hair
-    const B = parts();
-    if (look.skirt || gown) put(B, Cyl(0.19, gown ? 0.3 : 0.3, gown ? 0.62 : 0.42, 12), gown ? top : bottom, 0, gown ? 0.72 : 0.82, 0);
-    else put(B, Cyl(0.2, 0.19, 0.22, 12), bottom, 0, 0.95, 0, { sz: 0.75 });
-    const torso = new THREE.LatheGeometry([[0.001, 0], [0.18, 0.0], [0.195, 0.12], [0.2, 0.28], [look.skirt ? 0.21 : 0.24, 0.46], [0.23, 0.56], [0.13, 0.64], [0.001, 0.65]].map(([r, y]) => new THREE.Vector2(r, y)), 14);
-    put(B, torso, top, 0, 1.0, 0, { sz: 0.64 });
-    if (!gown && !look.skirt) put(B, Cyl(0.205, 0.205, 0.05, 12), ink, 0, 1.04, 0, { sz: 0.68 }); // belt
-    put(B, Cyl(0.058, 0.064, 0.14, 8), skin, 0, 1.68, 0);
-    put(B, Sph(0.132), skin, 0, 1.82, 0.005, { sy: 1.13, sz: 1.04 });
-    put(B, Sph(0.026, 6, 5), skin, 0, 1.8, 0.135);                               // nose
-    for (const x of [-0.047, 0.047]) put(B, Sph(0.02, 6, 5), ink, x, 1.83, 0.118); // eyes
-    for (const x of [-0.05, 0.05]) put(B, new THREE.BoxGeometry(0.055, 0.013, 0.02), hair, x, 1.868, 0.118, { rz: x > 0 ? -0.15 : 0.15 });
-    const hs = look.hairStyle;
-    if (hs !== 'bald') {
-      const capTop = (col, s = 1.06) => put(B, Sph(0.142, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), col, 0, 1.835, -0.012, { sy: s, sz: 1.08 });
-      if (hs === 'cap' || hs === 'beanie') {
-        capTop(hair, 0.9);
-        const cc = C(look.capCol, '#223');
-        put(B, Sph(0.15, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), cc, 0, 1.86, -0.01, { sy: hs === 'beanie' ? 1.25 : 0.95, sz: 1.06 });
-        if (hs === 'cap') put(B, new THREE.CylinderGeometry(0.1, 0.1, 0.018, 10, 1, false, 0, Math.PI), cc, 0, 1.87, 0.1, { sz: 1.3 });
-      } else capTop(hair, hs === 'slick' ? 0.95 : 1.08);
-      if (hs === 'long') put(B, Sph(1, 10, 8), hair, 0, 1.66, -0.085, { sx: 0.16, sy: 0.27, sz: 0.085 });
-    }
-    if (look.beard) put(B, Sph(0.11, 10, 8), hair, 0, 1.74, 0.045, { sy: 0.8, sz: 0.85 });
-    if (look.shades) put(B, new THREE.BoxGeometry(0.25, 0.055, 0.03), ink, 0, 1.835, 0.13);
-    if (look.tie) put(B, new THREE.BoxGeometry(0.065, 0.38, 0.025), C(look.tie), 0, 1.38, 0.155, { rx: -0.08 });
-    if (look.badge) put(B, Sph(0.03, 6, 5), C(look.badge), 0.1, 1.45, 0.15, { sz: 0.4 });
-    mesh(B, G);
-
-    G.legs = [];
-    for (const x of [-0.1, 0.1]) {
-      const p = new THREE.Group(); p.position.set(x, 0.92, 0); G.add(p);
-      const L = parts();
-      const legCol = look.skirt || gown ? skin : bottom;
-      put(L, Cyl(0.1, 0.07, 0.84, 10), legCol, 0, -0.44, 0, { sz: 0.9 });
-      put(L, Sph(1, 10, 8), shoe, 0, -0.875, 0.05, { sx: 0.075, sy: 0.06, sz: 0.145 });
-      mesh(L, p);
-      G.legs.push(p);
-    }
-    G.arms = [];
-    for (const x of [-0.27, 0.27]) {
-      const p = new THREE.Group(); p.position.set(x, 1.52, 0); p.rotation.z = x < 0 ? -0.1 : 0.1; G.add(p);
-      const A = parts();
-      const sleeve = look.tank ? skin : top;
-      put(A, Sph(0.078, 10, 8), top, 0, 0, 0);
-      put(A, Cyl(0.066, 0.056, 0.32, 8), sleeve, 0, -0.17, 0);
-      put(A, Cyl(0.056, 0.047, 0.3, 8), look.tank || look.short ? skin : sleeve, 0, -0.47, 0.01);
-      put(A, Sph(0.055, 8, 6), skin, 0, -0.66, 0.015, { sy: 1.2, sz: 0.8 });
-      mesh(A, p);
-      G.arms.push(p);
-    }
-    G.scale.setScalar(size * (look.size || 1));
-    inkCharacter(G, { rim: 0xfff0d0, outline: quality().look3d !== 'min' });
-    this.scene.add(G);
-    this.shadows && this.shadows.track(G, 0.45 * size * (look.size || 1));
-    return G;
   }
 
   /** A cast enemy model (enemies.js) once it has loaded, else the procedural NPC in `look`. */
@@ -988,83 +676,6 @@ export class Special3D {
     }
   }
 
-  updateGuards(dt) {
-    const h = this.hero.position;
-    for (const gd of this.guards) {
-      gd.seeing = false;
-      if (gd.ko) continue;
-      const m = gd.mesh;
-      gd.t += dt;
-      const dx = h.x - m.position.x, dz = h.z - m.position.z, d = Math.hypot(dx, dz);
-      const fx = Math.sin(m.rotation.y), fz = Math.cos(m.rotation.y);
-      if (this.t > this.grace && d < GUARD_RANGE && d > 0.01 && (dx * fx + dz * fz) / d > Math.cos(GUARD_FOV / 2) && this.clearLOS(m.position, h)) {
-        gd.seeing = true;
-        if (gd.look <= 0) { const s = this.screenOf(m.position, 2.1); if (s) this.g.commentary.guardShout(s.x, s.y); }
-        gd.look = 1.2;
-        this.alert = Math.min(100, this.alert + dt * (30 + (GUARD_RANGE - d) * 9));
-      }
-      if (m.enemy) { if (gd.look > 0) m.enemy.play('combatIdle'); else m.enemy.play('walk', { speed: 1.2 }); } // walk clip at 1.7 m/s
-      if (gd.look > 0) {
-        gd.look -= dt;
-        if (gd.seeing) m.rotation.y = Math.atan2(dx, dz);
-      } else {
-        const tgt = gd.route[gd.wp];
-        const tx = tgt.x - m.position.x, tz = tgt.z - m.position.z, td = Math.hypot(tx, tz);
-        if (td < 0.2) gd.wp = (gd.wp + 1) % gd.route.length;
-        else {
-          m.position.x += (tx / td) * 1.7 * dt; m.position.z += (tz / td) * 1.7 * dt;
-          let da = Math.atan2(tx, tz) - m.rotation.y;
-          while (da > Math.PI) da -= Math.PI * 2;
-          while (da < -Math.PI) da += Math.PI * 2;
-          m.rotation.y += da * Math.min(1, dt * 5);
-        }
-        const s = Math.sin(gd.t * 8) * 0.4;
-        m.legs[0].rotation.x = s; m.legs[1].rotation.x = -s;
-      }
-      if (!gd.cone.userData.comic) this.dressCone(gd.cone);
-      const cu = gd.cone.material.uniforms;
-      cu.col.value.set(gd.seeing ? 0xff2a2a : gd.look > 0 ? 0xffa020 : 0xffe040);
-      cu.k.value += ((gd.seeing ? 1 : 0.62) - cu.k.value) * Math.min(1, dt * 8);
-      cu.t.value = this.t;
-    }
-  }
-
-  /**
-   * Vision cones as comic "spotlight wedges": a soft fill that brightens toward the guard, an
-   * ink-dark rim and sweeping scan lines. Adopts whatever cone a zone built (same geometry).
-   */
-  dressCone(cone) {
-    const R = GUARD_RANGE;
-    cone.material.dispose();
-    cone.material = new THREE.ShaderMaterial({
-      uniforms: { col: { value: new THREE.Color(0xffe040) }, k: { value: 0.62 }, t: { value: 0 }, R: { value: R } },
-      vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `uniform vec3 col; uniform float k, t, R; varying vec3 vP;
-void main(){
-  float d = length(vP.xz) / R;
-  float a = atan(vP.x, vP.z);
-  float edge = smoothstep(0.9, 0.965, d) * (1.0 - smoothstep(0.985, 1.0, d));
-  float side = smoothstep(0.43, 0.51, abs(a));
-  float fill = (0.2 + 0.28 * (1.0 - d)) * (1.0 - smoothstep(0.97, 1.0, d));
-  float scan = smoothstep(0.93, 1.0, sin((d * 7.0 - t * 2.2) * 6.2832) * 0.5 + 0.5) * 0.18 * (1.0 - d);
-  float al = (fill + scan) * k + (edge + side * 0.6) * 0.55 * k;
-  gl_FragColor = vec4(mix(col, col * 0.35, edge * 0.6), al);
-}`,
-      transparent: true, depthWrite: false, side: THREE.DoubleSide,
-    });
-    cone.renderOrder = 2;
-    cone.userData.comic = true;
-  }
-
-  clearLOS(a, b) {
-    for (const c of this.colliders) {
-      if (!c.wall || c.disabled) continue;
-      if (segHitsBox(a.x, a.z, b.x, b.z, c)) return false;
-    }
-    if (!this.doorOpen && segHitsBox(a.x, a.z, b.x, b.z, this.doorCol)) return false;
-    return true;
-  }
-
   collide(p, r) {
     for (const c of this.colliders) {
       if (c.disabled) continue;
@@ -1133,32 +744,7 @@ void main(){
     this.g.input.setButton('interact', { lit: !!this.near });
   }
 
-  render() {
-    if (!this.scene) return;
-    const h = this.hero.position, st = this.g.state;
-    const target = this.cameraPitch(h), snap = this.camPitch === null;
-    // tilt up quickly to get out from behind a wall; settle back down gently
-    this.camPitch = snap ? target : this.camPitch + (target - this.camPitch) * (target > this.camPitch ? 0.3 : 0.08);
-    const off = this.cameraOffset(this.camPitch);
-    const want = h.clone().add(off.multiplyScalar(this.cameraReach(h, off) / CAM_DIST));
-    // smoothed follow that eases toward a look-ahead point in the direction she's heading
-    const k = snap ? 1 : 1 - Math.pow(0.0005, this.frameDt || 1 / 60);
-    if (snap) this.cam.position.copy(want); else this.cam.position.lerp(want, Math.max(0.12, k));
-    const la = this._look || (this._look = h.clone());
-    const fwdX = Math.sin(this.hero.rotation.y) * 0.9, fwdZ = Math.cos(this.hero.rotation.y) * 0.9;
-    if (snap) la.set(h.x, h.y, h.z);
-    la.x += (h.x + fwdX * (this.moving || 0) - la.x) * Math.max(0.1, k * 0.7);
-    la.z += (h.z + fwdZ * (this.moving || 0) - la.z) * Math.max(0.1, k * 0.7);
-    la.y = h.y;
-    this.cam.lookAt(la.x, la.y + 1.1, la.z);
-    if (st.intox > 30) {
-      const k = (st.intox - 30) / 70;
-      this.cam.rotation.z += Math.sin(this.t * 1.3) * 0.08 * k;
-      this.cam.fov = 58 + Math.sin(this.t * 0.9) * 6 * k;
-      this.cam.updateProjectionMatrix();
-    }
-    if (this.shadows) this.shadows.update();
-    lookFrame(this.renderer);
-    this.renderer.render(this.scene, this.cam);
-  }
 }
+
+// The zone's parts, each in its own module (camera, guards + cones, people, floor plan).
+Object.assign(Special3D.prototype, cameraMethods, guardMethods, peopleMethods, roomMethods);

@@ -32,11 +32,10 @@ const NARRATE_DISTRICT = {
   flop: ['Meanwhile, over {D}… the "heroine" makes another appearance.', '{D} braces itself. Not for crime, but for HER.', 'Can our so-called hero redeem herself in {D}?'],
   fraud: ['{D} groans. The FRAUD is back!', 'Even the crooks of {D} are laughing now!', 'Over {D}, the most disgraced cape in town…'],
 };
-const CRIME_REPORT = [
-  '{N} crimes reported in {D}!', 'Crime wave in {D}! {N} incidents and counting!', '{D} has {N} cries for help tonight!',
-];
-const ONE_REPORT = ['Trouble brewing in {D}!', 'A cry for help in {D}!', 'Crime reported in {D}!'];
-const QUIET_REPORT = ['All quiet in {D}… for now!', 'Not a crook in sight in {D}. Suspicious!'];
+// (the narration line already names the district; the report that follows it doesn't repeat it)
+const CRIME_REPORT = ['{N} crimes reported!', 'Crime wave! {N} incidents and counting!', '{N} cries for help tonight!'];
+const ONE_REPORT = ['Trouble is brewing!', 'A cry for help!', 'A crime has been reported!'];
+const QUIET_REPORT = ['All quiet… for now!', 'Not a crook in sight. Suspicious!'];
 
 const CITIZEN = {
   idol: ['LOOK! UP IN THE SKY!', 'We love you, Supergirl!', 'My hero!!', 'She waved at me! SHE WAVED AT ME!', 'Best. Hero. Ever!', 'Marry me, Supergirl!… wait, no, adopt me!'],

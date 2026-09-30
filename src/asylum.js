@@ -20,7 +20,7 @@ import { npcLook, portrait } from './art.js';
 import { sfx } from './sfx.js';
 import { randomPerson } from './casefile.js';
 import { playCutscene } from './cutscene.js';
-import { toon, lightPool } from './look3d.js';
+import { toon, lightPool, Particles } from './look3d.js';
 import { quality } from './settings.js';
 
 // Layout (metres). Wings run outward from a square hub; cells sit on both sides of each wing.
@@ -36,6 +36,14 @@ const END = S0 + N * CELL_W + 1.2;       // far end of each wing
 const WINGS = [
   { id: 'north', d: [0, -1] }, { id: 'east', d: [1, 0] }, { id: 'south', d: [0, 1] }, { id: 'west', d: [-1, 0] },
 ];
+
+// The look: sodium spots flickering over teal shade (Arkham), leaks dripping from the ceiling.
+const MOOD = {
+  bg: 0x040706, fog: [0x061210, 13, 38], grounds: 0x223029,
+  sky: 0x7fd8c8, ground: 0x0c1614, hemi: 0.55, amb: 0.08, key: 0xbff0e0, keyK: 0.75,
+  hubPool: [0xffd49a, 4.6, 0.5], wingPool: [0xffa040, 3.4, 0.5], flickerLow: 0.06,
+  drips: { count: 28, color: 0x9fe8ff, size: 0.05, top: 2.6, opacity: 0.8 },
+};
 
 /** Zone fields for the asylum on the map (the overworld supplies position/district). */
 export function asylumFields() {
@@ -204,6 +212,37 @@ class Builder {
     this.box(M.cabinet, 0.9, 1.8, 0.45, -HUB + 0.3, 0.9, -HUB + 0.9);   // medicine cabinet in a hub corner
     this.cabinetPos = new THREE.Vector3(-HUB + 0.9, 0, -HUB + 0.9);
     for (const w of WINGS) this.buildWing(w);
+    this.props();
+  }
+
+  /** Any geometry, placed (rotation about y), merged with its material. */
+  geo(mat, g, x, y, z, ry = 0) { g.rotateY(ry); g.translate(x, y, z); this.add(mat, g); }
+
+  /** Abandoned hospital kit: gurneys in the hub corners, wheelchairs left in a few cells. */
+  props() {
+    const M = this.M;
+    const gurney = (x, z, ry) => {
+      const P = (dx, dz) => [x + Math.cos(ry) * dx + Math.sin(ry) * dz, z - Math.sin(ry) * dx + Math.cos(ry) * dz];
+      const b = (w, h, d, dx, y, dz, m) => { const [px, pz] = P(dx, dz); this.geo(m, new THREE.BoxGeometry(w, h, d), px, y, pz, ry); };
+      b(0.7, 0.06, 1.9, 0, 0.78, 0, M.bedFrame);
+      b(0.64, 0.12, 1.8, 0, 0.87, 0, M.mattress);
+      for (const [dx, dz] of [[-0.3, -0.85], [0.3, -0.85], [-0.3, 0.85], [0.3, 0.85]]) { b(0.04, 0.72, 0.04, dx, 0.39, dz, M.bedFrame); b(0.08, 0.08, 0.08, dx, 0.05, dz, M.mass); }
+      b(0.7, 0.04, 0.04, 0, 1.05, -0.95, M.bedFrame);
+    };
+    gurney(HUB - 0.55, -HUB + 1.3, 0.08);
+    gurney(-HUB + 0.55, HUB - 1.3, -0.12);
+    const chair = (x, z, ry) => {
+      this.geo(M.bedFrame, new THREE.BoxGeometry(0.46, 0.06, 0.44), x, 0.5, z, ry);
+      this.geo(M.bedFrame, new THREE.BoxGeometry(0.46, 0.5, 0.05).translate(0, 0, -0.22), x, 0.78, z, ry);
+      for (const s of [-1, 1]) {
+        const wheel = new THREE.TorusGeometry(0.3, 0.025, 6, 16).rotateY(Math.PI / 2).translate(s * 0.27, 0, 0);
+        this.geo(M.mass, wheel, x, 0.3, z, ry);
+      }
+    };
+    for (const c of this.cells.filter((_, i) => i % 5 === 2)) {
+      const p = c.center.clone().lerp(c.door, 0.35);
+      chair(p.x + (c.alongX ? 1.0 : 0.6 * c.side), p.z + (c.alongX ? 0.6 * c.side : 1.0), Math.random() * 6.28);
+    }
   }
 
   buildWing(w) {
@@ -271,6 +310,7 @@ class Builder {
       root.add(new THREE.Mesh(merged, mat));
     }
     // ink lines along every wall edge and corner: one draw call (not a mesh, so not a collider)
+    root.userData.inked = true; // the shared inkEdges() pass needn't redo it
     const lines = new THREE.LineSegments(mergeGeometries(edges, false), new THREE.LineBasicMaterial({ color: 0x0e1210 }));
     lines.raycast = () => {};
     root.add(lines);
@@ -343,27 +383,57 @@ export class AsylumZone extends NightCase {
   buildWorld() {
     const c = this.club, S = this.scene;
     S.add(c.scene);
-    S.background = new THREE.Color(0x050706);
-    S.fog = new THREE.Fog(0x08100c, 14, 40);
-    S.add(new THREE.HemisphereLight(0xcfe8dc, 0x1a2420, 0.7));
-    S.add(new THREE.AmbientLight(0xffffff, 0.1));
-    this.key.color.set(0xe0fff0); this.key.intensity = 0.9;
+    S.background = new THREE.Color(MOOD.bg);
+    S.fog = new THREE.Fog(...MOOD.fog);
+    this.backdrop = { color: MOOD.grounds }; // wet grounds round the building, not black void
+    S.add(new THREE.HemisphereLight(MOOD.sky, MOOD.ground, MOOD.hemi));
+    S.add(new THREE.AmbientLight(0xffffff, MOOD.amb));
+    this.key.color.set(MOOD.key); this.key.intensity = MOOD.keyK;
     // Fluorescent tubes: pools of sickly light down each wing and over the hub (floor decals:
     // per-pixel point lights cost too much on phones). A couple buzz and flicker.
     const spots = [new THREE.Vector3(0, 0, 0)];
     for (const r of c.routes) for (const k of [0.3, 0.75]) spots.push(r.from.clone().lerp(r.to, k));
     const pools = spots.map((p, i) => {
-      const m = lightPool(i ? 0xbfffe0 : 0xfff0c8, i ? 3.4 : 4.4, 0.42);
+      const [col, r, k] = i ? MOOD.wingPool : MOOD.hubPool;
+      const m = lightPool(col, r, k);
+      m.userData.k = k;
       m.position.set(p.x, 0.02, p.z); S.add(m);
       return m;
     });
     this.plights = [];
     const flicker = shuffle([...pools]).slice(0, 3);
-    this.anims.push((t) => flicker.forEach((l, i) => { l.material.opacity = Math.sin(t * 23 + i * 7) > 0.93 || Math.sin(t * 3.1 + i) > 0.97 ? 0.05 : 0.42; }));
+    this.anims.push((t) => flicker.forEach((l, i) => { l.material.opacity = Math.sin(t * 23 + i * 7) > 0.93 || Math.sin(t * 3.1 + i) > 0.97 ? MOOD.flickerLow : l.userData.k; }));
+    // leaks: drips falling through a few of the pools
+    const dripScale = { full: 1, lite: 0.6, min: 0 }[quality().look3d] ?? 0.6;
+    if (dripScale) {
+      const d = new Particles('drip', shuffle(spots.slice(1)).slice(0, 4).map((p) => [p.x, p.z, 0.6, 0.6]), { ...MOOD.drips, count: Math.round(MOOD.drips.count * dripScale) });
+      S.add(d.mesh); this.particles.push(d);
+    }
+    this.addPuddles(spots);
     this.buildDoors();
     this.wallMat = this.doorMat; // X-ray fades the doors so she can look into the cells
     this.wallBaseOpacity = 1;
     this.placeClubGameplay();
+  }
+
+  /** Water stains under the leaks and grime in the corners: one merged decal mesh. */
+  addPuddles(spots) {
+    if (!AsylumZone.puddleTex) {
+      const c = document.createElement('canvas'); c.width = c.height = 128;
+      const g = c.getContext('2d');
+      for (let i = 0; i < 7; i++) {
+        const x = 40 + Math.random() * 48, y = 40 + Math.random() * 48, r = 14 + Math.random() * 26;
+        const gr = g.createRadialGradient(x, y, 0, x, y, r);
+        gr.addColorStop(0, 'rgba(20,40,36,.55)'); gr.addColorStop(0.7, 'rgba(20,40,36,.35)'); gr.addColorStop(1, 'rgba(20,40,36,0)');
+        g.fillStyle = gr; g.beginPath(); g.ellipse(x, y, r, r * 0.7, Math.random() * 3, 0, 7); g.fill();
+      }
+      g.strokeStyle = 'rgba(190,255,240,.35)'; g.lineWidth = 2; g.beginPath(); g.arc(58, 60, 16, 3.6, 4.6); g.stroke();
+      AsylumZone.puddleTex = new THREE.CanvasTexture(c);
+    }
+    const geos = shuffle(spots.slice(1)).slice(0, 6).map((p) => new THREE.PlaneGeometry(2.2, 2.2).rotateX(-Math.PI / 2).rotateY(Math.random() * 6).translate(p.x + rand(-0.4, 0.4), 0.015, p.z + rand(-0.4, 0.4)));
+    const m = new THREE.Mesh(mergeGeometries(geos, false), new THREE.MeshBasicMaterial({ map: AsylumZone.puddleTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+    m.raycast = () => {};
+    this.scene.add(m);
   }
 
   buildDoors() {
