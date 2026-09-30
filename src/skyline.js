@@ -11,7 +11,7 @@ const INK = '#0b0b16';
 const TONE = { s: -0.36, n: -0.08, e: -0.5, w: -0.18 };
 /** Lit window colours: warm tungsten, cool office light (glass towers). */
 /** Roofs smaller than this (screen px) on both sides drop their detail passes. */
-const LOD_PX = 22;
+const LOD_PX = 22, LOD_FAR_PX = 36, FAR_CAM = 1400;
 const WINDOW = { warm: [255, 212, 120, 0.85], cool: [170, 215, 255, 0.8] };
 
 export function drawBuilding(ctx, b, V) {
@@ -63,7 +63,8 @@ export function drawBuilding(ctx, b, V) {
   if (Math.max(gx1, rx1) < -4 || Math.min(gx0, rx0) > V.W + 4 || Math.max(gy1, ry1) < -4 || Math.min(gy0, ry0) > V.H + 4) return;
   const base = b.col, small = b.container || b.truck;
   // LOD: a building only a few pixels across (high patrol) gets flat walls and roof, no detail
-  const lite = rx1 - rx0 < LOD_PX && ry1 - ry0 < LOD_PX;
+  // (at high patrol the whole city is on screen: mid-size blocks go flat too)
+  const lod = V.camH > FAR_CAM ? LOD_FAR_PX : LOD_PX, lite = rx1 - rx0 < lod && ry1 - ry0 < lod;
   // One light for the whole city (sun/moon from the north-west, matching the baked shadows):
   // north and west faces catch it, south and east faces sit in shade.
   const walls = [];
