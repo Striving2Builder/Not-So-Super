@@ -52,9 +52,20 @@ render hand-off, enter/exit, the boost kick.
 - `flight3d.js` — mode glue: shared WebGL renderer (Special3D's), scene, per-frame update order,
   incident beams, and the transparent 2D comic overlay (icons over everything, edge markers,
   speed lines, WHOOSH!). Table: `LOOK3` (3D band heights, fog per band, beam size).
-- `city3d.js` — the city as chunked 3D (one ground tile = one chunk): merged building mesh with
-  one toon material (two-style facade atlas + lit-window emissive), ink edges, neon tubes, the
-  2D view's baked ground art as ground textures. Table: `DISTRICT_3D` (height multipliers, glass).
+- `city3d.js` — the city's orchestrator: chunks of 3x3 blocks, each ONE mesh = ONE draw call (near
+  build + a lite far-LOD build past `LOD.farMat`), landmarks (always drawn), the 2D view's baked
+  ground art as near ground, horizon, street life. Reads the key light / ambient from Sky3D's own
+  lights (no hook). Exposes `landmarks` ([{kind, district, x, y, h}], world units) for navigation.
+  - `buildings3d.js` — the building kit: mask atlas (5 facades + 3 roofs), the one cel shader
+    (`CityLook`: near / far / landmark materials; walls, roofs, screen-space ink quads thick near →
+    thin far, neon, signs, beacons; window grid → flat tone + lit floor bands by screen size; haze
+    thicker near the ground), `Builder`, `box` / `prism` / `gable` / `tree` / `mast` / `neonRing`.
+  - `blocks3d.js` — what stands on a block: `DISTRICT_3D` (heights + core bump, palettes, window
+    light, facade/silhouette/roof-kit odds), tower archetypes, roof kits, venue signs placement.
+  - `signs3d.js` — neon sign word atlas (comic lettering) + facade / rooftop / blade sign quads.
+  - `landmarks3d.js` — one signature tower per district (`LANDMARKS`), chosen near its seed.
+  - `skyline3d.js` — horizon: skyline ring at the fog line, sea with cel waves + glint, ground haze.
+  - `street3d.js` — GPU traffic light streams + street steam (static buffers, one time uniform).
 - `sky3d.js` — clock-driven gradient dome, sun/moon + lights, district-tinted fog, cloud decks.
 - `herofly3d.js` — the HeroModel posed from the flight state (hover / fist-forward / bank / cape).
 - `flightcam3d.js` — chase camera (offset spring, speed FOV, boost kick, tower avoidance, patrol view).
