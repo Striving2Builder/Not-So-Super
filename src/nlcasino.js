@@ -92,13 +92,13 @@ export function casino(zn, X, h) {
   const crystals = [];
   for (let i = 0; i < 16; i++) { const a = (i / 16) * TAU; X.bulb(Math.cos(a) * 1.0, 2.9, Math.sin(a) * 1.0, 0.3, 0xffe0a0); }
   for (let i = 0; i < 10; i++) { const a = (i / 10) * TAU; X.bulb(Math.cos(a) * 0.6, 3.14, Math.sin(a) * 0.6, 0.26, 0xffe0a0); }
-  for (let i = 0; i < (X.lite ? 24 : 48); i++) {
+  for (let i = 0; i < (X.rich ? 48 : 20); i++) {
     const a = rnd(0, TAU), r = rnd(0.2, 1.0);
     crystals.push(X.bulb(Math.cos(a) * r, rnd(2.35, 2.8), Math.sin(a) * r, 0.12, 0xffffff));
   }
-  X.bulb(0, 2.75, 0, 3.2, 0xffc070).c.multiplyScalar(0.35);
+  X.bulb(0, 2.75, 0, X.rich ? 3.2 : 2.0, 0xffc070).c.multiplyScalar(0.35); // the big halo is fill-rate heavy
   X.pool(0, 0, 3.2, 0xffc070, 0.35);
-  X.cone(new THREE.Vector3(0, 2.7, 0), new THREE.Vector3(0, 0, 0), 2.6, 0xffc070, 0.15);
+  if (X.rich) X.cone(new THREE.Vector3(0, 2.7, 0), new THREE.Vector3(0, 0, 0), 2.6, 0xffc070, 0.15); // a screen-wide beam: High only
   // the bar and its bartender
   bar(11, 4, 7, true);
   X.pool(11, 4, 3, 0xffc070, 0.2);
