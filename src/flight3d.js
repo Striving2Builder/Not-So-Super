@@ -36,6 +36,7 @@ const LOOK3 = {
   patrolBelow: 150,             // speed under which high patrol cranes up to the overhead view
   wallProbe: [10, 22],          // m to each side: a tower face this close rushes past (action lines)
   chips: 3,                     // edge chips for off-screen incidents (the waypoint is extra)
+  chipTop: 92,                  // px: chips stay below the top HUD row
 };
 
 const BEAM_VS = `varying vec3 vN; varying float vH; uniform float hgt;
@@ -256,7 +257,10 @@ export class Flight3D {
     for (const c of show) {
       // screen direction: ahead = up, right = right, behind = down
       const sx = Math.sin(c.rel), sy = -Math.cos(c.rel), s = Math.min(mx / Math.abs(sx || 1e-6), my / Math.abs(sy || 1e-6));
-      let ex = cx + sx * s, ey = cy + sy * s;
+      let ex = cx + sx * s, ey = Math.max(LOOK3.chipTop, cy + sy * s); // (below the top HUD row)
+      // thumb zones: the stick (bottom-left) and the buttons (bottom-right) push chips up the side edge
+      if (ex > W - 240 && ey > H - 190) { if (ex > W - 60) ey = H - 196; else ex = W - 246; }
+      if (ex < 170 && ey > H - 170) { if (ex < 60) ey = H - 176; else ex = 176; }
       // chips that would touch slide apart along their edge
       for (const p of placed) if (Math.hypot(p[0] - ex, p[1] - ey) < 58) { if (Math.abs(sx * s) >= mx - 1) ey += ey > p[1] ? 58 - Math.abs(ey - p[1]) : -(58 - Math.abs(ey - p[1])); else ex += ex > p[0] ? 58 - Math.abs(ex - p[0]) : -(58 - Math.abs(ex - p[0])); }
       const [x, y] = avoidHud(ex, ey, 8);
