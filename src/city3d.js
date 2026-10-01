@@ -184,6 +184,10 @@ export class City3D {
     sea.rotateX(-Math.PI / 2); sea.translate(c.coastX * M + 3000, -0.5, (c.H * M) / 2);
     this.sea = new THREE.Mesh(sea, comic(new THREE.MeshToonMaterial({ color: 0x1d4f78, gradientMap: gradMap(3) }), { halftone: 0.3 }));
     this.scene.add(this.sea);
+    // the countryside round the city out to the horizon (no edge of the world at high patrol)
+    const land = new THREE.PlaneGeometry(30000, 30000);
+    land.rotateX(-Math.PI / 2); land.translate((c.W * M) / 2 - 6000, -1, (c.H * M) / 2);
+    this.scene.add(new THREE.Mesh(land, new THREE.MeshBasicMaterial({ color: 0x2c4a30 })));
   }
 
   chunk(cx, cy) {
