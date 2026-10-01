@@ -26,7 +26,7 @@ export function flight3dEnabled() {
  * canyons, cruise weaves between the towers, high patrol rides above the cloud deck.
  */
 const LOOK3 = {
-  bands: [110, 420, 1020],     // world units (×0.5 m)
+  bands: [110, 560, 1100],     // world units (×0.5 m)
   fog: [1100, 1600, 2400],     // fog far (m) per band
   beam: { radius: 7, height: 420, alpha: 0.45 },
   iconPx: 26,
@@ -168,6 +168,7 @@ export class Flight3D {
       if (!front || x < -20 || y < -20 || x > W + 20 || y > H + 20) continue;
       ow.drawIcon(ctx, x, y, 11, z, ow.g.state && ow.g.state.locked(z.lockKey), z === ow.near);
     }
+    ow.fx.draw(ctx, hs[0], hs[1], 1.2); // wind streaks, sonic-boom ring, launch burst
     ow.fx.drawComic(ctx, W / 2, H / 2, W, H, night);
     ow.heroArt.drawPops(ctx, hs[0], hs[1], Math.min(W, H) / 390);
     // off-screen markers: ground points projected to the screen (identity SX/SY), real distances

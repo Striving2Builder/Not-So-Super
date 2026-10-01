@@ -155,6 +155,9 @@ export class Overworld {
     if (h.perch && Math.hypot(a.x, a.y) > 0.45) this.leavePerch(); // push off to take flight
   }
 
+  /** The WebGL renderer while the 3D flight slice is showing (the harness reads its draw stats). */
+  get renderer() { return this.view3d && document.body.classList.contains('fly3d') ? this.view3d.renderer : null; }
+
   /** A structure's height for flying into/onto it (the 3D slice's city stands taller). */
   hOf(o) { return this.view3d ? this.view3d.heightOf(o) : o.h; }
 
