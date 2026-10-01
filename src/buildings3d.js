@@ -50,7 +50,7 @@ function atlas() {
   // 0 concrete: punched windows, slab lines
   windows(0, 0.86, [7, 8], 1, 0.6, (x, y) => rect(x, y + CELL - 3, CELL, 3, 0.7, 0, 0));
   // 1 glass curtain wall: big panes, thin mullions, dark spandrel per floor
-  windows(CW, 0.7, [1, 2], 1, 0.6, (x, y) => rect(x, y + CELL - 7, CELL, 7, 0.38, 0.55, 0));
+  windows(CW, 0.7, [1, 2], 1, 0.42, (x, y) => rect(x, y + CELL - 7, CELL, 7, 0.38, 0.55, 0));
   // 2 brick: small windows with a pale lintel
   windows(CW * 2, 0.8, [9, 9], 1, 0.55, (x, y) => { rect(x + 7, y + 6, CELL - 14, 3, 1, 0, 0); for (let i = 0; i < 4; i++) rect(x, y + i * 8 + 3, CELL, 1, 0.68, 0, 0); });
   // 3 art deco: bright vertical piers, dark spandrels, tall narrow windows (reads TALL)
@@ -203,7 +203,7 @@ void main() {
   gl_FragColor = linearToOutputTexel(vec4(col + emi, 1.));
   // haze: distance fog, thicker toward the ground, so the towers rise out of it
   float d = dist * uFogK;
-  float f = smoothstep(fogNear, fogFar, d);
+  float f = smoothstep(fogNear, fogFar * 0.88, d);
   f = clamp(f + (1. - smoothstep(0., 200., vW.y)) * smoothstep(fogNear * 0.3, fogFar * 1.1, d) * 0.55, 0., 1.);
   if (vKind >= 2.) f *= 0.7; // neon cuts through the haze
   gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, f);

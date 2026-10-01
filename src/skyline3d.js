@@ -111,7 +111,7 @@ void main() {
     const R = Math.min(RING.max, Math.max(RING.min, fog.far * 1.04));
     // follows the camera across the ground: always "the next borough over"
     this.ring.position.set(cam.position.x, -R * 0.01, cam.position.z);
-    this.ring.scale.set(R, R * RING.tall, R);
+    this.ring.scale.set(R, Math.max(R * RING.tall, cam.position.y * 0.95 + R * 0.03), R); // top never drops below her eye line
     this.ringU.fogColor.value.copy(fog.color);
   }
 }
