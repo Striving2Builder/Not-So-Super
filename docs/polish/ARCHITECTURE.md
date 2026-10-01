@@ -71,7 +71,6 @@ render hand-off, enter/exit, the boost kick, and the 3D flight button set (`setB
   - `landmarks3d.js` — one signature tower per district (`LANDMARKS`), chosen near its seed.
   - `skyline3d.js` — horizon: skyline ring at the fog line, sea with cel waves + glint, ground haze.
   - `street3d.js` — GPU traffic light streams + street steam (static buffers, one time uniform).
->>>>>>> worktree-agent-a0caf6ca93335bc8b
 - `sky3d.js` — clock-driven gradient dome, sun/moon + lights, district-tinted fog, cloud decks.
 - `herofly3d.js` — the HeroModel posed from the flight state (hover idle / fist-forward with
   trailing legs / bank / cape), her own pushed-saturation suit materials + rim, inked blob shadow,
