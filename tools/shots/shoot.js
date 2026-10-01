@@ -168,6 +168,14 @@ async function shootFly3d(page, dir, name, plan) {
   await page.waitForTimeout(800);
   if (plan === 'low') await hold(page, 'KeyF', 4000);
   if (plan === 'high' || plan === 'patrolview') await hold(page, 'KeyR', 4500);
+  if (plan === 'patrolview') { // stopped up high: the camera cranes up overhead
+    await page.waitForTimeout(2500);
+    await page.screenshot({ path: path.join(dir, `${name}_1.png`) });
+    const m = await metrics(page);
+    await hold(page, 'KeyD', 900); await page.waitForTimeout(1500);
+    await page.screenshot({ path: path.join(dir, `${name}_2.png`) });
+    return { shots: [`${name}_1.png`, `${name}_2.png`], ...m };
+  }
   if (plan === 'boost') await page.keyboard.down('ShiftLeft');
   await page.keyboard.down('KeyW');
   await page.waitForTimeout(2500);

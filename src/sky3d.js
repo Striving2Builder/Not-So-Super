@@ -11,7 +11,7 @@ const SKY = {
   dusk: ['#2c3a78', '#ff9b62'],
   night: ['#050818', '#2b2152'],
 };
-const CLOUD = { count: 70, layers: [380, 430, 470], size: [120, 260], alpha: 0.55 }; // metres
+const CLOUD = { count: 150, layers: [380, 430, 470], size: [120, 260], alpha: 0.6 }; // metres
 
 let puff = null;
 function puffTexture() {

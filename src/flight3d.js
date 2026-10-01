@@ -30,6 +30,7 @@ const LOOK3 = {
   fog: [1100, 1600, 2400],     // fog far (m) per band
   beam: { radius: 7, height: 420, alpha: 0.45 },
   iconPx: 26,
+  patrolBelow: 150,             // speed under which high patrol cranes up to the overhead view
 };
 
 let beamTex = null;
@@ -82,6 +83,7 @@ export class Flight3D {
     if (!this.dragHooked) {
       // drag anywhere on the 3D view (the stick and buttons sit above it) to orbit the camera
       this.dragHooked = true;
+      addEventListener('keydown', (e) => { if (e.code === 'KeyV' && document.body.classList.contains('fly3d')) this.patrolForced = !this.patrolForced; });
       let last = null;
       const host = document.getElementById('three-host');
       host.addEventListener('pointerdown', (e) => { if (document.body.classList.contains('fly3d')) last = e.clientX; });
@@ -141,7 +143,9 @@ export class Flight3D {
     const b = ow.buildingAt(h.x, h.y), ground = b && this.heightOf(b) < h.z ? this.heightOf(b) : 0;
     this.hero.update(h, dt, ow.t, !!ow.diving, ground);
     const band = h.band ?? 1;
-    this.cam.update(h, dt, frac, band === BANDS.length - 1 && !ow.diving, (x, y, z) => { const o = ow.buildingAt(x, y); return !!o && z < this.heightOf(o); });
+    // patrol view: V toggles it; it also cranes up by itself when she stops up at high patrol
+    const patrol = !ow.diving && (this.patrolForced || (band === BANDS.length - 1 && h.speed < LOOK3.patrolBelow));
+    this.cam.update(h, dt, frac, patrol, (x, y, z) => { const o = ow.buildingAt(x, y); return !!o && z < this.heightOf(o); });
     this.fill.position.copy(this.cam.cam.position); this.fill.target.position.copy(this.hero.group.position);
     const fogFar = LOOK3.fog[band] || 1600;
     this.sky.update(clock, night, D?.map, this.cam.cam.position, fogFar);
@@ -162,6 +166,14 @@ export class Flight3D {
     ctx.clearRect(0, 0, W, H);
     const P = this.projector(), hs = P.proj(h.x, h.y, h.z);
     ow.heroScreen = { x: hs[0], y: hs[1] };
+    if (this.cam.patrolK > 0.3) {
+      // from the overhead view she's a speck: ring her in comic ink so she's always findable
+      ctx.globalAlpha = Math.min(1, (this.cam.patrolK - 0.3) * 2);
+      const r = 16 + 3 * Math.sin(ow.t * 5);
+      ctx.lineWidth = 5; ctx.strokeStyle = '#0b0b16'; ctx.beginPath(); ctx.arc(hs[0], hs[1], r, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = '#ffe23a'; ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
     // incident icons over everything
     for (const z of ow.zones) {
       const [x, y, front] = P.proj(z.x, z.y, LOOK3.beam.height / M * 0.55);
