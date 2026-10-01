@@ -237,17 +237,16 @@ export function styleRoom(zn, k) {
     if (o.isHemisphereLight) o.intensity = amb[0];
     else if (o.isAmbientLight) o.intensity = amb[1];
   }
-  // Three point lights, not five: every lit pixel pays for each one. Two light the hall (driven
-  // by the show); the third follows her, so wherever she goes (back room, office) she's in the neon.
+  // Two point lights, not five: with the cel/halftone surface pass every lit pixel pays ~7 ms
+  // (software) per light. Both light the hall and are driven by the show; the back room and the
+  // office get their mood from the key light and the painted floor glow.
   const pl = [];
   zn.scene.traverse((o) => { if (o.isPointLight) pl.push(o); });
-  for (const l of pl) if (!zn.plights.includes(l) || zn.plights.indexOf(l) > 2) l.visible = false;
-  const follow = zn.plights[2];
-  follow.distance = 11; follow.decay = 1.2; follow.intensity = 16; follow.color = C(zn.V.lights[0]);
+  for (const l of pl) if (zn.plights.indexOf(l) < 0 || zn.plights.indexOf(l) > 1) l.visible = false;
   // no black void past the walls: a deep neon-tinted night instead
   const bg = { club: 0x1c0d38, redlight: 0x2a0a12, gentlemens: 0x260b28, casino: 0x22120a }[k];
   zn.scene.background = C(bg); zn.scene.fog.color = C(bg);
-  return { floorMat, floors, follow, hall: zn.plights.slice(0, 2) };
+  return { floorMat, floors, hall: zn.plights.slice(0, 2) };
 }
 
 // Static light pools and sign reflections are painted into one glow texture on the floor

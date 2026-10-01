@@ -67,7 +67,7 @@ export function redlight(zn, X, h) {
   const lanGlows = lanterns.map(([x, y, z, s], i) => {
     if (i >= 6 && i % 2) X.pool(x, z, 1.6 * s, 0xff2a3a, 0.35);
     else if (i < 6) X.cone(new THREE.Vector3(x, y - 0.2, z), new THREE.Vector3(x, 0, z - 0.2), 0.9, 0xff3344, 0.3);
-    return X.bulb(x, y, z, 1.3 * s, 0xff3040);
+    return X.bulb(x, y, z, (X.rich ? 1.3 : 0.85) * s, 0xff3040); // big overlapping sprites: fill-rate
   });
   // strings between lanterns
   const lp = [];
@@ -81,8 +81,9 @@ export function redlight(zn, X, h) {
     for (const s of [-0.7, 0.7]) X.prop(new THREE.BoxGeometry(0.12, 2.4, 0.12).translate(dx + s, 1.2, -11.72), 0x1a0806);
     X.prop(new THREE.BoxGeometry(1.56, 0.14, 0.14).translate(dx, 2.43, -11.72), 0x1a0806);
     X.halo('N', dx, 1.15, 1.3, 2.3, 0xff2a3a, 0.7);
-    for (let i = 0; i < 12; i++) {
-      const x = dx - 0.6 + i * 0.11;
+    const strands = X.rich ? 12 : 7;
+    for (let i = 0; i < strands; i++) {
+      const x = dx - 0.6 + (i * 1.2) / (strands - 1);
       for (let j = 0; j < 9; j++) X.bulb(x, 2.3 - j * 0.24 - (i % 2) * 0.12, -11.6, 0.07, j % 3 ? 0xff6a8a : 0xffc060);
     }
   }

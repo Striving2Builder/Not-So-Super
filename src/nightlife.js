@@ -64,8 +64,6 @@ export function updateNightlife(zn, dt) {
     a.needsUpdate = true;
   }
   X.glow.flush(); X.signs.flush();
-  const fl = X.room.follow, hp = zn.hero && zn.hero.position;
-  if (hp) fl.position.set(hp.x, 2.6, hp.z + 0.6);
   // points are sized in world units: pixels per unit at distance 1
   if (X.pmat && zn.renderer) X.pmat.uniforms.uScale.value = zn.renderer.domElement.height / (2 * Math.tan((zn.cam.fov * Math.PI) / 360));
 }
