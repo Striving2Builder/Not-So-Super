@@ -13,6 +13,7 @@ const KEY = 'supergirl-settings';
  * outlines on the heroine and procedural people only, no grade · 'min' heroine only, no light pools.
  * flyDetail: flight-view extras (roof detail, ink rims, hero rim light, sway, grade, speed lines);
  * flyTileRes: canvas pixels per city block in the flight view's baked ground tiles.
+ * flySpriteMax: cap (device px) on her flight sprite, which is otherwise rendered 1:1 with the screen.
  * clubLights: real (moving) point lights in a premade club.
  * scanFilter: night-case detective vision darkens the 3D view with a CSS filter.
  * (One line per area's keys, so each area's additions merge cleanly.)
@@ -23,7 +24,7 @@ export const PROFILES = {
     id: 'high', label: 'High', fpsCap: 0, dpr2d: 2, dpr3d: 1.6, heroSprite: 192,
     clubTex: 'full', clubCache: 3, clubMaterials: 'full', clubLights: 5,
     look3d: 'full',
-    flyDetail: true, flyTileRes: 144,
+    flyDetail: true, flyTileRes: 144, flySpriteMax: 640,
     scanFilter: true,
     brawlSprite: 256, brawlBakeMs: 900,
   },
@@ -32,7 +33,7 @@ export const PROFILES = {
     id: 'balanced', label: 'Balanced', fpsCap: 0, dpr2d: 2, dpr3d: 1.25, heroSprite: 192,
     clubTex: 'lite', clubCache: 1, clubMaterials: 'standard', clubLights: 3,
     look3d: 'lite',
-    flyDetail: true, flyTileRes: 144,
+    flyDetail: true, flyTileRes: 144, flySpriteMax: 512,
     scanFilter: true,
     brawlSprite: 256, brawlBakeMs: 900,
   },
@@ -41,7 +42,7 @@ export const PROFILES = {
     id: 'saver', label: 'Battery saver', fpsCap: 30, dpr2d: 1, dpr3d: 1, heroSprite: 128,
     clubTex: 'lite', clubCache: 1, clubMaterials: 'lambert', clubLights: 2,
     look3d: 'min',
-    flyDetail: false, flyTileRes: 96,
+    flyDetail: false, flyTileRes: 96, flySpriteMax: 256,
     scanFilter: false,
     brawlSprite: 180, brawlBakeMs: 250,
   },
