@@ -4,7 +4,7 @@
 // layers so the streets melt into the sky colour before the towers do.
 import * as THREE from 'three';
 
-const RING = { segs: 72, repeat: 5, tall: 0.12, min: 1100, max: 3300 }; // tall = height / radius
+const RING = { segs: 72, repeat: 5, tall: 0.1, min: 1100, max: 3300 }; // tall = height / radius
 
 function skylineTexture() {
   const W = 2048, H = 256, c = document.createElement('canvas');
@@ -58,8 +58,8 @@ void main() {
   vec3 m = texture2D(map, vUv).rgb;
   if (m.r + m.g < 0.5) discard;
   // silhouettes a shade off the haze: darker and cooler toward the top, melting into it at the base
-  vec3 dark = fogColor * mix(0.72, 0.45, uNight) + vec3(0.0, 0.0, 0.03);
-  vec3 c = mix(fogColor, dark, (m.g > 0.5 ? 0.85 : 0.45) * smoothstep(0.0, 0.5, vUv.y));
+  vec3 dark = fogColor * mix(0.78, 0.5, uNight) + vec3(0.0, 0.0, 0.02);
+  vec3 c = mix(fogColor, dark, (m.g > 0.5 ? 0.6 : 0.3) * smoothstep(0.0, 0.6, vUv.y));
   c += vec3(1.0, 0.8, 0.45) * m.b * step(0.5, m.g) * uNight * 0.5 * smoothstep(0.05, 0.4, vUv.y);
   gl_FragColor = vec4(c, 1.);
 }`,
@@ -109,7 +109,8 @@ void main() {
   update(cam) {
     const fog = this.scene.fog;
     const R = Math.min(RING.max, Math.max(RING.min, fog.far * 1.04));
-    this.ring.position.set(cam.position.x, -R * 0.012, cam.position.z);
+    // follows the camera across the ground: always "the next borough over"
+    this.ring.position.set(cam.position.x, -R * 0.01, cam.position.z);
     this.ring.scale.set(R, R * RING.tall, R);
     this.ringU.fogColor.value.copy(fog.color);
   }

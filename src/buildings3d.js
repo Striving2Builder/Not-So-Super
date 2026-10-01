@@ -48,13 +48,13 @@ function atlas() {
     }
   };
   // 0 concrete: punched windows, slab lines
-  windows(0, 0.86, [7, 8], 1, 0.85, (x, y) => rect(x, y + CELL - 3, CELL, 3, 0.7, 0, 0));
+  windows(0, 0.86, [7, 8], 1, 0.6, (x, y) => rect(x, y + CELL - 3, CELL, 3, 0.7, 0, 0));
   // 1 glass curtain wall: big panes, thin mullions, dark spandrel per floor
-  windows(CW, 0.7, [1, 2], 1, 0.95, (x, y) => rect(x, y + CELL - 7, CELL, 7, 0.38, 0.55, 0));
+  windows(CW, 0.7, [1, 2], 1, 0.6, (x, y) => rect(x, y + CELL - 7, CELL, 7, 0.38, 0.55, 0));
   // 2 brick: small windows with a pale lintel
-  windows(CW * 2, 0.8, [9, 9], 1, 0.8, (x, y) => { rect(x + 7, y + 6, CELL - 14, 3, 1, 0, 0); for (let i = 0; i < 4; i++) rect(x, y + i * 8 + 3, CELL, 1, 0.68, 0, 0); });
+  windows(CW * 2, 0.8, [9, 9], 1, 0.55, (x, y) => { rect(x + 7, y + 6, CELL - 14, 3, 1, 0, 0); for (let i = 0; i < 4; i++) rect(x, y + i * 8 + 3, CELL, 1, 0.68, 0, 0); });
   // 3 art deco: bright vertical piers, dark spandrels, tall narrow windows (reads TALL)
-  windows(CW * 3, 0.62, [10, 5], 1, 0.75, (x, y) => { rect(x, y, 6, CELL, 1, 0, 0); rect(x + CELL - 4, y, 4, CELL, 0.95, 0, 0); });
+  windows(CW * 3, 0.62, [10, 5], 1, 0.55, (x, y) => { rect(x, y, 6, CELL, 1, 0, 0); rect(x + CELL - 4, y, 4, CELL, 0.95, 0, 0); });
   // 4 industrial: corrugated, a strip window every fourth floor
   {
     const ox = CW * 4;
@@ -104,6 +104,9 @@ void main() {
   vW = wp.xyz;
   vec4 mv = viewMatrix * wp;
   if (vKind == 1.) {
+#ifdef FAR
+    gl_Position = vec4(0., 0., 2., 1.); return; // far chunks: the haze does the outlining
+#endif
     // ink: a screen-space quad along the edge, thick near and thin far (clipped at the near plane)
     vec4 mo = viewMatrix * (modelMatrix * vec4(aAux, 1.));
     const float NZ = -0.4;
@@ -155,7 +158,7 @@ void main() {
     vec3 far = vec3(avg.r, avg.g, roof ? avg.b : mix(band * avg.g * 0.85, avg.b, smoothstep(0.45, 1.1, fw.y)));
     vec3 m = far;
 #ifndef FAR
-    float k = smoothstep(0.2, 0.5, max(fw.x, fw.y));
+    float k = smoothstep(0.12, 0.28, max(fw.x, fw.y));
     if (k < 0.999) {
       vec2 sc = vec2(0.96, 0.98) / vec2(8., 1.);
       vec2 u = vStyle == 7. ? clamp(vUv, 0.01, 0.99) : fract(vUv);
@@ -174,18 +177,18 @@ void main() {
     } else {
       // glass: dark by night, mirrors the sky (more at grazing angles) by day; curtain walls most
       float fres = pow(1. - max(dot(N, V), 0.), 2.);
-      vec3 glass = mix(vec3(0.03, 0.035, 0.055), uSky, (1. - uNight * 0.85) * ((vStyle == 1. ? 0.5 : 0.3) + 0.5 * fres));
+      vec3 glass = mix(vec3(0.03, 0.035, 0.055), uSky * 0.8, (1. - uNight * 0.85) * ((vStyle == 1. ? 0.4 : 0.2) + 0.45 * fres));
       col = mix(wall, glass * (0.6 + 0.4 * litK), m.g);
       col *= mix(0.42, 1., smoothstep(0., 45., vW.y)); // canyon floors are darker
       emi = vLit * m.b * uLit;
     }
 #ifndef FAR
     // halftone dots in the shade, close up only
-    float sh = (1. - litK) * (1. - smoothstep(120., 260., dist));
+    float sh = (1. - litK) * (1. - smoothstep(60., 140., dist));
     if (sh > 0.01) {
       vec2 p = mat2(0.7071, -0.7071, 0.7071, 0.7071) * gl_FragCoord.xy / (4.5 * dpr);
       float r = 0.34 * sh;
-      col *= 1. - 0.3 * (1. - smoothstep(r - 0.08, r + 0.08, length(fract(p) - 0.5) * 1.414));
+      col *= 1. - 0.22 * (1. - smoothstep(r - 0.08, r + 0.08, length(fract(p) - 0.5) * 1.414));
     }
 #endif
   }
@@ -237,13 +240,13 @@ export class CityLook {
       U.uKeyCol.value.copy(sun.color).multiplyScalar(0.12 + 0.36 * sun.intensity);
     }
     if (hemi) {
-      const k = 0.5 * hemi.intensity;
+      const k = 0.75 * hemi.intensity;
       U.uAmbUp.value.copy(hemi.color).multiplyScalar(k);
       U.uAmbDn.value.copy(hemi.groundColor).multiplyScalar(k * 1.2).lerp(U.uAmbUp.value, 0.25);
     }
     if (fog) U.uSky.value.copy(fog.color);
     U.uNight.value = night;
-    U.uLit.value = 1.5 * Math.min(1, Math.max(0, (night - 0.15) * 1.6));
+    U.uLit.value = 0.85 * Math.min(1, Math.max(0, (night - 0.15) * 1.6));
     U.uTime.value = time;
   }
 }
@@ -340,7 +343,7 @@ export function box(B, x0, z0, x1, z1, bot, top, L, { roof = true, ink = 1, wall
     for (let i = 0; i < 4; i++) {
       const a = c[i], b = c[(i + 1) % 4];
       B.ink([a[0], top, a[1]], [b[0], top, b[1]], ink);
-      if (walls) { B.ink([a[0], bot, a[1]], [a[0], top, a[1]], ink); B.ink([a[0], bot, a[1]], [b[0], bot, b[1]], ink * 0.8); }
+      if (walls) B.ink([a[0], bot, a[1]], [a[0], top, a[1]], ink);
     }
   }
   return top;
