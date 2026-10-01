@@ -79,6 +79,15 @@ export const ASYLUM = {
   districts: ['suburb', 'farm', 'lair'],
   cellsPerSide: 3,        // padded cells on each side of each of the four wings
   videoFolder: 'Asylum',  // clips in assets/video/Asylum/ play when she's sedated
+  // Back in her cell she must watch the cell TV: a clip from assets/video/AsylumTV/ keyed into a
+  // green-screen still, unskippable for tvSecs (it loops if it's shorter). No clips yet → brief static.
+  tvFolder: 'AsylumTV',
+  tvSecs: 30,
+  tvScreens: [
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => `asylum-tv${String(n).padStart(2, '0')}`),
+    ...[2, 4, 5, 7, 8, 9, 10].map((n) => `asylum-tv2-${String(n).padStart(2, '0')}`),
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => `asylum-tv3-${String(n).padStart(2, '0')}`),
+  ].map((f) => `assets/asylum/tv/${f}.webp`),
   reward: 45,
 };
 export const ASYLUM_JOBS = ['orderly', 'night nurse', 'staff psychiatrist', 'warden', 'pharmacist', 'janitor', 'administrator', 'visiting doctor'];

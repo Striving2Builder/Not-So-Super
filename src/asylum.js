@@ -19,7 +19,7 @@ import { dialog, toast, banner, flash } from './ui.js';
 import { npcLook, portrait } from './art.js';
 import { sfx } from './sfx.js';
 import { randomPerson } from './casefile.js';
-import { playCutscene } from './cutscene.js';
+import { playCutscene, playScreenScene } from './cutscene.js';
 import { toon, lightPool, Particles } from './look3d.js';
 import { quality } from './settings.js';
 
@@ -642,7 +642,10 @@ export class AsylumZone extends NightCase {
     setTimeout(async () => {
       if (this.g.mode !== this) return;
       await playCutscene({ folder: ASYLUM.videoFolder, caption: `${reason}<br>Everything goes dark…` });
-      if (this.g.mode === this) this.restartInCell();
+      if (this.g.mode !== this) return;
+      this.restartInCell();
+      // she comes to in her cell, and the TV on the wall has to be watched before she can move on
+      await playScreenScene({ screens: ASYLUM.tvScreens, folder: ASYLUM.tvFolder, lockSecs: ASYLUM.tvSecs, caption: `Cell ${this.wakeCell.id} · the TV switches on by itself…` });
     }, 1300);
   }
 

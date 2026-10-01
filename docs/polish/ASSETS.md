@@ -30,7 +30,15 @@ not as a replacement. Iterate until it's 100% right.
 | Humiliation Asylum packs (asylum, tv, mind, regen) | padded-cell stills, some with a green-screen TV, 1280x720, photoreal | **Sedation sequence (user spec):** when she's sedated and locked in her cell, a TV still plays a video in its green screen for a full **30 s, unskippable**, before she can get out; optionally a clip also plays at the moment of sedation to show she's back in her cell. Cell stills (no TV) cover the "back in the cell" beat. | asylum (selfbuilt) + director compositor |
 | office-gag / office-interrogation packs | captive interrogation stills, photoreal | capture-scene stills | later — style decision needed |
 
-## Green-screen compositor (shared, `story/greenscreen.js` in the target layout)
+## Green-screen compositor — BUILT (`src/greenscreen.js`, `playScreenScene` in `src/cutscene.js`)
+Status (2026-10-01): working on the asylum TVs, all billboards and the capture room (verified with a
+test pattern and a real clip). The asylum is wired: after sedation she wakes in her cell and a clip
+from **`assets/video/AsylumTV/`** plays in a random cell-TV still, **unskippable for 30 s**
+(countdown shown; short clips loop). Drop clips into that folder and rebuild the manifest
+(`node tools/build_video_manifest.js`). Until then the TV shows static briefly and play continues.
+Next uses: billboard story beats (downtown / red-light), the capture room TV (`room-2000.webp`).
+
+### Design notes
 - On load: chroma-key the image once (pure-green pixels → alpha, with spill suppression on the
   edge), and find the screen quad (the green region's four extreme corners).
 - Draw: warp the video/frame into the quad (two affine triangles on 2D canvas, or a CSS

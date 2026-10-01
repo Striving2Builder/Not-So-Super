@@ -33,6 +33,12 @@ body.three #three-host { display: block; }
 #cutscene .cs-cap { position: absolute; left: 50%; bottom: calc(40px + var(--sb)); transform: translateX(-50%); width: min(720px, 90vw); text-align: center; font: 400 26px/1.25 "Bangers", Impact, sans-serif; letter-spacing: .04em; color: #fff; text-shadow: 0 2px 8px #000; }
 #cutscene.bare .cs-cap { bottom: 50%; transform: translate(-50%, 50%); font-size: 34px; }
 #cutscene .cs-skip { position: absolute; right: calc(16px + var(--sr)); bottom: calc(12px + var(--sb)); font-size: 11px; opacity: .5; }
+#cutscene canvas.cs-screen { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; }
+#cutscene.screen .cs-cap, #cutscene.screen .cs-skip { z-index: 2; }
+/* the clip stays rendered (invisibly): iOS won't decode frames of a display:none video */
+#cutscene.screen video { display: block !important; opacity: 0; }
+#cutscene.screen .cs-cap { bottom: calc(24px + var(--sb)); top: auto; transform: translateX(-50%); font-size: 22px; }
+#cutscene.screen .cs-skip { opacity: .8; font: 400 15px "Bangers", Impact, sans-serif; letter-spacing: .06em; }
 #club-loading { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); width: min(320px, 70vw); display: none; z-index: 5; text-align: center; font-weight: 700; letter-spacing: .04em; color: #fff; text-shadow: 0 2px 6px #000a; }
 #club-loading.on { display: block; }
 #club-loading .lbl { font-size: 13px; margin-bottom: 6px; }
