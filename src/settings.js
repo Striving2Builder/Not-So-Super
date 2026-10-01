@@ -15,6 +15,8 @@ const KEY = 'supergirl-settings';
  * flyTileRes: canvas pixels per city block in the flight view's baked ground tiles.
  * clubLights: real (moving) point lights in a premade club.
  * scanFilter: night-case detective vision darkens the 3D view with a CSS filter.
+ * nightlife (code-built clubs' show): 'full' haze, 4 moving heads, dense specks · 'lite' 2 heads, no
+ * haze · 'min' no lasers, sparse specks.
  * (One line per area's keys, so each area's additions merge cleanly.)
  */
 export const PROFILES = {
@@ -23,6 +25,7 @@ export const PROFILES = {
     id: 'high', label: 'High', fpsCap: 0, dpr2d: 2, dpr3d: 1.6, heroSprite: 192,
     clubTex: 'full', clubCache: 3, clubMaterials: 'full', clubLights: 5,
     look3d: 'full',
+    nightlife: 'full',
     flyDetail: true, flyTileRes: 144,
     scanFilter: true,
     brawlSprite: 256, brawlBakeMs: 900,
@@ -32,6 +35,7 @@ export const PROFILES = {
     id: 'balanced', label: 'Balanced', fpsCap: 0, dpr2d: 2, dpr3d: 1.25, heroSprite: 192,
     clubTex: 'lite', clubCache: 1, clubMaterials: 'standard', clubLights: 3,
     look3d: 'lite',
+    nightlife: 'lite',
     flyDetail: true, flyTileRes: 144,
     scanFilter: true,
     brawlSprite: 256, brawlBakeMs: 900,
@@ -41,6 +45,7 @@ export const PROFILES = {
     id: 'saver', label: 'Battery saver', fpsCap: 30, dpr2d: 1, dpr3d: 1, heroSprite: 128,
     clubTex: 'lite', clubCache: 1, clubMaterials: 'lambert', clubLights: 2,
     look3d: 'min',
+    nightlife: 'min',
     flyDetail: false, flyTileRes: 96,
     scanFilter: false,
     brawlSprite: 180, brawlBakeMs: 250,
