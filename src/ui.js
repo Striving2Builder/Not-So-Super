@@ -67,7 +67,7 @@ export function avoidHud(x, y, pad = 18) {
     hudRectsT = now;
     hudRects = [...document.querySelectorAll(HUD_AVOID)].map((e) => e.getBoundingClientRect()).filter((r) => r.width && r.height);
   }
-  for (let pass = 0; pass < 2; pass++) {
+  for (let pass = 0; pass < 4; pass++) { // a nudge out of one button can land in its neighbour
     for (const r of hudRects) {
       const l = r.left - pad, t = r.top - pad, rr = r.right + pad, b = r.bottom + pad;
       if (x < l || x > rr || y < t || y > b) continue;

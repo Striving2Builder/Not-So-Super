@@ -721,7 +721,7 @@ export class Special3D {
     }).join('');
     const el = $('objectives');
     if (el._h !== html) { el.innerHTML = html; el._h = html; }
-    $('hud-sub').textContent = `Inside ${Math.floor(this.inside)}s${this.V.vice ? ' · tabloids watching' : ''}${this.xray ? ' · X-RAY' : ''}`;
+    $('hud-sub').textContent = [this.V.vice && 'Tabloids watching', this.xray && 'X-RAY'].filter(Boolean).join(' · ') || this.zone.venue || '';
     // objective marker
     const mk = $('marker');
     if (cur && cur.target && !this.done) {

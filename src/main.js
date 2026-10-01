@@ -64,6 +64,7 @@ game.setMode = (name, p) => {
   game.input.reset();
   // speech bubbles and bursts point at things in the old scene; captions/headlines/spin survive
   document.querySelectorAll('#comic-layer .bubble, #comic-layer .pow').forEach((e) => e.remove());
+  $('toasts').innerHTML = ''; // the last mode's notices don't stack onto the new scene's intro
   $('prompt').classList.remove('on');
   $('marker').classList.remove('on');
   game.mode.enter(p || {});
