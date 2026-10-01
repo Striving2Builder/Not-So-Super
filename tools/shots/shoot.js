@@ -44,6 +44,8 @@ const AREAS = {
     fly3d_boost: { type: 'fly3d', plan: 'boost' },
     fly3d_night: { type: 'fly3d', plan: 'night' },
     fly3d_patrolview: { type: 'fly3d', plan: 'patrolview' },
+    // night, low, flying north toward the entertainment district's landmark (venue signs, neon, street life)
+    fly3d_vice: { type: 'fly3d', plan: 'vice' },
   },
   premade3d: {
     triangle: Z3('special', 'Triangle Club', 'Madame Mesmer'),
@@ -166,7 +168,15 @@ async function shootFly3d(page, dir, name, plan) {
     if (night) g.state.clock = 23 * 60;
   }, plan === 'night');
   await page.waitForTimeout(800);
-  if (plan === 'low') await hold(page, 'KeyF', 4000);
+  if (plan === 'vice') {
+    await page.evaluate(() => {
+      const g = window.__game, ow = g.overworld, lm = ow.view3d.city3.landmarks.find((l) => l.district === 'entertainment') || ow.view3d.city3.landmarks[0];
+      g.state.clock = 21 * 60 + 30;
+      Object.assign(ow.hero, { x: lm.x + 30, y: lm.y + 620, ang: -Math.PI / 2, vx: 0, vy: 0, speed: 0 });
+    });
+    await page.waitForTimeout(600);
+  }
+  if (plan === 'low' || plan === 'vice') await hold(page, 'KeyF', 4000);
   if (plan === 'high' || plan === 'patrolview') await hold(page, 'KeyR', 4500);
   if (plan === 'patrolview') { // stopped up high: the camera cranes up overhead
     await page.waitForTimeout(2500);
