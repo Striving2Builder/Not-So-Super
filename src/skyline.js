@@ -18,7 +18,7 @@ export function drawBuilding(ctx, b, V) {
   const { cx, cy, k, P, SX, SY, night } = V;
   if (b.kind === 'tree') {
     const s = P(b.h), gx = SX(b.x), gy = SY(b.y);
-    const x = cx + (gx - cx) * s, y = cy + (gy - cy) * s, r = b.rad * k * s;
+    const x = SX(b.x, b.h), y = SY(b.y, b.h), r = b.rad * k * s;
     // (its shadow is baked into the ground cell)
     ctx.fillStyle = shade(b.col, -0.25); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
     if (V.rich) { ctx.strokeStyle = '#0b1a0e'; ctx.lineWidth = Math.max(0.8, k); ctx.stroke(); }
@@ -27,7 +27,7 @@ export function drawBuilding(ctx, b, V) {
   }
   if (b.kind === 'round') {
     const s = P(b.h), gx = SX(b.x), gy = SY(b.y);
-    const rx = cx + (gx - cx) * s, ry = cy + (gy - cy) * s;
+    const rx = SX(b.x, b.h), ry = SY(b.y, b.h);
     const gr = b.rad * k, rr = b.rad * k * s;
     ctx.fillStyle = shade(b.col, -0.3);
     ctx.beginPath(); ctx.arc(gx, gy, gr, 0, Math.PI * 2); ctx.fill();
@@ -46,7 +46,7 @@ export function drawBuilding(ctx, b, V) {
   if (b.kind === 'crane') {
     const s = P(b.h);
     const a = [SX(b.x), SY(b.y)], c = [SX(b.x2), SY(b.y2)];
-    const at = [cx + (a[0] - cx) * s, cy + (a[1] - cy) * s], ct = [cx + (c[0] - cx) * s, cy + (c[1] - cy) * s];
+    const at = [SX(b.x, b.h), SY(b.y, b.h)], ct = [SX(b.x2, b.h), SY(b.y2, b.h)];
     ctx.strokeStyle = shade(b.col, -0.3); ctx.lineWidth = 4 * k; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(at[0], at[1]); ctx.moveTo(c[0], c[1]); ctx.lineTo(ct[0], ct[1]); ctx.stroke();
     ctx.strokeStyle = b.col; ctx.lineWidth = 7 * k * s;
@@ -58,7 +58,7 @@ export function drawBuilding(ctx, b, V) {
 
   const s = P(b.h);
   const gx0 = SX(b.x), gx1 = SX(b.x + b.w), gy0 = SY(b.y), gy1 = SY(b.y + b.d);
-  const rx0 = cx + (gx0 - cx) * s, rx1 = cx + (gx1 - cx) * s, ry0 = cy + (gy0 - cy) * s, ry1 = cy + (gy1 - cy) * s;
+  const rx0 = SX(b.x, b.h), rx1 = SX(b.x + b.w, b.h), ry0 = SY(b.y, b.h), ry1 = SY(b.y + b.d, b.h);
   // cull: nothing of it (walls or roof) on screen
   if (Math.max(gx1, rx1) < -4 || Math.min(gx0, rx0) > V.W + 4 || Math.max(gy1, ry1) < -4 || Math.min(gy0, ry0) > V.H + 4) return;
   const base = b.col, small = b.container || b.truck;
@@ -68,45 +68,46 @@ export function drawBuilding(ctx, b, V) {
   // One light for the whole city (sun/moon from the north-west, matching the baked shadows):
   // north and west faces catch it, south and east faces sit in shade.
   const walls = [];
-  if (gy1 < cy) walls.push('s');
-  if (gy0 > cy) walls.push('n');
-  if (gx1 < cx) walls.push('e');
-  if (gx0 > cx) walls.push('w');
+  if (ry1 < gy1) walls.push('s');
+  if (ry0 > gy0) walls.push('n');
+  if (rx1 < gx1) walls.push('e');
+  if (rx0 > gx0) walls.push('w');
   const TONE = { s: -0.36, n: -0.08, e: -0.5, w: -0.18 };
-  // the edge of face `w` at perspective scale p (1 = ground, s = roof)
-  const edge = (w, p) => {
-    if (w === 's') return [cx + (gx0 - cx) * p, cy + (gy1 - cy) * p, cx + (gx1 - cx) * p, cy + (gy1 - cy) * p];
-    if (w === 'n') return [cx + (gx0 - cx) * p, cy + (gy0 - cy) * p, cx + (gx1 - cx) * p, cy + (gy0 - cy) * p];
-    if (w === 'e') return [cx + (gx1 - cx) * p, cy + (gy0 - cy) * p, cx + (gx1 - cx) * p, cy + (gy1 - cy) * p];
-    return [cx + (gx0 - cx) * p, cy + (gy0 - cy) * p, cx + (gx0 - cx) * p, cy + (gy1 - cy) * p];
+  // the edge of face `w` at height z
+  const edge = (w, z) => {
+    const x0 = SX(b.x, z), x1 = SX(b.x + b.w, z), y0 = SY(b.y, z), y1 = SY(b.y + b.d, z);
+    if (w === 's') return [x0, y1, x1, y1];
+    if (w === 'n') return [x0, y0, x1, y0];
+    if (w === 'e') return [x1, y0, x1, y1];
+    return [x0, y0, x0, y1];
   };
   const band = (w, p0, p1) => { const a = edge(w, p0), c = edge(w, p1); ctx.moveTo(a[0], a[1]); ctx.lineTo(a[2], a[3]); ctx.lineTo(c[2], c[3]); ctx.lineTo(c[0], c[1]); ctx.closePath(); };
   // Ink: comic outlines. Only fills (strokes and big overdraw are what mobile GPUs choke on):
   // thin quads up the wall corners here, and a dark rect under the roof for its rim.
   const small0 = b.container || b.truck;
   const ink = (V.rich || b.h >= 36) && !lite, lw = small0 ? Math.max(0.5, 0.7 * k) : Math.max(0.9, 1.4 * k);
-  for (const w of walls) { ctx.fillStyle = shade(base, TONE[w]); ctx.beginPath(); band(w, 1, s); ctx.fill(); }
+  for (const w of walls) { ctx.fillStyle = shade(base, TONE[w]); ctx.beginPath(); band(w, 0, b.h); ctx.fill(); }
   if (ink && walls.length && !small0) {
     ctx.fillStyle = INK; ctx.beginPath();
     const line = (x1, y1, x2, y2) => {
       const dx = x2 - x1, dy = y2 - y1, l = Math.hypot(dx, dy) || 1, nx = (-dy / l) * lw * 0.5, ny = (dx / l) * lw * 0.5;
       ctx.moveTo(x1 + nx, y1 + ny); ctx.lineTo(x2 + nx, y2 + ny); ctx.lineTo(x2 - nx, y2 - ny); ctx.lineTo(x1 - nx, y1 - ny); ctx.closePath();
     };
-    for (const w of walls) { const a = edge(w, 1), c = edge(w, s); line(a[0], a[1], c[0], c[1]); line(a[2], a[3], c[2], c[3]); }
+    for (const w of walls) { const a = edge(w, 0), c = edge(w, b.h); line(a[0], a[1], c[0], c[1]); line(a[2], a[3], c[2], c[3]); }
     ctx.fill();
   }
   const tall = b.h >= 36 && !small && !b.house && !b.ship;
   if (walls.length && V.rich && !small && !lite && b.h * k > 14) { // (skipped where it'd be a sliver)
     // ambient occlusion: the foot of each wall darkens toward the street
     ctx.fillStyle = 'rgba(4,6,20,.3)'; ctx.beginPath();
-    const pf = P(Math.min(b.h * 0.35, 30));
-    for (const w of walls) band(w, 1, pf);
+    const pf = Math.min(b.h * 0.35, 30);
+    for (const w of walls) band(w, 0, pf);
     ctx.fill();
     // glass: a sky reflection streak up the lit half of each face
     if (b.glass && tall) {
       ctx.fillStyle = 'rgba(200,230,255,.13)'; ctx.beginPath();
       for (const w of walls) {
-        const a = edge(w, 1), c = edge(w, s);
+        const a = edge(w, 0), c = edge(w, b.h);
         ctx.moveTo(a[0], a[1]); ctx.lineTo(lerp(a[0], a[2], 0.35), lerp(a[1], a[3], 0.35)); ctx.lineTo(lerp(c[0], c[2], 0.35), lerp(c[1], c[3], 0.35)); ctx.lineTo(c[0], c[1]); ctx.closePath();
       }
       ctx.fill();
@@ -122,9 +123,9 @@ export function drawBuilding(ctx, b, V) {
     const step = lite ? 2 : 1; // far away: every other floor
     const warm = !b.glass || seed > 0.7;
     for (let f = 1; f < floors; f += step) {
-      const p = P((f * b.h) / floors);
+      const fz = (f * b.h) / floors;
       for (const w of walls) {
-        const [x1, y1, x2, y2] = edge(w, p);
+        const [x1, y1, x2, y2] = edge(w, fz);
         if (!lite) { ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); }
         if (night > 0.2 && hash2(f, walls.length, (seed * 1e6) | 0) > 0.35) V.lights.push({ t: 'win', x1, y1, x2, y2, cool: !warm });
       }
