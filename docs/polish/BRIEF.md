@@ -11,6 +11,11 @@ The flight and brawler modes stay 2D canvas, but should read "as close to 3D as 
 parallax, depth shading, drop shadows, perspective, lighting, and the real 3D models rendered as
 sprites. The zone interiors are three.js.
 
+## Story is told through video (user's design — protect it)
+The LIVE city-feed video panel and videos keyed into green-screen images (billboards, the asylum
+cell TV, the capture room) are the game's narrative channel. Never shrink, hide, move or
+"declutter" them; critics must not penalise them; build around them.
+
 ## Hard constraints
 - **Mobile first.** Test at 844x390 landscape, touch. Text and targets must stay readable and
   tappable. Nothing may break the touch controls or the HUD layout.
