@@ -67,21 +67,26 @@ const SAMPLE = () => {
   const W = g.w, H = g.h, k = V.k, c = V.tilt ? V.tilt.c : 1;
   const gx = V.SX(h.x, 0), gy = V.SY(h.y, 0);
   const ahead = { right: (W - gx) / k, left: gx / k, down: (H - gy) / (k * c), up: gy / (k * c) };
-  const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d'), dpr = canvas.width / W;
-  const icons = [];
+  const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+  // Items are recorded in device pixels through the live transform (shake/sway move the world).
+  const icons = [], dev = (cx, x, y) => { const m = cx.getTransform(); return [m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f]; };
+  let hero = null;
   const drawIcon = ow.drawIcon, heroDraw = ow.heroArt.draw;
-  ow.drawIcon = function (cx, x, y, ...rest) { icons.push([x, y]); return drawIcon.call(this, cx, x, y, ...rest); };
-  const patch = (x, y) => {
-    const r = 4, px = Math.round(x * dpr), py = Math.round(y * dpr);
+  // sample the icon's coloured disc beside its glyph (a dark glyph on a dark night street would read as "hidden")
+  ow.drawIcon = function (cx, x, y, r, ...rest) { icons.push(dev(cx, x + r * 0.62, y)); return drawIcon.call(this, cx, x, y, r, ...rest); };
+  ow.heroArt.draw = function (cx, hh, x, y, ...rest) { hero = dev(cx, x, y); return heroDraw.call(this, cx, hh, x, y, ...rest); };
+  const patch = (p) => {
+    const r = 4, px = Math.round(p[0]), py = Math.round(p[1]);
     if (px < r || py < r || px > canvas.width - r || py > canvas.height - r) return null;
     return ctx.getImageData(px - r, py - r, r * 2, r * 2).data;
   };
+  const shake = ow.shake; ow.shake = 0; // identical frames for A and B
   ow.render(ctx);
-  const hs = ow.heroScreen, A = { hero: patch(hs.x, hs.y), icons: icons.map(([x, y]) => patch(x, y)) };
+  const A = { hero: hero && patch(hero), icons: icons.map(patch) };
   ow.drawIcon = () => {}; ow.heroArt.draw = () => {};
   ow.render(ctx);
-  const B = { hero: patch(hs.x, hs.y), icons: icons.map(([x, y]) => patch(x, y)) };
-  ow.drawIcon = drawIcon; ow.heroArt.draw = heroDraw;
+  const B = { hero: hero && patch(hero), icons: icons.map(patch) };
+  ow.drawIcon = drawIcon; ow.heroArt.draw = heroDraw; ow.shake = shake;
   const diff = (a, b) => { if (!a || !b) return null; let d = 0; for (let i = 0; i < a.length; i += 4) d += Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]); return d / (a.length / 4) / 3; };
   const vis = (a, b) => { const d = diff(a, b); return d === null ? null : d > 10; };
   return { ahead, hero: vis(A.hero, B.hero), icons: A.icons.map((a, i) => vis(a, B.icons[i])).filter((v) => v !== null) };
