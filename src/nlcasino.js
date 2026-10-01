@@ -19,10 +19,11 @@ export function casino(zn, X, h) {
     }
   }));
   const tableCols = [], chips = [], cards = [], wheels = [];
-  const feltBJ = felt('bj'), feltR = felt('r');
+  const feltBJM = lam(0xffffff, { map: felt('bj') }), feltRM = lam(0xffffff, { map: felt('r') });
   for (let i = 0; i < 4; i++) {
     const x = -7 + (i % 2) * 8, z = -5 + Math.floor(i / 2) * 8, rou = i === 1 || i === 2;
-    zn.cyl(1.5, 1.5, 0.1, x, 0.85, z, [lam(0x3a1a0a), lam(0xffffff, { map: rou ? feltR : feltBJ }), lam(0x3a1a0a)]);
+    // one felt material per layout (the padded rail torus hides the thin side): 2 draws, not 12
+    zn.cyl(1.5, 1.5, 0.1, x, 0.85, z, rou ? feltRM : feltBJM);
     zn.cyl(0.25, 0.3, 0.85, x, 0.42, z, lam(0x2a1a0a), true);
     zn.colliders.push({ minX: x - 1.5, maxX: x + 1.5, minZ: z - 1.5, maxZ: z + 1.5 });
     spot(x + 0.6, 0.92, z);
