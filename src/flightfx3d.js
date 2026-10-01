@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 
 const FX = {
-  trail: { n: 36, life: 0.55, width: [0.42, 0.06], from: 140, head: [1, 0.93, 0.45], tail: [1, 0.12, 0.2], alpha: 0.95 }, // speed (m/s) it starts
+  trail: { n: 24, life: 0.3, width: [0.34, 0.0], from: 140, head: [1, 0.2, 0.18], tail: [1, 0.8, 0.2], alpha: 1 },   // red off her heels → gold // speed (m/s) it starts
   wind: { n: 40, radius: [2.5, 13], ahead: [14, 70], width: 0.06, from: 0.42 },     // from = speed fraction
   ring: { life: 0.9, grow: [3, 70], boostGrow: [2, 26] },
   lines: { from: 0.18, deal: 70 },                                                  // speed fraction; re-deal ms
@@ -92,7 +92,9 @@ export class FlightFX3D {
       _s.crossVectors(_a, _b).normalize().multiplyScalar((T.width[0] + (T.width[1] - T.width[0]) * f) * hero3d.size * (boosting ? 1.5 : 1) * 0.5);
       tp.setXYZ(i * 2, q.p.x + _s.x, q.p.y + _s.y, q.p.z + _s.z);
       tp.setXYZ(i * 2 + 1, q.p.x - _s.x, q.p.y - _s.y, q.p.z - _s.z);
-      const al = i >= n ? 0 : T.alpha * amp * (1 - f) * Math.min(1, i / 2 + 0.4);
+      // (fades out before it reaches the lens: right under the camera it would be a smear)
+      const near = Math.min(1, Math.max(0, (q.p.distanceTo(cam.position) - 3) / 9));
+      const al = i >= n ? 0 : T.alpha * amp * (1 - f) * Math.min(1, i / 2 + 0.4) * near;
       const r = T.head[0] + (T.tail[0] - T.head[0]) * f, g = T.head[1] + (T.tail[1] - T.head[1]) * f, b = T.head[2] + (T.tail[2] - T.head[2]) * f;
       for (const k of [0, 1]) tc.setXYZW(i * 2 + k, r, g, b, Math.max(0, al));
     }
