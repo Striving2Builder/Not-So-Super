@@ -37,6 +37,13 @@ const AREAS = {
     cruise: { type: 'fly', plan: 'cruise' },
     low: { type: 'fly', plan: 'low' },
     high: { type: 'fly', plan: 'high' },
+    // the three.js flight slice (?flight=3d): same city seed, chase camera, flown forward then into a turn
+    fly3d_cruise: { type: 'fly3d', plan: 'cruise' },
+    fly3d_low: { type: 'fly3d', plan: 'low' },
+    fly3d_high: { type: 'fly3d', plan: 'high' },
+    fly3d_boost: { type: 'fly3d', plan: 'boost' },
+    fly3d_night: { type: 'fly3d', plan: 'night' },
+    fly3d_patrolview: { type: 'fly3d', plan: 'patrolview' },
   },
   premade3d: {
     triangle: Z3('special', 'Triangle Club', 'Madame Mesmer'),
@@ -71,8 +78,8 @@ const AREAS = {
 };
 
 // ------------------------------------------------------------------ page helpers
-async function newGame(page) {
-  await page.goto(`http://localhost:${PORT}/`);
+async function newGame(page, query = '') {
+  await page.goto(`http://localhost:${PORT}/${query}`);
   await page.waitForFunction(() => window.__game && document.querySelector('#btn-new'), null, { timeout: 30000 });
   await page.evaluate(async () => { (await import('/src/settings.js')).autoTune.done = true; }); // SwiftShader is "slow"
   await page.waitForTimeout(800);
@@ -149,6 +156,35 @@ async function shootFly(page, dir, name, plan) {
   await page.keyboard.up('KeyD');
   await hold(page, 'KeyW', 1500);
   await page.screenshot({ path: path.join(dir, `${name}_2.png`) });
+  return { shots: [`${name}_1.png`, `${name}_2.png`], ...m };
+}
+
+/** The 3D flight slice: fixed seed, a band, then forward (camera-relative) and a banked turn. */
+async function shootFly3d(page, dir, name, plan) {
+  await page.evaluate((night) => {
+    const g = window.__game; g.setMode('overworld'); g.overworld.nav.autopilot = false;
+    if (night) g.state.clock = 23 * 60;
+  }, plan === 'night');
+  await page.waitForTimeout(800);
+  if (plan === 'low') await hold(page, 'KeyF', 4000);
+  if (plan === 'high' || plan === 'patrolview') await hold(page, 'KeyR', 4500);
+  if (plan === 'patrolview') { // stopped up high: the camera cranes up overhead
+    await page.waitForTimeout(2500);
+    await page.screenshot({ path: path.join(dir, `${name}_1.png`) });
+    const m = await metrics(page);
+    await hold(page, 'KeyD', 900); await page.waitForTimeout(1500);
+    await page.screenshot({ path: path.join(dir, `${name}_2.png`) });
+    return { shots: [`${name}_1.png`, `${name}_2.png`], ...m };
+  }
+  if (plan === 'boost') await page.keyboard.down('ShiftLeft');
+  await page.keyboard.down('KeyW');
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: path.join(dir, `${name}_1.png`) });
+  const m = await metrics(page);
+  await page.keyboard.down('KeyD');
+  await page.waitForTimeout(1300);
+  await page.screenshot({ path: path.join(dir, `${name}_2.png`) });
+  await page.keyboard.up('KeyD'); await page.keyboard.up('KeyW'); await page.keyboard.up('ShiftLeft');
   return { shots: [`${name}_1.png`, `${name}_2.png`], ...m };
 }
 
@@ -279,10 +315,12 @@ async function shootNightClues(page, dir, name) {
         page.on('pageerror', (e) => errors.push(e.message));
         page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().slice(0, 300)); });
         try {
-          await newGame(page);
+          if (sc.type === 'fly3d') await page.addInitScript(`(() => { let s = 4242; Math.random = () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();`);
+          await newGame(page, sc.type === 'fly3d' ? '?flight=3d' : '');
           let r;
           if (sc.type === '3d') { r = await shoot3d(page, dir, name, sc.zone); if (sc.clues) r.shots.push(...await shootNightClues(page, dir, name)); }
           else if (sc.type === 'fly') r = await shootFly(page, dir, name, sc.plan);
+          else if (sc.type === 'fly3d') r = await shootFly3d(page, dir, name, sc.plan);
           else if (sc.type === 'brawl') r = await shootBrawl(page, dir, name, sc);
           else if (sc.type === 'investigate') r = await shootInvestigate(page, dir, name, sc.setting, sc.moments);
           report[area][name] = { ...r, errors };

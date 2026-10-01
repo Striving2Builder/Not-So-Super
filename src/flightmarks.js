@@ -11,13 +11,14 @@ const MARK = {
 };
 
 /**
- * marks: [{ x, y, color, waypoint? }] in world units; V: the overworld view (SX/SY, cx/scy);
+ * marks: [{ x, y, color, waypoint?, dist? }] in world units (dist overrides the distance shown);
+ * V: the view's projection (SX/SY, cx/scy);
  * from: { x, y } (the hero) for distances.
  */
 export function drawEdgeMarkers(ctx, V, marks, from, W, H) {
   const m = MARK.edge, chips = [];
   const sorted = marks
-    .map((z) => ({ z, sx: V.SX(z.x), sy: V.SY(z.y), d: Math.hypot(z.x - from.x, z.y - from.y) }))
+    .map((z) => ({ z, sx: V.SX(z.x), sy: V.SY(z.y), d: z.dist ?? Math.hypot(z.x - from.x, z.y - from.y) }))
     .filter((q) => !(q.sx > m && q.sx < W - m && q.sy > m + 50 && q.sy < H - m))
     .sort((a, b) => (b.z.waypoint ? 1 : 0) - (a.z.waypoint ? 1 : 0) || a.d - b.d);
   for (const q of sorted) {

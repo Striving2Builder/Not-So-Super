@@ -43,3 +43,20 @@ these folders, and its imports should make sense from there.
    shared/cached); 2D caches have a size bound.
 8. **Comments explain why**, match the surrounding terse style; no dead code or commented-out
    experiments left behind; debug/profiling helpers live in `tools/`, not `src/`.
+
+## Flight in 3D (vertical slice, `?flight=3d`, default off) — `flight/`
+A renderer swap, not a rewrite: `overworld.js` keeps simulating (hero, bands, zones, nav, events)
+and, when `view3d` exists, hands the frame to it. Hooks in overworld.js are deliberately few:
+camera-relative steering (`view3d.steer`), building heights for collisions/perching (`hOf`), the
+render hand-off, enter/exit, the boost kick.
+- `flight3d.js` — mode glue: shared WebGL renderer (Special3D's), scene, per-frame update order,
+  incident beams, and the transparent 2D comic overlay (icons over everything, edge markers,
+  speed lines, WHOOSH!). Table: `LOOK3` (3D band heights, fog per band, beam size).
+- `city3d.js` — the city as chunked 3D (one ground tile = one chunk): merged building mesh with
+  one toon material (two-style facade atlas + lit-window emissive), ink edges, neon tubes, the
+  2D view's baked ground art as ground textures. Table: `DISTRICT_3D` (height multipliers, glass).
+- `sky3d.js` — clock-driven gradient dome, sun/moon + lights, district-tinted fog, cloud decks.
+- `herofly3d.js` — the HeroModel posed from the flight state (hover / fist-forward / bank / cape).
+- `flightcam3d.js` — chase camera (offset spring, speed FOV, boost kick, tower avoidance, patrol view).
+Measurements: `tools/shots/fly3d.js` (2D vs 3D fps A/B, beams, time-to-waypoint); harness
+scenarios `fly3d_*` in `tools/shots/shoot.js`.

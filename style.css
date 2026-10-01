@@ -513,3 +513,8 @@ body.title-on #comic-layer { display: none; }
   100% { transform: translate(38vw, 30vh) scale(.25) rotate(20deg); opacity: 0; }
 }
 @keyframes snap-dev { from { filter: brightness(3) saturate(0); } to { filter: none; } }
+
+/* === flying (3D flight slice, ?flight=3d) === */
+/* the 3D view under a transparent 2D canvas that keeps the comic overlay (icons, markers, speed lines) */
+body.fly3d #three-host { display: block; z-index: 0; }
+body.fly3d #c2d { z-index: 1; pointer-events: none; }
