@@ -18,8 +18,13 @@ Not moved (undecided): the office gag / interrogation packs (blackmail-style sti
 | Set | Contents | Use | Owner / round |
 |---|---|---|---|
 | Investigation Scenes (`city-patrol-scenes.zip`) | 13 painted rooms 2000x1200: office(+2), apartment(+2), alley(+2), barn, casino, factory, hotel, pier, burned, clubbar; lower-right left empty for the witness; no people/text | Replace the code-painted day-case rooms (crimescene.js) with these backdrops; per-image hotspot table (container rects, clue anchors, witness spot, foreground mask) in a data module; keep the dynamic layers (props that open, tents, X-ray, dust, light) drawn on top | investigation, round 3 (top priority there) |
-| Side - RLD (`rld-alley-01..10.webp`) | side-view red-light street façades, neon, window silhouettes | brawler stage backdrops for red-light/nightclub districts (parallax facade layer) | brawler, round 3 |
-| downtown-01..10.webp | daylight storefront façades, 2000x1200 | brawler stage backdrops for downtown/retail districts | brawler, round 3 |
+| Side - RLD (`rld-alley-01..10.webp`) | side-view red-light street façades, neon, window silhouettes | brawler stage backdrops for red-light/nightclub districts, **mixed with** the procedural façades | brawler, round 3 |
+| downtown-01..10.webp | daylight storefront façades, 2000x1200 | brawler stage backdrops for downtown/retail districts, **mixed with** the procedural façades | brawler, round 3 |
+
+**User decision (after a device test):** the code-generated brawler streets (brawlstage/brawlfacades)
+look better than expected — keep that generator as the primary stage and use the painted façades
+alongside it (e.g. some blocks/segments or some fights use a painting, the rest are generated),
+not as a replacement. Iterate until it's 100% right.
 | Humiliation Billboards: downtown-gs-01..05, sg-bb-01..10, sg-mix-* ; RLD Billboards sg-mix-02..10 | street scenes with a green-screen billboard (some with the heroine looking up at it), 1280x720 | "your humiliation on every billboard" cutscene / tabloid beat: capture footage keyed into the billboard | director: shared green-screen compositor, then story beat |
 | capture/room.png | interrogation room with a green-screen wall TV, 2000x1200 | backdrop for the capture scene's villain TV | director (compositor) + captured.js |
 | Humiliation Asylum packs (asylum, tv, mind, regen) | padded-cell stills, some with a green-screen TV, 1280x720, photoreal | **Sedation sequence (user spec):** when she's sedated and locked in her cell, a TV still plays a video in its green screen for a full **30 s, unskippable**, before she can get out; optionally a clip also plays at the moment of sedation to show she's back in her cell. Cell stills (no TV) cover the "back in the cell" beat. | asylum (selfbuilt) + director compositor |
