@@ -186,7 +186,7 @@ function roofExtras(B, o, blk, S, D, L, h, face, x0, z0, x1, z1, H, roof) {
   // vice neon: tubes round the roof edge and a band two floors down, corner posts on some
   if (o.neon) {
     const roofY = Math.min(H, roof ? roof[4] : H);
-    neonRing(B, x0, z0, x1, z1, roofY - 0.6, o.neon);
+    neonRing(B, x0, z0, x1, z1, roofY - 1.2, o.neon);
     neonRing(B, x0, z0, x1, z1, Math.max(3, H * 0.62), o.neon2 || o.neon);
     if (h[5] < 0.4) for (const [px, pz] of [[x0, z0], [x1, z1]]) neonPost(B, px, pz, 4, roofY - 1, o.neon2 || o.neon);
   }

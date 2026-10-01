@@ -143,9 +143,9 @@ void main() {
   } else if (vKind == 2.) {
     vec3 s = texture2D(uSigns, vUv).rgb; // r tube core, g glow/letters, b board
     col = vec3(0.03, 0.02, 0.05) * s.b;
-    emi = (vCol * s.g * 0.9 + mix(vCol, vec3(1.), 0.65) * s.r) * mix(0.9, 1.7, uNight);
+    emi = (vCol * s.g * 0.85 + mix(vCol, vec3(1.), 0.5) * s.r * 0.6) * mix(0.8, 1.15, uNight);
   } else if (vKind == 3.) {
-    emi = vCol * mix(1.1, 2.0, uNight);
+    emi = vCol * mix(0.9, 1.3, uNight);
   } else if (vKind == 4.) {
     emi = vCol * (0.25 + 2.5 * step(0.6, fract(uTime * 0.7 + vUv.x)));
   } else {
@@ -154,8 +154,8 @@ void main() {
     vec2 fw = fwidth(cu);
     vec3 avg = uAvg[int(vStyle)];
     // past ~2-3 px per window the grid becomes the cell's flat tone plus lit floor bands
-    float band = step(0.62, h11(floor(cu.y) * 7.13 + floor(vUv.x) * 3.7 + dot(vCol, vec3(97., 57., 23.))));
-    vec3 far = vec3(avg.r, avg.g, roof ? avg.b : mix(band * avg.g * 0.85, avg.b, smoothstep(0.45, 1.1, fw.y)));
+    float band = step(0.6, h11(floor(cu.y / 3.) * 7.13 + floor(vUv.x) * 3.7 + dot(vCol, vec3(97., 57., 23.))));
+    vec3 far = vec3(avg.r, avg.g, roof ? avg.b : mix(band * avg.b * 2.2, avg.b, smoothstep(0.15, 0.4, fw.y)));
     vec3 m = far;
 #ifndef FAR
     float k = smoothstep(0.12, 0.28, max(fw.x, fw.y));
@@ -184,7 +184,7 @@ void main() {
     }
 #ifndef FAR
     // halftone dots in the shade, close up only
-    float sh = (1. - litK) * (1. - smoothstep(60., 140., dist));
+    float sh = (1. - litK) * (1. - m.g) * (1. - smoothstep(60., 140., dist));
     if (sh > 0.01) {
       vec2 p = mat2(0.7071, -0.7071, 0.7071, 0.7071) * gl_FragCoord.xy / (4.5 * dpr);
       float r = 0.34 * sh;
@@ -428,7 +428,7 @@ export function lamp(B, x, y, z, s, colour, kind = KIND.neon, phase = 0) {
 }
 
 /** Neon tubes: a glowing strip round a footprint at height y, just proud of the walls. */
-export function neonRing(B, x0, z0, x1, z1, y, colour, t = 0.45) {
+export function neonRing(B, x0, z0, x1, z1, y, colour, t = 0.7) {
   _l.set(colour);
   const o = 0.15, X0 = x0 - o, X1 = x1 + o, Z0 = z0 - o, Z1 = z1 + o, y0 = y - t / 2, y1 = y + t / 2;
   B.quad([X0, y0, Z1], [X1, y0, Z1], [X1, y1, Z1], [X0, y1, Z1], [0, 0, 1], UVQ, _l, _l, 0, KIND.neon);
@@ -437,7 +437,7 @@ export function neonRing(B, x0, z0, x1, z1, y, colour, t = 0.45) {
   B.quad([X0, y0, Z0], [X0, y0, Z1], [X0, y1, Z1], [X0, y1, Z0], [-1, 0, 0], UVQ, _l, _l, 0, KIND.neon);
 }
 /** A vertical neon tube up a corner (x, z) from y0 to y1. */
-export function neonPost(B, x, z, y0, y1, colour, t = 0.4) {
+export function neonPost(B, x, z, y0, y1, colour, t = 0.6) {
   _l.set(colour);
   const h = t / 2;
   B.quad([x - h, y0, z + h], [x + h, y0, z + h], [x + h, y1, z + h], [x - h, y1, z + h], [0, 0, 1], UVQ, _l, _l, 0, KIND.neon);

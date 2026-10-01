@@ -46,7 +46,7 @@ export class SignAtlas {
     g.globalCompositeOperation = 'lighter';
     g.textAlign = 'center'; g.textBaseline = 'middle';
     const glowText = (text, x, y) => {
-      g.shadowColor = 'rgb(0,255,0)'; g.shadowBlur = 10; g.fillStyle = 'rgb(0,200,0)'; g.fillText(text, x, y);
+      g.shadowColor = 'rgb(0,160,0)'; g.shadowBlur = 6; g.fillStyle = 'rgb(0,200,0)'; g.fillText(text, x, y);
       g.shadowBlur = 0; g.lineWidth = 2; g.strokeStyle = 'rgb(255,0,0)'; g.strokeText(text, x, y);
     };
     this.words.forEach((word, i) => {
