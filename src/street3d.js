@@ -1,0 +1,121 @@
+// Street life at canyon level, all on the GPU (static buffers, animated by one time uniform):
+// traffic as streams of headlights (coming at you) and tail lights (going away) along every road,
+// and steam rising from street vents in the dense districts. Two draw calls for the whole city.
+import * as THREE from 'three';
+import { BLOCK, ROAD } from './city.js';
+import { hash2 } from './rng.js';
+
+const TRAFFIC = { perLane: 110, speed: [9, 17], lane: 0.2, far: 900 }; // cars per lane on a full road; m/s; lane offset × ROAD; metres
+const STEAM = { districts: ['downtown', 'financial', 'residential', 'entertainment', 'nightclub', 'redlight'], odds: 0.12, puffs: 6, far: 650 };
+const BODY = ['#e8e8e8', '#222', '#c22', '#2a5ac8', '#f2c21a', '#3a8a4a', '#888'];
+
+export class Street {
+  constructor(city, scene, U, M) {
+    this.scene = scene;
+    // ---- traffic
+    const seg = [], car = [], body = [], c = new THREE.Color();
+    const roads = [];
+    for (let iy = 0; iy <= city.rows; iy++) { const z = (iy * BLOCK + ROAD / 2) * M; roads.push([0, z, city.coastX * M, z]); }
+    for (let ix = 0; ix <= city.landCols; ix++) { const x = (ix * BLOCK + ROAD / 2) * M; roads.push([x, 0, x, city.H * M]); }
+    const off = ROAD * TRAFFIC.lane * M;
+    roads.forEach(([ax, az, bx, bz], r) => {
+      const vert = ax === bx;
+      for (const lane of [-1, 1]) {
+        // each lane drives one way; offset to its own side of the road
+        const ox = vert ? lane * off : 0, oz = vert ? 0 : lane * off;
+        const A = lane > 0 ? [ax + ox, az + oz, bx + ox, bz + oz] : [bx + ox, bz + oz, ax + ox, az + oz];
+        for (let k = 0; k < TRAFFIC.perLane; k++) {
+          const h = hash2(r, k, lane + 5);
+          seg.push(...A);
+          car.push(h, TRAFFIC.speed[0] + (TRAFFIC.speed[1] - TRAFFIC.speed[0]) * hash2(k, r, 9));
+          c.set(BODY[(h * 977 | 0) % BODY.length]); body.push(c.r, c.g, c.b);
+        }
+      }
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(car.length / 2 * 3), 3));
+    g.setAttribute('aSeg', new THREE.Float32BufferAttribute(seg, 4));
+    g.setAttribute('aCar', new THREE.Float32BufferAttribute(car, 2));
+    g.setAttribute('aBody', new THREE.Float32BufferAttribute(body, 3));
+    const TU = { uTime: U.uTime, uNight: U.uNight, res: U.res, fogColor: { value: new THREE.Color() }, fogFar: { value: 1600 } };
+    this.TU = TU;
+    this.cars = new THREE.Points(g, new THREE.ShaderMaterial({
+      uniforms: TU, transparent: true, depthWrite: false, toneMapped: false,
+      vertexShader: /* glsl */`
+attribute vec4 aSeg; attribute vec2 aCar; attribute vec3 aBody;
+uniform float uTime; uniform float uNight; uniform vec2 res; uniform float fogFar;
+varying vec3 vC; varying float vA;
+void main() {
+  vec2 A = aSeg.xy, B = aSeg.zw; float len = length(B - A);
+  vec2 p = mix(A, B, fract(aCar.x + uTime * aCar.y / len));
+  vec3 wp = vec3(p.x, 0.9, p.y);
+  vec4 mv = viewMatrix * vec4(wp, 1.);
+  float d = -mv.z;
+  gl_Position = projectionMatrix * mv;
+  float head = step(0., dot(B - A, cameraPosition.xz - p));
+  vec3 light = mix(vec3(1.0, 0.1, 0.06), vec3(1.0, 0.93, 0.72), head);
+  vC = mix(aBody * 0.8, light * 1.5, smoothstep(0.15, 0.5, uNight));
+  vA = (1. - smoothstep(${TRAFFIC.far * 0.6}., ${TRAFFIC.far}., d)) * (1. - smoothstep(fogFar * 0.4, fogFar * 0.8, d));
+  gl_PointSize = vA <= 0. ? 0. : clamp(2.6 * projectionMatrix[1][1] * res.y * 0.5 / max(d, 1.), 1.5, 12.);
+}`,
+      fragmentShader: /* glsl */`
+varying vec3 vC; varying float vA;
+void main() {
+  float r = length(gl_PointCoord - 0.5);
+  float a = smoothstep(0.5, 0.15, r) * vA;
+  if (a < 0.02) discard;
+  gl_FragColor = vec4(vC, a);
+}`,
+    }));
+    this.cars.frustumCulled = false;
+    this.cars.renderOrder = 2;
+    scene.add(this.cars);
+    // ---- steam vents
+    const vp = [], vph = [];
+    for (const blk of city.blocks) {
+      if (!STEAM.districts.includes(blk.d) || hash2(blk.bx, blk.by, 61) > STEAM.odds * 3) continue;
+      const x = (blk.bx * BLOCK + ROAD * (0.3 + 0.4 * hash2(blk.bx, blk.by, 62))) * M, z = (blk.by * BLOCK + BLOCK * hash2(blk.bx, blk.by, 63)) * M;
+      for (let k = 0; k < STEAM.puffs; k++) { vp.push(x, 0, z); vph.push(k / STEAM.puffs + hash2(blk.bx, k, 64) * 0.1); }
+    }
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute('position', new THREE.Float32BufferAttribute(vp, 3));
+    sg.setAttribute('aPhase', new THREE.Float32BufferAttribute(vph, 1));
+    this.steam = new THREE.Points(sg, new THREE.ShaderMaterial({
+      uniforms: TU, transparent: true, depthWrite: false,
+      vertexShader: /* glsl */`
+attribute float aPhase;
+uniform float uTime; uniform vec2 res; uniform float fogFar;
+varying float vA; varying float vT;
+void main() {
+  float t = fract(aPhase + uTime * 0.22);
+  vec3 wp = position + vec3(sin(t * 3. + aPhase * 6.) * 1.5 * t, 0.6 + t * 15., cos(t * 2. + aPhase * 4.) * t);
+  vec4 mv = viewMatrix * vec4(wp, 1.);
+  float d = -mv.z;
+  gl_Position = projectionMatrix * mv;
+  vT = t;
+  vA = (1. - t) * smoothstep(0., 0.15, t) * 0.55 * (1. - smoothstep(${STEAM.far * 0.6}., ${STEAM.far}., d)) * (1. - smoothstep(fogFar * 0.3, fogFar * 0.7, d));
+  gl_PointSize = vA <= 0. ? 0. : min(260., (2.5 + t * 8.) * projectionMatrix[1][1] * res.y * 0.5 / max(d, 1.));
+}`,
+      fragmentShader: /* glsl */`
+uniform vec3 fogColor; uniform float uNight;
+varying float vA; varying float vT;
+void main() {
+  float r = length(gl_PointCoord - 0.5);
+  float a = smoothstep(0.5, 0.1, r) * vA;
+  if (a < 0.02) discard;
+  // comic steam: a flat cloud colour with an ink-ish darker rim, lit by the street at night
+  vec3 c = mix(vec3(0.92, 0.9, 0.88), vec3(0.75, 0.6, 0.65), uNight);
+  c = mix(c * 0.6, c, smoothstep(0.42, 0.3, r));
+  gl_FragColor = vec4(mix(c, fogColor, vT * 0.3), a);
+}`,
+    }));
+    this.steam.frustumCulled = false;
+    this.steam.renderOrder = 3;
+    scene.add(this.steam);
+  }
+
+  update() {
+    const fog = this.scene.fog;
+    this.TU.fogColor.value.copy(fog.color); this.TU.fogFar.value = fog.far;
+  }
+}
