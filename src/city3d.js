@@ -16,8 +16,8 @@ import { Street } from './street3d.js';
 export { M, DISTRICT_3D, height3 };
 
 const CHUNK = TILE * BLOCK; // world units per chunk side (one ground tile)
-/** farMat: metres past which a chunk switches to the flat-tone material (no texture, no halftone). */
-const LOD = { farMat: 480, landmarkFog: 0.45, coreR: 4.5 };
+/** farMat: metres past which a chunk switches to its lite build + flat-tone material (no texture, ink, halftone, roof kit). */
+const LOD = { farMat: 300, landmarkFog: 0.45, coreR: 4.5 };
 
 export class City3D {
   constructor(city, scene, { tileRes = 144 } = {}) {
@@ -80,27 +80,31 @@ export class City3D {
     this.scene.add(new THREE.Mesh(land, haze(new THREE.MeshBasicMaterial({ color: 0x3a5238 }))));
   }
 
+  /** A chunk's record (meshes built lazily: `near` full detail, `lite` for the far LOD). */
   chunk(cx, cy) {
     const k = cy * 64 + cx;
     let ch = this.chunks.get(k);
-    if (ch) return ch;
-    const B = new Builder(), city = this.city;
-    for (let by = cy * TILE; by < cy * TILE + TILE; by++) for (let bx = cx * TILE; bx < cx * TILE + TILE; bx++) {
+    if (!ch) { ch = { cx, cy }; this.chunks.set(k, ch); }
+    return ch;
+  }
+
+  /** Build one of a chunk's meshes ('near' | 'lite'); null when the chunk is empty. */
+  build(ch, which) {
+    const B = new Builder(which === 'lite'), city = this.city;
+    for (let by = ch.cy * TILE; by < ch.cy * TILE + TILE; by++) for (let bx = ch.cx * TILE; bx < ch.cx * TILE + TILE; bx++) {
       const blk = city.block(bx, by);
       if (!blk) continue;
       for (const o of blk.b) {
         if (o.landmark) continue;
         if (o.kind === 'box') building(B, o, blk, this.signs);
         else if (o.kind === 'round') round(B, o);
-        else if (o.kind === 'tree') tree(B, o.x * M, o.y * M, o.rad * M * 0.8, o.h * M * 0.9, o.col);
+        else if (o.kind === 'tree') { if (!B.lite) tree(B, o.x * M, o.y * M, o.rad * M * 0.8, o.h * M * 0.9, o.col); }
         else if (o.kind === 'crane') crane(B, o);
       }
     }
     const geo = B.geometry();
-    ch = { cx, cy, mesh: null };
-    if (geo) { ch.mesh = new THREE.Mesh(geo, this.look.near); this.scene.add(ch.mesh); }
-    this.chunks.set(k, ch);
-    return ch;
+    ch[which] = geo ? new THREE.Mesh(geo, B.lite ? this.look.far : this.look.near) : null;
+    if (ch[which]) this.scene.add(ch[which]);
   }
 
   /** Ground tile texture for a chunk (the 2D view's baked art), near chunks only. */
@@ -128,14 +132,18 @@ export class City3D {
     const R = Math.ceil(far / M / CHUNK) + 1;
     const ccx = Math.floor(px / CHUNK), ccy = Math.floor(pz / CHUNK);
     let budget = this.built ? 2 : 999;
-    for (const ch of this.chunks.values()) { if (ch.mesh) ch.mesh.visible = false; if (ch.gl) ch.gl.visible = false; if (ch.gd) ch.gd.visible = false; }
+    for (const ch of this.chunks.values()) for (const k of ['near', 'lite', 'gl', 'gd']) if (ch[k]) ch[k].visible = false;
+    const cut = far * 0.92; // the haze is all but solid past this
     for (let cy = ccy - R; cy <= ccy + R; cy++) for (let cx = ccx - R; cx <= ccx + R; cx++) {
       if (cx < 0 || cy < 0 || cx >= this.cols || cy >= this.rows) continue;
       const dx = ((cx + 0.5) * CHUNK - px) * M, dz = ((cy + 0.5) * CHUNK - pz) * M, d = Math.hypot(dx, dz) - CHUNK * M * 0.7;
-      if (d > far) continue;
-      let ch = this.chunks.get(cy * 64 + cx);
-      if (!ch) { if (budget-- <= 0) continue; ch = this.chunk(cx, cy); }
-      if (ch.mesh) { ch.mesh.visible = true; ch.mesh.material = d > LOD.farMat ? this.look.far : this.look.near; }
+      if (d > cut) continue;
+      const ch = this.chunk(cx, cy), which = d > LOD.farMat ? 'lite' : 'near';
+      if (ch[which] === undefined) {
+        if (budget-- <= 0) { const other = ch[which === 'near' ? 'lite' : 'near']; if (other) other.visible = true; continue; }
+        this.build(ch, which);
+      }
+      if (ch[which]) ch[which].visible = true;
       if (d < near * 1.2) this.groundTile(ch, night > 0.45, frame);
     }
     this.built = true;

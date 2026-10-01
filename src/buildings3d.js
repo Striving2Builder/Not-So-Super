@@ -87,7 +87,7 @@ function atlas() {
     avg.push(new THREE.Vector3(r / n / 255, gg / n / 255, b / n / 255));
   }
   const t = new THREE.CanvasTexture(c);
-  t.anisotropy = 4; // masks stay linear data (no colour space)
+  // masks stay linear data (no colour space); isotropic: edge-on walls fade to their flat tone anyway
   return { tex: t, avg };
 }
 
@@ -95,8 +95,9 @@ function atlas() {
 const VERT = /* glsl */`
 attribute vec3 aAux; attribute vec4 aCol; attribute vec4 aLit;
 uniform vec2 res; uniform float dpr; uniform float uInkW;
-varying vec2 vUv; varying vec3 vCol; varying vec3 vLit; varying vec3 vN; varying vec3 vW;
-varying float vStyle; varying float vKind;
+// per-face values are flat: exact (they seed hashes) and cheaper than interpolating
+varying vec2 vUv; flat varying vec3 vCol; flat varying vec3 vLit; flat varying vec3 vN; varying vec3 vW;
+flat varying float vStyle; flat varying float vKind;
 void main() {
   vKind = floor(aCol.a * 255. + .5); vStyle = floor(aLit.a * 255. + .5);
   vUv = uv; vCol = aCol.rgb; vLit = aLit.rgb; vN = aAux;
@@ -132,8 +133,9 @@ uniform vec3 uAvg[8];
 uniform vec3 uKeyDir; uniform vec3 uKeyCol; uniform vec3 uAmbUp; uniform vec3 uAmbDn; uniform vec3 uSky; uniform vec3 uInk;
 uniform float uNight; uniform float uLit; uniform float uTime; uniform float uFogK; uniform float dpr;
 uniform vec3 fogColor; uniform float fogNear; uniform float fogFar;
-varying vec2 vUv; varying vec3 vCol; varying vec3 vLit; varying vec3 vN; varying vec3 vW;
-varying float vStyle; varying float vKind;
+// per-face values are flat: exact (they seed hashes) and cheaper than interpolating
+varying vec2 vUv; flat varying vec3 vCol; flat varying vec3 vLit; flat varying vec3 vN; varying vec3 vW;
+flat varying float vStyle; flat varying float vKind;
 float h11(float n) { return fract(sin(n) * 43758.5453); }
 void main() {
   float dist = length(vW - cameraPosition);
@@ -154,7 +156,7 @@ void main() {
     vec2 fw = fwidth(cu);
     vec3 avg = uAvg[int(vStyle)];
     // past ~2-3 px per window the grid becomes the cell's flat tone plus lit floor bands
-    float band = step(0.6, h11(floor(cu.y / 3.) * 7.13 + floor(vUv.x) * 3.7 + dot(vCol, vec3(97., 57., 23.))));
+    float band = step(0.6, h11(floor(cu.y / 3.) * 7.13 + floor(vUv.x) * 3.7 + dot(floor(vCol * 255. + 0.5), vec3(0.97, 0.57, 0.23))));
     vec3 far = vec3(avg.r, avg.g, roof ? avg.b : mix(band * avg.b * 2.2, avg.b, smoothstep(0.15, 0.4, fw.y)));
     vec3 m = far;
 #ifndef FAR
@@ -163,7 +165,10 @@ void main() {
       vec2 sc = vec2(0.96, 0.98) / vec2(8., 1.);
       vec2 u = vStyle == 7. ? clamp(vUv, 0.01, 0.99) : fract(vUv);
       vec2 g = vUv * sc;
-      m = mix(textureGrad(uAtlas, u * sc + vec2((0.02 + vStyle) / 8., 0.01), dFdx(g), dFdy(g)).rgb, far, k);
+      // explicit isotropic LOD from the unwrapped uv (fract() seams would spike the mip otherwise)
+      vec2 gx = dFdx(g) * vec2(${CW * CELLS}., ${CH}.), gy = dFdy(g) * vec2(${CW * CELLS}., ${CH}.);
+      float lod = 0.5 * log2(max(dot(gx, gx), dot(gy, gy)));
+      m = mix(textureLod(uAtlas, u * sc + vec2((0.02 + vStyle) / 8., 0.01), lod).rgb, far, k);
     }
 #endif
     vec3 N = normalize(vN), V = normalize(cameraPosition - vW);
@@ -183,12 +188,12 @@ void main() {
       emi = vLit * m.b * uLit;
     }
 #ifndef FAR
-    // halftone dots in the shade, close up only
-    float sh = (1. - litK) * (1. - m.g) * (1. - smoothstep(60., 140., dist));
+    // halftone dots in the shade, close up only: fixed dot size (shrinking dots turn to salt),
+    // the strength fades out instead
+    float sh = (1. - litK) * (1. - m.g) * (1. - smoothstep(50., 120., dist));
     if (sh > 0.01) {
-      vec2 p = mat2(0.7071, -0.7071, 0.7071, 0.7071) * gl_FragCoord.xy / (4.5 * dpr);
-      float r = 0.34 * sh;
-      col *= 1. - 0.22 * (1. - smoothstep(r - 0.08, r + 0.08, length(fract(p) - 0.5) * 1.414));
+      vec2 p = mat2(0.7071, -0.7071, 0.7071, 0.7071) * gl_FragCoord.xy / (5. * dpr);
+      col *= 1. - 0.25 * sh * (1. - smoothstep(0.3, 0.42, length(fract(p) - 0.5) * 1.414));
     }
 #endif
   }
@@ -257,7 +262,8 @@ const b255 = (v) => Math.max(0, Math.min(255, Math.round(v * 255)));
 
 /** Collects one chunk's vertices (indexed quads) in the layout above. */
 export class Builder {
-  constructor() { this.pos = []; this.aux = []; this.uv = []; this.col = []; this.lit = []; this.idx = []; this.n = 0; }
+  /** lite: the far-LOD build (no ink, callers skip small detail). */
+  constructor(lite = false) { this.lite = lite; this.pos = []; this.aux = []; this.uv = []; this.col = []; this.lit = []; this.idx = []; this.n = 0; }
 
   /** tint/lit: THREE.Color or hex; style: atlas cell; kind: KIND.* */
   v(p, aux, u, w, tint, kind, lit, style) {
@@ -285,6 +291,8 @@ export class Builder {
 
   /** An ink line p→q (screen-space quad, always front-facing); w scales the weight. */
   ink(p, q, w = 1) {
+    // none far away (the far shader drops it anyway), none on tiny parts (HVAC, legs): saves triangles
+    if (this.lite || Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) + Math.abs(p[2] - q[2]) < 2.5) return;
     const i = this.v(p, q, 1, w, BLACK, 1, BLACK, 0);
     this.v(p, q, -1, w, BLACK, 1, BLACK, 0);
     this.v(q, p, 1, w, BLACK, 1, BLACK, 0);

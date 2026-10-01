@@ -152,7 +152,7 @@ function roofGarden(B, x0, z0, x1, z1, t, h, ex0, ez0, ex1, ez1) {
 /** Roof kit (when `roof` = [x0, z0, x1, z1, top] is free), neon, and signs. */
 function roofExtras(B, o, blk, S, D, L, h, face, x0, z0, x1, z1, H, roof) {
   const K = D.kit;
-  if (roof) {
+  if (roof && !B.lite) {
     const [rx0, rz0, rx1, rz1, top] = roof, w = rx1 - rx0, d = rz1 - rz0, m = Math.min(w, d);
     const r = (k) => hash2(o.x | 0, o.y | 0, 200 + k);
     if (K.helipad && r(1) < K.helipad && m >= 16 && H > 60) {
@@ -188,15 +188,15 @@ function roofExtras(B, o, blk, S, D, L, h, face, x0, z0, x1, z1, H, roof) {
     const roofY = Math.min(H, roof ? roof[4] : H);
     neonRing(B, x0, z0, x1, z1, roofY - 1.2, o.neon);
     neonRing(B, x0, z0, x1, z1, Math.max(3, H * 0.62), o.neon2 || o.neon);
-    if (h[5] < 0.4) for (const [px, pz] of [[x0, z0], [x1, z1]]) neonPost(B, px, pz, 4, roofY - 1, o.neon2 || o.neon);
+    if (h[5] < 0.4 && !B.lite) for (const [px, pz] of [[x0, z0], [x1, z1]]) neonPost(B, px, pz, 4, roofY - 1, o.neon2 || o.neon);
   }
   // signs: the 2D view's named venue / mall signs on the street face and the roof
   const vice = o.neon || D.neon;
   if (o.sign) {
     const top = roof ? roof[4] : H;
     signQuad(B, S, o.sign, o.neon || neonOf(D, h[3]) || '#ffd84d', x0, z0, x1, z1, face, Math.max(4, Math.min(top - 10, top * 0.55)), Math.min(9, Math.max(4, top * 0.18)));
-    if (roof) roofBoard(B, S, o.sign, o.neon || '#ffd84d', roof[0], roof[1], roof[2], roof[3], face, roof[4], Math.min(12, (roof[2] - roof[0]) * 0.22));
-  } else if (vice) {
+    if (roof && !B.lite) roofBoard(B, S, o.sign, o.neon || '#ffd84d', roof[0], roof[1], roof[2], roof[3], face, roof[4], Math.min(12, (roof[2] - roof[0]) * 0.22));
+  } else if (vice && !B.lite) {
     const words = SIGN_WORDS[blk.d];
     if (words && h[6] < 0.55) {
       const word = pick(words, h[7]), col = o.neon2 || neonOf(D, h[4]) || '#ff55aa';
