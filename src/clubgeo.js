@@ -103,6 +103,7 @@ export function mergeStatic(scene) {
     m.renderOrder = order;
     m.matrixAutoUpdate = false; // static: never recompute its matrix
     m.userData.minY = merged.boundingBox.min.y;
+    m.userData.maxY = merged.boundingBox.max.y;
     scene.add(m);
     out.push(m);
   }

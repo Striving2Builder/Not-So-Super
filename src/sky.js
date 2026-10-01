@@ -118,26 +118,27 @@ export class SpeedFX {
 
   /**
    * Comic speed lines: tapered ink-and-white wedges raking in from the screen edges toward her,
-   * re-dealt a dozen times a second so they judder like a hand-drawn panel. Only when boosting.
+   * re-dealt a dozen times a second so they judder like a hand-drawn panel. From cruise speed up.
    */
   drawComic(ctx, hx, hy, W, H, night) {
-    const f = Math.max(0, Math.min(1, ((this.frac || 0) - 0.55) / 0.35));
+    // from cruise speed (frac ~0.5) they start to show; full boost is a full-on speed panel
+    const f = Math.max(0, Math.min(1, ((this.frac || 0) - 0.36) / 0.5));
     if (f <= 0.02) return;
     const deal = Math.floor(performance.now() / 80);
     if (deal !== this.dealt) {
       this.dealt = deal;
       this.lines = [];
-      const n = 26 + Math.floor(f * 22);
-      for (let i = 0; i < n; i++) this.lines.push({ a: Math.random() * Math.PI * 2, in: 0.42 + Math.random() * 0.26, w: 4 + Math.random() * 12, ink: Math.random() < 0.35 });
+      const n = 22 + Math.floor(f * 30);
+      for (let i = 0; i < n; i++) this.lines.push({ a: Math.random() * Math.PI * 2, in: 0.42 + Math.random() * 0.26, w: 5 + Math.random() * 14, ink: Math.random() < 0.35 });
     }
-    const R = Math.hypot(W, H) * 0.62, ox = W / 2, oy = H / 2;
+    const R = Math.hypot(W, H) * 0.62, ox = W / 2, oy = H / 2, reach = 0.2 + 0.25 * f; // lines reach further in at boost
     ctx.save();
     for (const pass of [true, false]) {
       ctx.fillStyle = pass ? `rgba(8,10,30,${0.6 * f})` : night > 0.5 ? `rgba(215,235,255,${0.75 * f})` : `rgba(255,255,255,${0.85 * f})`;
       ctx.beginPath();
       for (const l of this.lines) {
         if (l.ink !== pass) continue;
-        const c = Math.cos(l.a), s = Math.sin(l.a), r0 = R * (l.in + (1 - f) * 0.25), px = -s * l.w, py = c * l.w;
+        const c = Math.cos(l.a), s = Math.sin(l.a), r0 = R * (1.05 - reach * (1 - l.in + 0.5)), px = -s * l.w, py = c * l.w;
         // pinch toward the hero, not the screen centre, so the lines frame her
         const tx = ox + (hx - ox) * 0.6 + c * r0, ty = oy + (hy - oy) * 0.6 + s * r0;
         ctx.moveTo(tx, ty); ctx.lineTo(ox + c * R * 1.2 + px, oy + s * R * 1.2 + py); ctx.lineTo(ox + c * R * 1.2 - px, oy + s * R * 1.2 - py); ctx.closePath();

@@ -10,6 +10,8 @@ const INK = '#0b0b16';
 /** Wall tone per face (shade amount): north/west catch the sun, south/east sit in shade. */
 const TONE = { s: -0.36, n: -0.08, e: -0.5, w: -0.18 };
 /** Lit window colours: warm tungsten, cool office light (glass towers). */
+/** Roofs smaller than this (screen px) on both sides drop their detail passes. */
+const LOD_PX = 22, LOD_FAR_PX = 36, FAR_CAM = 1400;
 const WINDOW = { warm: [255, 212, 120, 0.85], cool: [170, 215, 255, 0.8] };
 
 export function drawBuilding(ctx, b, V) {
@@ -57,7 +59,12 @@ export function drawBuilding(ctx, b, V) {
   const s = P(b.h);
   const gx0 = SX(b.x), gx1 = SX(b.x + b.w), gy0 = SY(b.y), gy1 = SY(b.y + b.d);
   const rx0 = cx + (gx0 - cx) * s, rx1 = cx + (gx1 - cx) * s, ry0 = cy + (gy0 - cy) * s, ry1 = cy + (gy1 - cy) * s;
+  // cull: nothing of it (walls or roof) on screen
+  if (Math.max(gx1, rx1) < -4 || Math.min(gx0, rx0) > V.W + 4 || Math.max(gy1, ry1) < -4 || Math.min(gy0, ry0) > V.H + 4) return;
   const base = b.col, small = b.container || b.truck;
+  // LOD: a building only a few pixels across (high patrol) gets flat walls and roof, no detail
+  // (at high patrol the whole city is on screen: mid-size blocks go flat too)
+  const lod = V.camH > FAR_CAM ? LOD_FAR_PX : LOD_PX, lite = rx1 - rx0 < lod && ry1 - ry0 < lod;
   // One light for the whole city (sun/moon from the north-west, matching the baked shadows):
   // north and west faces catch it, south and east faces sit in shade.
   const walls = [];
@@ -77,7 +84,7 @@ export function drawBuilding(ctx, b, V) {
   // Ink: comic outlines. Only fills (strokes and big overdraw are what mobile GPUs choke on):
   // thin quads up the wall corners here, and a dark rect under the roof for its rim.
   const small0 = b.container || b.truck;
-  const ink = (V.rich || b.h >= 36), lw = small0 ? Math.max(0.5, 0.7 * k) : Math.max(0.9, 1.4 * k);
+  const ink = (V.rich || b.h >= 36) && !lite, lw = small0 ? Math.max(0.5, 0.7 * k) : Math.max(0.9, 1.4 * k);
   for (const w of walls) { ctx.fillStyle = shade(base, TONE[w]); ctx.beginPath(); band(w, 1, s); ctx.fill(); }
   if (ink && walls.length && !small0) {
     ctx.fillStyle = INK; ctx.beginPath();
@@ -89,7 +96,7 @@ export function drawBuilding(ctx, b, V) {
     ctx.fill();
   }
   const tall = b.h >= 36 && !small && !b.house && !b.ship;
-  if (walls.length && V.rich && !small && b.h * k > 14) { // (skipped where it'd be a sliver)
+  if (walls.length && V.rich && !small && !lite && b.h * k > 14) { // (skipped where it'd be a sliver)
     // ambient occlusion: the foot of each wall darkens toward the street
     ctx.fillStyle = 'rgba(4,6,20,.3)'; ctx.beginPath();
     const pf = P(Math.min(b.h * 0.35, 30));
@@ -112,16 +119,17 @@ export function drawBuilding(ctx, b, V) {
     const seed = hash2(b.x | 0, b.y | 0);
     ctx.strokeStyle = b.glass ? 'rgba(220,240,255,.22)' : 'rgba(0,0,0,.22)'; ctx.lineWidth = 1;
     ctx.beginPath();
+    const step = lite ? 2 : 1; // far away: every other floor
     const warm = !b.glass || seed > 0.7;
-    for (let f = 1; f < floors; f++) {
+    for (let f = 1; f < floors; f += step) {
       const p = P((f * b.h) / floors);
       for (const w of walls) {
         const [x1, y1, x2, y2] = edge(w, p);
-        ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+        if (!lite) { ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); }
         if (night > 0.2 && hash2(f, walls.length, (seed * 1e6) | 0) > 0.35) V.lights.push({ t: 'win', x1, y1, x2, y2, cool: !warm });
       }
     }
-    ctx.stroke();
+    if (!lite) ctx.stroke();
   }
 
   // roof (with its inked crease against the walls)

@@ -16,6 +16,7 @@ import { sfx } from './sfx.js';
 import { quality } from './settings.js';
 import { STEP, DOWN, capsulePush, buildCollider, scanFloor, unpackFloor, mergeStatic } from './clubgeo.js';
 import { ClubMood } from './clubmood.js';
+import { captureEmitters, dropMeshes, texAverage } from './clubdress.js';
 
 // Premade clubs. Add more by exporting another .blend with tools/export_club.py, then run
 // tools/bake_clubs.js to make the lite (512 px textures) copy and bake the walkable floor.
@@ -92,6 +93,8 @@ function entryFor(key) {
         o.frustumCulled = true;
         if (q.clubMaterials !== 'full') o.material = Array.isArray(o.material) ? o.material.map(simple) : simple(o.material);
       });
+      dropMeshes(scene, key);
+      scene.userData.emitters = captureEmitters(scene); // where the neon is, before merging blurs it
       collapseDetail(scene, q.clubMaterials);
       scene.userData.chunks = mergeStatic(scene); // hundreds of props → a few dozen draw calls
       e.stage = 'Building the club';
@@ -162,24 +165,6 @@ const DETAIL = 0.8; // m: props smaller than this lose their texture
 function collapseDetail(scene, level) {
   scene.updateMatrixWorld(true);
   const avg = new Map(), shared = new Map(), box = new THREE.Box3(), used = new Set(), dropped = new Set();
-  const avgColor = (tex) => {
-    if (avg.has(tex)) return avg.get(tex);
-    let c = new THREE.Color(0.5, 0.5, 0.5);
-    const img = tex.image;
-    if (img && img.width) {
-      try {
-        const cv = document.createElement('canvas'); cv.width = cv.height = 4;
-        const x = cv.getContext('2d', { willReadFrequently: true });
-        x.drawImage(img, 0, 0, 4, 4);
-        const d = x.getImageData(0, 0, 4, 4).data;
-        let r = 0, g = 0, b = 0;
-        for (let i = 0; i < 64; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; }
-        c = new THREE.Color().setRGB(r / 16 / 255, g / 16 / 255, b / 16 / 255, THREE.SRGBColorSpace);
-      } catch (e) { /* unreadable: mid-grey */ }
-    }
-    avg.set(tex, c);
-    return c;
-  };
   const plainMat = (side, glass) => {
     const key = side + (glass ? 'g' : '');
     if (!shared.has(key)) {
@@ -205,7 +190,10 @@ function collapseDetail(scene, level) {
     }
     const g = o.geometry.clone();
     const col = m.color.clone();
-    if (textured) col.multiply(avgColor(m.map));
+    if (textured) col.multiply(texAverage(m.map));
+    // untextured white (doors, plinths, the pole stage) blows out under club lights: tone it down
+    const lum = col.r * 0.3 + col.g * 0.59 + col.b * 0.11;
+    if (lum > 0.45) col.multiplyScalar(0.45 / lum);
     const n = g.attributes.position.count, arr = new Float32Array(n * 3), old = g.attributes.color;
     for (let i = 0; i < n; i++) {
       const k = old ? [old.getX(i), old.getY(i), old.getZ(i)] : [1, 1, 1];

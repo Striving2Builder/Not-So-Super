@@ -165,7 +165,7 @@ async function shootBrawl(page, dir, name, sc = {}) {
     }
     g.startZone(z);
     // pinned scenarios keep her on her feet so every frame shows the move being shot, not a stagger
-    if (sc.god) g.mode.p.god = true;
+    if (sc.god) g.mode.hurtPlayer = () => {};
   }, sc);
   await page.waitForTimeout(2500);
   await page.screenshot({ path: path.join(dir, `${name}_1_start.png`) });
@@ -175,9 +175,11 @@ async function shootBrawl(page, dir, name, sc = {}) {
   await page.keyboard.up('KeyD');
   await page.screenshot({ path: path.join(dir, `${name}_2_fight.png`) });
   await page.keyboard.press('KeyK');
-  await page.waitForTimeout(500);
+  // the super freeze: comic cut-in panel (shoot at once: a capture takes a few hundred ms)
+  await page.screenshot({ path: path.join(dir, `${name}_3a_cutin.png`) });
+  await page.waitForTimeout(200);
   await page.screenshot({ path: path.join(dir, `${name}_3_special.png`) });
-  const shots = [`${name}_1_start.png`, `${name}_2_fight.png`, `${name}_3_special.png`];
+  const shots = [`${name}_1_start.png`, `${name}_2_fight.png`, `${name}_3a_cutin.png`, `${name}_3_special.png`];
   if (sc.crowd) {
     await page.waitForTimeout(600);
     for (let i = 0; i < 9; i++) { await page.keyboard.press('KeyJ'); await page.waitForTimeout(i % 3 === 2 ? 180 : 110); }

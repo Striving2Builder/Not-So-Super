@@ -160,6 +160,13 @@ export class City {
 // ---------------------------------------------------------------------------
 // Block generators. Buildings: {x,y,w,d,h,col,kind,...}; flats are ground decals.
 // ---------------------------------------------------------------------------
+// Rooftop sign names. signFor() spreads them over the grid so neighbouring blocks never share a
+// name (a screenful of BOWL BOWL BOWL reads as clone-stamped). The rng pick is still drawn so the
+// rest of the block generates exactly as before.
+const VENUE_SIGNS = ['THEATER', 'CINEMA', 'ARCADE', 'BOWL', 'COMEDY', 'JAZZ', 'OPERA', 'KARAOKE', 'BILLIARDS', 'ROXY', 'PALACE', 'DINER'];
+const MALLS = ['MALL', 'MEGAMART', 'OUTLET', 'PLAZA', 'SUPERSTORE', 'MARKET'];
+function signFor(blk, names, _drawn) { return names[(blk.bx * 5 + blk.by * 3) % names.length]; }
+
 function B(blk, x, y, w, d, h, col, extra = {}) {
   blk.b.push({ x, y, w, d, h, col, kind: 'box', ...extra });
 }
@@ -205,7 +212,7 @@ const GEN = {
     const { x0, y0 } = blk;
     blk.flats.push({ t: 'lot', x: x0 + 50, y: y0 + 50, w: LOT - 100, h: LOT - 100 });
     if (r.chance(0.3)) {
-      B(blk, x0 + 20, y0 + 22, LOT - 40, 90, r.range(28, 42), r.pick(D.pal), { skylight: true, sign: r.pick(['MALL', 'MEGAMART', 'OUTLET']) });
+      B(blk, x0 + 20, y0 + 22, LOT - 40, 90, r.range(28, 42), r.pick(D.pal), { skylight: true, sign: signFor(blk, MALLS, r.pick(MALLS)) });
       return;
     }
     // shop row around the perimeter
@@ -240,7 +247,7 @@ const GEN = {
   venues(blk, r, D) {
     const { x0, y0 } = blk;
     blk.flats.push({ t: 'rect', x: x0 + 6, y: y0 + 6, w: LOT - 12, h: LOT - 12, c: '#5a5070' });
-    B(blk, x0 + 20, y0 + 16, 150, 100, r.range(50, 80), r.pick(D.pal), { neon: r.pick(D.neon), sign: r.pick(['THEATER', 'CINEMA', 'ARCADE', 'BOWL']) });
+    B(blk, x0 + 20, y0 + 16, 150, 100, r.range(50, 80), r.pick(D.pal), { neon: r.pick(D.neon), sign: signFor(blk, VENUE_SIGNS, r.pick(VENUE_SIGNS)) });
     B(blk, x0 + 20, y0 + 132, 60, 44, r.range(D.hMin, D.hMax), r.pick(D.pal), { neon: r.pick(D.neon) });
     B(blk, x0 + 100, y0 + 132, 70, 44, r.range(D.hMin, D.hMax), r.pick(D.pal), { neon: r.pick(D.neon) });
   },
@@ -269,8 +276,10 @@ const GEN = {
   warehouses(blk, r, D) {
     const { x0, y0 } = blk;
     blk.flats.push({ t: 'rect', x: x0 + 4, y: y0 + 4, w: LOT - 8, h: LOT - 8, c: '#5a5750' });
-    B(blk, x0 + 12, y0 + 14, LOT - 24, 72, r.range(D.hMin, D.hMax), r.pick(D.pal), { corrugated: true });
-    if (r.chance(0.7)) B(blk, x0 + 12, y0 + 104, LOT - 24, 70, r.range(D.hMin, D.hMax), r.pick(D.pal), { corrugated: true });
+    // roof variety without touching the rng stream: skylight strips on some sheds, bare tin on others
+    const v = hash2(blk.bx, blk.by, 91);
+    B(blk, x0 + 12, y0 + 14, LOT - 24, 72, r.range(D.hMin, D.hMax), r.pick(D.pal), { corrugated: v > 0.35, skylight: v < 0.5 });
+    if (r.chance(0.7)) B(blk, x0 + 12, y0 + 104, LOT - 24, 70, r.range(D.hMin, D.hMax), r.pick(D.pal), { corrugated: v < 0.7, skylight: v > 0.6 });
     else for (let i = 0; i < 3; i++) B(blk, x0 + 20 + i * 52, y0 + 120, 40, 16, 14, '#e8e8e8', { truck: true });
   },
   docks(blk, r, D) {

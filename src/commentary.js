@@ -194,7 +194,7 @@ export class Commentary {
 
   onZoneEnd(outcome) {
     const txt = outcome === 'captured' ? pick(OUTRO_CAPTURED) : outcome === 'win' ? pick(OUTRO_WIN) : null;
-    if (txt) comic.caption(txt, { where: 'bottom', ms: 2600 });
+    if (txt) comic.caption(txt, { ms: 2600 });
   }
 
   // ---------------------------------------------------------- fights (screen coords)
