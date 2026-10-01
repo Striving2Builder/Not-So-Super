@@ -46,7 +46,8 @@ export class FlightCam3D {
     while (d < -Math.PI) d += Math.PI * 2;
     this.yaw += d * Math.min(1, dt * CAM.yawRate * clamp(h.speed / 200, 0.15, 1));
     this.orbit *= 1 - Math.min(1, dt * CAM.orbitBack * clamp(h.speed / 150, 0, 1));
-    this.patrolK += ((patrol ? 1 : 0) - this.patrolK) * Math.min(1, dt * 2.2);
+    this.patrolK += ((patrol ? 1 : 0) - this.patrolK) * Math.min(1, dt * (patrol ? 2.2 : 4.5)); // quick to swoop back down
+    if (!patrol && this.patrolK < 0.01) this.patrolK = 0;
     this.kick = Math.max(0, this.kick - dt * 1.6);
     const yaw = this.yaw + this.orbit, fx = Math.cos(yaw), fz = Math.sin(yaw);
     const hx = h.x * M, hy = h.z * M, hz = h.y * M;
