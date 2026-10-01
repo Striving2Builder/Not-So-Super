@@ -19,6 +19,7 @@ import { FlightHero } from './herofly.js';
 import { drawBuilding, drawLights } from './skyline.js';
 import { drawEdgeMarkers } from './flightmarks.js';
 import { tiltAngle, tiltLeadY, projection, centreOffset } from './tiltcam.js';
+import { Flight3D, flight3dEnabled } from './flight3d.js';
 import { FlightAudio } from './flightaudio.js';
 import { nightCaseFields } from './nightcase.js';
 import { asylumFields } from './asylum.js';
@@ -64,6 +65,7 @@ export class Overworld {
     this.feed = new CityFeed();          // clips in the minimap corner
     this.frame = 0;
     this.kick = 0;                       // boost punch (0..1), widens the view for a beat
+    this.view3d = flight3dEnabled() ? new Flight3D(this) : null; // ?flight=3d slice (default off)
     this.heroArt = new FlightHero();     // her inked 3/4 sprite, ground shadow, boost lettering
   }
 
@@ -93,6 +95,7 @@ export class Overworld {
   }
 
   enter(p = {}) {
+    if (this.view3d && !this.attract) this.view3d.enter();
     const inp = this.g.input;
     inp.setStick(true);
     inp.setButtons([
@@ -115,6 +118,7 @@ export class Overworld {
   }
 
   exit() {
+    this.view3d?.exit();
     $('prompt').classList.remove('on');
     this.audio.stop();
     this.feed.stop();
@@ -151,6 +155,9 @@ export class Overworld {
     if (h.perch && Math.hypot(a.x, a.y) > 0.45) this.leavePerch(); // push off to take flight
   }
 
+  /** A structure's height for flying into/onto it (the 3D slice's city stands taller). */
+  hOf(o) { return this.view3d ? this.view3d.heightOf(o) : o.h; }
+
   /** The tallest building footprint under (x, y), or null. */
   buildingAt(x, y) {
     const c = this.g.city, bx = Math.floor(x / BLOCK), by = Math.floor(y / BLOCK);
@@ -161,7 +168,7 @@ export class Overworld {
       for (const o of blk.b) {
         const inside = o.kind === 'box' ? x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.d
           : o.kind === 'round' ? Math.hypot(x - o.x, y - o.y) <= o.rad : false;
-        if (inside && (!best || o.h > best.h)) best = o;
+        if (inside && (!best || this.hOf(o) > this.hOf(best))) best = o;
       }
     }
     return best;
@@ -172,14 +179,14 @@ export class Overworld {
     const h = this.hero;
     if (h.perch || h.speed > 140) return null;
     const b = this.buildingAt(h.x, h.y);
-    return b && b.h >= 35 ? b : null;
+    return b && this.hOf(b) >= 35 ? b : null;
   }
 
   tryPerch() {
     const b = this.perchTarget();
     if (!b) { toast('Slow down over a rooftop to perch', 'info'); return; }
     const h = this.hero;
-    h.perch = { z: b.h + 2 };
+    h.perch = { z: this.hOf(b) + 2 };
     h.speed = 0;
     this.feed.onPerch(DISTRICTS[this.district]?.name);
     this.perchT = 0;
@@ -228,12 +235,12 @@ export class Overworld {
       const blk = c.block(bx + dx, by + dy);
       if (!blk) continue;
       for (const o of blk.b) {
-        if ((o.kind !== 'box' && o.kind !== 'round') || o.h <= h.z) continue; // only structures taller than her
+        if ((o.kind !== 'box' && o.kind !== 'round') || this.hOf(o) <= h.z) continue; // only structures taller than her
         // Already above the footprint (descending onto it, rising out of a zone on its lot):
         // she floats over the roof instead of being shoved sideways through the walls.
         const inside = o.kind === 'box' ? h.x >= o.x && h.x <= o.x + o.w && h.y >= o.y && h.y <= o.y + o.d
           : Math.hypot(h.x - o.x, h.y - o.y) <= o.rad;
-        if (inside) { h.z = o.h + 2; continue; }
+        if (inside) { h.z = this.hOf(o) + 2; continue; }
         // Flying into its side: it's a wall.
         let px, py;
         if (o.kind === 'box') { px = clamp(h.x, o.x, o.x + o.w); py = clamp(h.y, o.y, o.y + o.d); }
@@ -430,7 +437,7 @@ export class Overworld {
       const m = Math.hypot(tx - h.x, ty - h.y) || 1;
       a = { x: (tx - h.x) / m, y: (ty - h.y) / m };
     } else {
-      a = wobble(inp.axis(), st ? st.intox : 0, this.t);
+      a = wobble(this.view3d ? this.view3d.steer(inp.axis()) : inp.axis(), st ? st.intox : 0, this.t); // (3D: stick is camera-relative)
       // Autopilot: steer to the waypoint while the stick is idle; any input takes over.
       // (Still subject to the drunk wobble: autopilot is not a way around intoxication.)
       if (this.nav.autopilot && this.nav.target && !h.perch && Math.hypot(a.x, a.y) < 0.12) a = wobble(this.nav.steer(h), st ? st.intox : 0, this.t);
@@ -441,13 +448,13 @@ export class Overworld {
     if (this.rising === null) stepAltitude(h, dt);
     this.camH += (h.z + camAbove(h.z) - this.camH) * Math.min(1, dt * 4);
     // perched = standing on the roof; rising out of a zone = the camera move owns her position
-    if (h.z < 300 && !h.perch && this.rising === null) this.collideBuildings(h);
+    if (h.z < (this.view3d ? this.view3d.maxBuilding : 300) && !h.perch && this.rising === null) this.collideBuildings(h);
     h.x = clamp(h.x, 0, city.W);
     h.y = clamp(h.y, 0, city.H);
     if (h.perch) this.updatePerch(dt);
     const frac = speedFraction(h);
     if (!this.attract) {
-      if (ev.boostStart) { sfx.boost(); this.shake = Math.max(this.shake, 7); this.kick = 1; this.heroArt.whoosh(h.ang); }
+      if (ev.boostStart) { sfx.boost(); this.shake = Math.max(this.shake, 7); this.kick = 1; this.heroArt.whoosh(h.ang); this.view3d?.boost(); }
       if (ev.sonic) { sfx.sonicBoom(); this.shake = 12; this.fx.sonicBoom(); }
     }
     // Camera: look further ahead and pull out as she speeds up (dive/rise animations own the zoom).
@@ -720,6 +727,7 @@ export class Overworld {
 
   // ------------------------------------------------------------------ render
   render(ctx) {
+    if (this.view3d && document.body.classList.contains('fly3d')) { this.view3d.render(ctx); return; }
     const g = this.g, W = g.w, H = g.h, city = g.city, st = g.state;
     const night = st ? st.night : 0.8;
     const q = quality(), rich = q.flyDetail;

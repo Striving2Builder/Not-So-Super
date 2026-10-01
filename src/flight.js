@@ -26,6 +26,9 @@ export const BANDS = [
   { id: 'high', z: 620, speedMul: 1.3, vice: 0.4, label: 'High patrol', cam: 1020 },
 ];
 export const CRUISE_BAND = 1;
+
+/** The 3D flight slice re-sets the band heights for its much taller city. */
+export function setBandHeights(zs) { zs.forEach((z, i) => { BANDS[i].z = z; }); }
 export const CAM_ABOVE = 740; // at cruise: the reference for the view scale
 
 /**
