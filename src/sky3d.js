@@ -84,9 +84,11 @@ export class Sky3D {
 
   /**
    * clock: minutes since midnight; night: 0..1 (the game's own); tint: district colour to lean the
-   * horizon/fog toward; focus: the point the camera looks at (sun and dome follow it).
+   * horizon/fog toward; eye: the camera (sun and dome follow it); patrol 0..1: the raised map view
+   * thins the cloud deck under the camera (it read as a white haze over the corners) and lets the
+   * depth fog do the layering instead.
    */
-  update(clock, night, tint, eye, fogFar) {
+  update(clock, night, tint, eye, fogFar, patrol = 0) {
     const hr = (clock / 60) % 24;
     const dusk = Math.max(0, 1 - Math.min(Math.abs(hr - 19), Math.abs(hr - 6.5)) / 1.6) * (1 - night * 0.6);
     const day = 1 - night;
@@ -95,7 +97,8 @@ export class Sky3D {
     // fog = horizon, leaning toward the district colour (stronger at night: neon haze)
     const fog = this.scene.fog;
     fog.color.copy(this.uniforms.bottom.value).lerp(_t.set(tint || '#808080'), 0.12 + 0.18 * night);
-    fog.near = fogFar * 0.25; fog.far = fogFar;
+    fog.near = fogFar * (0.25 + 0.1 * patrol); fog.far = fogFar;
+    this.cloudMat.opacity = CLOUD.alpha * (1 - 0.75 * patrol);
     // sun by day, moon by night: an arc across the southern sky (behind a north-flying camera)
     const a = ((hr - 6) / 12) * Math.PI, up = night > 0.5 ? 0.55 : Math.max(0.05, Math.sin(a));
     const dir = new THREE.Vector3(night > 0.5 ? 0.5 : -Math.cos(a), up, 0.6).normalize();
