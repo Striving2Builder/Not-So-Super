@@ -15,6 +15,11 @@ export const TILT_PROFILES = {
   mild: [20, 11, 3],
   strong: [30, 16, 5],
 };
+/** Vertical look-ahead cap (fraction of the screen height) with tilt on; off keeps the shipped one. */
+const LEAD_Y = { mild: 0.24, strong: 0.24 };
+
+/** The tilt profile's vertical look-ahead cap, or null when tilt is off. */
+export function tiltLeadY() { return LEAD_Y[tiltProfile()] ?? null; }
 
 let chosen;
 /** The active profile name ('off' unless the URL asks), read once. */

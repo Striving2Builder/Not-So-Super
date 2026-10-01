@@ -18,7 +18,7 @@ import { CityArt, TILE, SUN, grade, glow } from './cityart.js';
 import { FlightHero } from './herofly.js';
 import { drawBuilding, drawLights } from './skyline.js';
 import { drawEdgeMarkers } from './flightmarks.js';
-import { tiltAngle, projection, centreOffset } from './tiltcam.js';
+import { tiltAngle, tiltLeadY, projection, centreOffset } from './tiltcam.js';
 import { FlightAudio } from './flightaudio.js';
 import { nightCaseFields } from './nightcase.js';
 import { asylumFields } from './asylum.js';
@@ -455,7 +455,9 @@ export class Overworld {
     // full boost she never slides to the edge of a phone screen: she stays the centre of the shot.
     const lead = cameraLead(h), kk = this.k || 0.5;
     const reach = 0.1 + 0.05 * clamp((frac - 0.5) * 2, 0, 1); // fraction of the screen, more at boost
-    const lx = clamp(h.vx * lead, -reach * this.g.w / kk, reach * this.g.w / kk), ly = clamp(h.vy * lead, -reach * this.g.h / kk, reach * this.g.h / kk);
+    // (tilt prototype: a longer vertical look-ahead, since a landscape phone sees far less up/down)
+    const ry = tiltLeadY() ?? reach, lyT = tiltLeadY() ? 2.2 : 1;
+    const lx = clamp(h.vx * lead, -reach * this.g.w / kk, reach * this.g.w / kk), ly = clamp(h.vy * lead * lyT, -ry * this.g.h / kk, ry * this.g.h / kk);
     this.cam.x += (h.x + lx - this.cam.x) * Math.min(1, dt * 4);
     const lift = h.speed > 1 ? Math.max(0, h.vy / h.speed) * h.z * Math.tan(tiltAngle(h.z)) : 0; // (tilt only)
     this.cam.y += (h.y + ly + lift - this.tiltOffset() - this.cam.y) * Math.min(1, dt * 4);
@@ -947,7 +949,7 @@ export class Overworld {
     this.airspace.drawFlyers(ctx, V, h.z, true);
     this.sky.draw(ctx, V, h.z, true);
     this.airspace.drawPlanes(ctx, V);
-    for (const [x, y, r, z, locked] of icons) this.drawIcon(ctx, x, y, r, z, locked, z === this.near);
+    const worldT = ctx.getTransform(); // incident icons go on last of all (below)
     ctx.restore();
 
     // comic speed lines when she really moves
@@ -964,6 +966,11 @@ export class Overworld {
     }
 
     this.paps.drawFlash(ctx, W, H);
+
+    // Incident icons over everything (speed lines, cloud white-out, flashes): never hidden.
+    ctx.save(); ctx.setTransform(worldT);
+    for (const [x, y, r, z, locked] of icons) this.drawIcon(ctx, x, y, r, z, locked, z === this.near);
+    ctx.restore();
 
     if (this.diving) {
       const e = Math.min(1, this.diving.t / DIVE_T);
