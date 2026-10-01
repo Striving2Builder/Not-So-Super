@@ -18,6 +18,7 @@ import { CityArt, TILE, SUN, grade, glow } from './cityart.js';
 import { FlightHero } from './herofly.js';
 import { drawBuilding, drawLights } from './skyline.js';
 import { drawEdgeMarkers } from './flightmarks.js';
+import { tiltAngle, tiltLeadY, projection, centreOffset } from './tiltcam.js';
 import { FlightAudio } from './flightaudio.js';
 import { nightCaseFields } from './nightcase.js';
 import { asylumFields } from './asylum.js';
@@ -136,8 +137,7 @@ export class Overworld {
   // ------------------------------------------------------------------ altitude, perching, hearing
   /** World-units to offset the camera so the tilted view still centres on her. */
   tiltOffset() {
-    const P = this.camH / (this.camH - this.hero.z), T = this.g.h * TILT;
-    return ((P - 1) * T) / (this.k * P);
+    return centreOffset(this.hero.z, this.camH, this.k, this.g.h * TILT, tiltAngle(this.hero.z));
   }
 
   altitudeInput(inp, a) {
@@ -455,9 +455,12 @@ export class Overworld {
     // full boost she never slides to the edge of a phone screen: she stays the centre of the shot.
     const lead = cameraLead(h), kk = this.k || 0.5;
     const reach = 0.1 + 0.05 * clamp((frac - 0.5) * 2, 0, 1); // fraction of the screen, more at boost
-    const lx = clamp(h.vx * lead, -reach * this.g.w / kk, reach * this.g.w / kk), ly = clamp(h.vy * lead, -reach * this.g.h / kk, reach * this.g.h / kk);
+    // (tilt prototype: a longer vertical look-ahead, since a landscape phone sees far less up/down)
+    const ry = tiltLeadY() ?? reach, lyT = tiltLeadY() ? 2.2 : 1;
+    const lx = clamp(h.vx * lead, -reach * this.g.w / kk, reach * this.g.w / kk), ly = clamp(h.vy * lead * lyT, -ry * this.g.h / kk, ry * this.g.h / kk);
     this.cam.x += (h.x + lx - this.cam.x) * Math.min(1, dt * 4);
-    this.cam.y += (h.y + ly - this.tiltOffset() - this.cam.y) * Math.min(1, dt * 4);
+    const lift = h.speed > 1 ? Math.max(0, h.vy / h.speed) * h.z * Math.tan(tiltAngle(h.z)) : 0; // (tilt only)
+    this.cam.y += (h.y + ly + lift - this.tiltOffset() - this.cam.y) * Math.min(1, dt * 4);
     if (this.rising === null) this.zoom += (cameraZoom(h) - this.zoom) * Math.min(1, dt * 2);
     this.shake = Math.max(0, this.shake - dt * 20);
     this.kick = Math.max(0, this.kick - dt * 1.8);
@@ -731,10 +734,9 @@ export class Overworld {
     // Perspective centre below the screen centre = a slight oblique view: roofs lean up-screen,
     // south faces show. Ground points are unaffected; height lifts things by (P-1)·T.
     const T = H * TILT, cy = scy + T;
-    const P = (z) => camH / (camH - z);
-    const SX = (x, z = 0) => cx + (x - camX) * k * P(z);
-    const SY = (y, z = 0) => scy + (y - camY) * k * P(z) - (P(z) - 1) * T;
-    const V = { cx, cy, scy, k, P, SX, SY, night, lights: [], t: this.t, W, H, camH, rich };
+    const pr = projection({ cx, scy, k, camX, camY, camH, T, th: tiltAngle(this.hero.z) });
+    const { P, SX, SY } = pr;
+    const V = { cx, cy, scy, k, P, SX, SY, tilt: pr, night, lights: [], t: this.t, W, H, camH, rich };
     this.V = V; // for things that place speech bubbles in world space
     const h = this.hero;
 
@@ -755,7 +757,7 @@ export class Overworld {
     const land = { x0: SX(0), y0: SY(0), x1: SX(city.coastX), y1: SY(city.H) };
     ctx.fillStyle = '#2a2d35'; ctx.fillRect(land.x0, land.y0, land.x1 - land.x0, land.y1 - land.y0);
 
-    const hw = W / 2 / k + 280, hh = H / 2 / k + 280;
+    const hw = W / 2 / k + 280, hh = H / 2 / (k * pr.c) + 280 + 340 * Math.tan(pr.th); // (tall towers below the frame rise into it)
     // ocean
     if (camX + hw > city.coastX) {
       const sx = SX(city.coastX);
@@ -777,8 +779,8 @@ export class Overworld {
     // bounds (a ground point maps linearly), plus a margin for the camera sway and shake.
     const TW = TILE * BLOCK, margin = 90 / k;
     const tx0 = Math.max(0, Math.floor((camX - W / 2 / k - margin) / TW)), tx1 = Math.floor((camX + W / 2 / k + margin) / TW);
-    const ty0 = Math.max(0, Math.floor((camY - H / 2 / k - margin) / TW)), ty1 = Math.floor((camY + H / 2 / k + margin) / TW);
-    const TS = TW * k + 0.6; // a hair of overlap hides seams between tiles
+    const ty0 = Math.max(0, Math.floor((camY - H / 2 / (k * pr.c) - margin) / TW)), ty1 = Math.floor((camY + H / 2 / (k * pr.c) + margin) / TW);
+    const TS = TW * k + 0.6, TSY = TW * k * pr.c + 0.6; // a hair of overlap hides seams between tiles
     // Tiles in view are painted when needed; the ring just outside is pre-painted one tile per
     // frame, so flying fast rarely has to paint on the spot. (Day/night tiles swap over at dusk.)
     const art = this.art, limit = art.painted + 1;
@@ -789,7 +791,7 @@ export class Overworld {
       if (!inView) continue;
       // not painted yet (e.g. dusk just flipped every tile): show the other variant meanwhile
       const img = c || art.ground.get(art.key(tx, ty) * 2 + (night > 0.45 ? 0 : 1))?.c;
-      if (img) ctx.drawImage(img, SX(tx * TW), SY(ty * TW), TS, TS);
+      if (img) ctx.drawImage(img, SX(tx * TW), SY(ty * TW), TS, TSY);
     }
     const blds = [];
     for (let by = by0; by <= by1; by++) for (let bx = bx0; bx <= bx1; bx++) for (const o of city.block(bx, by).b) if (o.kind !== 'tree') blds.push(o); // trees are baked into the ground tiles
@@ -815,9 +817,9 @@ export class Overworld {
       const ox = c.dir === 1 ? -9 : c.dir === 3 ? 9 : 0, oy = c.dir === 0 ? 9 : c.dir === 2 ? -9 : 0;
       const w = horiz ? 22 : 11, d = horiz ? 11 : 22;
       const x = c.x + ox - w / 2, y = c.y + oy - d / 2, sx = SX(x), sy = SY(y);
-      ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(sx + 2 * k, sy + 3 * k, w * k, d * k);
-      ctx.fillStyle = c.col; ctx.fillRect(sx, sy, w * k, d * k);
-      if (k > 0.3) ctx.strokeRect(sx, sy, w * k, d * k);
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(sx + 2 * k, sy + 3 * k, w * k, d * k * pr.c);
+      ctx.fillStyle = c.col; ctx.fillRect(sx, sy, w * k, d * k * pr.c);
+      if (k > 0.3) ctx.strokeRect(sx, sy, w * k, d * k * pr.c);
       ctx.fillStyle = 'rgba(20,30,50,.8)';
       ctx.fillRect(SX(x + (horiz ? 6 : 2)), SY(y + (horiz ? 2 : 6)), (horiz ? 9 : 7) * k, (horiz ? 7 : 9) * k);
       ctx.fillStyle = 'rgba(255,255,255,.35)';
@@ -871,7 +873,7 @@ export class Overworld {
     // buildings, far from screen centre first so near ones overlap correctly
     for (const b of blds) {
       const bx = b.kind === 'crane' ? b.x : b.x + (b.w || 0) / 2, by = b.kind === 'crane' ? (b.y + b.y2) / 2 : b.y + (b.d || 0) / 2;
-      b._d = (bx - camX) * (bx - camX) + (by - camY) * (by - camY);
+      b._d = (bx - pr.eye.x) * (bx - pr.eye.x) + (by - pr.eye.y) * (by - pr.eye.y);
     }
     blds.sort((a, b) => b._d - a._d);
     for (const b of blds) drawBuilding(ctx, b, V);
@@ -933,7 +935,7 @@ export class Overworld {
     this.fx.draw(ctx, SX(h.x, h.z), SY(h.y, h.z), hs);
     const hx = SX(h.x, h.z), hy = SY(h.y, h.z) + Math.sin(this.t * 2.2) * 2 * k;
     this.heroScreen = { x: hx, y: hy };
-    if (sprite) this.heroArt.draw(ctx, h, hx, hy, hs, { t: this.t, diving: !!this.diving, rich, night, px: q.heroSprite });
+    if (sprite) this.heroArt.draw(ctx, h, hx, hy, hs, { t: this.t, diving: !!this.diving, rich, night, dpr: Math.min(devicePixelRatio || 1, q.dpr2d), max: q.flySpriteMax });
     else drawHeroTop(ctx, hx, hy, hs, h.ang, this.t, h.bank);
     // super-hearing: sound rings pulsing out while perched
     if (h.perch) for (const r of this.hearRings || []) {
@@ -947,7 +949,7 @@ export class Overworld {
     this.airspace.drawFlyers(ctx, V, h.z, true);
     this.sky.draw(ctx, V, h.z, true);
     this.airspace.drawPlanes(ctx, V);
-    for (const [x, y, r, z, locked] of icons) this.drawIcon(ctx, x, y, r, z, locked, z === this.near);
+    const worldT = ctx.getTransform(); // incident icons go on last of all (below)
     ctx.restore();
 
     // comic speed lines when she really moves
@@ -964,6 +966,11 @@ export class Overworld {
     }
 
     this.paps.drawFlash(ctx, W, H);
+
+    // Incident icons over everything (speed lines, cloud white-out, flashes): never hidden.
+    ctx.save(); ctx.setTransform(worldT);
+    for (const [x, y, r, z, locked] of icons) this.drawIcon(ctx, x, y, r, z, locked, z === this.near);
+    ctx.restore();
 
     if (this.diving) {
       const e = Math.min(1, this.diving.t / DIVE_T);
