@@ -98,7 +98,16 @@ export class Overworld {
     if (this.view3d && !this.attract) this.view3d.enter();
     const inp = this.g.input;
     inp.setStick(true);
-    inp.setButtons([
+    // 3D view: a leaner set (one UP/DOWN rocker; DIVE and PERCH only show when they apply)
+    if (this.view3d) inp.setButtons([
+      { id: 'boost', label: 'BOOST', key: 'Shift', cls: 'f3 f3-boost' },
+      { id: 'dive', label: 'DIVE', key: 'Space', cls: 'f3 f3-dive gone' },
+      { id: 'climb', label: '▲', key: 'R', cls: 'f3 f3-up' },
+      { id: 'descend', label: '▼', key: 'F', cls: 'f3 f3-down' },
+      { id: 'perch', label: 'PERCH', key: 'H', cls: 'f3 f3-perch gone' },
+      { id: 'map', label: 'MAP', key: 'M', cls: 'f3 f3-map' },
+    ]);
+    else inp.setButtons([
       { id: 'dive', label: 'DIVE', key: 'Space', cls: 'big' },
       { id: 'boost', label: 'BOOST', key: 'Shift' },
       { id: 'map', label: 'MAP', key: 'M', slot: 2 },
@@ -617,6 +626,7 @@ export class Overworld {
     const el = $('prompt');
     const z = this.near;
     this.g.input.setButton('dive', { lit: !!z });
+    if (this.view3d) this.g.input.buttons.dive?.classList.toggle('gone', !z || !!this.diving);
     if (!z || this.diving) { el.classList.remove('on'); return; }
     const lock = this.g.state.locked(z.lockKey);
     const rc = z.risk === 'CAPTURE' ? '#ff3fb8' : z.risk === 'Traps' ? '#3fd0ff' : '#ffd23f';
@@ -636,7 +646,9 @@ export class Overworld {
     const nav = this.nav.target ? ` · 🧭 ${Math.round(this.nav.distance(this.hero) / 10)}m${this.nav.autopilot ? ' (auto)' : ''}` : '';
     const drones = this.paps.drones.some((d) => !d.leaving) ? ' · 📸 drones!' : '';
     $('hud-sub').textContent = `${fmtClock(st.clock)} · ${alt} · ${this.zones.length} incidents${D && D.vice ? ' · ⚠ vice' : ''}${drones}${nav}`;
-    this.g.input.setButton('perch', { lit: !this.hero.perch && !!this.perchTarget() });
+    const canPerch = !this.hero.perch && !!this.perchTarget();
+    this.g.input.setButton('perch', { lit: canPerch });
+    if (this.view3d) this.g.input.buttons.perch?.classList.toggle('gone', !canPerch && !this.hero.perch); // (perched: it's the take-off button)
     this.drawMinimap();
   }
 

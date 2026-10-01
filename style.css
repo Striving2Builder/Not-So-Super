@@ -524,3 +524,14 @@ body.title-on #comic-layer { display: none; }
 /* the 3D view under a transparent 2D canvas that keeps the comic overlay (icons, markers, speed lines) */
 body.fly3d #three-host { display: block; z-index: 0; }
 body.fly3d #c2d { z-index: 1; pointer-events: none; }
+
+/* flight buttons over the 3D view: smaller, grouped round the right thumb; DIVE/PERCH appear when they apply */
+body.fly3d .tbtn.f3 { width: 58px; height: 58px; font-size: 11px; }
+body.fly3d .tbtn.gone { display: none; }
+body.fly3d .tbtn.f3-boost { right: 4px; bottom: 6px; width: 74px; height: 74px; font-size: 13px; }
+body.fly3d .tbtn.f3-dive { right: 2px; bottom: 92px; width: 74px; height: 74px; font-size: 14px; }
+body.fly3d .tbtn.f3-up, body.fly3d .tbtn.f3-down { right: 90px; width: 50px; height: 46px; font-size: 16px; }
+body.fly3d .tbtn.f3-up { bottom: 54px; border-radius: 25px 25px 8px 8px; }
+body.fly3d .tbtn.f3-down { bottom: 6px; border-radius: 8px 8px 25px 25px; }
+body.fly3d .tbtn.f3-perch { right: 150px; bottom: 6px; }
+body.fly3d .tbtn.f3-map { right: 92px; bottom: 112px; width: 46px; height: 46px; font-size: 10px; }

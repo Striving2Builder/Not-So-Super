@@ -1,15 +1,16 @@
 // Vertical slice: the flight view rendered in real 3D with three.js, behind ?flight=3d (default
 // OFF: the 2D canvas flight is untouched). A renderer swap, not a rewrite: the Overworld keeps
 // simulating (hero, altitude bands, zones, nav, events); this module draws it as a 3D city with a
-// chase camera, and a transparent 2D overlay keeps the comic extras (speed lines, WHOOSH!, edge
-// markers, incident icons).
+// chase camera, and a transparent 2D overlay keeps the comic extras (action lines, edge chips,
+// incident icons).
 import * as THREE from 'three';
 import { City3D, M, height3 } from './city3d.js';
 import { Sky3D } from './sky3d.js';
 import { FlyHero3D } from './herofly3d.js';
 import { FlightCam3D } from './flightcam3d.js';
+import { FlightFX3D } from './flightfx3d.js';
 import { lookFrame } from './look3d.js';
-import { drawEdgeMarkers } from './flightmarks.js';
+import { avoidHud } from './ui.js';
 import { setBandHeights, speedFraction, BANDS } from './flight.js';
 import { DISTRICTS } from './data.js';
 import { quality } from './settings.js';
@@ -23,35 +24,46 @@ export function flight3dEnabled() {
 
 /**
  * 3D look tunables. Altitude bands are re-set for the taller 3D city: skim threads the street
- * canyons, cruise weaves between the towers, high patrol rides above the cloud deck.
+ * canyons, cruise weaves between the towers, high patrol rides above the cloud deck. Skim is
+ * slower in 3D (at 2D speeds the canyons are a wall every second).
  */
 const LOOK3 = {
   bands: [110, 560, 1100],     // world units (×0.5 m)
+  speedMul: [0.5, 1, 1.3],     // top-speed multiplier per band in 3D
   fog: [1100, 1600, 2400],     // fog far (m) per band
-  beam: { radius: 7, height: 420, alpha: 0.45 },
+  beam: { radius: 7, height: 420, alpha: 0.6, minPx: 0.012 }, // minPx: radius ≥ this × distance (stays a visible stroke far off)
   iconPx: 26,
   patrolBelow: 150,             // speed under which high patrol cranes up to the overhead view
+  wallProbe: [10, 22],          // m to each side: a tower face this close rushes past (action lines)
+  chips: 3,                     // edge chips for off-screen incidents (the waypoint is extra)
+  chipTop: 92,                  // px: chips stay below the top HUD row
 };
 
-let beamTex = null;
-function beamTexture() {
-  if (beamTex) return beamTex;
-  const c = document.createElement('canvas'); c.width = 4; c.height = 128;
-  const g = c.getContext('2d'), grd = g.createLinearGradient(0, 128, 0, 0);
-  grd.addColorStop(0, 'rgba(255,255,255,1)'); grd.addColorStop(0.7, 'rgba(255,255,255,.45)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = grd; g.fillRect(0, 0, 4, 128);
-  beamTex = new THREE.CanvasTexture(c);
-  return beamTex;
-}
+const BEAM_VS = `varying vec3 vN; varying float vH; uniform float hgt;
+void main() { vN = normalize(normalMatrix * normal); vH = position.y / hgt; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+// comic light column: inked silhouette edges, a saturated body, white bands rising up it
+const BEAM_FS = `uniform vec3 col; uniform float alpha; uniform float time; varying vec3 vN; varying float vH;
+void main() {
+  float e = abs(vN.z), ink = 1.0 - smoothstep(0.22, 0.42, e);
+  float band = step(0.84, fract(vH * 16.0 - time * 0.9)) * (1.0 - ink);
+  vec3 c = mix(mix(col, vec3(1.0), 0.25 * e + 0.55 * band), vec3(0.03, 0.03, 0.08), ink);
+  float a = alpha * (1.0 - smoothstep(0.55, 1.0, vH)) * mix(1.0, 1.5, ink);
+  gl_FragColor = vec4(c, clamp(a, 0.0, 1.0));
+  #include <colorspace_fragment>
+}`;
+
+const _v = new THREE.Vector3(), _f = new THREE.Vector3();
 
 export class Flight3D {
   constructor(ow) {
     this.ow = ow;
     this.g = ow.g;
     setBandHeights(LOOK3.bands);
+    LOOK3.speedMul.forEach((s, i) => { BANDS[i].speedMul = s; });
     this.scene = null;
     this.beams = new Map();
     this.frame = 0;
+    this.canyon = false;
   }
 
   /** World height (units) of a building for collisions/perching in the 3D city. */
@@ -68,6 +80,7 @@ export class Flight3D {
     this.sky = new Sky3D(this.scene, city.W * M, city.H * M);
     this.city3 = new City3D(city, this.scene, { tileRes: quality().flyTileRes });
     this.hero = new FlyHero3D(this.scene);
+    this.fx3 = new FlightFX3D(this.scene);
     // a soft fill from the camera so she (and the façades facing us) never go to black at night
     this.fill = new THREE.DirectionalLight(0xffe8cc, 0.7);
     this.scene.add(this.fill, this.fill.target);
@@ -90,31 +103,45 @@ export class Flight3D {
       addEventListener('pointermove', (e) => { if (last !== null) { this.orbit(e.clientX - last); last = e.clientX; } });
       addEventListener('pointerup', () => { last = null; });
     }
-    this.cam.placed = this.cam.lookPlaced = false; this.cam.yaw = null;
+    this.cam.placed = false; this.cam.yaw = null;
+    this.dpr = 0;
   }
 
-  exit() { document.body.classList.remove('fly3d'); }
+  exit() {
+    document.body.classList.remove('fly3d');
+    this.g.modes.special.resize(); // hand the shared renderer back at the zones' resolution
+  }
 
   steer(a) { return this.cam ? this.cam.steer(a) : a; }
-  boost() { this.cam?.boost(); }
+  boost() {
+    this.cam?.boost();
+    if (this.fx3 && this.hero) this.fx3.ring(this.hero.group.position, _v.set(Math.cos(this.ow.hero.ang), 0, Math.sin(this.ow.hero.ang)), false);
+  }
 
   /** Drag on the screen (not the stick): orbit the camera round her. */
   orbit(dx) { if (this.cam) this.cam.orbit += dx * 0.006; }
 
-  syncBeams() {
-    const ow = this.ow, seen = new Set();
+  syncBeams(t) {
+    const ow = this.ow, seen = new Set(), cp = this.cam.cam.position, B = LOOK3.beam;
     for (const z of ow.zones) {
       seen.add(z.uid);
       let b = this.beams.get(z.uid);
       if (!b) {
-        const geo = new THREE.CylinderGeometry(LOOK3.beam.radius, LOOK3.beam.radius * 1.4, LOOK3.beam.height, 12, 1, true);
-        geo.translate(0, LOOK3.beam.height / 2, 0);
-        b = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: beamTexture(), color: z.color, transparent: true, opacity: LOOK3.beam.alpha, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide }));
+        const geo = new THREE.CylinderGeometry(B.radius, B.radius * 1.4, B.height, 14, 1, true);
+        geo.translate(0, B.height / 2, 0);
+        b = new THREE.Mesh(geo, new THREE.ShaderMaterial({
+          uniforms: { col: { value: new THREE.Color(z.color) }, alpha: { value: B.alpha }, time: { value: 0 }, hgt: { value: B.height } },
+          vertexShader: BEAM_VS, fragmentShader: BEAM_FS, transparent: true, depthWrite: false, toneMapped: false,
+        }));
         b.renderOrder = 6;
         this.scene.add(b);
         this.beams.set(z.uid, b);
       }
       b.position.set(z.x * M, 0, z.y * M);
+      b.material.uniforms.time.value = t;
+      // far beams thicken so they stay a readable stroke on a phone instead of a hairline
+      const d = Math.hypot(b.position.x - cp.x, b.position.z - cp.z), s = Math.max(1, (d * B.minPx) / B.radius);
+      b.scale.set(s, 1, s);
     }
     for (const [uid, b] of this.beams) if (!seen.has(uid)) { this.scene.remove(b); b.geometry.dispose(); b.material.dispose(); this.beams.delete(uid); }
   }
@@ -131,62 +158,132 @@ export class Flight3D {
     return { proj };
   }
 
+  /** Pixel ratio: capped lower for the 3D flight, lower again among the towers (fill-rate bound). */
+  applyDpr() {
+    const caps = quality().fly3dDpr || [1, 1];
+    const want = Math.min(devicePixelRatio, caps[this.canyon ? 1 : 0]);
+    if (want !== this.dpr) { this.dpr = want; this.renderer.setPixelRatio(want); this.renderer.setSize(this.g.w, this.g.h, false); }
+  }
+
+  /** How close a tower face is on her left / right (0..1), for the wall-rush lines. */
+  walls(h) {
+    const out = { l: 0, r: 0 }, rx = -Math.sin(h.ang), ry = Math.cos(h.ang);
+    for (const [k, sgn] of [['l', -1], ['r', 1]]) {
+      for (const [i, d] of LOOK3.wallProbe.entries()) {
+        const u = d / M, o = this.ow.buildingAt(h.x + rx * u * sgn, h.y + ry * u * sgn);
+        if (o && this.heightOf(o) > h.z) { out[k] = i ? 0.55 : 1; break; }
+      }
+    }
+    return out;
+  }
+
   render(ctx) {
     const ow = this.ow, g = this.g, h = ow.hero, st = g.state, W = g.w, H = g.h;
     const dt = Math.min(0.05, (performance.now() - (this.lastT || performance.now())) / 1000);
     this.lastT = performance.now();
     this.frame++;
     const night = st ? st.night : 0.8, clock = st ? st.clock : 22 * 60;
-    const frac = speedFraction(h);
+    const frac = speedFraction(h), boosting = !!h.wasBoosting && h.speed > 300 && !h.perch;
     const D = DISTRICTS[ow.district];
-    // ground (or roof) under her, for the contact shadow
-    const b = ow.buildingAt(h.x, h.y), ground = b && this.heightOf(b) < h.z ? this.heightOf(b) : 0;
-    this.hero.update(h, dt, ow.t, !!ow.diving, ground);
     const band = h.band ?? 1;
     // patrol view: V toggles it; it also cranes up by itself when she stops up at high patrol
     const patrol = !ow.diving && (this.patrolForced || (band === BANDS.length - 1 && h.speed < LOOK3.patrolBelow));
-    this.cam.update(h, dt, frac, patrol, (x, y, z) => { const o = ow.buildingAt(x, y); return !!o && z < this.heightOf(o); });
+    // street canyons: skimming (and moving) among towers taller than her
+    this.canyon = band === 0 && !h.perch && !ow.diving;
+    this.applyDpr();
+    // ground (or roof) under her, for the contact shadow
+    const b = ow.buildingAt(h.x, h.y), ground = b && this.heightOf(b) < h.z ? this.heightOf(b) : 0;
+    this.hero.update(h, dt, ow.t, !!ow.diving, ground, this.cam.patrolK);
+    const solid = (x, y, z) => { const o = ow.buildingAt(x, y); return !!o && z < this.heightOf(o); };
+    this.cam.update(h, dt, frac, { patrol, boosting, canyon: this.canyon ? 1 - h.hover : 0 }, solid);
     this.fill.position.copy(this.cam.cam.position); this.fill.target.position.copy(this.hero.group.position);
     const fogFar = LOOK3.fog[band] || 1600;
-    this.sky.update(clock, night, D?.map, this.cam.cam.position, fogFar);
+    this.sky.update(clock, night, D?.map, this.cam.cam.position, fogFar, this.cam.patrolK);
     this.city3.update(this.cam.cam, { far: fogFar, near: Math.min(700, fogFar * 0.5), night, frame: this.frame });
-    this.syncBeams();
+    this.syncBeams(ow.t);
+    this.fx3.update(dt, this.hero, h, frac, boosting, this.cam.cam, ow.fx.rings.length);
     // render
     const r = this.renderer;
     r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.05;
     if (this.cam.cam.aspect !== W / H) { this.cam.cam.aspect = W / H; this.cam.cam.updateProjectionMatrix(); }
     lookFrame(r);
     r.render(this.scene, this.cam.cam);
-    this.overlay(ctx, night);
+    this.overlay(ctx, night, frac, boosting);
   }
 
-  /** The 2D comic layer over the 3D view: incident icons at the beam tops, edge markers, juice. */
-  overlay(ctx, night) {
+  /** The 2D comic layer over the 3D view: action lines, incident icons at the beam tops, edge chips. */
+  overlay(ctx, night, frac, boosting) {
     const ow = this.ow, W = this.g.w, H = this.g.h, h = ow.hero;
     ctx.clearRect(0, 0, W, H);
     const P = this.projector(), hs = P.proj(h.x, h.y, h.z);
     ow.heroScreen = { x: hs[0], y: hs[1] };
-    if (this.cam.patrolK > 0.3) {
-      // from the overhead view she's a speck: ring her in comic ink so she's always findable
-      ctx.globalAlpha = Math.min(1, (this.cam.patrolK - 0.3) * 2);
-      const r = 16 + 3 * Math.sin(ow.t * 5);
-      ctx.lineWidth = 5; ctx.strokeStyle = '#0b0b16'; ctx.beginPath(); ctx.arc(hs[0], hs[1], r, 0, Math.PI * 2); ctx.stroke();
-      ctx.lineWidth = 2.5; ctx.strokeStyle = '#ffe23a'; ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
+    // action lines converge on where she's heading (a point far ahead of her)
+    const ahead = 400 / M, vp = P.proj(h.x + Math.cos(h.ang) * ahead, h.y + Math.sin(h.ang) * ahead, h.z);
+    const walls = this.canyon && h.speed > 120 ? this.walls(h) : { l: 0, r: 0 };
+    const k = this.cam.patrolK > 0.5 ? 0 : 1;
+    this.fx3.drawLines(ctx, W, H, Math.max(frac * k, ow.fx.rush || 0), boosting && k, vp[2] ? { x: vp[0], y: vp[1] } : { x: W / 2, y: H / 2 }, walls, night);
     // incident icons over everything
     for (const z of ow.zones) {
       const [x, y, front] = P.proj(z.x, z.y, LOOK3.beam.height / M * 0.55);
       if (!front || x < -20 || y < -20 || x > W + 20 || y > H + 20) continue;
       ow.drawIcon(ctx, x, y, 11, z, ow.g.state && ow.g.state.locked(z.lockKey), z === ow.near);
     }
-    ow.fx.draw(ctx, hs[0], hs[1], 1.2); // wind streaks, sonic-boom ring, launch burst
-    ow.fx.drawComic(ctx, W / 2, H / 2, W, H, night);
     ow.heroArt.drawPops(ctx, hs[0], hs[1], Math.min(W, H) / 390);
-    // off-screen markers: ground points projected to the screen (identity SX/SY), real distances
-    const marks = [...ow.zones, ...ow.events.markers()];
-    if (ow.nav.target) marks.push({ ...ow.nav.target, color: '#78ffc8', waypoint: true });
-    const screen = marks.map((m) => { const [x, y] = P.proj(m.x, m.y, 0); return { ...m, x, y, dist: Math.hypot(m.x - h.x, m.y - h.y) }; });
-    drawEdgeMarkers(ctx, { SX: (x) => x, SY: (y) => y, cx: W / 2, scy: H / 2 }, screen, h, W, H);
+    this.chips(ctx, P, W, H);
+  }
+
+  /**
+   * Off-screen incidents as at most a few comic chips on the screen border (nearest first, plus
+   * the waypoint), pointing the way she'd have to turn. Never under a thumb button or HUD panel.
+   */
+  chips(ctx, P, W, H) {
+    const ow = this.ow, h = ow.hero, cam = this.cam.cam;
+    cam.getWorldDirection(_f);
+    const camYaw = Math.atan2(_f.z, _f.x);
+    const list = [];
+    const add = (m, waypoint) => {
+      const [x, y, front] = P.proj(m.x, m.y, waypoint ? 0 : LOOK3.beam.height / M * 0.55);
+      if (front && x > 24 && x < W - 24 && y > 60 && y < H - 24) return; // its beam/icon is in view
+      list.push({ m, waypoint, d: Math.hypot(m.x - h.x, m.y - h.y), rel: Math.atan2(m.y - h.y, m.x - h.x) - camYaw });
+    };
+    for (const z of ow.zones) add(z, false);
+    for (const e of ow.events.markers()) add(e, false);
+    list.sort((a, b) => a.d - b.d);
+    const show = list.slice(0, LOOK3.chips);
+    if (ow.nav.target) { const n = list.length; add({ ...ow.nav.target, color: '#78ffc8' }, true); if (list.length > n) show.push(list[n]); }
+    const cx = W / 2, cy = H * 0.52, mx = W / 2 - 30, my = H / 2 - 34, placed = [];
+    ctx.save();
+    ctx.font = '800 11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    for (const c of show) {
+      // screen direction: ahead = up, right = right, behind = down
+      const sx = Math.sin(c.rel), sy = -Math.cos(c.rel), s = Math.min(mx / Math.abs(sx || 1e-6), my / Math.abs(sy || 1e-6));
+      let ex = cx + sx * s, ey = Math.max(LOOK3.chipTop, cy + sy * s); // (below the top HUD row)
+      // thumb zones: the stick (bottom-left) and the buttons (bottom-right) push chips up the side edge
+      if (ex > W - 240 && ey > H - 190) { if (ex > W - 60) ey = H - 196; else ex = W - 246; }
+      if (ex < 170 && ey > H - 170) { if (ex < 60) ey = H - 176; else ex = 176; }
+      // chips that would touch slide apart along their edge
+      for (const p of placed) if (Math.hypot(p[0] - ex, p[1] - ey) < 58) { if (Math.abs(sx * s) >= mx - 1) ey += ey > p[1] ? 58 - Math.abs(ey - p[1]) : -(58 - Math.abs(ey - p[1])); else ex += ex > p[0] ? 58 - Math.abs(ex - p[0]) : -(58 - Math.abs(ex - p[0])); }
+      const [x, y] = avoidHud(ex, ey, 8);
+      placed.push([x, y]);
+      const a = Math.atan2(sy, sx), col = c.m.color || '#ffd23f';
+      // arrow tip toward the target, a round inked chip with its icon, distance under it
+      ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+      ctx.fillStyle = col; ctx.strokeStyle = '#0b0b16'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(24, 0); ctx.lineTo(11, -8); ctx.lineTo(11, 8); ctx.closePath(); ctx.stroke(); ctx.fill();
+      ctx.restore();
+      if (c.waypoint) {
+        ctx.fillStyle = col; ctx.strokeStyle = '#0b0b16'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x, y - 12); ctx.lineTo(x + 12, y); ctx.lineTo(x, y + 12); ctx.lineTo(x - 12, y); ctx.closePath(); ctx.stroke(); ctx.fill();
+      } else if (c.m.glyph) {
+        ctx.lineWidth = 3; ctx.strokeStyle = '#0b0b16'; ctx.beginPath(); ctx.arc(x, y, 13, 0, Math.PI * 2); ctx.stroke();
+        ow.drawIcon(ctx, x, y, 12, c.m, ow.g.state && ow.g.state.locked(c.m.lockKey), false);
+      } else {
+        ctx.fillStyle = col; ctx.strokeStyle = '#0b0b16'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.stroke(); ctx.fill();
+      }
+      const label = `${Math.round(c.d / 10)}m`, [lx, ly] = avoidHud(x, y + (sy > 0.5 ? -24 : 24), 20);
+      ctx.lineWidth = 3.5; ctx.strokeStyle = '#0b0b16'; ctx.strokeText(label, lx, ly);
+      ctx.fillStyle = '#fff'; ctx.fillText(label, lx, ly);
+    }
+    ctx.restore();
   }
 }
