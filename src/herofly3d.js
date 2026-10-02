@@ -81,9 +81,10 @@ class RibbonCape {
     this.placed = false;
     const strip = (mat) => {
       const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 2 * 3), 3).setUsage(THREE.DynamicDrawUsage));
+      // three columns (edge, spine, edge): the cross-section is an arch, so it has body from any side
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3 * 3), 3).setUsage(THREE.DynamicDrawUsage));
       const idx = [];
-      for (let i = 0; i < n - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+      for (let i = 0; i < n - 1; i++) { const a = i * 3; idx.push(a, a + 3, a + 1, a + 1, a + 3, a + 4, a + 1, a + 4, a + 2, a + 2, a + 4, a + 5); }
       g.setIndex(idx);
       const mesh = new THREE.Mesh(g, mat);
       mesh.frustumCulled = false; mesh.layers.set(HERO_LAYER);
@@ -97,9 +98,9 @@ class RibbonCape {
     const g = c.getContext('2d'), bw = 64 / CAPE.tones.length;
     CAPE.tones.forEach((t, i) => { g.fillStyle = t; g.fillRect(Math.round(i * bw), 0, Math.ceil(bw), 4); });
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-    this.cloth = strip(new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
-    const uv = new Float32Array(n * 2 * 2);
-    for (let i = 0; i < n; i++) uv.set([0, i / (n - 1), 1, i / (n - 1)], i * 4);
+    this.cloth = strip(new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 })); // (wins over the ink sheet it lies on: ink shows only past its edges)
+    const uv = new Float32Array(n * 3 * 2);
+    for (let i = 0; i < n; i++) uv.set([0, i / (n - 1), 0.5, i / (n - 1), 1, i / (n - 1)], i * 6);
     this.cloth.geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     this._t = new THREE.Vector3(); this._a = new THREE.Vector3();
   }
@@ -115,7 +116,7 @@ class RibbonCape {
       // streams back along her body, ripples (a wave running down it, bigger toward the hem),
       // and droops under gravity when she's slow
       const tgt = this._t.copy(this.p[i - 1]).addScaledVector(back, L * (0.3 + 0.7 * sk))
-        .addScaledVector(up, Math.sin(t * f - i * 0.95) * amp * k)
+        .addScaledVector(up, (Math.sin(t * f - i * 0.95) * amp + Math.sin(t * 1.7 - i * 0.55) * L * 0.3) * k) // ripple + a slow billow
         .addScaledVector(side, Math.sin(t * f * 0.63 - i * 0.7) * amp * 0.35 * k);
       tgt.y -= L * (1 - sk) * 0.9;
       this.p[i].lerp(tgt, Math.min(1, dt * (8 + v / 6)));
@@ -130,8 +131,11 @@ class RibbonCape {
         // the ink strip also runs a little past the hem
         const tail = extra && i === n - 1 ? this._a.subVectors(q, this.p[i - 1]).normalize().multiplyScalar(extra * size) : null;
         const x = q.x + (tail ? tail.x : 0), y = q.y + (tail ? tail.y : 0), z = q.z + (tail ? tail.z : 0);
-        pos.setXYZ(i * 2, x + side.x * w, y + side.y * w, z + side.z * w);
-        pos.setXYZ(i * 2 + 1, x - side.x * w, y - side.y * w, z - side.z * w);
+        // the edges curl down away from the spine (more toward the hem) and flutter out of phase
+        const curl = w * (0.25 + 0.35 * f), fl = Math.sin(t * 6 - i * 1.1) * w * 0.18 * f;
+        pos.setXYZ(i * 3, x + side.x * w - up.x * (curl + fl), y + side.y * w - up.y * (curl + fl), z + side.z * w - up.z * (curl + fl));
+        pos.setXYZ(i * 3 + 1, x, y, z);
+        pos.setXYZ(i * 3 + 2, x - side.x * w - up.x * (curl - fl), y - side.y * w - up.y * (curl - fl), z - side.z * w - up.z * (curl - fl));
       }
       pos.needsUpdate = true;
     }
