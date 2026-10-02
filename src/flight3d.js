@@ -51,6 +51,7 @@ const LOOK3 = {
   patrolBelow: 150,             // speed under which high patrol cranes up to the overhead view
   wallProbe: [10, 22],          // m to each side: a tower face this close rushes past (action lines)
   auto: { ahead: 260, step: 26, halfWidth: 24, turn: 0.22, tries: 6 }, // autopilot look-ahead (world units)
+  dynRes: { slow: 1 / 50, fast: 1 / 58, min: 0.8, rate: 0.25, step: 0.05 }, // frame time (s) to drop below / climb above; scale floor
   chips: 2,                     // edge chips for off-screen incidents (the waypoint is extra)
   chipTop: 92,                  // px: chips stay below the top HUD row
   chip: { inset: 30, pad: 18, slide: 34, merge: 64, label: 25 }, // px
@@ -246,9 +247,17 @@ export class Flight3D {
   }
 
   /** Pixel ratio: capped lower for the 3D flight, lower again among the towers (fill-rate bound). */
-  applyDpr() {
-    const caps = quality().fly3dDpr || [1, 1];
-    const want = Math.min(devicePixelRatio, caps[this.canyon ? 1 : 0]);
+  /**
+   * Plus dynamic resolution: a scale on that cap, eased down while frames run long and back up
+   * when there's headroom (in steps, so the buffer isn't reallocated every frame).
+   */
+  applyDpr(dt) {
+    const caps = quality().fly3dDpr || [1, 1], D = LOOK3.dynRes;
+    this.ft = this.ft === undefined ? dt : this.ft + (dt - this.ft) * 0.05; // smoothed frame time
+    if (this.ft > D.slow) this.resK = Math.max(D.min, (this.resK ?? 1) - D.rate * dt);
+    else if (this.ft < D.fast) this.resK = Math.min(1, (this.resK ?? 1) + D.rate * dt);
+    const k = Math.round((this.resK ?? 1) / D.step) * D.step;
+    const want = Math.min(devicePixelRatio, caps[this.canyon ? 1 : 0]) * k;
     if (want !== this.dpr) { this.dpr = want; this.renderer.setPixelRatio(want); this.renderer.setSize(this.g.w, this.g.h, false); }
   }
 
@@ -277,7 +286,7 @@ export class Flight3D {
     const patrol = !ow.diving && (this.patrolForced || (band === BANDS.length - 1 && h.speed < LOOK3.patrolBelow));
     // street canyons: skimming (and moving) among towers taller than her
     this.canyon = band === 0 && !h.perch && !ow.diving;
-    this.applyDpr();
+    this.applyDpr(dt);
     // ground (or roof) under her, for the contact shadow
     const b = ow.buildingAt(h.x, h.y), ground = b && this.heightOf(b) < h.z ? this.heightOf(b) : 0;
     this.hero.update(h, dt, ow.t, !!ow.diving, ground, this.cam.patrolK, boosting);
