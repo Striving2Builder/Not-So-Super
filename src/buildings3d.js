@@ -33,33 +33,49 @@ function atlas() {
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   const rgb = (r, gg, b) => `rgb(${r * 255 | 0},${gg * 255 | 0},${b * 255 | 0})`;
   const rect = (x, y, w, h, r, gg, b) => { g.fillStyle = rgb(r, gg, b); g.fillRect(x, y, w, h); };
-  // per floor: dark, some or most windows on (whole floors, so lit towers don't look stamped)
-  const litFloor = (r, k) => { const busy = rnd(); return () => rnd() < busy * k; };
-  const windows = (ox, wall, [mx, my], glass, k, extra) => {
+  // lit windows come in floors: a dark floor, runs of 2-6 lit windows along it, or a fully lit floor
+  // (offices working late). Row-coherent, so the mipmaps average to floor bands, not blotches.
+  const floorLights = (k) => {
+    const mode = rnd(), full = mode < 0.12 * k + 0.04, dark = !full && mode > 0.25 + 0.6 * k;
+    let on = rnd() < 0.5, left = 0;
+    return () => {
+      if (full) return true;
+      if (dark) return false;
+      if (left-- <= 0) { on = !on; left = on ? 1 + (rnd() * 5 | 0) : (rnd() * 4 | 0); }
+      return on;
+    };
+  };
+  /** One facade cell grid: slabs, recessed windows with a mullion + transom, sills. */
+  const windows = (ox, wall, [mx, my], k, extra) => {
     rect(ox, 0, CW, CH, wall, 0, 0);
     for (let r = 0; r < WIN.rows; r++) {
-      const on = litFloor(r, k);
+      const on = floorLights(k);
+      rect(ox, r * CELL + CELL - 3, CW, 3, wall * 0.72, 0, 0); // floor slab
       for (let col = 0; col < WIN.cols; col++) {
-        const x = ox + col * CELL, y = r * CELL;
+        const x = ox + col * CELL, y = r * CELL, w = CELL - mx * 2, h = CELL - my * 2;
         if (extra) extra(x, y, r, col);
-        const lit = on();
-        rect(x + mx, y + my, CELL - mx * 2, CELL - my * 2, 0.25, glass, lit ? 0.5 + rnd() * 0.5 : 0); // lamps differ
+        const lit = on() ? 0.6 + rnd() * 0.4 : 0;
+        rect(x + mx, y + my, w, h, 0.25, 1, lit);
+        rect(x + mx, y + my, w, 2, 0.15, 0.55, lit * 0.55); // recess shadow under the lintel
+        rect(x + mx + (w >> 1) - 1, y + my, 2, h, 0.45, 0, 0); // mullion
+        rect(x + mx, y + my + (h * 0.32 | 0), w, 1, 0.45, 0, 0); // transom
+        rect(x + mx - 1, y + my + h, w + 2, 2, Math.min(1, wall * 1.18), 0, 0); // sill
       }
     }
   };
-  // 0 concrete: punched windows, slab lines
-  windows(0, 0.86, [7, 8], 1, 0.6, (x, y) => rect(x, y + CELL - 3, CELL, 3, 0.7, 0, 0));
+  // 0 concrete: punched windows
+  windows(0, 0.86, [7, 7], 0.6);
   // 1 glass curtain wall: big panes, thin mullions, dark spandrel per floor
-  windows(CW, 0.7, [1, 2], 1, 0.3, (x, y) => rect(x, y + CELL - 7, CELL, 7, 0.38, 0.55, 0));
-  // 2 brick: small windows with a pale lintel
-  windows(CW * 2, 0.8, [9, 9], 1, 0.55, (x, y) => { rect(x + 7, y + 6, CELL - 14, 3, 1, 0, 0); for (let i = 0; i < 4; i++) rect(x, y + i * 8 + 3, CELL, 1, 0.68, 0, 0); });
+  windows(CW, 0.7, [1, 2], 0.35, (x, y) => rect(x, y + CELL - 8, CELL, 6, 0.38, 0.55, 0));
+  // 2 brick: smaller windows, coursing lines, a pale lintel
+  windows(CW * 2, 0.8, [8, 8], 0.55, (x, y) => { for (let i = 0; i < 4; i++) rect(x, y + i * 8 + 3, CELL, 1, 0.68, 0, 0); rect(x + 6, y + 5, CELL - 12, 3, 1, 0, 0); });
   // 3 art deco: bright vertical piers, dark spandrels, tall narrow windows (reads TALL)
-  windows(CW * 3, 0.62, [10, 5], 1, 0.55, (x, y) => { rect(x, y, 6, CELL, 1, 0, 0); rect(x + CELL - 4, y, 4, CELL, 0.95, 0, 0); });
+  windows(CW * 3, 0.62, [9, 4], 0.55, (x, y) => { rect(x, y, 6, CELL, 1, 0, 0); rect(x + CELL - 4, y, 4, CELL, 0.95, 0, 0); });
   // 4 industrial: corrugated, a strip window every fourth floor
   {
     const ox = CW * 4;
     for (let x = 0; x < CW; x += 4) rect(ox + x, 0, 2, CH, 0.92, 0, 0), rect(ox + x + 2, 0, 2, CH, 0.72, 0, 0);
-    for (let r = 0; r < WIN.rows; r += 4) for (let col = 0; col < WIN.cols; col++) rect(ox + col * CELL + 2, r * CELL + 10, CELL - 4, 10, 0.25, 1, rnd() < 0.3 ? 1 : 0);
+    for (let r = 0; r < WIN.rows; r += 4) for (let col = 0; col < WIN.cols; col++) rect(ox + col * CELL + 2, r * CELL + 10, CELL - 4, 10, 0.25, 1, rnd() < 0.3 ? 0.8 : 0);
   }
   // 5 gravel roof (also leaves, lawns): speckle
   rect(CW * 5, 0, CW, CH, 0.72, 0, 0);
@@ -190,25 +206,19 @@ void main() {
     vec2 cu = vUv * vec2(${WIN.cols}., ${WIN.rows}.);
     vec2 fw = fwidth(cu);
     vec3 avg = uAvg[int(vStyle)];
-    // past ~2-3 px per window the grid becomes the cell's flat tone plus lit floor bands
-    // far: lit windows as blocky clusters whose size doubles as they shrink on screen (each block
-    // stays >= ~3 px: a pattern, never static), same average light as the grid
-    float lv = clamp(ceil(log2(max(max(fw.x, fw.y), 1e-3) * 4.)), 0., 4.), bs = exp2(lv);
-    vec2 blk = floor(cu / vec2(bs, bs * 1.5));
-    float on = step(1. - avg.b * 2.4, h11(blk.x * 7.13 + blk.y * 3.71 + lv * 17. + dot(floor(vCol * 255. + 0.5), vec3(0.97, 0.57, 0.23))));
-    vec3 far = vec3(avg.r, avg.g, roof ? avg.b : mix(on * 0.8, avg.b, smoothstep(0.5, 1., max(fw.x, fw.y) * bs * 0.25)));
-    vec3 m = far;
+    vec3 far = avg;
+    // walls + glass fade to their flat tones when the grid gets small (no moire); the lit channel
+    // always comes from the mipmapped atlas, whose row-coherent windows average to floor bands
+    vec2 sc = vec2(0.96, 0.98) / vec2(8., 1.);
+    vec2 u = vStyle == 7. ? clamp(vUv, 0.01, 0.99) : fract(vUv);
+    vec2 g = vUv * sc;
+    vec2 gx = dFdx(g) * vec2(${CW * CELLS}., ${CH}.), gy = dFdy(g) * vec2(${CW * CELLS}., ${CH}.);
+    float lod = min(0.5 * log2(max(max(dot(gx, gx), dot(gy, gy)), 1e-6)), 5.);
+    vec3 t = textureLod(uAtlas, u * sc + vec2((0.02 + vStyle) / 8., 0.01), lod).rgb;
+    vec3 m = vec3(far.rg, t.b);
 #ifndef FAR
     float k = smoothstep(0.12, 0.28, max(fw.x, fw.y));
-    if (k < 0.999) {
-      vec2 sc = vec2(0.96, 0.98) / vec2(8., 1.);
-      vec2 u = vStyle == 7. ? clamp(vUv, 0.01, 0.99) : fract(vUv);
-      vec2 g = vUv * sc;
-      // explicit isotropic LOD from the unwrapped uv (fract() seams would spike the mip otherwise)
-      vec2 gx = dFdx(g) * vec2(${CW * CELLS}., ${CH}.), gy = dFdy(g) * vec2(${CW * CELLS}., ${CH}.);
-      float lod = 0.5 * log2(max(dot(gx, gx), dot(gy, gy)));
-      m = mix(textureLod(uAtlas, u * sc + vec2((0.02 + vStyle) / 8., 0.01), lod).rgb, far, k);
-    }
+    m.rg = mix(t.rg, far.rg, k);
 #endif
     vec3 N = normalize(vN), V = normalize(cameraPosition - vW);
     float ndl = dot(N, uKeyDir);
