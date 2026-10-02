@@ -51,7 +51,7 @@ const LOOK3 = {
   patrolBelow: 150,             // speed under which high patrol cranes up to the overhead view
   wallProbe: [10, 22],          // m to each side: a tower face this close rushes past (action lines)
   auto: { ahead: 260, step: 26, halfWidth: 24, turn: 0.22, tries: 6 }, // autopilot look-ahead (world units)
-  dynRes: { slow: 1 / 50, fast: 1 / 58, min: 0.8, rate: 0.25, step: 0.05 }, // frame time (s) to drop below / climb above; scale floor
+  dynRes: { slow: 1 / 50, fast: 1 / 58, min: 0.65, rate: 0.25, step: 0.05 }, // frame time (s) to drop below / climb above; scale floor
   chips: 2,                     // edge chips for off-screen incidents (the waypoint is extra)
   chipTop: 92,                  // px: chips stay below the top HUD row
   chip: { inset: 30, pad: 18, slide: 34, merge: 64, label: 25 }, // px
@@ -259,7 +259,7 @@ export class Flight3D {
     const k = Math.round((this.resK ?? 1) / D.step) * D.step;
     // the canvas keeps a crisp output density (her pass + the overlay), the scene renders at
     // cap × dynamic scale into its own target
-    const out = Math.min(devicePixelRatio, quality().fly3dOut || 1);
+    const out = Math.min(devicePixelRatio, this.outQ || quality().fly3dOut || 1);
     if (out !== this.dpr) { this.dpr = out; this.renderer.setPixelRatio(out); this.renderer.setSize(this.g.w, this.g.h, false); }
     this.sceneScale = Math.min(1, (Math.min(devicePixelRatio, caps[this.canyon ? 1 : 0]) * k) / out);
   }

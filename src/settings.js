@@ -41,7 +41,7 @@ export const PROFILES = {
     clubTex: 'lite', clubCache: 1, clubMaterials: 'standard', clubLights: 3,
     look3d: 'lite',
     nightlife: 'lite',
-    flyDetail: true, flyTileRes: 144, flySpriteMax: 512, fly3dDpr: [1, 0.75], fly3dHero: [4, 1], fly3dAA: 'fxaa', fly3dOut: 2,
+    flyDetail: true, flyTileRes: 144, flySpriteMax: 512, fly3dDpr: [1, 0.75], fly3dHero: [4, 1], fly3dAA: 'fxaa', fly3dOut: 1.5,
     scanFilter: true,
     brawlSprite: 256, brawlBakeMs: 900,
   },
