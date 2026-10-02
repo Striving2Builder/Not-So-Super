@@ -14,7 +14,7 @@ const CAM = {
   chase: { dist: [6.2, 4.8], height: [0.7, 2.4], side: [0.4, 1.3], fov: [58, 70], at: [0.46, 0.64] }, // side: to her right → a 3/4 rear view // at = her spot on screen (x, y from top-left)
   boost: { dist: 0.8, height: 0.2, fov: 9, kickFov: 16 },         // sustained while boosting + a kick on the press
   canyon: { height: 1.4, at: [0.47, 0.62], fovUp: 4, snap: 0.62 }, // skim band: lower, along the street (snap ≈ 35°)
-  patrol: { dist: 115, height: 85, fov: 60, at: [0.5, 0.66] },    // ≈ 27° down at the city: horizon along the top
+  patrol: { dist: 100, height: 85, side: 60, fov: 60, at: [0.5, 0.66] }, // ≈ 30° down at the city, from her 3/4 rear (her side reads): horizon along the top
   yawRate: 2.6,  // how fast the camera swings round behind her heading (1/s)
   orbitBack: 0.6, // drag-orbit eases back behind her at this rate while she's moving (1/s)
   roll: 0.1,      // camera roll into her turns (rad per unit bank)
@@ -73,7 +73,7 @@ export class FlightCam3D {
     const chaseDist = lerp(C.dist[0], C.dist[1], frac) + B.dist * this.boostK;
     const chaseUp = lerp(lerp(C.height[0], C.height[1], frac), CAM.canyon.height, this.canyonK) + B.height * this.boostK;
     const dist = lerp(chaseDist, P.dist, K), up = lerp(chaseUp, P.height, K);
-    const side = lerp(C.side[0], C.side[1], frac) * (1 - K) * (1 - 0.6 * this.canyonK);
+    const side = lerp(lerp(C.side[0], C.side[1], frac) * (1 - 0.3 * this.canyonK), P.side, K);
     // Sphere-cast from her to each candidate spot (her usual shoulder, the other one, then both
     // lifted and pulled in) and take the clearest: a candidate loses for a blocked line of sight,
     // and for a tower face right beside the lens (that's the "one wall fills the frame" shot).

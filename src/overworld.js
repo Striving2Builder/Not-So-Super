@@ -101,10 +101,10 @@ export class Overworld {
     // 3D view: a leaner set (one UP/DOWN rocker; DIVE and PERCH only show when they apply)
     if (this.view3d) inp.setButtons([
       { id: 'boost', label: 'BOOST', key: 'Shift', cls: 'f3 f3-boost' },
-      { id: 'dive', label: 'DIVE', key: 'Space', cls: 'f3 f3-dive gone' },
+      { id: 'dive', label: '▼<br>DIVE!', key: 'Space', cls: 'f3 f3-dive gone' },
       { id: 'climb', label: '▲', key: 'R', cls: 'f3 f3-up' },
       { id: 'descend', label: '▼', key: 'F', cls: 'f3 f3-down' },
-      { id: 'perch', label: 'PERCH', key: 'H', cls: 'f3 f3-perch gone' },
+      { id: 'perch', label: 'PERCH<br>⤓', key: 'H', cls: 'f3 f3-perch gone' },
       { id: 'map', label: 'MAP', key: 'M', cls: 'f3 f3-map' },
     ]);
     else inp.setButtons([

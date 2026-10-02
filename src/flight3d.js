@@ -11,7 +11,6 @@ import { FlightCam3D } from './flightcam3d.js';
 import { FlightFX3D } from './flightfx3d.js';
 import { HeroPass, HERO_LAYER } from './heropass3d.js';
 import { lookFrame } from './look3d.js';
-import { avoidHud } from './ui.js';
 import { setBandHeights, speedFraction, BANDS } from './flight.js';
 import { DISTRICTS } from './data.js';
 import { quality } from './settings.js';
@@ -40,6 +39,8 @@ const LOOK3 = {
   auto: { ahead: 260, step: 26, halfWidth: 24, turn: 0.22, tries: 6 }, // autopilot look-ahead (world units)
   chips: 3,                     // edge chips for off-screen incidents (the waypoint is extra)
   chipTop: 92,                  // px: chips stay below the top HUD row
+  chip: { inset: 30, pad: 18, slide: 34, merge: 64, label: 25 }, // px
+  hudAvoid: '#hud-left, #hud-top, #hud-right, #objectives.on, #prompt.on, #btns .tbtn, #stick-base, .caption',
 };
 
 const BEAM_VS = `varying vec3 vN; varying float vH; uniform float hgt;
@@ -279,23 +280,59 @@ export class Flight3D {
     const ahead = 400 / M, vp = P.proj(h.x + Math.cos(h.ang) * ahead, h.y + Math.sin(h.ang) * ahead, h.z);
     const walls = this.canyon && h.speed > 120 ? this.walls(h) : { l: 0, r: 0 };
     const k = this.cam.patrolK > 0.5 ? 0 : 1;
+    // (under the HUD: the lines are clipped out of every panel and thumb button)
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H);
+    for (const r of this.hudRects()) ctx.roundRect(r.left - 4, r.top - 4, r.width + 8, r.height + 8, 16);
+    ctx.clip('evenodd');
     this.fx3.drawLines(ctx, W, H, Math.max(frac * k, ow.fx.rush || 0), boosting && k, vp[2] ? { x: vp[0], y: vp[1] } : { x: W / 2, y: H / 2 }, walls, night);
+    ctx.restore();
     // incident icons over everything
     for (const z of ow.zones) {
       const [x, y, front] = P.proj(z.x, z.y, LOOK3.beam.height / M * 0.55);
-      if (!front || x < -20 || y < -20 || x > W + 20 || y > H + 20) continue;
+      if (!front || x < -20 || y < -20 || x > W + 20 || y > H + 20 || this.underHud(x, y, 4)) continue; // (never printed over the HUD)
       ow.drawIcon(ctx, x, y, 11, z, ow.g.state && ow.g.state.locked(z.lockKey), z === ow.near);
+      if (z === ow.near && !ow.diving) this.diveTag(ctx, x, y, ow.t);
     }
     ow.heroArt.drawPops(ctx, hs[0], hs[1], Math.min(W, H) / 390);
     this.chips(ctx, P, W, H);
   }
 
+  /** In range of an incident: a pulsing ring and a "DIVE!" tag on it, so the move reads in the world too. */
+  diveTag(ctx, x, y, t) {
+    const p = 0.5 + 0.5 * Math.sin(t * 7);
+    ctx.save();
+    ctx.lineWidth = 3; ctx.strokeStyle = `rgba(255,226,58,${0.5 + 0.5 * p})`;
+    ctx.beginPath(); ctx.arc(x, y, 17 + 5 * p, 0, Math.PI * 2); ctx.stroke();
+    ctx.font = '900 13px Bangers, Impact, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    ctx.lineWidth = 4; ctx.strokeStyle = '#0b0b16'; ctx.strokeText('DIVE! ▼', x, y - 30);
+    ctx.fillStyle = '#ffe23a'; ctx.fillText('DIVE! ▼', x, y - 30);
+    ctx.restore();
+  }
+
+  /** Screen rects the overlay must keep clear (HUD panels, caption, stick, thumb buttons), cached briefly. */
+  hudRects() {
+    const now = performance.now();
+    if (!this.rects || now - this.rectsT > 300) {
+      this.rectsT = now;
+      this.rects = [...document.querySelectorAll(LOOK3.hudAvoid)].map((e) => e.getBoundingClientRect()).filter((r) => r.width && r.height);
+    }
+    return this.rects;
+  }
+
+  /** Is (x, y) within pad px of any HUD rect? */
+  underHud(x, y, pad) {
+    for (const r of this.hudRects()) if (x > r.left - pad && x < r.right + pad && y > r.top - pad && y < r.bottom + pad) return true;
+    return false;
+  }
+
   /**
-   * Off-screen incidents as at most a few comic chips on the screen border (nearest first, plus
-   * the waypoint), pointing the way she'd have to turn. Never under a thumb button or HUD panel.
+   * Off-screen incidents as at most a few comic chips on the screen border, pointing the way
+   * she'd have to turn: nearest first, chips that land close together merge into one with a
+   * count, and a chip that would sit on the HUD, the caption, the stick or a thumb button slides
+   * along its edge to the nearest clear spot. The waypoint always gets its own chip.
    */
   chips(ctx, P, W, H) {
-    const ow = this.ow, h = ow.hero, cam = this.cam.cam;
+    const ow = this.ow, h = ow.hero, cam = this.cam.cam, C = LOOK3.chip;
     cam.getWorldDirection(_f);
     const camYaw = Math.atan2(_f.z, _f.x);
     const list = [];
@@ -307,24 +344,36 @@ export class Flight3D {
     for (const z of ow.zones) add(z, false);
     for (const e of ow.events.markers()) add(e, false);
     list.sort((a, b) => a.d - b.d);
-    const show = list.slice(0, LOOK3.chips);
-    if (ow.nav.target) { const n = list.length; add({ ...ow.nav.target, color: '#78ffc8' }, true); if (list.length > n) show.push(list[n]); }
-    const cx = W / 2, cy = H * 0.52, mx = W / 2 - 30, my = H / 2 - 34, placed = [];
+    if (ow.nav.target) add({ ...ow.nav.target, color: '#78ffc8' }, true);
+    const L = C.inset, T = LOOK3.chipTop, R = W - C.inset, B = H - C.inset, cx = W / 2, cy = H * 0.52;
+    const groups = [];
+    for (const c of list) {
+      // screen direction: ahead = up, right = right, behind = down; onto the inset border
+      const sx = Math.sin(c.rel), sy = -Math.cos(c.rel);
+      const k = Math.min((sx > 0 ? R - cx : cx - L) / Math.abs(sx || 1e-6), (sy > 0 ? B - cy : cy - T) / Math.abs(sy || 1e-6));
+      let x = cx + sx * k, y = cy + sy * k;
+      const side = Math.abs(x - L) < 1 || Math.abs(x - R) < 1; // on a side edge: slide vertically
+      for (let i = 0; i < 24 && this.underHud(x, y, C.pad); i++) {
+        const step = Math.ceil((i + 1) / 2) * C.slide * (i % 2 ? -1 : 1);
+        if (side) y = Math.min(B, Math.max(T, cy + sy * k + step)); else x = Math.min(R, Math.max(L, cx + sx * k + step));
+      }
+      if (this.underHud(x, y, C.pad)) continue; // no clear spot on that edge
+      const near = !c.waypoint && groups.find((g) => !g.waypoint && Math.hypot(g.x - x, g.y - y) < C.merge);
+      if (near) { near.n++; continue; }
+      if (!c.waypoint && groups.filter((g) => !g.waypoint).length >= LOOK3.chips) {
+        // full: fold it into the closest chip so the count still says it's out there
+        let best = null;
+        for (const g of groups) if (!g.waypoint && (!best || Math.hypot(g.x - x, g.y - y) < Math.hypot(best.x - x, best.y - y))) best = g;
+        if (best) best.n++;
+        continue;
+      }
+      groups.push({ ...c, x, y, n: 1, sx, sy });
+    }
     ctx.save();
-    ctx.font = '800 11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
-    for (const c of show) {
-      // screen direction: ahead = up, right = right, behind = down
-      const sx = Math.sin(c.rel), sy = -Math.cos(c.rel), s = Math.min(mx / Math.abs(sx || 1e-6), my / Math.abs(sy || 1e-6));
-      let ex = cx + sx * s, ey = Math.max(LOOK3.chipTop, cy + sy * s); // (below the top HUD row)
-      // thumb zones: the stick (bottom-left) and the buttons (bottom-right) push chips up the side edge
-      if (ex > W - 240 && ey > H - 190) { if (ex > W - 60) ey = H - 196; else ex = W - 246; }
-      if (ex < 170 && ey > H - 170) { if (ex < 60) ey = H - 176; else ex = 176; }
-      // chips that would touch slide apart along their edge
-      for (const p of placed) if (Math.hypot(p[0] - ex, p[1] - ey) < 58) { if (Math.abs(sx * s) >= mx - 1) ey += ey > p[1] ? 58 - Math.abs(ey - p[1]) : -(58 - Math.abs(ey - p[1])); else ex += ex > p[0] ? 58 - Math.abs(ex - p[0]) : -(58 - Math.abs(ex - p[0])); }
-      const [x, y] = avoidHud(ex, ey, 8);
-      placed.push([x, y]);
-      const a = Math.atan2(sy, sx), col = c.m.color || '#ffd23f';
-      // arrow tip toward the target, a round inked chip with its icon, distance under it
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    for (const c of groups) {
+      const { x, y } = c, a = Math.atan2(c.sy, c.sx), col = c.m.color || '#ffd23f';
+      // arrow tip toward the target, a round inked chip with its icon
       ctx.save(); ctx.translate(x, y); ctx.rotate(a);
       ctx.fillStyle = col; ctx.strokeStyle = '#0b0b16'; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(24, 0); ctx.lineTo(11, -8); ctx.lineTo(11, 8); ctx.closePath(); ctx.stroke(); ctx.fill();
@@ -338,8 +387,18 @@ export class Flight3D {
       } else {
         ctx.fillStyle = col; ctx.strokeStyle = '#0b0b16'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.stroke(); ctx.fill();
       }
-      const label = `${Math.round(c.d / 10)}m`, [lx, ly] = avoidHud(x, y + (sy > 0.5 ? -24 : 24), 20);
-      ctx.lineWidth = 3.5; ctx.strokeStyle = '#0b0b16'; ctx.strokeText(label, lx, ly);
+      if (c.n > 1) { // count badge
+        const bx = x + 12, by = y - 12;
+        ctx.fillStyle = '#fff'; ctx.strokeStyle = '#0b0b16'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(bx, by, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#0b0b16'; ctx.font = '900 10px system-ui, sans-serif'; ctx.fillText(String(c.n), bx, by + 0.5);
+      }
+      // distance in an ink pill, on the side facing the middle of the screen
+      const label = `${Math.round(c.d / 10).toLocaleString()}m`, ly = y + (y > cy ? -C.label : C.label);
+      const lx = Math.min(W - 26, Math.max(26, x));
+      ctx.font = '800 11px system-ui, sans-serif';
+      const tw = ctx.measureText(label).width + 10;
+      ctx.fillStyle = 'rgba(11,11,22,.82)'; ctx.beginPath(); ctx.roundRect(lx - tw / 2, ly - 8, tw, 16, 8); ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = '#0b0b16'; ctx.strokeText(label, lx, ly);
       ctx.fillStyle = '#fff'; ctx.fillText(label, lx, ly);
     }
     ctx.restore();

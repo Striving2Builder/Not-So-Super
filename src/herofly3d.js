@@ -93,7 +93,8 @@ export class FlyHero3D {
     // Flying vs hovering is her own blend, not the flight model's hover (which only drops below
     // ~55 m/s): any real forward motion lays her out horizontal; only near a standstill does she
     // stand upright in the air. It falls back slowly, so a bump off a tower doesn't stand her up.
-    const want = h.perch || diving ? 0 : smooth(POSE.flyFrom, POSE.flyFull, h.speed);
+    // (in the raised patrol view she glides over the map rather than standing in the sky)
+    const want = h.perch || diving ? 0 : Math.max(smooth(POSE.flyFrom, POSE.flyFull, h.speed), patrol > 0.5 ? 0.85 : 0);
     this.flyK = this.flyK === undefined ? want : this.flyK + (want - this.flyK) * Math.min(1, dt * (want > this.flyK ? 6 : 1.6));
     const fk = this.flyK, hover = !h.perch && !diving && fk < 0.3;
     const pitch = h.perch || hover ? -h.lean * 0.2 : diving ? -0.9 : (1 - fk) * POSE.slowPitch - h.lean * 0.25;
