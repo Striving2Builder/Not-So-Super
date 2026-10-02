@@ -22,7 +22,7 @@ export const fxDraw = {
   drawBeam(ctx) {
     const p = this.p, s = this.sc(p.z) * HERO_SCALE;
     const x = this.sx(p.x), y = this.gy(p.z);
-    const ey = y - p.y * s - 90 * s, x0 = x + p.facing * 12 * s, x1 = x + p.facing * 780 * this.k;
+    const ey = y - p.y * s - 90 * s, x0 = x + p.facing * 12 * s, x1 = x + p.facing * (p.beamEnd || 520) * this.k;
     const wob = 1 + Math.sin(this.t * 60) * 0.1, g = Math.min(1, p.st_t / 0.08);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
@@ -34,13 +34,17 @@ export const fxDraw = {
     }
     ctx.globalAlpha = 1; ctx.drawImage(glow('#ff6030'), x0 - 44 * s, ey - 44 * s, 88 * s, 88 * s);
     ctx.drawImage(glow('#ffffff'), x0 - 14 * s, ey - 14 * s, 28 * s, 28 * s);
+    // the end: a white-hot splash on the target (or a flare where it dies out in open air)
+    const fl = (p.beamHit ? 60 : 36) * s * (1 + Math.sin(this.t * 50) * 0.15);
+    ctx.drawImage(glow('#ff7a30'), x1 - fl, ey - fl, fl * 2, fl * 2);
+    ctx.drawImage(glow('#ffffff'), x1 - fl * 0.4, ey - fl * 0.4, fl * 0.8, fl * 0.8);
     ctx.restore();
     // embers shed along the beam
-    for (let i = 0; i < 3; i++) this.fx.push({ kind: 'ember', x: p.x + p.facing * rand(30, 700), y: 90 + rand(-6, 6), z: p.z, vx: rand(-40, 40), vy: rand(40, 160), t: 0, max: rand(0.4, 0.8) });
+    for (let i = 0; i < 3; i++) this.fx.push({ kind: 'ember', x: p.x + p.facing * rand(30, p.beamEnd || 520), y: 90 + rand(-6, 6), z: p.z, vx: rand(-40, 40), vy: rand(40, 160), t: 0, max: rand(0.4, 0.8) });
     // impact burst wherever it's burning a crook
     for (const e of this.enemies) {
       const dx = (e.x - p.x) * p.facing;
-      if (e.dead || dx <= 0 || dx > 780 || Math.abs(e.z - p.z) > DZ * 1.3) continue;
+      if (e.dead || dx <= 0 || dx > (p.beamEnd || 520) + 30 || Math.abs(e.z - p.z) > DZ * 1.3) continue;
       if (chance(0.6)) this.fx.push({ kind: 'spark', x: e.x - p.facing * 10, y: 88, z: e.z + 0.001, t: 0, max: 0.1, big: true, hot: true, rot: rand(0, 6) });
       if (chance(0.6)) this.fx.push({ kind: 'streak', x: e.x - p.facing * 8, y: 88, z: e.z, vx: -p.facing * rand(100, 300), vy: rand(-100, 300), t: 0, max: 0.2, hot: true });
     }
