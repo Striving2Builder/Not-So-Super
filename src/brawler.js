@@ -277,19 +277,27 @@ export class Brawler {
     if ((p.st === 'beam' || p.st === 'breath') && p.aimZ != null) p.z += (p.aimZ - p.z) * Math.min(1, dt * 14); // aim assist onto the lane of the pack
     if (p.st === 'beam') {
       this.shake = Math.max(this.shake, 3.5);
-      if (p.st_t > 0.1) for (const e of this.enemies) {
-        if (e.dead || p.hitSet.has(e)) continue;
+      // The beam stops at the first crook in line and burns through the queue one body per frame (each
+      // one blasted clear lets it reach the next), so it still clears a whole line, but reads as a hit.
+      p.beamEnd = 520; p.beamHit = false;
+      let first = null, fd = 760, any = 760;
+      for (const e of this.enemies) {
         const dx = (e.x - p.x) * p.facing;
-        if (dx > 0 && dx < 760 && Math.abs(e.z - p.z) < DZ * 1.3) {
-          if (!p.hitSet.size) { const s = this.screenOf(e.x, e.z, 85); this.g.commentary.beam(s.x, s.y); }
-          p.hitSet.add(e); this.damage(e, 24, true, true);
-          e.scorch = 1.6; e.vx = p.facing * 520; e.vy = 360; // scorched and blasted off their feet
-          for (let i = 0; i < 6; i++) this.fx.push({ kind: 'smoke', x: e.x + rand(-14, 14), y: rand(50, 100), z: e.z, vy: rand(40, 90), vx: rand(-30, 30), t: 0, max: rand(0.8, 1.4), r: rand(8, 14), dark: true });
-        }
+        if (e.dead || dx <= 0 || Math.abs(e.z - p.z) >= DZ * 1.3) continue;
+        if (dx < any) any = dx; // nearest body in line (already burning or not): where the beam lands
+        if (!p.hitSet.has(e) && dx < fd) { first = e; fd = dx; }
+      }
+      if (any < 760) { p.beamEnd = any - 10; p.beamHit = true; }
+      if (p.st_t > 0.1 && first) {
+        const e = first;
+        if (!p.hitSet.size) { const s = this.screenOf(e.x, e.z, 85); this.g.commentary.beam(s.x, s.y); }
+        p.hitSet.add(e); this.damage(e, 24, true, true);
+        e.scorch = 1.6; e.vx = p.facing * 520; e.vy = 360; // scorched and blasted off their feet
+        for (let i = 0; i < 6; i++) this.fx.push({ kind: 'smoke', x: e.x + rand(-14, 14), y: rand(50, 100), z: e.z, vy: rand(40, 90), vx: rand(-30, 30), t: 0, max: rand(0.8, 1.4), r: rand(8, 14), dark: true });
       }
       if (p.st_t > 0.1) for (const b of this.breakables) {
         const dx = (b.x - p.x) * p.facing;
-        if (!b.broken && dx > 0 && dx < 760 && Math.abs(b.z - p.z) < DZ * 1.3) this.smash(b, p.facing);
+        if (!b.broken && dx > 0 && dx < p.beamEnd + 20 && Math.abs(b.z - p.z) < DZ * 1.3) this.smash(b, p.facing);
       }
       if (p.st_t > 0.85) p.st = 'idle'; // (hits land once per beam; the tail is the burn-out)
     }
@@ -366,7 +374,10 @@ export class Brawler {
     if (this.sprite) {
       const H = this.sprite.hero;
       H.pose('punch', 1.2);
+      // cape hidden: the snap to a frontal yaw would fling the cloth sim into a streak across the panel
+      const cape = H.cape && H.cape.mesh; if (cape) cape.visible = false;
       const img = this.sprite.render({ view: 'side', yaw: 0.5, span: 2.6, lift: 0.12 });
+      if (cape) cape.visible = true;
       if (!this.cutImg) { this.cutImg = document.createElement('canvas'); this.cutImg.width = img.width; this.cutImg.height = img.height; }
       const g = this.cutImg.getContext('2d'); g.clearRect(0, 0, img.width, img.height); g.drawImage(img, 0, 0);
       this.heroSt = null; // force her world sprite to re-render next frame
@@ -389,7 +400,7 @@ export class Brawler {
     this.hitstop = Math.max(this.hitstop, heavy ? 0.08 : 0.06);
     this.shake = Math.max(this.shake, heavy ? 9 : 4.5); this.shakeDir = p.facing;
     if (heavy) this.zoom = Math.max(this.zoom, 0.025);
-    e.flash = 0.12; e.barT = 3;
+    e.flash = 0.1; e.barT = 3; this.lastHit = e;
     // contact point: where the fist / boot meets the body
     const hy = (p.st === 'flykick' ? 55 + p.y * 0.6 : p.combo === 3 ? 62 : 84) + rand(-5, 5);
     this.fx.push({ kind: 'spark', x: e.x - p.facing * 16, y: hy, z: e.z + 0.001, t: 0, max: heavy ? 0.26 : 0.18, big: heavy, rot: rand(0, 6) });
@@ -398,7 +409,9 @@ export class Brawler {
       const an = rand(-0.9, 0.9) + (p.facing > 0 ? 0 : Math.PI);
       this.fx.push({ kind: 'streak', x: e.x - p.facing * 10, y: hy, z: e.z, vx: Math.cos(an) * rand(300, 600), vy: Math.sin(an) * rand(200, 500), t: 0, max: 0.2 });
     }
-    this.fx.push({ kind: 'num', x: e.x + rand(-10, 10), y: 128 * (e.look.size || 1), z: e.z, t: 0, max: 0.8, txt: String(dmg), big: heavy, vy: 90, vx: -p.facing * 30 });
+    // numbers stack upward instead of printing over each other
+    const near = this.fx.filter((o) => o.kind === 'num' && o.t < 0.4 && Math.abs(o.x - e.x) < 60).length;
+    this.fx.push({ kind: 'num', x: e.x + rand(-6, 6), y: 128 * (e.look.size || 1) + near * 22, z: e.z, t: 0, max: 0.8, txt: String(dmg), big: heavy, vy: 90, vx: -p.facing * 30 });
     this.hits++; this.hitT = 0; this.hitPop = 1; this.best = Math.max(this.best, this.hits);
     if (this.hits === 10 || this.hits === 25 || this.hits === 50) {
       const s = this.screenOf(p.x, p.z, 150);

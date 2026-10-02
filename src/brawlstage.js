@@ -9,6 +9,7 @@ import { RNG } from './rng.js';
 import { quality } from './settings.js';
 import { INK, mk, halftone, pen } from './brawlpaint.js';
 import { paintFacade, TAGS, POSTERS } from './brawlfacades.js';
+import { PAINTINGS, DISTRICT_PAINTINGS, usePaintings, painting } from './brawlpaintings.js';
 
 export { INK };
 
@@ -29,6 +30,11 @@ export class Stage {
   build() {
     const r = this.rng, D = this.D, st = this.st, len = this.b.len;
     this.facades = [];
+    // painted façade blocks mixed in among the generated ones (red-light / downtown streets)
+    const dp = DISTRICT_PAINTINGS[this.b.zone.district], P = dp && PAINTINGS[dp.set];
+    const pool = P ? P.list.map((e) => [r.next(), e]).sort((a, c) => a[0] - c[0]).map((e) => e[1]) : [];
+    const firstView = this.b.waves[0].x + 80; // the opening fight should show one
+    let anyPainted = false;
     let x = -500;
     while (x < len + 700) {
       const wide = st === 'houses' || st === 'farm';
@@ -50,12 +56,20 @@ export class Stage {
       f.tagCol = r.pick(['#ff3fa4', '#39e0ff', '#7dff4a', '#ffe14a', '#ff7a1a']);
       f.poster = r.chance(0.5) ? r.pick(POSTERS) : null;
       f.seed = r.int(1, 1e6);
+      if (pool.length && (r.chance(dp.share) || (!anyPainted && x > firstView - 380 && x < firstView + 40))) {
+        const [name, ground] = pool.pop();
+        Object.assign(f, { painted: name, ground, pnight: P.night, w: 2000 * P.scale, h: 1200 * ground * P.scale });
+        anyPainted = true;
+      }
       this.facades.push(f);
-      x += w + (wide ? r.range(50, 130) : st === 'docks' ? r.range(20, 60) : r.range(0, 10));
+      x += f.w + (f.painted ? 0 : wide ? r.range(50, 130) : st === 'docks' ? r.range(20, 60) : r.range(0, 10));
     }
     // street furniture on the back edge of the sidewalk (never in the way)
+    usePaintings(this.facades.filter((f) => f.painted).map((f) => f.painted));
+    // lamps stand at the seams between blocks, so a post never cuts through a shop sign
     this.lamps = [];
-    for (let lx = 140; lx < len + 500; lx += 460) this.lamps.push(lx + r.range(-40, 40));
+    let last = -1e9;
+    for (const f of this.facades) if (f.x > 60 && f.x < len + 500 && f.x - last > 380) { this.lamps.push(f.x - 2); last = f.x; }
     const PROPS = st === 'farm' ? ['hay', 'fence', 'hay'] : st === 'houses' ? ['hydrant', 'mailbox', 'tree', 'bin'] : st === 'docks' ? ['bollard', 'crate', 'bollard'] : st === 'warehouses' || st === 'factory' || st === 'lair' ? ['bags', 'bollard', 'crate', 'meter', 'hydrant'] : ['hydrant', 'newsbox', 'bags', 'bench', 'meter', 'tree'];
     this.props = [];
     for (let px = 60; px < len + 500; px += r.range(130, 240)) {
@@ -83,7 +97,7 @@ export class Stage {
     let best = null, bd = r;
     for (const f of this.facades) {
       const s = f.kind;
-      if (s === 'docks' || s === 'farm') continue;
+      if (s === 'docks' || s === 'farm' || f.painted) continue; // (painted blocks: no known doorway)
       const d = f.x + f.w * (s === 'warehouses' || s === 'factory' ? 0.41 : s === 'houses' ? 0.5 : 0.755);
       if (Math.abs(d - x) < bd) { bd = Math.abs(d - x); best = d; }
     }
@@ -122,6 +136,7 @@ export class Stage {
     this.geom(W, H);
     const nb = Math.round(night * 4) / 4, px = Math.round(cam * this.b.k * this.dpr);
     const key = px + '|' + nb + '|' + W + 'x' + H;
+    if (this.pendingPaint && [...this.facadeCache].some(([f, fc]) => fc.pending && painting(f.painted))) { this.bgKey = this.lastKey = null; this.pendingPaint = false; }
     if (this.bgKey !== key) {
       if (this.lastKey === key) {
         if (!this.bg) this.bg = mk(1, 1);
@@ -174,7 +189,7 @@ export class Stage {
       const x = W / 2 + (f.x - cam) * k;
       if (x > W + 90 * k || x + (f.w + 90) * k < 0) { if (this.facadeCache.has(f)) this.facadeCache.delete(f); continue; }
       let fc = this.facadeCache.get(f);
-      if (!fc || fc.lit !== lit || fc.nb !== nb) { fc = this.bakeFacade(f, lit, nb); this.facadeCache.set(f, fc); }
+      if (!fc || fc.lit !== lit || fc.nb !== nb || (fc.pending && painting(f.painted))) { fc = this.bakeFacade(f, lit, nb); this.facadeCache.set(f, fc); }
       ctx.drawImage(fc.c, x - fc.padX * k, gt - fc.top * k, fc.c.width / this.dpr, fc.c.height / this.dpr);
     }
     // ground (wall-contact shadow baked in)
@@ -596,6 +611,20 @@ export class Stage {
   }
 
   // ---------------------------------------------------------------- facades
+  /**
+   * A painted façade block: the painting above its ground line, scaled to the stage, bottom-aligned on the
+   * pavement; halftone side shade and an ink seam on both edges so it sits among the generated blocks.
+   */
+  paintPainted(g, f, img) {
+    const { ink, tone } = pen(g);
+    const sh = img.naturalHeight * f.ground;
+    g.drawImage(img, 0, 0, img.naturalWidth, sh, 0, -f.h, f.w, f.h);
+    tone(0, -f.h, 8, f.h, 0.32);
+    const gr = g.createLinearGradient(0, -16, 0, 0); gr.addColorStop(0, 'rgba(20,12,20,0)'); gr.addColorStop(1, 'rgba(20,12,20,.45)');
+    g.fillStyle = gr; g.fillRect(0, -16, f.w, 16);
+    g.beginPath(); g.moveTo(0, -f.h); g.lineTo(0, 0); g.moveTo(f.w, -f.h); g.lineTo(f.w, 0); g.moveTo(0, 0); g.lineTo(f.w, 0); ink(2.2);
+  }
+
   bakeFacade(f, lit, nb = 0) {
     const k = this.b.k, dpr = this.dpr, gt = this.b.gt;
     // tight bounds: transparent padding still costs fill on every frame
@@ -607,8 +636,12 @@ export class Stage {
     g.setTransform(k * dpr, 0, 0, k * dpr, padX * k * dpr, top * k * dpr);
     g.lineJoin = 'round';
     const out = { c, padX, top, lit, nb, neon: null };
-    paintFacade(g, f, lit, out);
-    this.tint(g, nb);
+    const img = f.painted && painting(f.painted);
+    if (img) this.paintPainted(g, f, img);
+    else paintFacade(g, f, lit, out);
+    out.pending = !!f.painted && !img; // generated stand-in until the painting decodes
+    if (out.pending) this.pendingPaint = true;
+    this.tint(g, f.painted && img && f.pnight ? nb * 0.25 : nb); // night-painted pieces are already graded
     return out;
   }
 
