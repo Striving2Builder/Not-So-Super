@@ -15,7 +15,7 @@ const POSE = {
   flyFrom: 14, flyFull: 70, // speed (world units/s) where her horizontal flying pose starts / is full
   slowPitch: 0.45,  // head-up tilt (rad) while flying slowly
   legs: 0.9,        // how hard the legs straighten and trail at speed (0..1)
-  patrolScale: 12,   // in the overhead patrol view she becomes a big inked map figure
+  patrolScale: 16,   // in the overhead patrol view she becomes a big inked map figure
   shadow: 0x05060f,
 };
 /** Costume read at night: saturation, self-light (fraction of albedo), accent rim. */

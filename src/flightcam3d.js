@@ -13,7 +13,7 @@ import { clamp, lerp } from './util.js';
 const CAM = {
   chase: { dist: [6.2, 4.8], height: [0.7, 2.4], side: [0.4, 1.3], fov: [58, 70], at: [0.46, 0.64] }, // side: to her right → a 3/4 rear view // at = her spot on screen (x, y from top-left)
   boost: { dist: 0.8, height: 0.2, fov: 9, kickFov: 16 },         // sustained while boosting + a kick on the press
-  canyon: { height: 1.4, at: [0.47, 0.62], fovUp: 4, snap: 0.62 }, // skim band: lower, along the street (snap ≈ 35°)
+  canyon: { height: 2.4, at: [0.47, 0.62], fovUp: 4, snap: 0.62 }, // skim band: lower, along the street (snap ≈ 35°)
   patrol: { dist: 100, height: 85, side: 60, fov: 60, at: [0.5, 0.66] }, // ≈ 30° down at the city, from her 3/4 rear (her side reads): horizon along the top
   yawRate: 2.6,  // how fast the camera swings round behind her heading (1/s)
   orbitBack: 0.6, // drag-orbit eases back behind her at this rate while she's moving (1/s)
