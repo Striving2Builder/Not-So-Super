@@ -1,8 +1,10 @@
 # Polish pass: status and handoff
 
 Read this first when picking the polish pass up in a new thread. Last updated 2026-10-02, after
-flight/city round 6 was merged and blind-tested (the r7fly critic). No builders are running: the
-next step is to start round 7 from "Next round" below. The companion docs are [BRIEF.md](BRIEF.md) (the builder brief),
+flight/city round 6 was merged and blind-tested (the r7fly critic). **Round 7 is running** (3 builders
+in worktrees: post/clouds = briefs 1+5, hero/cape = 3+4, city = 2+6). The harness dynRes pin is done
+(c1d53f0: `?dynres=off`, used by shoot.js for fly3d shots; baseline in `shots/r7base/`). A new thread
+can't resume these agents: if they're gone, check the `worktree-agent-*` branches for their WIP commits. The companion docs are [BRIEF.md](BRIEF.md) (the builder brief),
 [ARCHITECTURE.md](ARCHITECTURE.md) (module map and target layout) and [ASSETS.md](ASSETS.md) (incoming art).
 
 ## How the loop runs
