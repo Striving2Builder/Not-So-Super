@@ -79,6 +79,8 @@ export function building(B, o, blk, S) {
   let style = STYLE[pickW(D.styles, h[1])];
   if (o.glass && D.styles.glass) style = h[1] < 0.7 ? STYLE.glass : style;
   const L = look(o.gold ? '#e6c66a' : wall, pick(D.lit, h[2]), style, o.roofCol || pick(D.roofs, h[3]), h[4] < 0.55 ? STYLE.gravel : STYLE.tar, Math.floor(h[5] * 8) / 8, Math.floor(h[6] * 16) / 16);
+  // roofs: the district's roof colour, pulled toward its own wall colour (no candy caps)
+  L.roofTint.lerp(L.tint, 0.45).multiplyScalar(0.85);
   const face = streetFace(o, blk);
   if (o.container || o.truck) { L.style = STYLE.industrial; box(B, x0, z0, x1, z1, 0, H, L, { ink: 0.6 }); return; }
   if (o.house || o.barn) {

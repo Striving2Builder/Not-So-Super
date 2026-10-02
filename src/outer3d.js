@@ -10,7 +10,7 @@ import { M, STYLE, Builder, box, prism, lamp, look, KIND } from './buildings3d.j
 import { OUTER } from './skyline3d.js';
 
 const TILE_M = 1200;                  // metres per culling tile
-const BOROUGH = { band: 2300, base: [10, 34], tall: 0.05 }; // metres of blocks past the river; storeys
+const BOROUGH = { band: 1700, base: [10, 34], tall: 0.05 }; // metres of blocks past the river; storeys
 const WALLS = ['#8a8580', '#9a7a66', '#7d8696', '#a89878', '#6f6a74', '#b08a70', '#8c9aa0'];
 const LITS = ['#ffcf7a', '#ffd890', '#cfe0ff'];
 const BRIDGE = { river: { deck: 9, tower: 46, w: 16 }, bay: { deck: 16, tower: 120, w: 24 } };

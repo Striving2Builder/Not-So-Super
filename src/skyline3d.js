@@ -118,7 +118,7 @@ void main() {
   vec3 lot = h < 0.12 ? vec3(0.28, 0.42, 0.24) : mix(vec3(0.42, 0.4, 0.38), vec3(0.5, 0.36, 0.3), step(0.6, h));
   vec3 day = mix(lot, vec3(0.17, 0.17, 0.2), road) * (uAmbUp + uKeyCol * 0.8);
   // night: sodium avenues and a scatter of lit lots
-  vec3 glow = vec3(1., 0.62, 0.25) * road * 0.8 + vec3(1., 0.8, 0.5) * step(0.55, h) * (1. - road) * 0.07;
+  vec3 glow = vec3(1., 0.62, 0.25) * road * 0.4 + vec3(1., 0.8, 0.5) * step(0.55, h) * (1. - road) * 0.07;
   vec3 c = day * (1. - uNight * 0.6) + glow * uLit;
 #ifdef TONE_MAPPING
   c = toneMapping(c);

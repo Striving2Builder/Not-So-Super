@@ -24,6 +24,8 @@ function plan(city, landmarks) {
   for (let i = 0; i <= city.landCols; i++) for (let j = 0; j <= city.rows; j++) n.fillRect((i * BLOCK + ROAD * 0.2) * PX, (j * BLOCK + ROAD * 0.2) * PX, ROAD * 0.6 * PX, ROAD * 0.6 * PX);
   for (const b of city.blocks) {
     const D = DISTRICTS[b.d];
+    // river blocks: green banks (the 3D ribbon of water lies on them, smoothly, not block-stepped)
+    if (b.river) { R(d, b.x0 - ROAD / 2, b.y0 - ROAD / 2, LOT + ROAD, LOT + ROAD, '#4f7046'); continue; }
     R(d, b.x0, b.y0, LOT, LOT, D.lot);
     // the kerb: a pale line round each lot
     d.strokeStyle = 'rgba(255,255,255,.18)'; d.lineWidth = 1; d.strokeRect(b.x0 * PX + 0.5, b.y0 * PX + 0.5, LOT * PX - 1, LOT * PX - 1);
@@ -68,7 +70,7 @@ uniform sampler2D day; uniform sampler2D night; uniform vec3 uKeyCol; uniform ve
 ${HAZE_GLSL}
 varying vec2 vUv; varying vec3 vW;
 void main() {
-  vec3 c = texture2D(day, vUv).rgb * (uAmbUp + uKeyCol * 0.8) * (1. - uNight * 0.55) + texture2D(night, vUv).rgb * uLit * 0.9;
+  vec3 c = texture2D(day, vUv).rgb * (uAmbUp + uKeyCol * 0.8) * (1. - uNight * 0.55) + texture2D(night, vUv).rgb * uLit * 0.5;
 #ifdef TONE_MAPPING
   c = toneMapping(c);
 #endif
