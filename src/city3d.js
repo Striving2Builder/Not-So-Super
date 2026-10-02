@@ -11,13 +11,15 @@ import { DISTRICT_3D, height3, building, round, crane, tree } from './blocks3d.j
 import { SignAtlas } from './signs3d.js';
 import { chooseLandmarks, buildLandmarks } from './landmarks3d.js';
 import { Horizon, haze } from './skyline3d.js';
+import { Outer } from './outer3d.js';
+import { cityGround } from './ground3d.js';
 import { Street } from './street3d.js';
 
 export { M, DISTRICT_3D, height3 };
 
 const CHUNK = TILE * BLOCK; // world units per chunk side (one ground tile)
 /** farMat: metres past which a chunk switches to its lite build + flat-tone material (no texture, ink, halftone, roof kit). */
-const LOD = { farMat: 300, landmarkFog: 0.45, coreR: 4.5 };
+const LOD = { farMat: 300, landmarkFog: 0.8, landmarkMax: 0.93, coreR: 4.5 };
 
 export class City3D {
   constructor(city, scene, { tileRes = 144 } = {}) {
@@ -38,15 +40,23 @@ export class City3D {
     // the key light + ambient come from the sky's own lights (Sky3D is built before the city)
     this.sun = scene.children.find((o) => o.isDirectionalLight);
     this.hemi = scene.children.find((o) => o.isHemisphereLight);
+    // the dome's horizon colour: the haze ends exactly on it, so there is never a visible edge
+    this.dome = scene.children.find((o) => o.material?.uniforms?.bottom);
     const LB = buildLandmarks(this.landmarks, this.signs);
-    this.harbour(LB);
-    this.lmMat = this.look.make(LOD.landmarkFog);
+    // the harbour is hazed like everything else (in the landmarks' mesh it sat on the horizon as a dark band)
+    const HB = new Builder();
+    this.harbour(HB);
+    this.harbourMesh = new THREE.Mesh(HB.geometry(), this.look.near);
+    scene.add(this.harbourMesh);
+    this.lmMat = this.look.make(LOD.landmarkFog, {}, LOD.landmarkMax);
     this.lmMesh = new THREE.Mesh(LB.geometry(), this.lmMat);
     this.lmMesh.frustumCulled = false;
     scene.add(this.lmMesh);
-    this.addGround();
-    this.horizon = new Horizon(scene, this.look.U, city, M);
-    this.street = new Street(city, scene, this.look.U, M);
+    this.ground = cityGround(city, this.look.U, this.landmarks);
+    scene.add(this.ground);
+    this.horizon = new Horizon(scene, this.look.U, [0, 0, city.coastX * M, city.H * M]);
+    this.outer = new Outer(city, scene, this.look, this.horizon);
+    this.street = new Street(city, scene, this.look.U, M, this.outer.roads);
     this.t0 = performance.now();
   }
 
@@ -64,20 +74,6 @@ export class City3D {
       for (let k = 0; k < 4; k++) box(B, x0 + 8 + k * 14, z0 + 3, x0 + 20 + k * 14, z1 - 3, 5, 8 + (k % 2) * 2.5, look(['#b8452f', '#2f6fb8', '#d9a53a', '#3a8a5a'][k], '#000', STYLE.industrial), { ink: 0.6 });
       prism(B, x1 - 12, (z0 + z1) / 2, 0.4, 0.3, 13, 20, 4, hull, { ink: 0.5 });
     }
-  }
-
-  /** District-coloured ground for the whole city in one draw (the near tiles sit on top). */
-  addGround() {
-    const c = this.city, t = new THREE.CanvasTexture(c.minimap);
-    t.magFilter = THREE.NearestFilter; t.colorSpace = THREE.SRGBColorSpace;
-    const g = new THREE.PlaneGeometry(c.W * M, c.H * M);
-    g.rotateX(-Math.PI / 2); g.translate((c.W * M) / 2, -0.3, (c.H * M) / 2);
-    this.far = new THREE.Mesh(g, haze(new THREE.MeshBasicMaterial({ map: t, color: 0x6a6878 })));
-    this.scene.add(this.far);
-    // the countryside round the city out to the horizon (no edge of the world at high patrol)
-    const land = new THREE.PlaneGeometry(30000, 30000);
-    land.rotateX(-Math.PI / 2); land.translate((c.W * M) / 2 - 6000, -1, (c.H * M) / 2);
-    this.scene.add(new THREE.Mesh(land, haze(new THREE.MeshBasicMaterial({ color: 0x3a5238 }))));
   }
 
   /** A chunk's record (meshes built lazily: `near` full detail, `lite` for the far LOD). */
@@ -116,7 +112,7 @@ export class City3D {
       const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
       const g = new THREE.PlaneGeometry(CHUNK * M, CHUNK * M);
       g.rotateX(-Math.PI / 2); g.translate((ch.cx + 0.5) * CHUNK * M, 0, (ch.cy + 0.5) * CHUNK * M);
-      const m = new THREE.Mesh(g, haze(new THREE.MeshBasicMaterial({ map: t })));
+      const m = new THREE.Mesh(g, haze(new THREE.MeshBasicMaterial({ map: t }), this.look.U));
       ch[key] = m;
       this.scene.add(m);
     }
@@ -129,11 +125,13 @@ export class City3D {
    */
   update(cam, { far = 1500, near = 700, night = 0, frame = 0 } = {}) {
     const px = cam.position.x / M, pz = cam.position.z / M;
-    const R = Math.ceil(far / M / CHUNK) + 1;
+    const R = Math.ceil(Math.max(far, this.look.U.uHazeFar.value) / M / CHUNK) + 1;
     const ccx = Math.floor(px / CHUNK), ccy = Math.floor(pz / CHUNK);
     let budget = this.built ? 2 : 999;
     for (const ch of this.chunks.values()) for (const k of ['near', 'lite', 'gl', 'gd']) if (ch[k]) ch[k].visible = false;
-    const cut = far * 0.92; // the haze is all but solid past this
+    // haze first: from altitude it reaches further than the band's fog, and so do the chunks
+    this.look.light(this.sun, this.hemi, this.scene.fog, night, (performance.now() - this.t0) / 1000, this.dome?.material.uniforms.bottom.value, cam.position.y);
+    const reach = Math.max(far, this.look.U.uHazeFar.value), cut = reach * 0.92; // the haze is all but solid past this
     for (let cy = ccy - R; cy <= ccy + R; cy++) for (let cx = ccx - R; cx <= ccx + R; cx++) {
       if (cx < 0 || cy < 0 || cx >= this.cols || cy >= this.rows) continue;
       const dx = ((cx + 0.5) * CHUNK - px) * M, dz = ((cy + 0.5) * CHUNK - pz) * M, d = Math.hypot(dx, dz) - CHUNK * M * 0.7;
@@ -147,8 +145,7 @@ export class City3D {
       if (d < near * 1.2) this.groundTile(ch, night > 0.45, frame);
     }
     this.built = true;
-    this.look.light(this.sun, this.hemi, this.scene.fog, night, (performance.now() - this.t0) / 1000);
-    this.horizon.update(cam);
-    this.street.update();
+    this.outer.update(cam, cut);
+    this.street.update(cam);
   }
 }
