@@ -1,7 +1,9 @@
 // Investigation zones: a hotspot crime scene. Search props, use X-ray vision on sealed things,
 // question a witness, photograph evidence for the paper, then accuse the suspect who matches the clues.
-// The scene is painted as an inked comic panel (crimescene.js): perspective room, practical light,
-// inked props with drop shadows, halftone grading. X-RAY is detective vision; clue finds punch in.
+// The room is a painting (assets/scenes, hotspots in scenespots.js) with the live layers drawn over it
+// and graded into its light: witness, bait, story dressing, evidence tents, dust, detective vision.
+// Until the painting has loaded (or if it fails) the code painter (crimescene.js) stands in.
+// X-RAY is detective vision; clue finds punch in.
 import { ATTRS, FIRST_NAMES, LAST_NAMES, JOBS, WITNESS_MOODS, INTOX_ITEMS, HERO, DISTRICTS } from './data.js';
 import { drawHumanoid, pose, npcLook, portrait } from './art.js';
 import { pick, shuffle, chance, fitScene, $ } from './util.js';
@@ -10,7 +12,8 @@ import { sfx } from './sfx.js';
 import { CaseFile } from './casefile.js';
 import { comic } from './comic.js';
 import { quality } from './settings.js';
-import { LW, LH, FLOOR, INK, CAPTION, ease, paintRoom, paintFixture, paintLight, paintDust, makeDust, makeGrade, paintStory, paintForeground } from './crimescene.js';
+import { LW, LH, FLOOR, INK, CAPTION, ease, paintRoom, paintFixture, paintLight, paintDust, makeDust, makeGrade, paintStory, paintForeground, paintBackdrop, paintSceneLight, paintSceneFx } from './crimescene.js';
+import { SCENES, pickScene, loadScene, sceneImage, dropScene } from './scenespots.js';
 import { SETTINGS, CONTAINERS, SURFACES, ANIM, drawProp, drawPropAnim, shadeProp, contactShadow, tent } from './sceneprops.js';
 import { ScanView } from './scanview.js';
 import { LensFX } from './lensfx.js';
@@ -31,6 +34,9 @@ export class Investigate {
     this.snapReq = null;
     this.setting = SETTINGS[zone.def.setting];
     this.settingKey = zone.def.setting;
+    this.paint = pickScene(zone.def.setting, zone.def.id, zone.paint); // zone.paint: debug/harness override
+    this.scene = this.paint ? SCENES[this.paint] : null;
+    if (this.paint) loadScene(this.paint); // the bake picks it up once decoded (baseKey)
     this.buildCase();
     if (this.lay) this.lay.baseKey = ''; // new case, new room
     if (document.fonts && document.fonts.load) document.fonts.load('20px Bangers').catch(() => {});
@@ -53,7 +59,10 @@ export class Investigate {
     }, 1500);
   }
 
-  exit() { $('objectives').classList.remove('on'); }
+  exit() {
+    $('objectives').classList.remove('on');
+    dropScene(); this.lay = null; // the painting and the full-screen layers go with the scene
+  }
 
   get photos() { return this.case.photos; }
 
@@ -61,7 +70,12 @@ export class Investigate {
     const S = this.setting;
     this.case = new CaseFile(JOBS[this.zone.def.setting]);
     this.clues = this.case.clues;
-    this.props = S.props.map(([type, name, x, y, w, h, desc]) => ({ type, name, x, y, w, h, desc }));
+    const sc = this.scene;
+    // in a painted room each prop is the painted thing at its spot (renamed to what the painting shows)
+    this.props = S.props.map(([type, name, x, y, w, h, desc], i) => {
+      const sp = sc && sc.spots[i];
+      return sp ? { type, name: sp[4] || name, x: sp[0], y: sp[1], w: sp[2], h: sp[3], desc: sp[5] || desc } : { type, name, x, y, w, h, desc };
+    });
     const pool = shuffle([...this.props]);
     for (const c of this.clues) {
       if (c.method === 'witness') continue;
@@ -71,12 +85,14 @@ export class Investigate {
     }
     const mood = pick(WITNESS_MOODS);
     const wl = npcLook('civilian');
-    this.witness = { x: 780, y: 520, look: wl, mood, clue: this.clues.find((c) => c.method === 'witness'), talked: false, name: `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}` };
+    const [wx, wy, ws] = sc ? sc.witness : [780, 520, 2.1];
+    this.witness = { x: wx, y: wy, s: ws, look: wl, mood, clue: this.clues.find((c) => c.method === 'witness'), talked: false, name: `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}` };
     const surf = this.props.filter((p) => SURFACES.includes(p.type));
     const th = surf.length ? pick(surf) : pick(this.props);
     const item = pick(INTOX_ITEMS);
-    this.trap = { item, x: th.x + th.w * 0.72 - 18, y: th.y - 34, w: 36, h: 36, taken: false, givesClue: chance(0.5) };
-    this.chalk = this.freeFloorSpot();
+    const [bx, by] = sc ? sc.bait : [th.x + th.w * 0.72, th.y + 2];
+    this.trap = { item, x: bx - 18, y: by - 36, w: 36, h: 36, taken: false, givesClue: chance(0.5) };
+    this.chalk = sc ? { x: sc.chalk[0], y: sc.chalk[1], wallX: sc.chalk[2] } : this.freeFloorSpot();
   }
 
   /** A patch of floor clear of furniture and the witness, for the chalk outline. */
@@ -137,7 +153,17 @@ export class Investigate {
     sfx.pow();
   }
 
-  hit(p, x, y) { return x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h; }
+  /** Hit test, grown to at least 68 logical units (44 px on a landscape phone) each way. */
+  hit(p, x, y) {
+    const px = Math.max(0, (68 - p.w) / 2), py = Math.max(0, (68 - p.h) / 2);
+    return x >= p.x - px && x <= p.x + p.w + px && y >= p.y - py && y <= p.y + p.h + py;
+  }
+
+  /** The witness's tappable body, from their drawn scale. */
+  witnessBox() { const w = this.witness; return { x: w.x - 19 * w.s, y: w.y - 106 * w.s, w: 38 * w.s, h: 106 * w.s }; }
+
+  /** The floor line of the room in use (the painting's, or the code room's). */
+  get floorY() { return this.scene ? this.scene.floor : FLOOR; }
 
   async tap(sx, sy) {
     if (this.busy) return;
@@ -147,7 +173,7 @@ export class Investigate {
     this.busy = true;
     try {
       if (!tr.taken && this.hit(tr, x, y)) return await this.useTrap();
-      if (x > w.x - 40 && x < w.x + 40 && y > w.y - 230 && y < w.y) return await this.talk();
+      if (this.hit(this.witnessBox(), x, y)) return await this.talk();
       const props = [...this.props].sort((a, b) => (b.y + b.h) - (a.y + a.h));
       const p = props.find((p) => this.hit(p, x, y));
       if (p) await this.search(p);
@@ -337,31 +363,39 @@ export class Investigate {
     // full-screen layer), so they're baked once per case into a "base" image. Animated things
     // (slot reels, screens, the roulette wheel, the witness, the bait) are inked per frame in small
     // sprite-sized canvases. The punch-in zoom and tipsy sway just transform the baked image.
-    const baseKey = `${L.w}x${L.h}|${key}|${night > 0.5}|${this.trap.taken}|${this.witness.talked}`;
+    const rec = this.paint ? sceneImage(this.paint) : null, sc = rec ? this.scene : null;
+    const baseKey = `${L.w}x${L.h}|${key}|${sc ? this.paint : ''}|${night > 0.5}|${this.trap.taken}|${this.witness.talked}`;
     const props = [...this.props].sort((a, b) => (a.y + a.h) - (b.y + b.h));
     const w = this.witness;
     if (L.baseKey !== baseKey) {
       const B = L.base.getContext('2d');
       B.setTransform(1, 0, 0, 1, 0, 0); B.clearRect(0, 0, L.w, L.h);
-      this.paintRoomTo(B, f, dpr, 0, v, key, night, t);
+      if (sc) this.paintSceneTo(B, f, dpr, v, rec.img);
+      else this.paintRoomTo(B, f, dpr, 0, v, key, night, t);
       const P = L.props.getContext('2d');
       P.setTransform(1, 0, 0, 1, 0, 0); P.clearRect(0, 0, L.w, L.h);
       this.view(P, f, dpr, 0, true);
-      let witnessDrawn = false;
-      for (const p of props) {
-        if (!witnessDrawn && p.y + p.h > w.y) { this.drawWitness(P); witnessDrawn = true; }
-        drawProp(P, p, 0); shadeProp(P, p);
+      if (sc) { // the painting has the furniture: only the live cast and the case's story go on top
+        if (sc.story !== false) this.drawFloorDressing(P);
+        this.drawWitness(P); this.drawTrap(P);
+        this.gradeLayer(L, sc);
+      } else {
+        let witnessDrawn = false;
+        for (const p of props) {
+          if (!witnessDrawn && p.y + p.h > w.y) { this.drawWitness(P); witnessDrawn = true; }
+          drawProp(P, p, 0); shadeProp(P, p);
+        }
+        if (!witnessDrawn) this.drawWitness(P);
+        this.drawTrap(P);
       }
-      if (!witnessDrawn) this.drawWitness(P);
-      this.drawTrap(P);
       this.inkLayer(L, f, dpr, lite);
       const sh = 9 * f.s * dpr;
       B.globalAlpha = 0.4; B.drawImage(L.ink, sh, sh * 0.7); // comic drop shadow away from the lamp
       B.globalAlpha = 1; B.drawImage(L.ink, 0, 0); B.drawImage(L.props, 0, 0);
       // static light, the witness's bubble, the tape, then the print grade: all baked
       B.save(); this.view(B, f, dpr, 0, true);
-      paintLight(B, key, this.setting, night, v, t);
-      if (!w.talked) this.bubble(B, w.x + 30, w.y - 250, '…?');
+      if (sc) paintSceneLight(B, sc); else paintLight(B, key, this.setting, night, v, t);
+      if (!w.talked) this.bubble(B, w.x + 14 * w.s, w.y - 119 * w.s, '…?');
       const id = this.zone.def.id;
       if (id === 'arson') { // smoke still hanging under the ceiling
         const hz = B.createLinearGradient(0, v.y0, 0, FLOOR);
@@ -369,7 +403,7 @@ export class Investigate {
         B.fillStyle = hz; B.fillRect(v.x0, v.y0, v.x1 - v.x0, FLOOR - v.y0);
       }
       if (key === 'apartment' || key === 'alley') this.drawTape(B, v); // outdoors/at a home the police tape up
-      paintForeground(B, key, v);
+      if (!sc) paintForeground(B, key, v);
       B.restore();
       const c = this.toScreen(LW / 2, LH * 0.55);
       B.setTransform(1, 0, 0, 1, 0, 0);
@@ -386,15 +420,17 @@ export class Investigate {
     // moving parts (reels, screens, the roulette wheel, the bait's glow) are drawn live on top
     ctx.save();
     this.view(ctx, f, dpr, zk);
-    for (const p of props) if (ANIM.includes(p.type)) drawPropAnim(ctx, p, t);
+    if (sc) paintSceneFx(ctx, sc.fx || [], t);
+    else for (const p of props) if (ANIM.includes(p.type)) drawPropAnim(ctx, p, t);
     this.drawTrapGlow(ctx);
     ctx.restore();
 
     // 3) live bits: dust in the light, evidence markers
     ctx.save();
     this.view(ctx, f, dpr, zk);
-    paintDust(ctx, t, lite ? this.dust.slice(0, 18) : this.dust);
+    paintDust(ctx, t, lite ? this.dust.slice(0, 18) : this.dust, sc && sc.lamp);
     this.drawMarkers(ctx);
+    if (sc && sc.fg) { const [x, y, fw, fh] = sc.fg, k = rec.img.naturalWidth / LW; ctx.drawImage(rec.img, x * k, y * k, fw * k, fh * k, x, y, fw, fh); }
     ctx.restore();
 
     if (this.snapReq) this.takeSnapshot(ctx, dpr);
@@ -427,6 +463,29 @@ export class Investigate {
     I.globalCompositeOperation = 'source-over';
   }
 
+  /** The painted room: backdrop (edge-extended past the stage), the witness's contact shadow. */
+  paintSceneTo(c, f, dpr, v, img) {
+    c.save();
+    this.view(c, f, dpr, 0);
+    paintBackdrop(c, img, v);
+    const w = this.witness;
+    contactShadow(c, { x: w.x - 16 * w.s, y: w.y - 10, w: 32 * w.s, h: 10 });
+    c.restore();
+  }
+
+  /** Multiply the live layer by the painting's ambient colour (alpha kept), so the drawn-on cast
+   *  and dressing take the room's light instead of sitting on it like stickers. */
+  gradeLayer(L, sc) {
+    if (!L.tmp) { L.tmp = document.createElement('canvas'); L.tmp.width = L.w; L.tmp.height = L.h; }
+    const T = L.tmp.getContext('2d');
+    T.setTransform(1, 0, 0, 1, 0, 0); T.clearRect(0, 0, L.w, L.h); T.drawImage(L.props, 0, 0);
+    const P = L.props.getContext('2d');
+    P.save(); P.setTransform(1, 0, 0, 1, 0, 0);
+    P.globalCompositeOperation = 'multiply'; P.fillStyle = sc.tint; P.fillRect(0, 0, L.w, L.h);
+    P.globalCompositeOperation = 'destination-in'; P.drawImage(L.tmp, 0, 0);
+    P.restore();
+  }
+
   /** Room, fixture, floor dressing and contact shadows onto a device-pixel canvas. */
   paintRoomTo(c, f, dpr, zk, v, key, night, t) {
     c.save();
@@ -441,7 +500,8 @@ export class Investigate {
 
   drawWitness(c) {
     const w = this.witness;
-    drawHumanoid(c, w.x, w.y, 2.1, -1, w.look, pose('stand', this.t), this.t);
+    drawHumanoid(c, w.x, w.y, w.s, -1, w.look, pose('stand', this.t), this.t);
+    if (this.scene) shadeProp(c, { x: w.x - 22 * w.s, y: w.y - 96 * w.s, w: 44 * w.s, h: 96 * w.s });
   }
 
   /** What happened here, told on the floor: per case type (scorch marks, ransom letters…). */
@@ -462,8 +522,14 @@ export class Investigate {
     for (const c of this.clues) {
       if (!c.found || !c.host) continue;
       const p = c.host, n = this.case.num(c);
-      const floorY = Math.min(LH - 12, Math.max(p.y + p.h + 16, FLOOR + 30));
       const x = Math.min(LW - 30, Math.max(30, p.x + p.w * 0.5 + (n % 2 ? -1 : 1) * Math.min(40, p.w * 0.3)));
+      // on the floor in front of whatever the prop stands on (a computer's desk), never on furniture
+      let foot = p.y + p.h;
+      for (let k = 0; k < 3; k++) {
+        const q = this.props.find((q) => q !== p && x > q.x && x < q.x + q.w && foot + 12 > q.y && foot < q.y + q.h);
+        if (!q) break; foot = q.y + q.h;
+      }
+      const floorY = Math.min(LH - 12, Math.max(foot + 16, this.floorY + 30));
       tent(g, x, floorY, n, c.photo);
     }
   }

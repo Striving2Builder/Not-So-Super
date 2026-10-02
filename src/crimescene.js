@@ -6,6 +6,7 @@
 import { shade } from './util.js';
 
 export const LW = 1000, LH = 600, FLOOR = 380, CEIL = 14;
+const FLOOR_ = FLOOR; // for functions that take a painting's floor line in its place
 export const VP = { x: 500, y: 200 }; // vanishing point
 export const INK = '#120a16';
 export const CAPTION = '"Bangers", Impact, "Arial Black", sans-serif';
@@ -293,13 +294,13 @@ export function paintLight(g, key, S, night, v, t) {
 }
 
 /** Dust motes drifting through the lamp light (live, every frame). */
-export function paintDust(g, t, dust) {
-  const top = CEIL + 30;
+export function paintDust(g, t, dust, lamp = null) {
+  const top = lamp ? lamp[1] : CEIL + 30, lx = lamp ? lamp[0] : 500;
   g.save();
   g.globalCompositeOperation = 'lighter';
   for (const d of dust) {
-    const px = d.x + Math.sin(t * d.s + d.p) * 22, py = ((d.y + t * d.v * 18) % 470) + 60;
-    const inCone = Math.abs(px - 500) < 30 + (py - top) * 0.55;
+    const px = d.x + (lx - 500) + Math.sin(t * d.s + d.p) * 22, py = ((d.y + t * d.v * 18) % 470) + 60;
+    const inCone = py > top - 40 && Math.abs(px - lx) < 30 + Math.abs(py - top) * 0.55;
     const a = (inCone ? 0.55 : 0.12) * (0.6 + 0.4 * Math.sin(t * 2 + d.p));
     g.fillStyle = `rgba(255,240,210,${a.toFixed(3)})`; g.fillRect(px, py, d.r, d.r);
   }
@@ -310,6 +311,69 @@ export function makeDust(n = 46) {
   const out = [];
   for (let i = 0; i < n; i++) out.push({ x: 160 + Math.random() * 680, y: Math.random() * 470, r: 1.5 + Math.random() * 2.5, s: 0.3 + Math.random() * 0.6, v: 0.2 + Math.random() * 0.6, p: Math.random() * 6.28 });
   return out;
+}
+
+// ------------------------------------------------------------------ painted rooms (scenespots.js)
+
+/** The painting fills the logical stage; overflow on wider/taller screens is the edge strip mirrored
+ *  outward and darkened, so there are never blank bands. Baked once per size by the caller. */
+export function paintBackdrop(g, img, v) {
+  const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height, k = iw / LW;
+  g.fillStyle = '#07040b'; g.fillRect(v.x0 - 2, v.y0 - 2, v.x1 - v.x0 + 4, v.y1 - v.y0 + 4);
+  g.drawImage(img, 0, 0, LW, LH);
+  // the gradient runs from the seam (x0,y0) out to the screen edge (x1,y1) over rect r
+  const shade = (x0, y0, x1, y1, r) => {
+    const gr = g.createLinearGradient(x0, y0, x1, y1);
+    gr.addColorStop(0, 'rgba(7,4,11,.4)'); gr.addColorStop(1, 'rgba(7,4,11,.9)');
+    g.fillStyle = gr; g.fillRect(...r);
+  };
+  const H = [v.y0 - 2, v.y1 - v.y0 + 4];
+  const l = Math.min(LW / 2, -v.x0), r = Math.min(LW / 2, v.x1 - LW);
+  if (l > 0) { g.save(); g.scale(-1, 1); g.drawImage(img, 0, 0, l * k, ih, -1, 0, l + 1, LH); g.restore(); shade(0, 0, -l, 0, [v.x0 - 2, H[0], -v.x0 + 2, H[1]]); }
+  if (r > 0) { g.save(); g.translate(2 * LW, 0); g.scale(-1, 1); g.drawImage(img, iw - r * k, 0, r * k, ih, LW - r, 0, r + 1, LH); g.restore(); shade(LW, 0, LW + r, 0, [LW, H[0], v.x1 - LW + 2, H[1]]); }
+  const top = Math.min(LH / 2, -v.y0), bot = Math.min(LH / 2, v.y1 - LH);
+  if (top > 0) { g.save(); g.scale(1, -1); g.drawImage(img, 0, 0, iw, top * k, 0, -1, LW, top + 1); g.restore(); shade(0, 0, 0, -top, [v.x0 - 2, v.y0 - 2, v.x1 - v.x0 + 4, -v.y0 + 2]); }
+  if (bot > 0) { g.save(); g.translate(0, 2 * LH); g.scale(1, -1); g.drawImage(img, 0, ih - bot * k, iw, bot * k, 0, LH - bot, LW, bot + 1); g.restore(); shade(0, LH, 0, LH + bot, [v.x0 - 2, LH, v.x1 - v.x0 + 4, v.y1 - LH + 2]); }
+}
+
+/** The painting's own key light, re-lit live-free: a soft additive bloom at the lamp and a pool
+ *  under it, so the drawn-on layers share its light. */
+export function paintSceneLight(g, sc) {
+  const [x, y, col] = sc.lamp;
+  g.save(); g.globalCompositeOperation = 'lighter';
+  let gr = g.createRadialGradient(x, y, 4, x, y, 150);
+  gr.addColorStop(0, `rgba(${col},.22)`); gr.addColorStop(1, `rgba(${col},0)`);
+  g.fillStyle = gr; g.fillRect(x - 150, y - 150, 300, 300);
+  const fy = Math.max(sc.floor + 60, y + 160);
+  gr = g.createRadialGradient(x, fy, 6, x, fy, 260);
+  gr.addColorStop(0, `rgba(${col},.1)`); gr.addColorStop(1, `rgba(${col},0)`);
+  g.save(); g.translate(x, fy); g.scale(1, 0.3); g.translate(-x, -fy); g.fillStyle = gr; g.fillRect(x - 260, fy - 260, 520, 520); g.restore();
+  g.restore();
+}
+
+/** Live touches over painted screens and lights (see scenespots.js `fx`). */
+export function paintSceneFx(g, fx, t) {
+  g.save(); g.globalCompositeOperation = 'lighter';
+  for (const [k, x, y, a, b, c] of fx) {
+    if (k === 'screen') { // a lit screen: a slow colour wash and a rolling scan bar
+      g.fillStyle = `hsla(${(c + Math.sin(t * 0.7) * 30 + 360) % 360},70%,55%,.16)`; g.fillRect(x, y, a, b);
+      const sy = y + ((t * 26) % b); g.fillStyle = 'rgba(220,240,255,.18)'; g.fillRect(x, sy, a, Math.min(4, y + b - sy));
+    } else if (k === 'blink') {
+      const on = Math.sin(t * 6 + x) > 0 ? 1 : 0.25, gr = g.createRadialGradient(x, y, 1, x, y, a);
+      gr.addColorStop(0, `rgba(${b},${0.55 * on})`); gr.addColorStop(1, `rgba(${b},0)`);
+      g.fillStyle = gr; g.fillRect(x - a, y - a, a * 2, a * 2);
+    } else if (k === 'spin') { // the roulette ball running round the wheel (the wheel is painted)
+      const an = t * 5, bx = x + Math.cos(an) * a, by = y + Math.sin(an) * a * 0.3;
+      g.fillStyle = 'rgba(255,250,235,.95)'; g.beginPath(); g.arc(bx, by, 3.2, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(255,230,170,.25)'; g.beginPath(); g.ellipse(x, y, a * 1.1, a * 0.36, 0, an, an + 1.2); g.lineTo(x, y); g.fill();
+    } else if (k === 'flicker') {
+      const f = 0.75 + 0.25 * Math.sin(t * 7 + x) * Math.sin(t * 2.3 + y);
+      const gr = g.createRadialGradient(x + a / 2, y + b / 2, 2, x + a / 2, y + b / 2, Math.max(a, b) * 0.8);
+      gr.addColorStop(0, `rgba(${c},${0.16 * f})`); gr.addColorStop(1, `rgba(${c},0)`);
+      g.fillStyle = gr; g.fillRect(x - a * 0.3, y - b * 0.3, a * 1.6, b * 1.6);
+    }
+  }
+  g.restore();
 }
 
 // ------------------------------------------------------------------ grading (cached per size)
@@ -341,16 +405,18 @@ export function scanPattern(g) {
 
 // ------------------------------------------------------------------ detective vision
 
-/** Studs, joists, conduit and pipes: the building's insides, drawn in scan colours. */
-export function paintXrayStructure(g, key, v, t) {
+/** Studs, joists, conduit and pipes: the building's insides, drawn in scan colours. `FLOOR` may be
+ *  a painting's own floor line (scenespots.js). */
+export function paintXrayStructure(g, key, v, t, FLOOR = FLOOR_) {
   const L = LOOKS[key] || LOOKS.office;
   const x0 = v.x0, x1 = v.x1, y1 = v.y1;
+  const laneX = (u, y) => VP.x + (u - VP.x) * (y - VP.y) / (FLOOR - VP.y);
   g.save();
   g.lineCap = 'round';
   // perspective grid on floor and walls
   g.strokeStyle = 'rgba(60,200,255,.16)'; g.lineWidth = 1.5; g.beginPath();
   for (let u = -2400; u <= 3400; u += 100) { g.moveTo(u, FLOOR); g.lineTo(laneX(u, y1 + 40), y1 + 40); }
-  for (const y of floorRows(y1, 12)) { g.moveTo(x0, y); g.lineTo(x1, y); }
+  for (const y of floorRows(y1, 12)) { const yy = y + FLOOR - FLOOR_; if (yy < y1 + 40) { g.moveTo(x0, yy); g.lineTo(x1, yy); } }
   for (let x = 0; x <= LW; x += 62.5) { g.moveTo(x, CEIL); g.lineTo(x, FLOOR); } // studs
   for (const side of [-1, 1]) {
     const bx = side < 0 ? 0 : LW, ex = side < 0 ? x0 : x1;
