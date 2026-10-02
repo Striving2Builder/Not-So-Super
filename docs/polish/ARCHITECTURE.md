@@ -71,8 +71,9 @@ render hand-off, enter/exit, the boost kick, and the 3D flight button set (`setB
     light, neon trims, facade/silhouette/roof-kit odds), tower archetypes, roof kits, venue signs.
   - `signs3d.js` — neon sign word atlas (comic lettering) + facade / rooftop / blade sign quads.
   - `landmarks3d.js` — one signature tower per district (`LANDMARKS`), chosen near its seed.
-  - `river3d.js` — the river (city.js `blk.river`: water blocks, no buildings, no zones): water,
-    embankments, bridges on the north-south streets.
+  - `river3d.js` — the river (city.js `riverPath`/`riverBasin`; river blocks hold no buildings or
+    zones): a smooth corner-cut ribbon + oval basin with shore band and ink line, bridges.
+  - `skycard3d.js` — the far skyline silhouette card riding on the horizon line (only above the towers).
   - `ground3d.js` — the map's ground from altitude: street-plan texture (lots, parks, plazas) +
     night avenue glow.
   - `outer3d.js` — beyond the map: outer boroughs (far-LOD blocks), bay islands, river bridges, the
