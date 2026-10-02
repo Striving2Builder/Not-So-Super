@@ -16,7 +16,7 @@ const CAM = {
   canyon: { height: 2.4, dist: 3.4, at: [0.47, 0.62], fovUp: 4, snap: 0.62 }, // skim band: lower, along the street (snap ≈ 35°)
   // high patrol, flying: low and a little below her, she sits on the left third against the sky,
   // the horizon down in the bottom third (the Superman-over-the-city shot)
-  high: { dist: 4.4, height: -0.7, side: 1.4, at: [0.36, 0.5], from: 760, to: 1000 }, // from/to: altitude (world units) it blends in over
+  high: { dist: 4.8, height: -0.6, side: 1.4, at: [0.36, 0.5], from: 760, to: 1000 }, // from/to: altitude (world units) it blends in over
   patrol: { dist: 100, height: 85, side: 60, fov: 60, at: [0.36, 0.66] }, // ≈ 30° down at the city, from her 3/4 rear (her side reads): horizon along the top
   yawRate: 2.6,  // how fast the camera swings round behind her heading (1/s)
   orbitBack: 0.6, // drag-orbit eases back behind her at this rate while she's moving (1/s)
@@ -57,7 +57,7 @@ export class FlightCam3D {
     if (!o.patrol && this.patrolK < 0.01) this.patrolK = 0;
     this.boostK = ease(this.boostK, o.boosting ? 1 : 0, o.boosting ? 3 : 1.5);
     this.canyonK = ease(this.canyonK, o.canyon || 0, 2);
-    this.highK = ease(this.highK || 0, clamp((h.z - CAM.high.from) / (CAM.high.to - CAM.high.from), 0, 1) * (o.diving ? 0 : 1), 1.5);
+    this.highK = ease(this.highK || 0, clamp((h.z - CAM.high.from) / (CAM.high.to - CAM.high.from), 0, 1) * (o.diving ? 0 : 1), 3);
     this.kick = Math.max(0, this.kick - dt * 1.6);
     // Swing behind her heading (only while she's going somewhere). In the street canyons the
     // target heading snaps to the street axis when she's roughly along it, so the shot looks
