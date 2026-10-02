@@ -12,13 +12,14 @@ import { clamp, lerp } from './util.js';
 /** Framing per mode, in metres / degrees. Pairs are hover → full speed. */
 const CAM = {
   chase: { dist: [6.2, 4.8], height: [0.7, 2.4], side: [0.4, 1.3], fov: [58, 70], at: [0.46, 0.64] }, // side: to her right → a 3/4 rear view // at = her spot on screen (x, y from top-left)
-  boost: { dist: 0.6, height: 0.2, fov: 6, kickFov: 8 },         // sustained while boosting + a kick on the press
+  boost: { dist: 0.8, height: 0.2, fov: 9, kickFov: 16 },         // sustained while boosting + a kick on the press
   canyon: { height: 1.4, at: [0.47, 0.62], fovUp: 4, snap: 0.62 }, // skim band: lower, along the street (snap ≈ 35°)
   patrol: { dist: 115, height: 85, fov: 60, at: [0.5, 0.66] },    // ≈ 27° down at the city: horizon along the top
   yawRate: 2.6,  // how fast the camera swings round behind her heading (1/s)
   orbitBack: 0.6, // drag-orbit eases back behind her at this rate while she's moving (1/s)
   roll: 0.1,      // camera roll into her turns (rad per unit bank)
-  aimUp: 0.3,     // aim a little above her pivot (metres): her shoulders, not her hips
+  aimUp: 0.3,
+  wall: { radius: 1.6, steps: 10, probe: [3.5, 8], crowdK: 0.45, lift: 6, liftIn: 0.75, minT: 0.25 }, // camera collision (m)     // aim a little above her pivot (metres): her shoulders, not her hips
 };
 
 const _p = new THREE.Vector3(), _d = new THREE.Vector3(), _c = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
@@ -73,20 +74,38 @@ export class FlightCam3D {
     const chaseUp = lerp(lerp(C.height[0], C.height[1], frac), CAM.canyon.height, this.canyonK) + B.height * this.boostK;
     const dist = lerp(chaseDist, P.dist, K), up = lerp(chaseUp, P.height, K);
     const side = lerp(C.side[0], C.side[1], frac) * (1 - K) * (1 - 0.6 * this.canyonK);
-    _p.set(hx - fx * dist - fz * side, hy + up, hz - fz * dist + fx * side);
-    // never inside a tower: walk from her toward the wanted spot, stop short of the first wall
-    const steps = 12;
-    for (let i = 1; i <= steps; i++) {
-      const f = i / steps;
-      const x = lerp(hx, _p.x, f), y = lerp(hy, _p.y, f), z = lerp(hz, _p.z, f);
-      if (solid(x / M, z / M, y / M + 2)) { const g = Math.max(0.15, (i - 1.5) / steps); _p.set(lerp(hx, _p.x, g), lerp(hy, _p.y, g) + 2, lerp(hz, _p.z, g)); break; }
+    // Sphere-cast from her to each candidate spot (her usual shoulder, the other one, then both
+    // lifted and pulled in) and take the clearest: a candidate loses for a blocked line of sight,
+    // and for a tower face right beside the lens (that's the "one wall fills the frame" shot).
+    const W = CAM.wall, sideSign = this.sideSign || 1;
+    const ball = (x, y, z) => solid(x / M, z / M, y / M) || solid((x + W.radius) / M, z / M, y / M) || solid((x - W.radius) / M, z / M, y / M)
+      || solid(x / M, (z + W.radius) / M, y / M) || solid(x / M, (z - W.radius) / M, y / M);
+    let best = null;
+    for (const [sg, lift] of [[sideSign, 0], [-sideSign, 0], [sideSign, 1], [-sideSign, 1]]) {
+      const d = dist * (lift ? W.liftIn : 1), u = up + lift * W.lift * (1 - K);
+      const cx = hx - fx * d - fz * side * sg, cy = hy + u, cz = hz - fz * d + fx * side * sg;
+      let t = 1;
+      for (let i = 2; i <= W.steps; i++) {
+        const f = i / W.steps;
+        if (ball(lerp(hx, cx, f), lerp(hy, cy, f), lerp(hz, cz, f))) { t = (i - 1.5) / W.steps; break; }
+      }
+      let crowd = 0; // tower faces right beside the camera, either side
+      for (const lat of W.probe) for (const k of [1, -1]) if (solid((cx - fz * lat * k) / M, (cz + fx * lat * k) / M, cy / M)) crowd += 1 / lat;
+      const score = t * 2 - crowd * W.crowdK - lift * 0.35 - (sg !== sideSign ? 0.12 : 0);
+      if (!best || score > best.score) best = { score, t, sg, cx, cy, cz };
+      if (t === 1 && crowd === 0) break; // the usual spot is clean: done
     }
+    this.sideSign = best.sg;
+    const g = Math.max(W.minT, best.t);
+    _p.set(lerp(hx, best.cx, g), lerp(hy, best.cy, g) + (1 - g) * W.lift * 0.5, lerp(hz, best.cz, g));
     _p.y = Math.max(_p.y, 2);
     // Spring the camera's OFFSET from her (not its absolute position): at 300 m/s an absolute
     // spring would trail 50 m behind. The offset eases, so turns and climbs still swing smoothly.
     _p.x -= hx; _p.y -= hy; _p.z -= hz;
     if (!this.placed) { this.pos.copy(_p); this.placed = true; }
     this.pos.lerp(_p, Math.min(1, dt * 5.5));
+    // the spring may swing it through a corner: if the eased spot is inside a wall, cut to the safe one
+    if (ball(hx + this.pos.x, hy + this.pos.y, hz + this.pos.z)) this.pos.copy(_p);
     this.cam.position.set(hx + this.pos.x, hy + this.pos.y, hz + this.pos.z);
     // lens first (the aim below depends on it)
     const fov = lerp(lerp(C.fov[0], C.fov[1], frac) + CAM.canyon.fovUp * this.canyonK + B.fov * this.boostK + B.kickFov * Math.sin(this.kick * Math.PI), P.fov, K);

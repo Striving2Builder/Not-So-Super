@@ -260,6 +260,7 @@ export class Overworld {
         const ddx = h.x - px, ddy = h.y - py, d = Math.hypot(ddx, ddy);
         if (d >= R || d < 1e-6) continue;
         h.x = px + (ddx / d) * R; h.y = py + (ddy / d) * R;
+        if (this.view3d) { this.view3d.slide(h, ddx / d, ddy / d); continue; } // (3D: glance along the façade)
         if (h.speed > 350) { this.shake = Math.max(this.shake, 8); sfx.hit(); }
         h.speed *= 0.35;
       }
@@ -452,7 +453,7 @@ export class Overworld {
       a = wobble(this.view3d ? this.view3d.steer(inp.axis()) : inp.axis(), st ? st.intox : 0, this.t); // (3D: stick is camera-relative)
       // Autopilot: steer to the waypoint while the stick is idle; any input takes over.
       // (Still subject to the drunk wobble: autopilot is not a way around intoxication.)
-      if (this.nav.autopilot && this.nav.target && !h.perch && Math.hypot(a.x, a.y) < 0.12) a = wobble(this.nav.steer(h), st ? st.intox : 0, this.t);
+      if (this.nav.autopilot && this.nav.target && !h.perch && Math.hypot(a.x, a.y) < 0.12) a = wobble(this.view3d ? this.view3d.autoSteer(h, this.nav.steer(h)) : this.nav.steer(h), st ? st.intox : 0, this.t); // (3D: routes round towers taller than her)
     }
     const boost = !this.attract && inp.down('boost');
     if (!this.attract) this.altitudeInput(inp, a);

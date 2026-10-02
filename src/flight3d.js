@@ -14,6 +14,7 @@ import { avoidHud } from './ui.js';
 import { setBandHeights, speedFraction, BANDS } from './flight.js';
 import { DISTRICTS } from './data.js';
 import { quality } from './settings.js';
+import { sfx } from './sfx.js';
 
 /** Flight in 3D? Read once from the URL (?flight=3d). */
 let on;
@@ -35,6 +36,7 @@ const LOOK3 = {
   iconPx: 26,
   patrolBelow: 150,             // speed under which high patrol cranes up to the overhead view
   wallProbe: [10, 22],          // m to each side: a tower face this close rushes past (action lines)
+  auto: { ahead: 260, step: 26, halfWidth: 24, turn: 0.22, tries: 6 }, // autopilot look-ahead (world units)
   chips: 3,                     // edge chips for off-screen incidents (the waypoint is extra)
   chipTop: 92,                  // px: chips stay below the top HUD row
 };
@@ -118,6 +120,51 @@ export class Flight3D {
     if (this.fx3 && this.hero) this.fx3.ring(this.hero.group.position, _v.set(Math.cos(this.ow.hero.ang), 0, Math.sin(this.ow.hero.ang)), false);
   }
 
+  /**
+   * Autopilot in the 3D city: the 2D route is a straight line, but here the core's towers rise
+   * through the cruise band. Look ahead along the wanted heading; if a tower taller than her is in
+   * the way, swing to the nearest clear heading (alternating sides, widening), so she threads the
+   * gaps at full speed instead of bouncing off façades.
+   */
+  autoSteer(h, a) {
+    if (!a) return a;
+    const mag = Math.hypot(a.x, a.y) || 1, base = Math.atan2(a.y, a.x), A = LOOK3.auto;
+    const clear = (ang) => {
+      const cx = Math.cos(ang), cy = Math.sin(ang), px = -cy * A.halfWidth, py = cx * A.halfWidth;
+      for (let d = A.step; d <= A.ahead; d += A.step) {
+        const x = h.x + cx * d, y = h.y + cy * d;
+        for (const k of [0, 1, -1]) { const o = this.ow.buildingAt(x + px * k, y + py * k); if (o && this.heightOf(o) > h.z - 8) return false; }
+      }
+      return true;
+    };
+    // keep the last detour while it's still clear (no flip-flopping between gaps)
+    if (this.detour !== undefined && Math.abs(this.detour) > 0 && clear(base + this.detour)) {
+      if (clear(base)) this.detour = 0; else return { x: Math.cos(base + this.detour) * mag, y: Math.sin(base + this.detour) * mag };
+    }
+    if (clear(base)) { this.detour = 0; return a; }
+    for (let i = 1; i <= A.tries; i++) for (const sgn of [1, -1]) {
+      const off = sgn * i * A.turn;
+      if (clear(base + off)) { this.detour = off; return { x: Math.cos(base + off) * mag, y: Math.sin(base + off) * mag }; }
+    }
+    return a;
+  }
+
+  /**
+   * She hit a tower face (n = the wall's outward normal, world units): in 3D the towers are
+   * everywhere in the cruise band, so instead of the 2D stop-dead she glances off along the
+   * façade, losing speed only in proportion to how head-on the hit was. A hard head-on hit still
+   * thumps (shake + sound).
+   */
+  slide(h, nx, ny) {
+    const cx = Math.cos(h.ang), cy = Math.sin(h.ang), into = -(cx * nx + cy * ny);
+    if (into <= 0) return; // already moving away from it
+    let tx = -ny, ty = nx;
+    if (tx * cx + ty * cy < 0) { tx = -tx; ty = -ty; }
+    h.ang = Math.atan2(ty, tx);
+    h.speed *= 1 - 0.45 * into;
+    if (into > 0.85 && h.speed > 350 && this.ow.shake < 4) { this.ow.shake = 8; sfx.hit(); }
+  }
+
   /** Drag on the screen (not the stick): orbit the camera round her. */
   orbit(dx) { if (this.cam) this.cam.orbit += dx * 0.006; }
 
@@ -193,7 +240,7 @@ export class Flight3D {
     this.applyDpr();
     // ground (or roof) under her, for the contact shadow
     const b = ow.buildingAt(h.x, h.y), ground = b && this.heightOf(b) < h.z ? this.heightOf(b) : 0;
-    this.hero.update(h, dt, ow.t, !!ow.diving, ground, this.cam.patrolK);
+    this.hero.update(h, dt, ow.t, !!ow.diving, ground, this.cam.patrolK, boosting);
     const solid = (x, y, z) => { const o = ow.buildingAt(x, y); return !!o && z < this.heightOf(o); };
     this.cam.update(h, dt, frac, { patrol, boosting, canyon: this.canyon ? 1 - h.hover : 0 }, solid);
     this.fill.position.copy(this.cam.cam.position); this.fill.target.position.copy(this.hero.group.position);
