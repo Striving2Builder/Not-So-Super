@@ -40,7 +40,7 @@ export const PROFILES = {
     clubTex: 'lite', clubCache: 1, clubMaterials: 'standard', clubLights: 3,
     look3d: 'lite',
     nightlife: 'lite',
-    flyDetail: true, flyTileRes: 144, flySpriteMax: 512, fly3dDpr: [1, 0.8], fly3dHero: [0, 2], fly3dAA: 'fxaa',
+    flyDetail: true, flyTileRes: 144, flySpriteMax: 512, fly3dDpr: [1, 0.75], fly3dHero: [0, 1.75], fly3dAA: 'fxaa',
     scanFilter: true,
     brawlSprite: 256, brawlBakeMs: 900,
   },

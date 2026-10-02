@@ -43,7 +43,7 @@ const LOOK3 = {
   bands: [110, 560, 1100],     // world units (×0.5 m)
   speedMul: [0.5, 1, 1.3],     // top-speed multiplier per band in 3D
   fog: [1100, 1600, 2400],     // fog far (m) per band
-  beam: { width: 14, height: 420, alpha: 0.95, minPx: 0.03 }, // m; minPx: width ≥ this × distance (a few px far off)
+  beam: { width: 14, height: 420, alpha: 0.95, minPx: 0.03, max: 24 }, // m; minPx: width ≥ this × distance (a few px far off)
   icons: { max: 3, cluster: 40, fade: [300, 1600], heroBox: [90, 80] }, // on-screen incident icons: cap, merge radius (px), fade (m)
   iconPx: 26,
   patrolBelow: 150,             // speed under which high patrol cranes up to the overhead view
@@ -58,26 +58,25 @@ const LOOK3 = {
 // Incident beacon: a thin, perfectly vertical shaft of light. A quad that turns about its own
 // vertical axis to face the camera (never leans), a hot core with a soft glow across it, fading up
 // its height; soft edges only, so it never draws a hard stair-stepped one.
-const BEAM_VS = `uniform float hgt; uniform float width; varying vec2 vQ;
+const BEAM_VS = `attribute vec3 base; attribute vec3 bcol; attribute float bw; uniform float hgt; varying vec2 vQ; varying vec3 vCol;
 void main() {
-  vec3 base = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
   vec3 to = cameraPosition - base; to.y = 0.0;
   vec3 right = normalize(vec3(to.z, 0.0, -to.x) + 1e-5);
-  vQ = vec2(position.x * 2.0, position.y / hgt);
-  vec3 p = base + right * position.x * width + vec3(0.0, position.y, 0.0);
+  vQ = vec2(position.x * 2.0, position.y / hgt); vCol = bcol;
+  vec3 p = base + right * position.x * bw + vec3(0.0, position.y, 0.0);
   gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
 }`;
-const BEAM_FS = `uniform vec3 col; uniform float alpha; uniform float time; varying vec2 vQ;
+const BEAM_FS = `uniform float alpha; uniform float time; varying vec2 vQ; varying vec3 vCol;
 void main() {
   float x = vQ.x, core = exp(-x * x * 40.0), glow = exp(-x * x * 6.0) * 0.6;
   float up = pow(1.0 - vQ.y, 1.4) * smoothstep(0.0, 0.02, vQ.y);
-  float pulse = 0.85 + 0.15 * sin(time * 3.0 - vQ.y * 14.0);
+  float pulse = 0.85 + 0.15 * sin(time * 3.0 - vQ.y * 14.0 + vCol.r * 9.0);
   float a = clamp((core + glow) * up * pulse * alpha, 0.0, 1.0);
   // a white-hot core in a coloured glow; alpha-blended so it still reads against a bright day sky
-  gl_FragColor = vec4(mix(col, vec3(1.0), core / (core + glow + 1e-4) * 0.7), a);
+  gl_FragColor = vec4(mix(vCol, vec3(1.0), core / (core + glow + 1e-4) * 0.7), a);
 }`;
 
-const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _uv = new THREE.Vector2();
+const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _uv = new THREE.Vector2(), _c = new THREE.Color();
 
 export class Flight3D {
   constructor(ow) {
@@ -86,7 +85,6 @@ export class Flight3D {
     setBandHeights(LOOK3.bands);
     LOOK3.speedMul.forEach((s, i) => { BANDS[i].speedMul = s; });
     this.scene = null;
-    this.beams = new Map();
     this.frame = 0;
     this.canyon = false;
   }
@@ -195,31 +193,41 @@ export class Flight3D {
   /** Drag on the screen (not the stick): orbit the camera round her. */
   orbit(dx) { if (this.cam) this.cam.orbit += dx * 0.006; }
 
+  /** All the incident beacons in one mesh (one draw call): a quad per incident, placed in the shader. */
   syncBeams(t) {
-    const ow = this.ow, seen = new Set(), cp = this.cam.cam.position, B = LOOK3.beam;
-    for (const z of ow.zones) {
-      seen.add(z.uid);
-      let b = this.beams.get(z.uid);
-      if (!b) {
-        const geo = new THREE.PlaneGeometry(1, B.height, 1, 8);
-        geo.translate(0, B.height / 2, 0);
-        b = new THREE.Mesh(geo, new THREE.ShaderMaterial({
-          uniforms: { col: { value: new THREE.Color(z.color) }, alpha: { value: B.alpha }, time: { value: 0 }, hgt: { value: B.height }, width: { value: B.width } },
-          vertexShader: BEAM_VS, fragmentShader: BEAM_FS, transparent: true, depthWrite: false, toneMapped: false, side: THREE.DoubleSide,
-        }));
-        b.frustumCulled = false; // (the quad is placed in the vertex shader)
-        b.renderOrder = 6;
-        this.scene.add(b);
-        this.beams.set(z.uid, b);
+    const ow = this.ow, cp = this.cam.cam.position, B = LOOK3.beam, N = B.max;
+    if (!this.beamMesh) {
+      const g = new THREE.BufferGeometry(), pos = [], idx = [];
+      for (let i = 0; i < N; i++) {
+        const o = i * 4;
+        pos.push(-0.5, 0, 0, 0.5, 0, 0, 0.5, B.height, 0, -0.5, B.height, 0);
+        idx.push(o, o + 1, o + 2, o, o + 2, o + 3);
       }
-      b.position.set(z.x * M, 0, z.y * M);
-      const u = b.material.uniforms;
-      u.time.value = t;
-      // thin up close, a constant few pixels far off (never a hairline, never a fat stick)
-      const d = Math.hypot(b.position.x - cp.x, b.position.z - cp.z);
-      u.width.value = Math.max(B.width, d * B.minPx);
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      for (const [k, n] of [['base', 3], ['bcol', 3], ['bw', 1]]) g.setAttribute(k, new THREE.BufferAttribute(new Float32Array(N * 4 * n), n).setUsage(THREE.DynamicDrawUsage));
+      g.setIndex(idx);
+      this.beamMesh = new THREE.Mesh(g, new THREE.ShaderMaterial({
+        uniforms: { alpha: { value: B.alpha }, time: { value: 0 }, hgt: { value: B.height } },
+        vertexShader: BEAM_VS, fragmentShader: BEAM_FS, transparent: true, depthWrite: false, toneMapped: false, side: THREE.DoubleSide,
+      }));
+      this.beamMesh.frustumCulled = false; // (the quads are placed in the vertex shader)
+      this.beamMesh.renderOrder = 6;
+      this.scene.add(this.beamMesh);
     }
-    for (const [uid, b] of this.beams) if (!seen.has(uid)) { this.scene.remove(b); b.geometry.dispose(); b.material.dispose(); this.beams.delete(uid); }
+    const g = this.beamMesh.geometry, base = g.attributes.base, col = g.attributes.bcol, bw = g.attributes.bw;
+    let i = 0;
+    for (const z of ow.zones) {
+      if (i >= N) break;
+      const x = z.x * M, y = z.y * M, d = Math.hypot(x - cp.x, y - cp.z);
+      // thin up close, a constant few pixels far off (never a hairline, never a fat stick)
+      const w = Math.max(B.width, d * B.minPx);
+      _c.set(z.color);
+      for (let k = 0; k < 4; k++) { base.setXYZ(i * 4 + k, x, 0, y); col.setXYZ(i * 4 + k, _c.r, _c.g, _c.b); bw.setX(i * 4 + k, w); }
+      i++;
+    }
+    g.setDrawRange(0, i * 6);
+    base.needsUpdate = col.needsUpdate = bw.needsUpdate = true;
+    this.beamMesh.material.uniforms.time.value = t;
   }
 
   /** Screen projection helpers for the 2D overlay (markers), in CSS px. */
