@@ -69,9 +69,16 @@ const AREAS = {
   },
   investigation: {
     daycase: { type: 'investigate', setting: 'rigged' },          // setting = case id (data.js CASES)
-    dayoffice: { type: 'investigate', setting: 'blackmail', moments: true },
-    dayalley: { type: 'investigate', setting: 'smuggle' },
+    dayoffice: { type: 'investigate', setting: 'blackmail', moments: true, paint: 'office' }, // paint = force a painted room (scenespots.js)
+    dayalley: { type: 'investigate', setting: 'smuggle', paint: 'alley' },
     dayarson: { type: 'investigate', setting: 'arson' },
+    daypier: { type: 'investigate', setting: 'smuggle', paint: 'pier' },
+    dayhotel: { type: 'investigate', setting: 'missing', paint: 'hotel' },
+    dayapt: { type: 'investigate', setting: 'missing', paint: 'apartment_2' },
+    dayclub: { type: 'investigate', setting: 'spiked' },
+    dayfarm: { type: 'investigate', setting: 'poison' },
+    dayfactory: { type: 'investigate', setting: 'sabotage' },
+    dayinsider: { type: 'investigate', setting: 'insider', paint: 'office_2' },
     nightcase: { ...Z3('nightcase', 'Triangle Club'), clues: true },
   },
   nightlife: {
@@ -240,14 +247,15 @@ async function shootBrawl(page, dir, name, sc = {}) {
   return { shots, ...m };
 }
 
-async function shootInvestigate(page, dir, name, setting, moments) {
-  await page.evaluate(async (caseId) => {
+async function shootInvestigate(page, dir, name, setting, moments, paint) {
+  await page.evaluate(async ([caseId, paint]) => {
     const g = window.__game; g.setMode('overworld');
     let z = null;
     for (let i = 0; i < 40 && !(z && z.mode === 'investigate'); i++) { g.state.clock = 12 * 60; z = g.overworld.spawn('case', true); }
     if (caseId) { const def = (await import('/src/data.js')).CASES.find((c) => c.id === caseId); if (def) { z.def = def; z.name = def.name; } }
+    if (paint) z.paint = paint;
     g.startZone(z);
-  }, setting);
+  }, [setting, paint]);
   await page.waitForTimeout(2500);
   const shots = [];
   const snap = async (n) => { const f = `${name}_${n}.png`; await page.screenshot({ path: path.join(dir, f) }); shots.push(f); };
@@ -337,7 +345,7 @@ async function shootNightClues(page, dir, name) {
           else if (sc.type === 'fly') r = await shootFly(page, dir, name, sc.plan);
           else if (sc.type === 'fly3d') r = await shootFly3d(page, dir, name, sc.plan);
           else if (sc.type === 'brawl') r = await shootBrawl(page, dir, name, sc);
-          else if (sc.type === 'investigate') r = await shootInvestigate(page, dir, name, sc.setting, sc.moments);
+          else if (sc.type === 'investigate') r = await shootInvestigate(page, dir, name, sc.setting, sc.moments, sc.paint);
           report[area][name] = { ...r, errors };
         } catch (e) {
           report[area][name] = { failed: e.message.split('\n')[0], errors };

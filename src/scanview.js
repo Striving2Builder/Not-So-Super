@@ -3,6 +3,7 @@
 // container with an Arkham-style data card on a leader line, the witness shows a skeleton + pulse.
 // Mixed into Investigate (uses its view/toScreen/layers/clues).
 import { LW, LH, ease, scanPattern, paintXrayStructure, paintSkeleton } from './crimescene.js';
+import { sceneImage, sceneEdges } from './scenespots.js';
 import { honey, scanGlyph, clueTag, trapTag, pulseTag, drawScanTags } from './scanhud.js';
 
 export const ScanView = {
@@ -32,7 +33,7 @@ export const ScanView = {
     ctx.fillStyle = sg; ctx.fillRect(sweepX - 260, v.y0, 320, v.y1 - v.y0);
     ctx.globalCompositeOperation = 'source-over';
     const w = this.witness;
-    paintSkeleton(ctx, w.x, w.y, 2.1, t);
+    paintSkeleton(ctx, w.x, w.y, w.s, t);
     const tags = [];
     for (const c of this.clues) {
       if (c.method !== 'xray' || !c.host) continue;
@@ -66,7 +67,7 @@ export const ScanView = {
       ctx.beginPath(); ctx.arc(tr.x + 18, tr.y + 20, 18 + Math.sin(t * 6) * 3, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
       tags.push(trapTag(this.toScreenZ(tr.x + 18, tr.y + 4, f, zk)));
     }
-    tags.push(pulseTag(this.toScreenZ(w.x - 12, w.y - 186, f, zk), w.mood.works, t));
+    tags.push(pulseTag(this.toScreenZ(w.x - 6 * w.s, w.y - 89 * w.s, f, zk), w.mood.works, t));
 
     // screen-space: grain, falloff, data cards and tags kept clear of the HUD
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -103,7 +104,11 @@ export const ScanView = {
     X.globalCompositeOperation = 'saturation'; X.globalAlpha = 0.88; X.fillStyle = '#808080'; X.fillRect(0, 0, Wd, Hd);
     X.globalAlpha = 1; X.globalCompositeOperation = 'multiply'; X.fillStyle = '#3a68b0'; X.fillRect(0, 0, Wd, Hd);
     X.globalCompositeOperation = 'source-over'; X.fillStyle = 'rgba(2,8,24,.18)'; X.fillRect(0, 0, Wd, Hd);
-    X.save(); this.view(X, f, dpr, 0, true); X.globalAlpha = 0.55; paintXrayStructure(X, this.settingKey, v, 0); X.restore();
+    const rec = this.paint && sceneImage(this.paint);
+    if (rec) { X.fillStyle = 'rgba(2,6,18,.4)'; X.fillRect(0, 0, Wd, Hd); } // a painting dims further: the scan lines carry the room
+    X.save(); this.view(X, f, dpr, 0, true); X.globalAlpha = 0.55; paintXrayStructure(X, this.settingKey, v, 0, this.floorY);
+    if (rec) { X.globalCompositeOperation = 'lighter'; X.globalAlpha = 0.5; X.drawImage(sceneEdges(rec), 0, 0, LW, LH); } // its own edges, traced
+    X.restore();
     X.globalCompositeOperation = 'lighter'; X.drawImage(L.edge, 0, 0); X.globalAlpha = 0.45; X.drawImage(L.edge, 0, 0);
     X.globalAlpha = 1; X.globalCompositeOperation = 'source-over';
     L.xrOk = true;
