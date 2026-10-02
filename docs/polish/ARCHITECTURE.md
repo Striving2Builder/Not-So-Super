@@ -80,7 +80,13 @@ render hand-off, enter/exit, the boost kick, and the 3D flight button set (`setB
   - `skyline3d.js` — horizon: the water (bay + river round the map), the outer "city carpet" ground
     (street grid in the shader), the haze patch for MeshBasic ground.
   - `street3d.js` — GPU traffic light streams (streets, bridges, highway) + street steam.
-- `sky3d.js` — clock-driven gradient dome, sun/moon + lights, district-tinted fog, cloud decks.
+- `sky3d.js` — clock-driven graded dome (horizon band → mid → zenith, sun disc + glow, moon +
+  halo; exactly `horizon` at/below the horizon), sun/moon lights, district-tinted fog, inked
+  two-tone comic cumulus billboards (one draw call). Exposes `horizon` (display colour); flight3d
+  sets `city3.sky = sky` so the city's haze ends on it. Tables: `SKY`, `CLOUD`.
+- `flightpost3d.js` — whole-frame AA: the scene renders into a target three treats like the canvas
+  (tone mapping + sRGB output), then one pass to the canvas with FXAA (+ the boost zoom streak);
+  `quality().fly3dAA` = 'fxaa' | 'msaa' | 'none'.
 - `herofly3d.js` — the HeroModel posed from the flight state (hover idle / fist-forward with
   trailing legs / bank / cape), her own pushed-saturation suit materials + rim, inked blob shadow,
   enlarged in the patrol view. Tables: `POSE`, `SUIT`.
