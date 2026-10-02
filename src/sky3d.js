@@ -99,11 +99,11 @@ void main(){
   // out as a whole: the fill is about the horizon's colour, so fogging both alike left a hollow
   // ink outline hanging in the haze
   float fogK = smoothstep(fogNear, fogFar, vDist);
-  inkK *= 1.0 - smoothstep(0.1, 0.6, fogK);
+  inkK *= 1.0 - smoothstep(0.05, 0.4, fogK);
   vec3 under = shade * mix(0.68, 1.0, smoothstep(0.1, 0.6, vLy));
   vec3 c = mix(mix(under, lit, litK), ink, inkK);
   c = mix(c, fogCol, fogK * 0.85);
-  gl_FragColor = vec4(c, a * alpha * vFade * (1.0 - 0.75 * smoothstep(0.5, 1.0, fogK)));
+  gl_FragColor = vec4(c, a * alpha * vFade * (1.0 - 0.85 * smoothstep(0.3, 0.9, fogK)));
 }`;
 
 let cloudTex = null;
