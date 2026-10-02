@@ -15,7 +15,7 @@ export const KIND = { surface: 0, ink: 1, sign: 2, neon: 3, beacon: 4 };
 /** Atlas cells: five facades, three roofs. */
 export const STYLE = { concrete: 0, glass: 1, brick: 2, deco: 3, industrial: 4, gravel: 5, tar: 6, helipad: 7 };
 /** One facade tile = WIN.cols windows of WIN.w m by WIN.rows floors of WIN.floor m. */
-export const WIN = { cols: 8, rows: 16, w: 4, floor: 3.6 };
+export const WIN = { cols: 8, rows: 16, w: 3, floor: 3.5 };
 const CELL = 32, CW = WIN.cols * CELL, CH = WIN.rows * CELL, CELLS = 8;
 
 // ---------------------------------------------------------------- atlas
@@ -43,14 +43,14 @@ function atlas() {
         const x = ox + col * CELL, y = r * CELL;
         if (extra) extra(x, y, r, col);
         const lit = on();
-        rect(x + mx, y + my, CELL - mx * 2, CELL - my * 2, 0.25, glass, lit ? 1 : 0);
+        rect(x + mx, y + my, CELL - mx * 2, CELL - my * 2, 0.25, glass, lit ? 0.5 + rnd() * 0.5 : 0); // lamps differ
       }
     }
   };
   // 0 concrete: punched windows, slab lines
   windows(0, 0.86, [7, 8], 1, 0.6, (x, y) => rect(x, y + CELL - 3, CELL, 3, 0.7, 0, 0));
   // 1 glass curtain wall: big panes, thin mullions, dark spandrel per floor
-  windows(CW, 0.7, [1, 2], 1, 0.42, (x, y) => rect(x, y + CELL - 7, CELL, 7, 0.38, 0.55, 0));
+  windows(CW, 0.7, [1, 2], 1, 0.3, (x, y) => rect(x, y + CELL - 7, CELL, 7, 0.38, 0.55, 0));
   // 2 brick: small windows with a pale lintel
   windows(CW * 2, 0.8, [9, 9], 1, 0.55, (x, y) => { rect(x + 7, y + 6, CELL - 14, 3, 1, 0, 0); for (let i = 0; i < 4; i++) rect(x, y + i * 8 + 3, CELL, 1, 0.68, 0, 0); });
   // 3 art deco: bright vertical piers, dark spandrels, tall narrow windows (reads TALL)
@@ -92,6 +92,23 @@ function atlas() {
 }
 
 // ---------------------------------------------------------------- the shader
+/** Haze reach: far = max(fog far, camera height x perAlt), capped under the camera's far plane. */
+export const HAZE = { perAlt: 7, max: 4200, near: 0.08 };
+const _cool = new THREE.Color(0.93, 0.98, 1.1);
+/**
+ * Aerial perspective shared by every city material (buildings, ground, sea, street lights): a cool,
+ * desaturated haze that thickens toward the ground and converges on the sky dome's own horizon
+ * colour at uHazeFar, so the world never ends in an edge, a plate or a fog wall.
+ */
+export const HAZE_GLSL = /* glsl */`
+uniform vec3 uHazeCol; uniform vec3 uHorizon; uniform float uHazeNear; uniform float uHazeFar;
+vec3 haze(vec3 c, float d, float y, float k) {
+  float f = clamp((d - uHazeNear) / (uHazeFar - uHazeNear), 0., 1.);
+  f = 1. - (1. - f) * (1. - f); // ease-out: soft layers through the middle distance, solid at the end
+  f = clamp(f + (1. - smoothstep(0., 220., y)) * smoothstep(uHazeNear * 0.3, uHazeFar, d) * 0.45, 0., 1.) * k;
+  return mix(c, mix(uHazeCol, uHorizon, smoothstep(0.35, 1., f)), f);
+}`;
+
 const VERT = /* glsl */`
 attribute vec3 aAux; attribute vec4 aCol; attribute vec4 aLit;
 uniform vec2 res; uniform float dpr; uniform float uInkW;
@@ -104,27 +121,46 @@ void main() {
   vec4 wp = modelMatrix * vec4(position, 1.);
   vW = wp.xyz;
   vec4 mv = viewMatrix * wp;
-  if (vKind == 1.) {
-#ifdef FAR
-    gl_Position = vec4(0., 0., 2., 1.); return; // far chunks: the haze does the outlining
-#endif
-    // ink: a screen-space quad along the edge, thick near and thin far (clipped at the near plane)
-    vec4 mo = viewMatrix * (modelMatrix * vec4(aAux, 1.));
-    const float NZ = -0.4;
-    if (mv.z > NZ && mo.z > NZ) { gl_Position = vec4(0., 0., 2., 1.); return; }
-    if (mv.z > NZ) mv.xyz = mix(mo.xyz, mv.xyz, (NZ - mo.z) / (mv.z - mo.z));
-    else if (mo.z > NZ) mo.xyz = mix(mv.xyz, mo.xyz, (NZ - mv.z) / (mo.z - mv.z));
-    float d = -mv.z;
-    mv.xyz *= 1. - min(0.003 + 0.25 / d, 0.2); // ride on top of the faces it borders
-    vec4 c0 = projectionMatrix * mv, c1 = projectionMatrix * mo;
-    vec2 s = (c1.xy / c1.w - c0.xy / c0.w) * res;
-    vec2 dir = dot(s, s) > 1e-8 ? normalize(s) : vec2(1., 0.);
-    float w = uInkW * dpr * uv.y * mix(1., 0.3, smoothstep(25., 650., d));
-    c0.xy += vec2(-dir.y, dir.x) * uv.x * max(w, 0.9) / res * c0.w;
-    gl_Position = c0;
-    return;
-  }
   gl_Position = projectionMatrix * mv;
+}`;
+
+/**
+ * Ink: its own transparent layer (one more draw per near chunk). Each edge is a screen-space quad
+ * a little wider than the line; the fragment fades its edges, so lines are anti-aliased, a
+ * sub-pixel line fades instead of breaking into dashes, and the weight thins with depth.
+ */
+const INK_VERT = /* glsl */`
+attribute vec3 aAux;
+uniform vec2 res; uniform float dpr; uniform float uInkW;
+varying float vAcross; varying float vWid; varying vec3 vP;
+void main() {
+  vec4 wp = modelMatrix * vec4(position, 1.);
+  vP = wp.xyz;
+  vec4 mv = viewMatrix * wp, mo = viewMatrix * (modelMatrix * vec4(aAux, 1.));
+  const float NZ = -0.4;
+  if (mv.z > NZ && mo.z > NZ) { gl_Position = vec4(0., 0., 2., 1.); return; }
+  if (mv.z > NZ) mv.xyz = mix(mo.xyz, mv.xyz, (NZ - mo.z) / (mv.z - mo.z));
+  else if (mo.z > NZ) mo.xyz = mix(mv.xyz, mo.xyz, (NZ - mv.z) / (mo.z - mv.z));
+  float d = -mv.z;
+  mv.xyz *= 1. - min(0.006 + 0.5 / d, 0.25); // sit in front of the faces it borders (no z-fight dashes)
+  vec4 c0 = projectionMatrix * mv, c1 = projectionMatrix * mo;
+  vec2 s = (c1.xy / c1.w - c0.xy / c0.w) * res;
+  vec2 dir = dot(s, s) > 1e-8 ? normalize(s) : vec2(1., 0.);
+  vWid = uInkW * dpr * uv.y * mix(1., 0.35, smoothstep(25., 600., d)); // wanted width, px
+  float hw = max(vWid, 1.) * 0.5 + 1.; // the quad: a pixel of feather each side
+  vAcross = uv.x * hw;
+  c0.xy += vec2(-dir.y, dir.x) * uv.x * hw * 2. / res * c0.w;
+  gl_Position = c0;
+}`;
+const INK_FRAG = /* glsl */`
+uniform vec3 uInk;
+${HAZE_GLSL}
+varying float vAcross; varying float vWid; varying vec3 vP;
+void main() {
+  float d = length(vP - cameraPosition);
+  float a = clamp(max(vWid, 1.) * 0.5 + 0.5 - abs(vAcross), 0., 1.) * min(vWid, 1.) * (1. - smoothstep(450., 800., d));
+  if (a < 0.01) discard;
+  gl_FragColor = vec4(haze(uInk, d, vP.y, 1.), a);
 }`;
 
 const FRAG = /* glsl */`
@@ -132,7 +168,8 @@ uniform sampler2D uAtlas; uniform sampler2D uSigns;
 uniform vec3 uAvg[8];
 uniform vec3 uKeyDir; uniform vec3 uKeyCol; uniform vec3 uAmbUp; uniform vec3 uAmbDn; uniform vec3 uSky; uniform vec3 uInk;
 uniform float uNight; uniform float uLit; uniform float uTime; uniform float uFogK; uniform float dpr;
-uniform vec3 fogColor; uniform float fogNear; uniform float fogFar;
+uniform float uFogMax;
+${HAZE_GLSL}
 // per-face values are flat: exact (they seed hashes) and cheaper than interpolating
 varying vec2 vUv; flat varying vec3 vCol; flat varying vec3 vLit; flat varying vec3 vN; varying vec3 vW;
 flat varying float vStyle; flat varying float vKind;
@@ -140,9 +177,7 @@ float h11(float n) { return fract(sin(n) * 43758.5453); }
 void main() {
   float dist = length(vW - cameraPosition);
   vec3 col = vec3(0.), emi = vec3(0.);
-  if (vKind == 1.) {
-    col = uInk;
-  } else if (vKind == 2.) {
+  if (vKind == 2.) {
     vec3 s = texture2D(uSigns, vUv).rgb; // r tube core, g glow/letters, b board
     col = vec3(0.03, 0.02, 0.05) * s.b;
     emi = (vCol * s.g * 0.85 + mix(vCol, vec3(1.), 0.5) * s.r * 0.6) * mix(0.8, 1.15, uNight);
@@ -156,8 +191,12 @@ void main() {
     vec2 fw = fwidth(cu);
     vec3 avg = uAvg[int(vStyle)];
     // past ~2-3 px per window the grid becomes the cell's flat tone plus lit floor bands
-    float band = step(0.6, h11(floor(cu.y / 3.) * 7.13 + floor(vUv.x) * 3.7 + dot(floor(vCol * 255. + 0.5), vec3(0.97, 0.57, 0.23))));
-    vec3 far = vec3(avg.r, avg.g, roof ? avg.b : mix(band * avg.b * 2.2, avg.b, smoothstep(0.15, 0.4, fw.y)));
+    // far: lit windows as blocky clusters whose size doubles as they shrink on screen (each block
+    // stays >= ~3 px: a pattern, never static), same average light as the grid
+    float lv = clamp(ceil(log2(max(max(fw.x, fw.y), 1e-3) * 4.)), 0., 4.), bs = exp2(lv);
+    vec2 blk = floor(cu / vec2(bs, bs * 1.5));
+    float on = step(1. - avg.b * 2.4, h11(blk.x * 7.13 + blk.y * 3.71 + lv * 17. + dot(floor(vCol * 255. + 0.5), vec3(0.97, 0.57, 0.23))));
+    vec3 far = vec3(avg.r, avg.g, roof ? avg.b : mix(on * 0.8, avg.b, smoothstep(0.5, 1., max(fw.x, fw.y) * bs * 0.25)));
     vec3 m = far;
 #ifndef FAR
     float k = smoothstep(0.12, 0.28, max(fw.x, fw.y));
@@ -173,9 +212,10 @@ void main() {
 #endif
     vec3 N = normalize(vN), V = normalize(cameraPosition - vW);
     float ndl = dot(N, uKeyDir);
-    float litK = smoothstep(0.0, 0.07, ndl);
+    // three cel bands: shadow, raking light, full light (roofs always full when the sun is up)
+    float litK = smoothstep(0.0, 0.05, ndl), fullK = N.y > 0.5 ? 1. : smoothstep(0.32, 0.37, ndl);
     vec3 amb = mix(uAmbDn, uAmbUp, N.y * 0.5 + 0.5);
-    vec3 light = amb + uKeyCol * litK * (N.y > 0.5 ? 1.0 : 0.85);
+    vec3 light = amb + uKeyCol * litK * (0.6 + 0.4 * fullK);
     vec3 wall = vCol * m.r * light;
     if (roof) {
       col = mix(wall, vec3(0.9, 0.62, 0.05) * light, m.b);
@@ -190,10 +230,11 @@ void main() {
 #ifndef FAR
     // halftone dots in the shade, close up only: fixed dot size (shrinking dots turn to salt),
     // the strength fades out instead
-    float sh = (1. - litK) * (1. - m.g) * (1. - smoothstep(50., 120., dist));
+    // (the raking band gets a lighter screen than the full shadow)
+    float sh = (1. - 0.6 * litK - 0.4 * fullK * litK) * (1. - m.g * 0.7) * (1. - smoothstep(140., 260., dist));
     if (sh > 0.01) {
       vec2 p = mat2(0.7071, -0.7071, 0.7071, 0.7071) * gl_FragCoord.xy / (5. * dpr);
-      col *= 1. - 0.25 * sh * (1. - smoothstep(0.3, 0.42, length(fract(p) - 0.5) * 1.414));
+      col *= 1. - 0.3 * sh * (1. - smoothstep(0.3, 0.42, length(fract(p) - 0.5) * 1.414));
     }
 #endif
   }
@@ -201,12 +242,8 @@ void main() {
   col = toneMapping(col);
 #endif
   gl_FragColor = linearToOutputTexel(vec4(col + emi, 1.));
-  // haze: distance fog, thicker toward the ground, so the towers rise out of it
-  float d = dist * uFogK;
-  float f = smoothstep(fogNear, fogFar * 0.88, d);
-  f = clamp(f + (1. - smoothstep(0., 200., vW.y)) * smoothstep(fogNear * 0.3, fogFar * 1.1, d) * 0.55, 0., 1.);
-  if (vKind >= 2.) f *= 0.7; // neon cuts through the haze
-  gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, f);
+  // towers rise out of the haze; neon cuts through it; landmarks stay pale silhouettes (uFogMax)
+  gl_FragColor.rgb = haze(gl_FragColor.rgb, dist * uFogK, vW.y, (vKind >= 2. ? 0.7 : 1.) * uFogMax);
 }`;
 
 /**
@@ -218,38 +255,51 @@ export class CityLook {
   constructor(signTex) {
     const A = atlas();
     this.atlas = A.tex;
-    const U = THREE.UniformsUtils.merge([THREE.UniformsLib.fog]);
-    Object.assign(U, {
+    const U = {
+      uHazeCol: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() }, uHazeNear: { value: 400 }, uHazeFar: { value: 1600 },
       uAtlas: { value: A.tex }, uSigns: { value: signTex }, uAvg: { value: A.avg },
       uKeyDir: { value: new THREE.Vector3(0.4, 0.7, 0.5).normalize() }, uKeyCol: { value: new THREE.Color(1, 1, 1) },
       uAmbUp: { value: new THREE.Color(0.4, 0.4, 0.5) }, uAmbDn: { value: new THREE.Color(0.2, 0.2, 0.3) },
       uSky: { value: new THREE.Color(0.6, 0.7, 0.9) }, uInk: { value: new THREE.Color(0x120c14) },
       uNight: { value: 0 }, uLit: { value: 0 }, uTime: { value: 0 }, uInkW: { value: 2.6 },
       res: LOOK.res, dpr: LOOK.dpr,
-    });
+    };
     this.U = U;
     this.near = this.make(1);
     this.far = this.make(1, { FAR: 1 });
+    this.ink = new THREE.ShaderMaterial({ uniforms: this.U, vertexShader: INK_VERT, fragmentShader: INK_FRAG, transparent: true, depthWrite: false });
   }
 
-  make(fogK, defines = {}) {
-    const uniforms = { ...this.U, uFogK: { value: fogK } };
-    return new THREE.ShaderMaterial({ uniforms, vertexShader: VERT, fragmentShader: FRAG, defines, fog: true });
+  make(fogK, defines = {}, fogMax = 1) {
+    const uniforms = { ...this.U, uFogK: { value: fogK }, uFogMax: { value: fogMax } };
+    return new THREE.ShaderMaterial({ uniforms, vertexShader: VERT, fragmentShader: FRAG, defines });
   }
 
-  /** Per frame: key light + ambient from the sky's own lights, sky colour for glass, night. */
-  light(sun, hemi, fog, night, time) {
+  /**
+   * Per frame: key light + ambient from the sky's own lights, sky colour for glass, night, and the
+   * haze: its colour leans from the (district-tinted) fog toward a cool desaturated grey, ends on
+   * the dome's horizon colour, and reaches further the higher the camera (a city to the horizon).
+   */
+  light(sun, hemi, fog, night, time, horizon, camY) {
     const U = this.U;
     if (sun) {
       U.uKeyDir.value.copy(sun.position).sub(sun.target.position).normalize();
-      U.uKeyCol.value.copy(sun.color).multiplyScalar(0.12 + 0.36 * sun.intensity);
+      U.uKeyCol.value.copy(sun.color).multiplyScalar((0.12 + 0.36 * sun.intensity) * (1 - 0.45 * night));
     }
     if (hemi) {
-      const k = 0.75 * hemi.intensity;
+      const k = 0.75 * hemi.intensity * (1 - 0.4 * night);
       U.uAmbUp.value.copy(hemi.color).multiplyScalar(k);
       U.uAmbDn.value.copy(hemi.groundColor).multiplyScalar(k * 1.2).lerp(U.uAmbUp.value, 0.25);
     }
-    if (fog) U.uSky.value.copy(fog.color);
+    if (fog) {
+      U.uSky.value.copy(fog.color);
+      const c = fog.color, l = 0.3 * c.r + 0.59 * c.g + 0.11 * c.b;
+      U.uHorizon.value.copy(horizon || c);
+      // mostly the horizon itself, a little of the district tint, desaturated and cooled
+      U.uHazeCol.value.setRGB(l, l, l).lerp(c, 0.4).lerp(U.uHorizon.value, 0.6).multiply(_cool);
+      U.uHazeFar.value = Math.min(HAZE.max, Math.max(fog.far, camY * HAZE.perAlt));
+      U.uHazeNear.value = U.uHazeFar.value * HAZE.near;
+    }
     U.uNight.value = night;
     U.uLit.value = 0.85 * Math.min(1, Math.max(0, (night - 0.15) * 1.6));
     U.uTime.value = time;
@@ -263,7 +313,10 @@ const b255 = (v) => Math.max(0, Math.min(255, Math.round(v * 255)));
 /** Collects one chunk's vertices (indexed quads) in the layout above. */
 export class Builder {
   /** lite: the far-LOD build (no ink, callers skip small detail). */
-  constructor(lite = false) { this.lite = lite; this.pos = []; this.aux = []; this.uv = []; this.col = []; this.lit = []; this.idx = []; this.n = 0; }
+  constructor(lite = false) {
+    this.lite = lite; this.pos = []; this.aux = []; this.uv = []; this.col = []; this.lit = []; this.idx = []; this.n = 0;
+    this.ip = []; this.ia = []; this.iu = []; this.ii = []; this.inN = 0; // the ink layer
+  }
 
   /** tint/lit: THREE.Color or hex; style: atlas cell; kind: KIND.* */
   v(p, aux, u, w, tint, kind, lit, style) {
@@ -293,11 +346,22 @@ export class Builder {
   ink(p, q, w = 1) {
     // none far away (the far shader drops it anyway), none on tiny parts (HVAC, legs): saves triangles
     if (this.lite || Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) + Math.abs(p[2] - q[2]) < 2.5) return;
-    const i = this.v(p, q, 1, w, BLACK, 1, BLACK, 0);
-    this.v(p, q, -1, w, BLACK, 1, BLACK, 0);
-    this.v(q, p, 1, w, BLACK, 1, BLACK, 0);
-    this.v(q, p, -1, w, BLACK, 1, BLACK, 0);
-    this.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
+    const i = this.inN;
+    for (const [a, b, side] of [[p, q, 1], [p, q, -1], [q, p, 1], [q, p, -1]]) { this.ip.push(...a); this.ia.push(...b); this.iu.push(side, w); }
+    this.inN += 4;
+    this.ii.push(i, i + 1, i + 2, i, i + 2, i + 3);
+  }
+
+  /** The ink layer's geometry (null when there is none). */
+  inkGeometry() {
+    if (!this.inN) return null;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.ip, 3));
+    g.setAttribute('aAux', new THREE.Float32BufferAttribute(this.ia, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.iu, 2));
+    g.setIndex(this.inN > 65535 ? new THREE.Uint32BufferAttribute(this.ii, 1) : new THREE.Uint16BufferAttribute(this.ii, 1));
+    g.computeBoundingSphere();
+    return g;
   }
 
   geometry() {
@@ -313,7 +377,6 @@ export class Builder {
     return g;
   }
 }
-const BLACK = new THREE.Color(0, 0, 0);
 const UV0 = [[0.5, 0.5], [0.5, 0.5], [0.5, 0.5]];
 
 /** Surface look of a part: wall tint, window light, facade style, roof tint + style, uv offsets. */
@@ -415,9 +478,11 @@ export function tree(B, x, z, r, h, tint) {
 const TREE_L = look('#3a7a3a', '#000', STYLE.gravel, '#3a7a3a', STYLE.gravel);
 
 /** A thin mast with a blinking beacon on top (antennas, spires). */
-export function mast(B, x, z, bot, top, r = 0.35, beacon = '#ff3030', tint = '#3a3d44') {
+export function mast(B, x, z, bot, top, r = 0.35, beacon = '#ff3030', tint = '#8a8e98') {
+  // no ink: an inked hairline mast reads as a stray line off the tower
   const L = MAST_L; L.tint.set(tint); L.roofTint.set(tint);
-  prism(B, x, z, r, r * 0.5, bot, top, 4, L, { ink: 0.6, cap: false });
+  r = Math.max(r, 0.6);
+  prism(B, x, z, r, r * 0.6, bot, top, 4, L, { ink: 0, cap: false });
   if (beacon) lamp(B, x, top + 0.6, z, 0.9, beacon, KIND.beacon, (x * 0.37 + z * 0.11) % 1);
 }
 const MAST_L = look('#3a3d44', '#000', STYLE.industrial);
@@ -438,6 +503,7 @@ export function lamp(B, x, y, z, s, colour, kind = KIND.neon, phase = 0) {
 /** Neon tubes: a glowing strip round a footprint at height y, just proud of the walls. */
 export function neonRing(B, x0, z0, x1, z1, y, colour, t = 0.7) {
   _l.set(colour);
+  t = Math.max(t, B.lite ? 1.6 : 0.6); // thin tubes alias into dashed lines at range
   const o = 0.15, X0 = x0 - o, X1 = x1 + o, Z0 = z0 - o, Z1 = z1 + o, y0 = y - t / 2, y1 = y + t / 2;
   B.quad([X0, y0, Z1], [X1, y0, Z1], [X1, y1, Z1], [X0, y1, Z1], [0, 0, 1], UVQ, _l, _l, 0, KIND.neon);
   B.quad([X1, y0, Z1], [X1, y0, Z0], [X1, y1, Z0], [X1, y1, Z1], [1, 0, 0], UVQ, _l, _l, 0, KIND.neon);

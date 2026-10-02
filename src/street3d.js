@@ -10,23 +10,27 @@ const STEAM = { districts: ['downtown', 'financial', 'residential', 'entertainme
 const BODY = ['#e8e8e8', '#222', '#c22', '#2a5ac8', '#f2c21a', '#3a8a4a', '#888'];
 
 export class Street {
-  constructor(city, scene, U, M) {
+  /** extra: elevated lanes [{a:[x,z], b:[x,z], y, lanes, w}] (bridges, highway), metres. */
+  constructor(city, scene, U, M, extra = []) {
     this.scene = scene;
     // ---- traffic
-    const seg = [], car = [], body = [], c = new THREE.Color();
+    const seg = [], car = [], body = [], ys = [], c = new THREE.Color();
     const roads = [];
     for (let iy = 0; iy <= city.rows; iy++) { const z = (iy * BLOCK + ROAD / 2) * M; roads.push([0, z, city.coastX * M, z]); }
     for (let ix = 0; ix <= city.landCols; ix++) { const x = (ix * BLOCK + ROAD / 2) * M; roads.push([x, 0, x, city.H * M]); }
     const off = ROAD * TRAFFIC.lane * M;
-    roads.forEach(([ax, az, bx, bz], r) => {
-      const vert = ax === bx;
-      for (const lane of [-1, 1]) {
+    const lanes = roads.map((r) => ({ r, y: 0.9, lanes: [-1, 1].map((l) => l * off) }));
+    for (const e of extra) lanes.push({ r: [...e.a, ...e.b], y: e.y, lanes: e.lanes === 4 ? [-0.75, -0.3, 0.3, 0.75].map((k) => k * e.w) : [-0.4 * e.w, 0.4 * e.w], dense: e.lanes === 4 ? 1.6 : 0.6 });
+    lanes.forEach(({ r: [ax, az, bx, bz], y, lanes: L, dense = 1 }, r) => {
+      const vert = Math.abs(ax - bx) < Math.abs(az - bz), n = Math.round(TRAFFIC.perLane * dense * Math.hypot(bx - ax, bz - az) / 3600);
+      for (const lo of L) {
+        const lane = lo > 0 ? 1 : -1, loff = Math.abs(lo);
         // each lane drives one way; offset to its own side of the road
-        const ox = vert ? lane * off : 0, oz = vert ? 0 : lane * off;
+        const ox = vert ? lane * loff : 0, oz = vert ? 0 : lane * loff;
         const A = lane > 0 ? [ax + ox, az + oz, bx + ox, bz + oz] : [bx + ox, bz + oz, ax + ox, az + oz];
-        for (let k = 0; k < TRAFFIC.perLane; k++) {
-          const h = hash2(r, k, lane + 5);
-          seg.push(...A);
+        for (let k = 0; k < n; k++) {
+          const h = hash2(r, k, Math.round(lo * 10) + 5);
+          seg.push(...A); ys.push(y);
           car.push(h, TRAFFIC.speed[0] + (TRAFFIC.speed[1] - TRAFFIC.speed[0]) * hash2(k, r, 9));
           c.set(BODY[(h * 977 | 0) % BODY.length]); body.push(c.r, c.g, c.b);
         }
@@ -37,25 +41,27 @@ export class Street {
     g.setAttribute('aSeg', new THREE.Float32BufferAttribute(seg, 4));
     g.setAttribute('aCar', new THREE.Float32BufferAttribute(car, 2));
     g.setAttribute('aBody', new THREE.Float32BufferAttribute(body, 3));
-    const TU = { uTime: U.uTime, uNight: U.uNight, res: U.res, fogColor: { value: new THREE.Color() }, fogFar: { value: 1600 } };
+    g.setAttribute('aY', new THREE.Float32BufferAttribute(ys, 1));
+    // lights stay visible further from higher up (the avenue grid reads from high patrol)
+    const TU = { uTime: U.uTime, uNight: U.uNight, res: U.res, uHazeCol: U.uHazeCol, uHazeFar: U.uHazeFar, uReach: { value: TRAFFIC.far } };
     this.TU = TU;
     this.cars = new THREE.Points(g, new THREE.ShaderMaterial({
       uniforms: TU, transparent: true, depthWrite: false, toneMapped: false,
       vertexShader: /* glsl */`
-attribute vec4 aSeg; attribute vec2 aCar; attribute vec3 aBody;
-uniform float uTime; uniform float uNight; uniform vec2 res; uniform float fogFar;
+attribute vec4 aSeg; attribute vec2 aCar; attribute vec3 aBody; attribute float aY;
+uniform float uTime; uniform float uNight; uniform vec2 res; uniform float uHazeFar; uniform float uReach;
 varying vec3 vC; varying float vA;
 void main() {
   vec2 A = aSeg.xy, B = aSeg.zw; float len = length(B - A);
   vec2 p = mix(A, B, fract(aCar.x + uTime * aCar.y / len));
-  vec3 wp = vec3(p.x, 0.9, p.y);
+  vec3 wp = vec3(p.x, aY, p.y);
   vec4 mv = viewMatrix * vec4(wp, 1.);
   float d = -mv.z;
   gl_Position = projectionMatrix * mv;
   float head = step(0., dot(B - A, cameraPosition.xz - p));
   vec3 light = mix(vec3(1.0, 0.1, 0.06), vec3(1.0, 0.93, 0.72), head);
   vC = mix(aBody * 0.8, light * 1.5, smoothstep(0.15, 0.5, uNight));
-  vA = (1. - smoothstep(${TRAFFIC.far * 0.6}., ${TRAFFIC.far}., d)) * (1. - smoothstep(fogFar * 0.4, fogFar * 0.8, d));
+  vA = (1. - smoothstep(uReach * 0.6, uReach, d)) * (1. - smoothstep(uHazeFar * 0.5, uHazeFar * 0.85, d));
   gl_PointSize = vA <= 0. ? 0. : clamp(2.6 * projectionMatrix[1][1] * res.y * 0.5 / max(d, 1.), 1.5, 12.);
 }`,
       fragmentShader: /* glsl */`
@@ -84,7 +90,7 @@ void main() {
       uniforms: TU, transparent: true, depthWrite: false,
       vertexShader: /* glsl */`
 attribute float aPhase;
-uniform float uTime; uniform vec2 res; uniform float fogFar;
+uniform float uTime; uniform vec2 res; uniform float uHazeFar;
 varying float vA; varying float vT;
 void main() {
   float t = fract(aPhase + uTime * 0.22);
@@ -93,11 +99,11 @@ void main() {
   float d = -mv.z;
   gl_Position = projectionMatrix * mv;
   vT = t;
-  vA = (1. - t) * smoothstep(0., 0.15, t) * 0.55 * (1. - smoothstep(${STEAM.far * 0.6}., ${STEAM.far}., d)) * (1. - smoothstep(fogFar * 0.3, fogFar * 0.7, d));
+  vA = (1. - t) * smoothstep(0., 0.15, t) * 0.55 * (1. - smoothstep(${STEAM.far * 0.6}., ${STEAM.far}., d)) * (1. - smoothstep(uHazeFar * 0.2, uHazeFar * 0.45, d));
   gl_PointSize = vA <= 0. ? 0. : min(260., (2.5 + t * 8.) * projectionMatrix[1][1] * res.y * 0.5 / max(d, 1.));
 }`,
       fragmentShader: /* glsl */`
-uniform vec3 fogColor; uniform float uNight;
+uniform vec3 uHazeCol; uniform float uNight;
 varying float vA; varying float vT;
 void main() {
   float r = length(gl_PointCoord - 0.5);
@@ -106,7 +112,7 @@ void main() {
   // comic steam: a flat cloud colour with an ink-ish darker rim, lit by the street at night
   vec3 c = mix(vec3(0.92, 0.9, 0.88), vec3(0.75, 0.6, 0.65), uNight);
   c = mix(c * 0.6, c, smoothstep(0.42, 0.3, r));
-  gl_FragColor = vec4(mix(c, fogColor, vT * 0.3), a);
+  gl_FragColor = vec4(mix(c, uHazeCol, vT * 0.3), a);
 }`,
     }));
     this.steam.frustumCulled = false;
@@ -114,8 +120,5 @@ void main() {
     scene.add(this.steam);
   }
 
-  update() {
-    const fog = this.scene.fog;
-    this.TU.fogColor.value.copy(fog.color); this.TU.fogFar.value = fog.far;
-  }
+  update(cam) { this.TU.uReach.value = TRAFFIC.far + Math.max(0, cam.position.y) * 1.6; }
 }
