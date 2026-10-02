@@ -150,8 +150,8 @@ export class FlightFX3D {
     if (deal !== this.dealt) {
       this.dealt = deal;
       this.lines = [];
-      const n = Math.floor(8 + f * 16 + (boosting ? 16 : 0));
-      for (let i = 0; i < n; i++) this.lines.push({ a: Math.random() * Math.PI * 2, in: Math.random(), w: 9 + Math.random() * (boosting ? 34 : 20), ink: Math.random() < 0.45 });
+      const n = Math.floor(8 + f * (boosting ? 16 : 10) + (boosting ? 16 : 0)); // cruise: light and sparse; boost: a full speed panel
+      for (let i = 0; i < n; i++) this.lines.push({ a: Math.random() * Math.PI * 2, in: Math.random(), w: (boosting ? 9 : 5) + Math.random() * (boosting ? 34 : 12), ink: Math.random() < (boosting ? 0.45 : 0.12) });
       // wall rush: a fan of long streaks down the side the tower face is on
       for (const [side, k] of [[-1, walls.l], [1, walls.r]]) {
         const m = Math.floor(k * 16);
@@ -161,7 +161,8 @@ export class FlightFX3D {
     const R = Math.hypot(W, H) * 0.75, ox = vp.x, oy = vp.y;
     ctx.save();
     for (const pass of [true, false]) {
-      ctx.fillStyle = pass ? 'rgba(8,10,30,0.8)' : night > 0.5 ? 'rgba(228,242,255,0.9)' : 'rgba(255,255,255,0.92)';
+      const wa = boosting ? 0.92 : 0.6;
+      ctx.fillStyle = pass ? 'rgba(8,10,30,0.8)' : night > 0.5 ? `rgba(228,242,255,${wa})` : `rgba(255,255,255,${wa})`;
       ctx.beginPath();
       for (const l of this.lines) {
         if (l.ink !== pass) continue;

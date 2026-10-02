@@ -77,6 +77,11 @@ render hand-off, enter/exit, the boost kick, and the 3D flight button set (`setB
   enlarged in the patrol view. Tables: `POSE`, `SUIT`.
 - `flightcam3d.js` — chase camera aimed so she sits at a fixed screen spot (lower third, 3/4 rear),
   offset spring, speed FOV, boost pull-back + kick, street-canyon framing at skim (yaw snaps to the
-  street axis), tower avoidance, patrol view with capped pitch. Table: `CAM`.
+  street axis), sphere-cast collision (shoulder swap / lift; no wall-only frames), patrol view with
+  capped pitch. Table: `CAM`.
+- `heropass3d.js` — her sharp pass: the hero layer rendered into a small target over her screen
+  rect at 2× the frame's density (optional MSAA; `quality().fly3dHero`), laid over the frame.
+Other 3D hooks in overworld.js: `view3d.autoSteer` (autopilot routes round towers taller than her)
+and `view3d.slide` (she glances off façades instead of the 2D stop-dead).
 Measurements: `tools/shots/fly3d.js` (2D vs 3D fps A/B, beams, time-to-waypoint); harness
 scenarios `fly3d_*` in `tools/shots/shoot.js`.

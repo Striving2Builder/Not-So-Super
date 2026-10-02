@@ -535,3 +535,11 @@ body.fly3d .tbtn.f3-up { bottom: 54px; border-radius: 25px 25px 8px 8px; }
 body.fly3d .tbtn.f3-down { bottom: 6px; border-radius: 8px 8px 25px 25px; }
 body.fly3d .tbtn.f3-perch { right: 150px; bottom: 6px; }
 body.fly3d .tbtn.f3-map { right: 92px; bottom: 112px; width: 46px; height: 46px; font-size: 10px; }
+/* DIVE / PERCH: contextual, but loud when they apply (pop in, gold, pulsing) */
+@keyframes f3pop { from { transform: scale(.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes f3pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 214, 40, .8), 0 0 12px rgba(255, 214, 40, .6); } 50% { box-shadow: 0 0 0 12px rgba(255, 214, 40, 0), 0 0 24px rgba(255, 214, 40, .95); } }
+body.fly3d .tbtn.f3-dive:not(.gone), body.fly3d .tbtn.f3-perch.lit:not(.gone) {
+  background: linear-gradient(#ffe24a, #f0a000); color: #160c1c; border: 3px solid #0b0b16; text-shadow: none;
+  animation: f3pop .22s ease-out, f3pulse 1.1s ease-in-out .22s infinite;
+}
+body.fly3d .tbtn.f3-perch { font-size: 10px; }
