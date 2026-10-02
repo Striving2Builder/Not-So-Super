@@ -9,6 +9,7 @@ import { Sky3D } from './sky3d.js';
 import { FlyHero3D } from './herofly3d.js';
 import { FlightCam3D } from './flightcam3d.js';
 import { FlightFX3D } from './flightfx3d.js';
+import { HeroPass, HERO_LAYER } from './heropass3d.js';
 import { lookFrame } from './look3d.js';
 import { avoidHud } from './ui.js';
 import { setBandHeights, speedFraction, BANDS } from './flight.js';
@@ -83,9 +84,11 @@ export class Flight3D {
     this.city3 = new City3D(city, this.scene, { tileRes: quality().flyTileRes });
     this.hero = new FlyHero3D(this.scene);
     this.fx3 = new FlightFX3D(this.scene);
+    this.heroPass = new HeroPass();
     // a soft fill from the camera so she (and the façades facing us) never go to black at night
     this.fill = new THREE.DirectionalLight(0xffe8cc, 0.7);
     this.scene.add(this.fill, this.fill.target);
+    for (const l of [this.fill, this.sky.sun, this.sky.hemi]) l.layers.enable(HERO_LAYER); // she's lit in her own pass too
     for (const b of city.blocks) for (const o of b.b) height3(o, b.d);
   }
 
@@ -111,6 +114,7 @@ export class Flight3D {
 
   exit() {
     document.body.classList.remove('fly3d');
+    if (this.renderer) this.renderer.info.autoReset = true;
     this.g.modes.special.resize(); // hand the shared renderer back at the zones' resolution
   }
 
@@ -251,10 +255,17 @@ export class Flight3D {
     this.fx3.update(dt, this.hero, h, frac, boosting, this.cam.cam, ow.fx.rings.length);
     // render
     const r = this.renderer;
+    r.info.autoReset = false; r.info.reset(); // count the whole frame (main + her pass), not just the last draw
     r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.05;
     if (this.cam.cam.aspect !== W / H) { this.cam.cam.aspect = W / H; this.cam.cam.updateProjectionMatrix(); }
     lookFrame(r);
+    // her own sharp pass (her model moves to the hero layer once it has loaded); the profile's
+    // fly3dHero = [MSAA samples, pixel ratio], a ratio of 0 draws her in the main pass instead
+    if (this.hero.model && !this.layered) { this.layered = true; this.hero.pivot.traverse((o) => o.layers.set(HERO_LAYER)); }
+    const hq = this.heroQ || quality().fly3dHero || [0, 0], sharp = this.layered && hq[1] > 0;
+    if (sharp) this.cam.cam.layers.disable(HERO_LAYER); else this.cam.cam.layers.enable(HERO_LAYER);
     r.render(this.scene, this.cam.cam);
+    if (sharp) this.heroPass.render(r, this.scene, this.cam.cam, this.hero.group.position, 2.4 * this.hero.size, W, H, hq);
     this.overlay(ctx, night, frac, boosting);
   }
 
