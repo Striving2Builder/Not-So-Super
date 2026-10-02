@@ -102,6 +102,7 @@ export class Flight3D {
     this.cam = new FlightCam3D(this.g.w / this.g.h);
     this.sky = new Sky3D(this.scene, city.W * M, city.H * M);
     this.city3 = new City3D(city, this.scene, { tileRes: quality().flyTileRes });
+    this.city3.sky = this.sky; // the city's haze ends exactly on Sky3D.horizon
     this.hero = new FlyHero3D(this.scene);
     this.fx3 = new FlightFX3D(this.scene);
     this.heroPass = new HeroPass();

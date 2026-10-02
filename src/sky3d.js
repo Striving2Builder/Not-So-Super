@@ -13,14 +13,14 @@ import { RNG } from './rng.js';
 /** [zenith, mid, horizon] display colours per time of day. */
 const SKY = {
   day: ['#2a63c4', '#69a4e4', '#e8f2fa'],
-  dusk: ['#2a1f66', '#8a4f9e', '#ffb468'],
+  dusk: ['#1d2766', '#9a86c4', '#f2cbc4'], // deep blue over a light peach-lilac band (cool: complements her red)
   night: ['#04071a', '#141038', '#35275e'],
 };
 /** Cloud decks (metres) and their two-tone fills + ink, per time of day (display colours). */
 const CLOUD = {
   count: 70, layers: [380, 430, 470], size: [70, 150],
   fadeNear: [60, 160], // m from the camera: clouds fade out before they can smear the lens
-  day: ['#ffffff', '#b9cbe6', '#2a3350'], dusk: ['#ffd9b8', '#b7769a', '#2a1630'], night: ['#5d6292', '#2e3060', '#07081a'],
+  day: ['#ffffff', '#b9cbe6', '#2a3350'], dusk: ['#ffe4d2', '#a58cbc', '#221a40'], night: ['#5d6292', '#2e3060', '#07081a'],
 };
 const linear = (hex) => new THREE.Color().setHex(parseInt(hex.slice(1), 16), THREE.LinearSRGBColorSpace); // as-is (display) values
 
