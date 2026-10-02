@@ -120,18 +120,18 @@ export function building(B, o, blk, S) {
     for (let k = 0; k < 2; k++) {
       const i = (0.12 + k * 0.1) * Math.min(w, d), t = b + H * 0.045;
       box(B, rx0 + i, rz0 + i, rx1 - i, rz1 - i, b, t, L);
-      neonRing(B, rx0 + i, rz0 + i, rx1 - i, rz1 - i, t - 0.4, gold, 0.3);
+      neonRing(B, rx0 + i, rz0 + i, rx1 - i, rz1 - i, t - 0.5, gold, 0.6);
       b = t;
     }
     const r = Math.min(w, d) * 0.28;
     prism(B, cx, cz, r * 1.41, 0, b, b + H * 0.08, 4, L, { rot: Math.PI / 4 });
-    mast(B, cx, cz, b + H * 0.08, b + H * 0.15, 0.4, '#ff3030', '#c8c0b0');
+    mast(B, cx, cz, b + H * 0.08, b + H * 0.12, 0.5, '#ff3030', '#c8c0b0');
     return roofExtras(B, o, blk, S, D, L, h, face, x0, z0, x1, z1, H, null);
   }
   if (shape === 'spire') {
     const r = Math.min(w, d) / 2;
     prism(B, cx, cz, r * 1.41, r * 0.1, top, top + H * 0.14, 4, L, { rot: Math.PI / 4 });
-    mast(B, cx, cz, top + H * 0.14, top + H * 0.22, 0.35);
+    mast(B, cx, cz, top + H * 0.14, top + H * 0.18, 0.5);
     return roofExtras(B, o, blk, S, D, L, h, face, x0, z0, x1, z1, H, null);
   }
   roofExtras(B, o, blk, S, D, L, h, face, x0, z0, x1, z1, H, [rx0, rz0, rx1, rz1, top]);
@@ -177,7 +177,7 @@ function roofExtras(B, o, blk, S, D, L, h, face, x0, z0, x1, z1, H, roof) {
       }
     }
     if (K.water && r(10) < K.water && m >= 10) waterTower(B, rx1 - 4, rz1 - 4, top);
-    if (K.antenna && r(11) < K.antenna) mast(B, rx0 + 2, rz0 + 2, top, top + 8 + r(12) * 18);
+    if (K.antenna && r(11) < K.antenna) mast(B, rx0 + 2, rz0 + 2, top, top + 6 + r(12) * 8);
     if (K.sign && r(13) < K.sign && !o.sign && m >= 12) {
       const words = SIGN_WORDS[blk.d];
       if (words) roofBoard(B, S, pick(words, r(14)), neonOf(D, r(15)), rx0, rz0, rx1, rz1, face, top, Math.min(8, m * 0.3));

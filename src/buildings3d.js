@@ -43,14 +43,14 @@ function atlas() {
         const x = ox + col * CELL, y = r * CELL;
         if (extra) extra(x, y, r, col);
         const lit = on();
-        rect(x + mx, y + my, CELL - mx * 2, CELL - my * 2, 0.25, glass, lit ? 1 : 0);
+        rect(x + mx, y + my, CELL - mx * 2, CELL - my * 2, 0.25, glass, lit ? 0.5 + rnd() * 0.5 : 0); // lamps differ
       }
     }
   };
   // 0 concrete: punched windows, slab lines
   windows(0, 0.86, [7, 8], 1, 0.6, (x, y) => rect(x, y + CELL - 3, CELL, 3, 0.7, 0, 0));
   // 1 glass curtain wall: big panes, thin mullions, dark spandrel per floor
-  windows(CW, 0.7, [1, 2], 1, 0.42, (x, y) => rect(x, y + CELL - 7, CELL, 7, 0.38, 0.55, 0));
+  windows(CW, 0.7, [1, 2], 1, 0.3, (x, y) => rect(x, y + CELL - 7, CELL, 7, 0.38, 0.55, 0));
   // 2 brick: small windows with a pale lintel
   windows(CW * 2, 0.8, [9, 9], 1, 0.55, (x, y) => { rect(x + 7, y + 6, CELL - 14, 3, 1, 0, 0); for (let i = 0; i < 4; i++) rect(x, y + i * 8 + 3, CELL, 1, 0.68, 0, 0); });
   // 3 art deco: bright vertical piers, dark spandrels, tall narrow windows (reads TALL)
@@ -121,27 +121,46 @@ void main() {
   vec4 wp = modelMatrix * vec4(position, 1.);
   vW = wp.xyz;
   vec4 mv = viewMatrix * wp;
-  if (vKind == 1.) {
-#ifdef FAR
-    gl_Position = vec4(0., 0., 2., 1.); return; // far chunks: the haze does the outlining
-#endif
-    // ink: a screen-space quad along the edge, thick near and thin far (clipped at the near plane)
-    vec4 mo = viewMatrix * (modelMatrix * vec4(aAux, 1.));
-    const float NZ = -0.4;
-    if (mv.z > NZ && mo.z > NZ) { gl_Position = vec4(0., 0., 2., 1.); return; }
-    if (mv.z > NZ) mv.xyz = mix(mo.xyz, mv.xyz, (NZ - mo.z) / (mv.z - mo.z));
-    else if (mo.z > NZ) mo.xyz = mix(mv.xyz, mo.xyz, (NZ - mv.z) / (mo.z - mv.z));
-    float d = -mv.z;
-    mv.xyz *= 1. - min(0.003 + 0.25 / d, 0.2); // ride on top of the faces it borders
-    vec4 c0 = projectionMatrix * mv, c1 = projectionMatrix * mo;
-    vec2 s = (c1.xy / c1.w - c0.xy / c0.w) * res;
-    vec2 dir = dot(s, s) > 1e-8 ? normalize(s) : vec2(1., 0.);
-    float w = uInkW * dpr * uv.y * mix(1., 0.3, smoothstep(25., 650., d));
-    c0.xy += vec2(-dir.y, dir.x) * uv.x * max(w, 0.9) / res * c0.w;
-    gl_Position = c0;
-    return;
-  }
   gl_Position = projectionMatrix * mv;
+}`;
+
+/**
+ * Ink: its own transparent layer (one more draw per near chunk). Each edge is a screen-space quad
+ * a little wider than the line; the fragment fades its edges, so lines are anti-aliased, a
+ * sub-pixel line fades instead of breaking into dashes, and the weight thins with depth.
+ */
+const INK_VERT = /* glsl */`
+attribute vec3 aAux;
+uniform vec2 res; uniform float dpr; uniform float uInkW;
+varying float vAcross; varying float vWid; varying vec3 vP;
+void main() {
+  vec4 wp = modelMatrix * vec4(position, 1.);
+  vP = wp.xyz;
+  vec4 mv = viewMatrix * wp, mo = viewMatrix * (modelMatrix * vec4(aAux, 1.));
+  const float NZ = -0.4;
+  if (mv.z > NZ && mo.z > NZ) { gl_Position = vec4(0., 0., 2., 1.); return; }
+  if (mv.z > NZ) mv.xyz = mix(mo.xyz, mv.xyz, (NZ - mo.z) / (mv.z - mo.z));
+  else if (mo.z > NZ) mo.xyz = mix(mv.xyz, mo.xyz, (NZ - mv.z) / (mo.z - mv.z));
+  float d = -mv.z;
+  mv.xyz *= 1. - min(0.006 + 0.5 / d, 0.25); // sit in front of the faces it borders (no z-fight dashes)
+  vec4 c0 = projectionMatrix * mv, c1 = projectionMatrix * mo;
+  vec2 s = (c1.xy / c1.w - c0.xy / c0.w) * res;
+  vec2 dir = dot(s, s) > 1e-8 ? normalize(s) : vec2(1., 0.);
+  vWid = uInkW * dpr * uv.y * mix(1., 0.35, smoothstep(25., 600., d)); // wanted width, px
+  float hw = max(vWid, 1.) * 0.5 + 1.; // the quad: a pixel of feather each side
+  vAcross = uv.x * hw;
+  c0.xy += vec2(-dir.y, dir.x) * uv.x * hw * 2. / res * c0.w;
+  gl_Position = c0;
+}`;
+const INK_FRAG = /* glsl */`
+uniform vec3 uInk;
+${HAZE_GLSL}
+varying float vAcross; varying float vWid; varying vec3 vP;
+void main() {
+  float d = length(vP - cameraPosition);
+  float a = clamp(max(vWid, 1.) * 0.5 + 0.5 - abs(vAcross), 0., 1.) * min(vWid, 1.) * (1. - smoothstep(450., 800., d));
+  if (a < 0.01) discard;
+  gl_FragColor = vec4(haze(uInk, d, vP.y, 1.), a);
 }`;
 
 const FRAG = /* glsl */`
@@ -158,9 +177,7 @@ float h11(float n) { return fract(sin(n) * 43758.5453); }
 void main() {
   float dist = length(vW - cameraPosition);
   vec3 col = vec3(0.), emi = vec3(0.);
-  if (vKind == 1.) {
-    col = uInk;
-  } else if (vKind == 2.) {
+  if (vKind == 2.) {
     vec3 s = texture2D(uSigns, vUv).rgb; // r tube core, g glow/letters, b board
     col = vec3(0.03, 0.02, 0.05) * s.b;
     emi = (vCol * s.g * 0.85 + mix(vCol, vec3(1.), 0.5) * s.r * 0.6) * mix(0.8, 1.15, uNight);
@@ -174,8 +191,12 @@ void main() {
     vec2 fw = fwidth(cu);
     vec3 avg = uAvg[int(vStyle)];
     // past ~2-3 px per window the grid becomes the cell's flat tone plus lit floor bands
-    float band = step(0.6, h11(floor(cu.y / 3.) * 7.13 + floor(vUv.x) * 3.7 + dot(floor(vCol * 255. + 0.5), vec3(0.97, 0.57, 0.23))));
-    vec3 far = vec3(avg.r, avg.g, roof ? avg.b : mix(band * avg.b * 2.2, avg.b, smoothstep(0.15, 0.4, fw.y)));
+    // far: lit windows as blocky clusters whose size doubles as they shrink on screen (each block
+    // stays >= ~3 px: a pattern, never static), same average light as the grid
+    float lv = clamp(ceil(log2(max(max(fw.x, fw.y), 1e-3) * 4.)), 0., 4.), bs = exp2(lv);
+    vec2 blk = floor(cu / vec2(bs, bs * 1.5));
+    float on = step(1. - avg.b * 2.4, h11(blk.x * 7.13 + blk.y * 3.71 + lv * 17. + dot(floor(vCol * 255. + 0.5), vec3(0.97, 0.57, 0.23))));
+    vec3 far = vec3(avg.r, avg.g, roof ? avg.b : mix(on * 0.8, avg.b, smoothstep(0.5, 1., max(fw.x, fw.y) * bs * 0.25)));
     vec3 m = far;
 #ifndef FAR
     float k = smoothstep(0.12, 0.28, max(fw.x, fw.y));
@@ -246,6 +267,7 @@ export class CityLook {
     this.U = U;
     this.near = this.make(1);
     this.far = this.make(1, { FAR: 1 });
+    this.ink = new THREE.ShaderMaterial({ uniforms: this.U, vertexShader: INK_VERT, fragmentShader: INK_FRAG, transparent: true, depthWrite: false });
   }
 
   make(fogK, defines = {}, fogMax = 1) {
@@ -291,7 +313,10 @@ const b255 = (v) => Math.max(0, Math.min(255, Math.round(v * 255)));
 /** Collects one chunk's vertices (indexed quads) in the layout above. */
 export class Builder {
   /** lite: the far-LOD build (no ink, callers skip small detail). */
-  constructor(lite = false) { this.lite = lite; this.pos = []; this.aux = []; this.uv = []; this.col = []; this.lit = []; this.idx = []; this.n = 0; }
+  constructor(lite = false) {
+    this.lite = lite; this.pos = []; this.aux = []; this.uv = []; this.col = []; this.lit = []; this.idx = []; this.n = 0;
+    this.ip = []; this.ia = []; this.iu = []; this.ii = []; this.inN = 0; // the ink layer
+  }
 
   /** tint/lit: THREE.Color or hex; style: atlas cell; kind: KIND.* */
   v(p, aux, u, w, tint, kind, lit, style) {
@@ -321,11 +346,22 @@ export class Builder {
   ink(p, q, w = 1) {
     // none far away (the far shader drops it anyway), none on tiny parts (HVAC, legs): saves triangles
     if (this.lite || Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) + Math.abs(p[2] - q[2]) < 2.5) return;
-    const i = this.v(p, q, 1, w, BLACK, 1, BLACK, 0);
-    this.v(p, q, -1, w, BLACK, 1, BLACK, 0);
-    this.v(q, p, 1, w, BLACK, 1, BLACK, 0);
-    this.v(q, p, -1, w, BLACK, 1, BLACK, 0);
-    this.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
+    const i = this.inN;
+    for (const [a, b, side] of [[p, q, 1], [p, q, -1], [q, p, 1], [q, p, -1]]) { this.ip.push(...a); this.ia.push(...b); this.iu.push(side, w); }
+    this.inN += 4;
+    this.ii.push(i, i + 1, i + 2, i, i + 2, i + 3);
+  }
+
+  /** The ink layer's geometry (null when there is none). */
+  inkGeometry() {
+    if (!this.inN) return null;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.ip, 3));
+    g.setAttribute('aAux', new THREE.Float32BufferAttribute(this.ia, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.iu, 2));
+    g.setIndex(this.inN > 65535 ? new THREE.Uint32BufferAttribute(this.ii, 1) : new THREE.Uint16BufferAttribute(this.ii, 1));
+    g.computeBoundingSphere();
+    return g;
   }
 
   geometry() {
@@ -341,7 +377,6 @@ export class Builder {
     return g;
   }
 }
-const BLACK = new THREE.Color(0, 0, 0);
 const UV0 = [[0.5, 0.5], [0.5, 0.5], [0.5, 0.5]];
 
 /** Surface look of a part: wall tint, window light, facade style, roof tint + style, uv offsets. */
@@ -443,9 +478,11 @@ export function tree(B, x, z, r, h, tint) {
 const TREE_L = look('#3a7a3a', '#000', STYLE.gravel, '#3a7a3a', STYLE.gravel);
 
 /** A thin mast with a blinking beacon on top (antennas, spires). */
-export function mast(B, x, z, bot, top, r = 0.35, beacon = '#ff3030', tint = '#3a3d44') {
+export function mast(B, x, z, bot, top, r = 0.35, beacon = '#ff3030', tint = '#8a8e98') {
+  // no ink: an inked hairline mast reads as a stray line off the tower
   const L = MAST_L; L.tint.set(tint); L.roofTint.set(tint);
-  prism(B, x, z, r, r * 0.5, bot, top, 4, L, { ink: 0.6, cap: false });
+  r = Math.max(r, 0.6);
+  prism(B, x, z, r, r * 0.6, bot, top, 4, L, { ink: 0, cap: false });
   if (beacon) lamp(B, x, top + 0.6, z, 0.9, beacon, KIND.beacon, (x * 0.37 + z * 0.11) % 1);
 }
 const MAST_L = look('#3a3d44', '#000', STYLE.industrial);
@@ -466,6 +503,7 @@ export function lamp(B, x, y, z, s, colour, kind = KIND.neon, phase = 0) {
 /** Neon tubes: a glowing strip round a footprint at height y, just proud of the walls. */
 export function neonRing(B, x0, z0, x1, z1, y, colour, t = 0.7) {
   _l.set(colour);
+  t = Math.max(t, B.lite ? 1.6 : 0.6); // thin tubes alias into dashed lines at range
   const o = 0.15, X0 = x0 - o, X1 = x1 + o, Z0 = z0 - o, Z1 = z1 + o, y0 = y - t / 2, y1 = y + t / 2;
   B.quad([X0, y0, Z1], [X1, y0, Z1], [X1, y1, Z1], [X0, y1, Z1], [0, 0, 1], UVQ, _l, _l, 0, KIND.neon);
   B.quad([X1, y0, Z1], [X1, y0, Z0], [X1, y1, Z0], [X1, y1, Z1], [1, 0, 0], UVQ, _l, _l, 0, KIND.neon);

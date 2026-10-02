@@ -47,11 +47,11 @@ export class City3D {
     const HB = new Builder();
     this.harbour(HB);
     this.harbourMesh = new THREE.Mesh(HB.geometry(), this.look.near);
-    scene.add(this.harbourMesh);
+    scene.add(this.harbourMesh, new THREE.Mesh(HB.inkGeometry(), this.look.ink));
     this.lmMat = this.look.make(LOD.landmarkFog, {}, LOD.landmarkMax);
     this.lmMesh = new THREE.Mesh(LB.geometry(), this.lmMat);
     this.lmMesh.frustumCulled = false;
-    scene.add(this.lmMesh);
+    scene.add(this.lmMesh, new THREE.Mesh(LB.inkGeometry(), this.look.ink));
     this.ground = cityGround(city, this.look.U, this.landmarks);
     scene.add(this.ground);
     this.horizon = new Horizon(scene, this.look.U, [0, 0, city.coastX * M, city.H * M]);
@@ -98,9 +98,10 @@ export class City3D {
         else if (o.kind === 'crane') crane(B, o);
       }
     }
-    const geo = B.geometry();
+    const geo = B.geometry(), ink = B.inkGeometry();
     ch[which] = geo ? new THREE.Mesh(geo, B.lite ? this.look.far : this.look.near) : null;
     if (ch[which]) this.scene.add(ch[which]);
+    if (ink) { ch[which + 'Ink'] = new THREE.Mesh(ink, this.look.ink); this.scene.add(ch[which + 'Ink']); }
   }
 
   /** Ground tile texture for a chunk (the 2D view's baked art), near chunks only. */
@@ -128,7 +129,7 @@ export class City3D {
     const R = Math.ceil(Math.max(far, this.look.U.uHazeFar.value) / M / CHUNK) + 1;
     const ccx = Math.floor(px / CHUNK), ccy = Math.floor(pz / CHUNK);
     let budget = this.built ? 2 : 999;
-    for (const ch of this.chunks.values()) for (const k of ['near', 'lite', 'gl', 'gd']) if (ch[k]) ch[k].visible = false;
+    for (const ch of this.chunks.values()) for (const k of ['near', 'lite', 'nearInk', 'gl', 'gd']) if (ch[k]) ch[k].visible = false;
     // haze first: from altitude it reaches further than the band's fog, and so do the chunks
     this.look.light(this.sun, this.hemi, this.scene.fog, night, (performance.now() - this.t0) / 1000, this.dome?.material.uniforms.bottom.value, cam.position.y);
     const reach = Math.max(far, this.look.U.uHazeFar.value), cut = reach * 0.92; // the haze is all but solid past this
@@ -142,6 +143,7 @@ export class City3D {
         this.build(ch, which);
       }
       if (ch[which]) ch[which].visible = true;
+      if (ch[which + 'Ink']) ch[which + 'Ink'].visible = true;
       if (d < near * 1.2) this.groundTile(ch, night > 0.45, frame);
     }
     this.built = true;
