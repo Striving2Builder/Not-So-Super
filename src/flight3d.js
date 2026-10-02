@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { City3D, M, height3 } from './city3d.js';
 import { Sky3D } from './sky3d.js';
-import { FlyHero3D } from './herofly3d.js';
+import { FlyHero3D, RIM, RIM_K } from './herofly3d.js';
 import { FlightCam3D } from './flightcam3d.js';
 import { FlightFX3D } from './flightfx3d.js';
 import { HeroPass, HERO_LAYER } from './heropass3d.js';
@@ -15,6 +15,7 @@ import { lookFrame } from './look3d.js';
 import { setBandHeights, speedFraction, BANDS } from './flight.js';
 import { DISTRICTS } from './data.js';
 import { quality } from './settings.js';
+import { lerp } from './util.js';
 import { sfx } from './sfx.js';
 
 /**
@@ -44,7 +45,8 @@ const LOOK3 = {
   speedMul: [0.5, 1, 1.3],     // top-speed multiplier per band in 3D
   fog: [1100, 1600, 2400],     // fog far (m) per band
   beam: { width: 14, height: 420, alpha: 0.95, minPx: 0.03, max: 24 }, // m; minPx: width ≥ this × distance (a few px far off)
-  icons: { max: 3, cluster: 40, fade: [300, 1600], heroBox: [90, 80] }, // on-screen incident icons: cap, merge radius (px), fade (m)
+  icons: { max: 3, cluster: 40, fade: [300, 1600] },
+  heroEllipse: [1.5, 1.25, 2.4], // her exclusion ellipse: × her screen radius (x, y); her radius in m (× her size) // on-screen incident icons: cap, merge radius (px), fade (m)
   iconPx: 26,
   patrolBelow: 150,             // speed under which high patrol cranes up to the overhead view
   wallProbe: [10, 22],          // m to each side: a tower face this close rushes past (action lines)
@@ -280,7 +282,8 @@ export class Flight3D {
     const b = ow.buildingAt(h.x, h.y), ground = b && this.heightOf(b) < h.z ? this.heightOf(b) : 0;
     this.hero.update(h, dt, ow.t, !!ow.diving, ground, this.cam.patrolK, boosting);
     const solid = (x, y, z) => { const o = ow.buildingAt(x, y); return !!o && z < this.heightOf(o); };
-    this.cam.update(h, dt, frac, { patrol, boosting, canyon: this.canyon ? 1 - h.hover : 0 }, solid);
+    this.cam.update(h, dt, frac, { patrol, boosting, diving: !!ow.diving, canyon: this.canyon ? 1 - h.hover : 0 }, solid);
+    RIM.value = lerp(RIM_K[0], RIM_K[1], this.cam.canyonK); // a brighter rim against the dark canyon walls
     this.fill.position.copy(this.cam.cam.position); this.fill.target.position.copy(this.hero.group.position);
     const fogFar = LOOK3.fog[band] || 1600;
     this.sky.update(clock, night, D?.map, this.cam.cam.position, fogFar, this.cam.patrolK);
@@ -312,6 +315,11 @@ export class Flight3D {
     ctx.clearRect(0, 0, W, H);
     const P = this.projector(), hs = P.proj(h.x, h.y, h.z);
     ow.heroScreen = { x: hs[0], y: hs[1] };
+    // her on-screen radius (from her size and distance): the ellipse markers keep out of
+    const E = LOOK3.heroEllipse, cam = this.cam.cam;
+    const dist = Math.max(0.5, cam.position.distanceTo(this.hero.group.position));
+    const rpx = (E[2] * this.hero.size / (dist * Math.tan((cam.fov * Math.PI) / 360))) * (H / 2);
+    this.heroEl = { x: hs[0], y: hs[1], rx: rpx * E[0], ry: rpx * E[1] };
     // action lines converge on where she's heading (a point far ahead of her)
     const ahead = 400 / M, vp = P.proj(h.x + Math.cos(h.ang) * ahead, h.y + Math.sin(h.ang) * ahead, h.z);
     const walls = this.canyon && h.speed > 120 ? this.walls(h) : { l: 0, r: 0 };
@@ -336,7 +344,7 @@ export class Flight3D {
     for (const z of ow.zones) {
       const [x, y, front] = P.proj(z.x, z.y, LOOK3.beam.height / M * 0.55);
       if (!front || x < -20 || y < -20 || x > W + 20 || y > H + 20 || this.underHud(x, y, 4)) continue; // (never printed over the HUD)
-      if (Math.abs(x - this.ow.heroScreen.x) < I.heroBox[0] && Math.abs(y - this.ow.heroScreen.y) < I.heroBox[1]) continue; // (nor over her)
+      if (this.onHero(x, y, 14)) continue; // (nor over her)
       list.push({ z, x, y, d: Math.hypot(z.x - h.x, z.y - h.y) * M });
     }
     list.sort((a, b) => (b.z === ow.near) - (a.z === ow.near) || a.d - b.d);
@@ -380,6 +388,14 @@ export class Flight3D {
     return this.rects;
   }
 
+  /** Is (x, y) inside her exclusion ellipse (grown by pad px)? Markers never stack onto her. */
+  onHero(x, y, pad = 0) {
+    const e = this.heroEl;
+    if (!e) return false;
+    const dx = (x - e.x) / (e.rx + pad), dy = (y - e.y) / (e.ry + pad);
+    return dx * dx + dy * dy < 1;
+  }
+
   /** Is (x, y) within pad px of any HUD rect? */
   underHud(x, y, pad) {
     for (const r of this.hudRects()) if (x > r.left - pad && x < r.right + pad && y > r.top - pad && y < r.bottom + pad) return true;
@@ -414,11 +430,11 @@ export class Flight3D {
       const k = Math.min((sx > 0 ? R - cx : cx - L) / Math.abs(sx || 1e-6), (sy > 0 ? B - cy : cy - T) / Math.abs(sy || 1e-6));
       let x = cx + sx * k, y = cy + sy * k;
       const side = Math.abs(x - L) < 1 || Math.abs(x - R) < 1; // on a side edge: slide vertically
-      for (let i = 0; i < 24 && this.underHud(x, y, C.pad); i++) {
+      for (let i = 0; i < 24 && (this.underHud(x, y, C.pad) || this.onHero(x, y, C.pad)); i++) {
         const step = Math.ceil((i + 1) / 2) * C.slide * (i % 2 ? -1 : 1);
         if (side) y = Math.min(B, Math.max(T, cy + sy * k + step)); else x = Math.min(R, Math.max(L, cx + sx * k + step));
       }
-      if (this.underHud(x, y, C.pad)) continue; // no clear spot on that edge
+      if (this.underHud(x, y, C.pad) || this.onHero(x, y, C.pad)) continue; // no clear spot on that edge
       const near = !c.waypoint && groups.find((g) => !g.waypoint && Math.hypot(g.x - x, g.y - y) < C.merge);
       if (near) { near.n++; continue; }
       if (!c.waypoint && groups.filter((g) => !g.waypoint).length >= LOOK3.chips) {
