@@ -73,6 +73,7 @@ void main() {
   c = toneMapping(c);
 #endif
   gl_FragColor = linearToOutputTexel(vec4(c, 1.));
+  gl_FragColor.rgb = pulp(gl_FragColor.rgb);
   gl_FragColor.rgb = haze(gl_FragColor.rgb, length(vW - cameraPosition), 0., 1.);
 }`,
   }));
