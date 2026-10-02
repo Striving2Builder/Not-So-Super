@@ -20,7 +20,7 @@ export { M, DISTRICT_3D, height3 };
 
 const CHUNK = TILE * BLOCK; // world units per chunk side (one ground tile)
 /** farMat: metres past which a chunk switches to its lite build + flat-tone material (no texture, ink, halftone, roof kit). */
-const LOD = { farMat: 300, landmarkFog: 0.8, landmarkMax: 0.93, coreR: 4.5 };
+const LOD = { farMat: 300, farInk: 900, landmarkFog: 0.8, landmarkMax: 0.93, coreR: 4.5 };
 
 export class City3D {
   constructor(city, scene, { tileRes = 144 } = {}) {
@@ -105,6 +105,7 @@ export class City3D {
     const geo = B.geometry(), ink = B.inkGeometry();
     ch[which] = geo ? new THREE.Mesh(geo, B.lite ? this.look.far : this.look.near) : null;
     if (ch[which]) this.scene.add(ch[which]);
+    // far chunks' ink only within LOD.farInk (one more draw each; the haze takes the rest)
     if (ink) { ch[which + 'Ink'] = new THREE.Mesh(ink, this.look.ink); this.scene.add(ch[which + 'Ink']); }
   }
 
@@ -133,7 +134,7 @@ export class City3D {
     const R = Math.ceil(Math.max(far, this.look.U.uHazeFar.value) / M / CHUNK) + 1;
     const ccx = Math.floor(px / CHUNK), ccy = Math.floor(pz / CHUNK);
     let budget = this.built ? 2 : 999;
-    for (const ch of this.chunks.values()) for (const k of ['near', 'lite', 'nearInk', 'gl', 'gd']) if (ch[k]) ch[k].visible = false;
+    for (const ch of this.chunks.values()) for (const k of ['near', 'lite', 'nearInk', 'liteInk', 'gl', 'gd']) if (ch[k]) ch[k].visible = false;
     // haze first: from altitude it reaches further than the band's fog, and so do the chunks
     this.look.light(this.sun, this.hemi, this.scene.fog, night, (performance.now() - this.t0) / 1000, this.sky?.horizon || this.dome?.material.uniforms.bottom.value, cam.position.y);
     const reach = Math.max(far, this.look.U.uHazeFar.value), cut = reach * 0.92; // the haze is all but solid past this
@@ -147,7 +148,7 @@ export class City3D {
         this.build(ch, which);
       }
       if (ch[which]) ch[which].visible = true;
-      if (ch[which + 'Ink']) ch[which + 'Ink'].visible = true;
+      if (ch[which + 'Ink']) ch[which + 'Ink'].visible = which === 'near' || d < LOD.farInk;
       if (d < near * 1.2) this.groundTile(ch, night > 0.45, frame);
     }
     this.built = true;
