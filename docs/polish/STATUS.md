@@ -60,14 +60,13 @@ flight/city round 6. The companion docs are [BRIEF.md](BRIEF.md) (the builder br
   - a flowing cape instead of the flat kite seen at high patrol
   - lit clouds
   - a safe zone away from the caption and joystick
-- **City builder** (city3d, buildings3d, blocks3d, signs3d, landmarks3d, skyline3d, skycard3d, street3d, ground3d, outer3d, river3d):
-  - crisp near walls (the `mag` threshold and dynRes)
-  - window shimmer and the orange street "waffle" at altitude
-  - closing off the world-edge void
-  - a stronger sun/moon key with 3-tone faces
-  - the floating low-rise slabs by day
-  - one ink style in the casino district
-  - the blue river restored in the 2D view
+- **City round 6: done and merged** (ec553af; files city3d, buildings3d, blocks3d, skyline3d, skycard3d, ground3d, river3d, city.js, cityart.js).
+  - crisp near walls (per-axis magnification), row-averaged far windows (no shimmer), a lit avenue every 4th street with dim side streets
+  - the sea fades into the haze; a horizon glow band sits in the skycard; key light ×1.4 by day and dusk; contact rims under low-rise
+  - casino palette fixed; the 2D river is blue again
+  - perf: +1–7% against the round's start
+  - its notes for flight: the post pass's speed streak softens the nearest wall when skimming; the horizon glow could move into sky3d
+  - its next ideas: painted daytime sign boards for casino/neon, taper the river at the bay, setback-tier collision
 
 If a new thread starts before they report, check for their worktree branches
 (`git branch --list "worktree-*"`; `git log phase-2..<branch>`). Merge what's committed and
@@ -75,9 +74,8 @@ re-brief fresh builders from this file for anything unfinished.
 
 ## Backlog (rough priority)
 1. Next flight/city rounds from the critic list: the hero render, near walls, altitude noise, lighting, clouds.
-2. Director items:
-   - The caption sometimes appears clipped at the left edge in shots (slide-in captured mid-animation?).
-   - The district caption can lag the district name.
+2. Director: the district caption can lag the district name. A caption clipped at the left edge in
+   shots is just its slide-in/out animation caught mid-way; that's by design, not a bug.
 3. Brawler round 4:
    - painted blocks by day (lit windows, brightening)
    - a wet reflective street from the red-light paintings
