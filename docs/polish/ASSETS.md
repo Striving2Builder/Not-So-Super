@@ -1,7 +1,9 @@
 # Incoming art (2026-09-30) — integration plan
 
 Source: `C:\Users\ngnic\Desktop\Not So Super assets`. The sets that will be used are now in the
-repo as WebP (not wired in yet):
+repo as WebP. Wired (2026-10-02): `scenes/` (day-case backdrops, hotspots in `src/scenespots.js`),
+`brawl/backdrops/` (mixed in as façade blocks, `src/brawlpaintings.js`), billboards (brawl-loss
+cutscene), `asylum/tv/` (sedation TV). Not yet: `asylum/cell/`, `capture/room-2000.webp`.
 
 | Folder | Files |
 |---|---|
