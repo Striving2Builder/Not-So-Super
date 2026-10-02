@@ -57,20 +57,27 @@ render hand-off, enter/exit, the boost kick, and the 3D flight button set (`setB
   beams, chips).
 - `flightfx3d.js` — speed juice: contrail ribbon, wind streaks, sonic/boost rings (3D), comic
   action lines + wall-rush lines (2D overlay). Table: `FX`.
-- `city3d.js` — the city's orchestrator: chunks of 3x3 blocks, each ONE mesh = ONE draw call (near
-  build + a lite far-LOD build past `LOD.farMat`), landmarks (always drawn), the 2D view's baked
-  ground art as near ground, horizon, street life. Reads the key light / ambient from Sky3D's own
-  lights (no hook). Exposes `landmarks` ([{kind, district, x, y, h}], world units) for navigation.
+- `city3d.js` — the city's orchestrator: chunks of 3x3 blocks, each ONE mesh = ONE draw call plus
+  one ink-layer draw (near build + a lite far-LOD build past `LOD.farMat`), landmarks (always drawn),
+  the 2D view's baked ground art as near ground, horizon, outer boroughs, street life. Reads the key
+  light / ambient from Sky3D's lights and the haze's end colour from the dome's `bottom` uniform
+  (found in the scene: no hook). Chunks reach as far as the haze (further than the band's fog when
+  high up). Exposes `landmarks` ([{kind, district, x, y, h}], world units) for navigation.
   - `buildings3d.js` — the building kit: mask atlas (5 facades + 3 roofs), the one cel shader
-    (`CityLook`: near / far / landmark materials; walls, roofs, screen-space ink quads thick near →
-    thin far, neon, signs, beacons; window grid → flat tone + lit floor bands by screen size; haze
-    thicker near the ground), `Builder`, `box` / `prism` / `gable` / `tree` / `mast` / `neonRing`.
+    (`CityLook`: near / far / landmark materials + the anti-aliased `ink` layer; 3 cel bands +
+    halftone, windows → scale-aware lit clusters far off), `HAZE_GLSL` (the shared aerial
+    perspective: cool, thicker low, ends on the dome horizon), `Builder`, `box` / `prism` / ….
   - `blocks3d.js` — what stands on a block: `DISTRICT_3D` (heights + core bump, palettes, window
-    light, facade/silhouette/roof-kit odds), tower archetypes, roof kits, venue signs placement.
+    light, neon trims, facade/silhouette/roof-kit odds), tower archetypes, roof kits, venue signs.
   - `signs3d.js` — neon sign word atlas (comic lettering) + facade / rooftop / blade sign quads.
   - `landmarks3d.js` — one signature tower per district (`LANDMARKS`), chosen near its seed.
-  - `skyline3d.js` — horizon: skyline ring at the fog line, sea with cel waves + glint, ground haze.
-  - `street3d.js` — GPU traffic light streams + street steam (static buffers, one time uniform).
+  - `ground3d.js` — the map's ground from altitude: street-plan texture (lots, parks, plazas) +
+    night avenue glow.
+  - `outer3d.js` — beyond the map: outer boroughs (far-LOD blocks), bay islands, river bridges, the
+    bay bridges, the ring highway (their lanes feed the traffic).
+  - `skyline3d.js` — horizon: the water (bay + river round the map), the outer "city carpet" ground
+    (street grid in the shader), the haze patch for MeshBasic ground.
+  - `street3d.js` — GPU traffic light streams (streets, bridges, highway) + street steam.
 - `sky3d.js` — clock-driven gradient dome, sun/moon + lights, district-tinted fog, cloud decks.
 - `herofly3d.js` — the HeroModel posed from the flight state (hover idle / fist-forward with
   trailing legs / bank / cape), her own pushed-saturation suit materials + rim, inked blob shadow,
