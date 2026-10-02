@@ -127,7 +127,8 @@ export const actorDraw = {
   drawEnemy(ctx, e, x, y, s) {
     s *= CROOK_SCALE;
     let alpha = e.alpha != null ? e.alpha : 1;
-    if (e.dead) alpha *= Math.max(0, 1 - e.st_t / 0.9) * (Math.sin(e.st_t * 40) > 0 ? 1 : 0.35);
+    // KO'd: an opaque arcade blink-out (never a see-through ghost)
+    if (e.dead && (e.st_t > 0.9 || (e.st_t > 0.15 && Math.sin(e.st_t * 40) < 0))) return;
     if (alpha <= 0) return;
     ctx.globalAlpha = alpha;
     const jitter = e.flash > 0 ? rand(-2, 2) * s : 0;
@@ -141,10 +142,11 @@ export const actorDraw = {
       const dir = e.st === 'down' || e.st === 'getup' || e.dead ? -e.facing : e.facing;
       const ox = -wpx / 2 - (f.shift || 0) * M * s;
       ctx.save(); ctx.translate(x + jitter, 0); ctx.scale(dir, 1);
-      if (e.scorch > 0) ctx.filter = `brightness(${0.35 + (1 - Math.min(1, e.scorch)) * 0.65}) sepia(0.5)`;
+      if (e.scorch > 0) ctx.filter = `brightness(${0.6 + (1 - Math.min(1, e.scorch)) * 0.4}) sepia(0.6) saturate(1.4)`; // singed, not blacked out
       ctx.drawImage(f.img, ox, top, wpx, hpx);
       if (e.scorch > 0) ctx.filter = 'none';
-      if (e.flash > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = alpha * 0.85; ctx.drawImage(f.img, ox, top, wpx, hpx); ctx.globalCompositeOperation = 'source-over'; }
+      // hit flash: a solid white silhouette (cached per frame) laid over the sprite
+      if (e.flash > 0 || (e.dead && e.st_t < 0.15)) { ctx.globalAlpha = alpha * 0.9; ctx.drawImage(whiteOf(f), ox, top, wpx, hpx); ctx.globalAlpha = alpha; }
       if (f.head && f.top) this.drawHeadgear(ctx, e, f, fy, s);
       ctx.restore();
       ctx.globalAlpha = alpha;
@@ -217,7 +219,7 @@ export const actorDraw = {
       ctx.fillStyle = INK; ctx.fillRect(bx - 1.5, by - 1.5, bw + 3, 5 * s + 3);
       ctx.fillStyle = '#5a1020'; ctx.fillRect(bx, by, bw, 5 * s);
       ctx.fillStyle = e.hp / e.max > 0.35 ? '#ffd23f' : '#ff4d4d'; ctx.fillRect(bx, by, bw * Math.max(0, e.hp / e.max), 5 * s);
-      if (e.barT > 0) {
+      if (e.barT > 0 && this.lastHit === e) { // one nameplate at a time: the crook you're working on
         ctx.font = `900 ${9 * s}px Impact, system-ui`; ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = INK;
         ctx.strokeText(e.def.name, x, by - 3 * s); ctx.fillStyle = '#fff'; ctx.fillText(e.def.name, x, by - 3 * s);
       }
@@ -363,11 +365,13 @@ export const actorDraw = {
     const bob = Math.sin(this.t * 4) * 3;
     const label = c.blocked ? 'TRAPPED BY FIRE!' : 'HELP!';
     ctx.font = `900 ${12 * s}px Impact, system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const tw = ctx.measureText(label).width + 14 * s, th = 20 * s, bx = x + 10 * s, by = y - 92 * s + bob;
+    const tw = ctx.measureText(label).width + 14 * s, th = 20 * s, by = y - 96 * s + bob;
+    // over the captive's head, slid aside when the heroine stands in front so it can't read as hers
+    const hx = this.sx(this.p.x), dxh = x - hx, bx = Math.abs(dxh) < 50 * s ? x + (dxh >= 0 ? 1 : -1) * (tw / 2 + 12 * s) : x;
     ctx.fillStyle = '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.ellipse(bx, by, tw / 2, th / 2 + 2 * s, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(bx - 8 * s, by + th / 2 - 1 * s); ctx.lineTo(x - 2 * s, y - 62 * s); ctx.lineTo(bx + 2 * s, by + th / 2); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.fillRect(bx - 7 * s, by + th / 2 - 3.5 * s, 9 * s, 3 * s);
+    ctx.beginPath(); ctx.moveTo(bx - 5 * s, by + th / 2 - 1 * s); ctx.lineTo(x, y - 60 * s); ctx.lineTo(bx + 5 * s, by + th / 2 - 1 * s); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.fillRect(bx - 4.5 * s, by + th / 2 - 3.5 * s, 9 * s, 3 * s);
     ctx.fillStyle = c.blocked ? '#d8122e' : INK; ctx.fillText(label, bx, by + 1);
     ctx.textBaseline = 'alphabetic';
     if (c.freed > 0) {
@@ -477,4 +481,13 @@ function shadowSprite() {
   r.addColorStop(0, 'rgba(8,4,16,1)'); r.addColorStop(0.55, 'rgba(8,4,16,.8)'); r.addColorStop(1, 'rgba(8,4,16,0)');
   g.setTransform(1, 0, 0, 0.5, 0, 8); g.fillStyle = r; g.fillRect(0, 0, 64, 64);
   return shadowC;
+}
+
+/** White silhouette of a baked frame, made once on its first hit flash. */
+function whiteOf(f) {
+  if (f.white) return f.white;
+  const c = document.createElement('canvas'); c.width = f.img.width; c.height = f.img.height;
+  const g = c.getContext('2d'); g.drawImage(f.img, 0, 0);
+  g.globalCompositeOperation = 'source-in'; g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, c.height);
+  return (f.white = c);
 }
