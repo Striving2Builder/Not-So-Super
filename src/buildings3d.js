@@ -22,8 +22,7 @@ const CELL = 32, CW = WIN.cols * CELL, CH = WIN.rows * CELL, CELLS = 8;
 /**
  * Mask atlas, no alpha (canvas premultiplication would eat it): R = wall shade, G = glass, B = lit
  * window (facades) or paint (roofs). The shader tints walls per building and lights windows per
- * district, so one texture serves the whole city. Returns the per-cell averages too: far away
- * (or edge-on) the grid is swapped for them, which is what kills the window moire.
+ * district, so one texture serves the whole city. Returns its rows twin too (below).
  */
 function atlas() {
   const c = document.createElement('canvas');
@@ -94,22 +93,32 @@ function atlas() {
     g.fillRect(cx - 50, cy - 110, 24, 220); g.fillRect(cx + 26, cy - 110, 24, 220); g.fillRect(cx - 50, cy - 12, 100, 24);
     g.fillRect(ox + 6, 0, 6, CH); g.fillRect(ox + CW - 12, 0, 6, CH); g.fillRect(ox, 6, CW, 6); g.fillRect(ox, CH - 12, CW, 6);
   }
-  // per-cell averages (linear-ish masks: these are data, not colours)
-  const avg = [];
   const px = g.getImageData(0, 0, c.width, c.height).data;
-  for (let k = 0; k < CELLS; k++) {
-    let r = 0, gg = 0, b = 0, n = 0;
-    for (let y = 0; y < CH; y += 2) for (let x = k * CW; x < (k + 1) * CW; x += 2) { const i = (y * c.width + x) * 4; r += px[i]; gg += px[i + 1]; b += px[i + 2]; n++; }
-    avg.push(new THREE.Vector3(r / n / 255, gg / n / 255, b / n / 255));
-  }
   const t = new THREE.CanvasTexture(c);
   // masks stay linear data (no colour space); isotropic: edge-on walls fade to their flat tone anyway
-  return { tex: t, avg };
+  // The rows twin: each cell averaged across its width (one column per style). Far walls sample it
+  // with the vertical footprint only: floor bands (glass vs spandrel by day, lit-floor tones by
+  // night) that never shimmer, since nothing varies along a row.
+  const rc = document.createElement('canvas');
+  rc.width = CELLS; rc.height = CH;
+  const rg = rc.getContext('2d'), ri = rg.createImageData(CELLS, CH);
+  for (let k = 0; k < CELLS; k++) for (let y = 0; y < CH; y++) {
+    let r = 0, gg = 0, b = 0;
+    for (let x = k * CW; x < (k + 1) * CW; x++) { const i = (y * c.width + x) * 4; r += px[i]; gg += px[i + 1]; b += px[i + 2]; }
+    const o = (y * CELLS + k) * 4;
+    ri.data[o] = r / CW; ri.data[o + 1] = gg / CW; ri.data[o + 2] = b / CW; ri.data[o + 3] = 255;
+  }
+  rg.putImageData(ri, 0, 0);
+  const rows = new THREE.CanvasTexture(rc);
+  rows.wrapS = THREE.ClampToEdgeWrapping; rows.wrapT = THREE.RepeatWrapping;
+  return { tex: t, rows };
 }
 
 // ---------------------------------------------------------------- the shader
 /** Haze reach: far = max(fog far, camera height x perAlt), capped under the camera's far plane. */
 export const HAZE = { perAlt: 7, max: 4200, near: 0.2 };
+/** Key vs ambient: a clear lit / raking / shadow split on every tower, day and dusk too. */
+const KEY = { key: 1.45, amb: 0.72 };
 const _cool = new THREE.Color(0.93, 0.98, 1.1);
 /**
  * Aerial perspective shared by every city material (buildings, ground, sea, street lights): a cool,
@@ -136,7 +145,7 @@ vec3 haze(vec3 c, float d, float y, float k) {
 
 const VERT = /* glsl */`
 attribute vec3 aAux; attribute vec4 aCol; attribute vec4 aLit;
-uniform vec2 res; uniform float dpr; uniform float uInkW; uniform float uNeonFar;
+uniform vec2 res; uniform float dpr; uniform float uInkW; uniform float uNeonFar; uniform float uNight;
 // per-face values are flat: exact (they seed hashes) and cheaper than interpolating
 varying vec2 vUv; flat varying vec3 vCol; flat varying vec3 vLit; flat varying vec3 vN; varying vec3 vW;
 flat varying float vStyle; flat varying float vKind;
@@ -147,7 +156,7 @@ void main() {
   vW = wp.xyz;
   vec4 mv = viewMatrix * wp;
   // neon tubes drop out past ~650 m (far off they were a dotted circuit board, not glow)
-  if (vKind == 3. && -mv.z > uNeonFar) { gl_Position = vec4(0., 0., 2., 1.); return; }
+  if (vKind == 3. && -mv.z > uNeonFar * mix(0.45, 1., uNight)) { gl_Position = vec4(0., 0., 2., 1.); return; } // thin tubes by day read as stray strokes
   gl_Position = projectionMatrix * mv;
 }`;
 
@@ -193,7 +202,7 @@ void main() {
 
 const FRAG = /* glsl */`
 uniform sampler2D uAtlas; uniform sampler2D uSigns;
-uniform vec3 uAvg[8];
+uniform sampler2D uRows;
 uniform vec3 uKeyDir; uniform vec3 uKeyCol; uniform vec3 uAmbUp; uniform vec3 uAmbDn; uniform vec3 uSky; uniform vec3 uInk;
 uniform float uNight; uniform float uLit; uniform float uTime; uniform float uFogK; uniform float dpr; uniform float uNeonFar;
 uniform float uFogMax;
@@ -226,29 +235,29 @@ void main() {
     col = vec3(0.03, 0.02, 0.05) * s.b;
     emi = (vCol * s.g * 0.85 + mix(vCol, vec3(1.), 0.5) * s.r * 0.6) * mix(0.8, 1.15, uNight);
   } else if (vKind == 3.) {
-    emi = vCol * mix(0.9, 1.3, uNight) * (1. - smoothstep(uNeonFar * 0.6, uNeonFar, dist));
+    emi = vCol * mix(0.9, 1.3, uNight) * (1. - smoothstep(uNeonFar * 0.6, uNeonFar, dist / mix(0.45, 1., uNight)));
   } else if (vKind == 4.) {
     emi = vCol * (0.25 + 2.5 * step(0.6, fract(uTime * 0.7 + vUv.x)));
   } else {
     bool roof = vStyle > 4.5;
     vec2 cu = vUv * vec2(${WIN.cols}., ${WIN.rows}.);
     vec2 fw = fwidth(cu);
-    vec3 avg = uAvg[int(vStyle)];
-    vec3 far = avg;
-    // walls + glass fade to their flat tones when the grid gets small (no moire); the lit channel
-    // always comes from the mipmapped atlas, whose row-coherent windows average to floor bands
     vec2 sc = vec2(0.96, 0.98) / vec2(8., 1.);
     vec2 u = vStyle == 7. ? clamp(vUv, 0.01, 0.99) : fract(vUv);
-    vec2 g = vUv * sc;
-    vec2 gx = dFdx(g) * vec2(${CW * CELLS}., ${CH}.), gy = dFdy(g) * vec2(${CW * CELLS}., ${CH}.);
-    float lod = min(0.5 * log2(max(max(dot(gx, gx), dot(gy, gy)), 1e-6)), 5.);
-    // fully magnified walls (crisp cells below) never need the filtered atlas
-    vec3 t = lod < -1.3 && vStyle < 3.5 ? vec3(0.) : textureLod(uAtlas, u * sc + vec2((0.02 + vStyle) / 8., 0.01), lod).rgb;
-    vec3 m = vec3(far.rg, t.b);
+    // far: the rows twin, filtered by the vertical footprint only (floor bands, no shimmer)
+    float dv = length(vec2(dFdx(vUv.y), dFdy(vUv.y))) * ${CH}. * 0.98;
+    vec3 far = textureLod(uRows, vec2((vStyle + 0.5) / 8., u.y * 0.98 + 0.01), log2(max(dv, 1e-4))).rgb;
+    vec3 m = far;
 #ifndef FAR
+    vec2 g = vUv * sc;
+    // per texture axis: how many atlas texels one pixel covers
+    float tu = length(vec2(dFdx(g.x), dFdy(g.x))) * ${CW * CELLS}., tv = length(vec2(dFdx(g.y), dFdy(g.y))) * ${CH}.;
+    float lod = 0.5 * log2(max(max(tu * tu, tv * tv), 1e-6));
     float k = smoothstep(0.12, 0.28, max(fw.x, fw.y));
-    m.rg = mix(t.rg, far.rg, k);
-    float mag = smoothstep(-0.3, -1.3, lod) * step(vStyle, 3.5);
+    if (k < 0.999) m = mix(textureLod(uAtlas, u * sc + vec2((0.02 + vStyle) / 8., 0.01), lod).rgb, far, k);
+    // the crisp cells take over wherever a window is still several pixels on its most magnified
+    // axis (grazing walls included); their per-axis AA handles the other
+    float mag = smoothstep(1.2, 0.4, log2(max(min(tu, tv), 1e-4))) * (1. - k) * step(vStyle, 3.5);
     if (mag > 0.) {
       vec2 A = vec2(u.x * 0.96 + 0.02, u.y * 0.98 + 0.01);
       vec2 cell = (floor(A * vec2(${WIN.cols}., ${WIN.rows}.)) + 0.5) / vec2(${WIN.cols}., ${WIN.rows}.);
@@ -310,7 +319,7 @@ export class CityLook {
     this.atlas = A.tex;
     const U = {
       uHazeCol: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() }, uHazeNear: { value: 400 }, uHazeFar: { value: 1600 },
-      uAtlas: { value: A.tex }, uSigns: { value: signTex }, uAvg: { value: A.avg },
+      uAtlas: { value: A.tex }, uRows: { value: A.rows }, uSigns: { value: signTex },
       uKeyDir: { value: new THREE.Vector3(0.4, 0.7, 0.5).normalize() }, uKeyCol: { value: new THREE.Color(1, 1, 1) },
       uAmbUp: { value: new THREE.Color(0.4, 0.4, 0.5) }, uAmbDn: { value: new THREE.Color(0.2, 0.2, 0.3) },
       uSky: { value: new THREE.Color(0.6, 0.7, 0.9) }, uInk: { value: new THREE.Color(0x120c14) },
@@ -337,10 +346,10 @@ export class CityLook {
     const U = this.U;
     if (sun) {
       U.uKeyDir.value.copy(sun.position).sub(sun.target.position).normalize();
-      U.uKeyCol.value.copy(sun.color).multiplyScalar((0.12 + 0.36 * sun.intensity) * (1 - 0.15 * night));
+      U.uKeyCol.value.copy(sun.color).multiplyScalar((0.12 + 0.36 * sun.intensity) * (1 - 0.15 * night) * KEY.key);
     }
     if (hemi) {
-      const k = 0.75 * hemi.intensity * (1 - 0.55 * night);
+      const k = 0.75 * hemi.intensity * (1 - 0.55 * night) * KEY.amb;
       U.uAmbUp.value.copy(hemi.color).multiplyScalar(k);
       U.uAmbDn.value.copy(hemi.groundColor).multiplyScalar(k * 1.2).lerp(U.uAmbUp.value, 0.25);
     }
@@ -402,7 +411,7 @@ export class Builder {
     // none far away (the far shader drops it anyway), none on tiny parts (HVAC, legs): saves triangles
     // far (lite) builds ink only long edges: the skyline silhouettes keep their comic line
     const len = Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) + Math.abs(p[2] - q[2]);
-    if (len < (this.lite ? 30 : 2.5)) return;
+    if (this.lite || len < 2.5) return; // far: the haze bands and skyline card carry the line
     const i = this.inN;
     for (const [a, b, side] of [[p, q, 1], [p, q, -1], [q, p, 1], [q, p, -1]]) { this.ip.push(...a); this.ia.push(...b); this.iu.push(side, w); }
     this.inN += 4;
@@ -449,7 +458,8 @@ const fu = (len) => len / (WIN.w * WIN.cols), fv = (y) => y / (WIN.floor * WIN.r
  */
 export function box(B, x0, z0, x1, z1, bot, top, L, { roof = true, ink = 1, walls = true } = {}) {
   if (walls) {
-    const v0 = L.voff + fv(bot), v1 = L.voff + fv(top);
+    const fl = 1 / WIN.rows, vo = L.voff - ((((L.voff + fv(top)) % fl) + fl) % fl) + fl * 0.02;
+    const v0 = vo + fv(bot), v1 = vo + fv(top);
     const face = (a, b, nrm, len, u0) => {
       const u1 = u0 + fu(len);
       B.quad([a[0], bot, a[1]], [b[0], bot, b[1]], [b[0], top, b[1]], [a[0], top, a[1]], nrm, [[u0, v0], [u1, v0], [u1, v1], [u0, v1]], L.tint, L.lit, L.style);
