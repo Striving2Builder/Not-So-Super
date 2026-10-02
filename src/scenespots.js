@@ -167,7 +167,10 @@ export function sceneEdges(rec) {
   const w = 500, h = 300;
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const g = c.getContext('2d', { willReadFrequently: true });
-  g.drawImage(rec.img, 0, 0, w, h);
+  // soften first (down to a third and back up) so texture (hay, grit, wood grain) doesn't read as edges
+  const s = document.createElement('canvas'); s.width = w / 3 | 0; s.height = h / 3 | 0;
+  s.getContext('2d').drawImage(rec.img, 0, 0, s.width, s.height);
+  g.imageSmoothingQuality = 'high'; g.drawImage(s, 0, 0, w, h);
   const src = g.getImageData(0, 0, w, h), d = src.data;
   const lum = new Float32Array(w * h);
   for (let i = 0; i < w * h; i++) lum[i] = d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11;
@@ -176,7 +179,7 @@ export function sceneEdges(rec) {
     const i = y * w + x;
     const gx = lum[i - w + 1] + 2 * lum[i + 1] + lum[i + w + 1] - lum[i - w - 1] - 2 * lum[i - 1] - lum[i + w - 1];
     const gy = lum[i + w - 1] + 2 * lum[i + w] + lum[i + w + 1] - lum[i - w - 1] - 2 * lum[i - w] - lum[i - w + 1];
-    const m = Math.min(255, Math.max(0, Math.hypot(gx, gy) - 40) * 1.6);
+    const m = Math.min(255, Math.max(0, Math.hypot(gx, gy) - 22) * 3);
     if (m > 0) { o[i * 4] = 140; o[i * 4 + 1] = 240; o[i * 4 + 2] = 255; o[i * 4 + 3] = m; }
   }
   g.putImageData(out, 0, 0);

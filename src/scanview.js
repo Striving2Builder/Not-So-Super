@@ -107,7 +107,7 @@ export const ScanView = {
     const rec = this.paint && sceneImage(this.paint);
     if (rec) { X.fillStyle = 'rgba(2,6,18,.4)'; X.fillRect(0, 0, Wd, Hd); } // a painting dims further: the scan lines carry the room
     X.save(); this.view(X, f, dpr, 0, true); X.globalAlpha = 0.55; paintXrayStructure(X, this.settingKey, v, 0, this.floorY);
-    if (rec) { X.globalCompositeOperation = 'lighter'; X.globalAlpha = 0.6; X.drawImage(sceneEdges(rec), 0, 0, LW, LH); } // its own edges, traced
+    if (rec) { X.globalCompositeOperation = 'lighter'; X.globalAlpha = 0.5; X.drawImage(sceneEdges(rec), 0, 0, LW, LH); } // its own edges, traced
     X.restore();
     X.globalCompositeOperation = 'lighter'; X.drawImage(L.edge, 0, 0); X.globalAlpha = 0.45; X.drawImage(L.edge, 0, 0);
     X.globalAlpha = 1; X.globalCompositeOperation = 'source-over';
