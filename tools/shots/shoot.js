@@ -326,7 +326,7 @@ async function shootNightClues(page, dir, name) {
         page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().slice(0, 300)); });
         try {
           if (sc.type === 'fly3d') await page.addInitScript(`(() => { let s = 4242; Math.random = () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();`);
-          await newGame(page, sc.type === 'fly3d' ? '?flight=3d' : '');
+          await newGame(page, sc.type === 'fly3d' ? '?flight=3d' : '?flight=2d');
           let r;
           if (sc.type === '3d') { r = await shoot3d(page, dir, name, sc.zone); if (sc.clues) r.shots.push(...await shootNightClues(page, dir, name)); }
           else if (sc.type === 'fly') r = await shootFly(page, dir, name, sc.plan);

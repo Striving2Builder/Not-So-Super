@@ -30,7 +30,7 @@ async function open(browser, three, band) {
   await ctx.addInitScript(INIT);
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.log('ERR', three ? '3d' : '2d', e.message));
-  await page.goto(`http://localhost:${PORT}/${three ? '?flight=3d' : ''}`);
+  await page.goto(`http://localhost:${PORT}/${three ? '?flight=3d' : '?flight=2d'}`);
   await page.waitForFunction(() => window.__game && document.querySelector('#btn-new'), null, { timeout: 60000 });
   await page.evaluate(async () => { (await import('/src/settings.js')).autoTune.done = true; });
   await page.waitForTimeout(500);

@@ -65,7 +65,7 @@ export class Overworld {
     this.feed = new CityFeed();          // clips in the minimap corner
     this.frame = 0;
     this.kick = 0;                       // boost punch (0..1), widens the view for a beat
-    this.view3d = flight3dEnabled() ? new Flight3D(this) : null; // ?flight=3d slice (default off)
+    this.view3d = flight3dEnabled() ? new Flight3D(this) : null; // 3D flight (default); ?flight=2d = top-down
     this.heroArt = new FlightHero();     // her inked 3/4 sprite, ground shadow, boost lettering
   }
 

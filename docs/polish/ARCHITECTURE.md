@@ -44,7 +44,7 @@ these folders, and its imports should make sense from there.
 8. **Comments explain why**, match the surrounding terse style; no dead code or commented-out
    experiments left behind; debug/profiling helpers live in `tools/`, not `src/`.
 
-## Flight in 3D (vertical slice, `?flight=3d`, default off) — `flight/`
+## Flight in 3D (the DEFAULT since 2026-10-02; `?flight=2d` or no WebGL = the old top-down view) — `flight/`
 A renderer swap, not a rewrite: `overworld.js` keeps simulating (hero, bands, zones, nav, events)
 and, when `view3d` exists, hands the frame to it. Hooks in overworld.js are deliberately few:
 camera-relative steering (`view3d.steer`), building heights for collisions/perching (`hOf`), the
