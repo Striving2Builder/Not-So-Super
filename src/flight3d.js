@@ -278,7 +278,7 @@ export class Flight3D {
     const hq = this.heroQ || quality().fly3dHero || [0, 0], sharp = this.layered && hq[1] > 0;
     if (sharp) this.cam.cam.layers.disable(HERO_LAYER); else this.cam.cam.layers.enable(HERO_LAYER);
     this.post.render(r, this.scene, this.cam.cam, this.aaQ || quality().fly3dAA); // (whole-frame AA)
-    if (sharp) this.heroPass.render(r, this.scene, this.cam.cam, this.hero.group.position, 2.4 * this.hero.size, W, H, hq);
+    if (sharp) this.heroPass.render(r, this.scene, this.cam.cam, this.hero.group.position, 3.4 * this.hero.size, W, H, hq); // (radius: her + the cape)
     this.overlay(ctx, night, frac, boosting);
   }
 
