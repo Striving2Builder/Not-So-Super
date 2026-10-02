@@ -69,7 +69,7 @@ export const SCENES = {
       [0, 58, 150, 345, 'Scorched Bookcase', 'Books burned down to their spines.']],
   },
   alley: {
-    floor: 445, bait: [330, 352], witness: [770, 594, 2.8], chalk: [420, 535, 470],
+    floor: 445, bait: [330, 362], witness: [770, 594, 2.8], chalk: [420, 535, 470],
     lamp: [662, 50, '255,214,140'], tint: '#a0909c',
     fx: [['flicker', 640, 20, 46, 60, '255,214,140']],
     spots: [[0, 237, 240, 210], [245, 350, 155, 100], [418, 295, 104, 152], [262, 60, 178, 232, 'Torn Poster', 'Shredded by the rain. A club flyer used to be here.'],
