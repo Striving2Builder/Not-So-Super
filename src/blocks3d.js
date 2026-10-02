@@ -37,8 +37,8 @@ const isTall = (o) => o.kind === 'box' && !o.house && !o.container && !o.truck &
 export function height3(o, district, core = 0) {
   if (o.h3 !== undefined) return o.h3;
   const d = DISTRICT_3D[district] || DISTRICT_3D.retail;
-  // a few standouts break the grid from altitude
-  const stand = d.core > 0.2 && hash2(o.x | 0, o.y | 0, 37) < 0.06 ? 1.6 : 1;
+  // a few standouts break the mid-rise grid from altitude (not in the core: they'd wall the cruise band)
+  const stand = d.core <= 0.3 && d.mult >= 1.3 && hash2(o.x | 0, o.y | 0, 37) < 0.07 ? 1.8 : 1;
   o.h3 = isTall(o) ? Math.min(MAX_H, o.h * (d.mult + d.spread * (hash2(o.x | 0, o.y | 0, 31) - 0.5)) * (1 + d.core * core) * stand) : o.h;
   return o.h3;
 }
