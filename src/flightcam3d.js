@@ -11,10 +11,13 @@ import { clamp, lerp } from './util.js';
 
 /** Framing per mode, in metres / degrees. Pairs are hover → full speed. */
 const CAM = {
-  chase: { dist: [6.2, 3.8], height: [0.7, 1.9], side: [0.4, 1.2], fov: [58, 66], at: [0.45, 0.62] }, // side: to her right → a 3/4 rear view // at = her spot on screen (x, y from top-left)
+  chase: { dist: [6.2, 3.5], height: [0.7, 2.5], side: [0.6, 1.7], fov: [58, 66], at: [0.45, 0.62] }, // side: to her right → a 3/4 rear view; at = her spot on screen (x, y from top-left)
   boost: { dist: 0.8, height: 0.2, fov: 13, kickFov: 8, shake: [0.035, 0.14], lag: 2.6 }, // shake m: sustained / on the punch; lag = spring rate         // sustained while boosting + a kick on the press
-  canyon: { height: 2.4, at: [0.47, 0.62], fovUp: 4, snap: 0.62 }, // skim band: lower, along the street (snap ≈ 35°)
-  patrol: { dist: 100, height: 85, side: 60, fov: 60, at: [0.5, 0.66] }, // ≈ 30° down at the city, from her 3/4 rear (her side reads): horizon along the top
+  canyon: { height: 2.4, dist: 3.4, at: [0.47, 0.62], fovUp: 4, snap: 0.62 }, // skim band: lower, along the street (snap ≈ 35°)
+  // high patrol, flying: level with her, she sits on the left third against the sky,
+  // the city's far edge down in the bottom third (the Superman-over-the-city shot)
+  high: { dist: 4.0, height: 0.15, side: 1.4, at: [0.36, 0.5], from: 760, to: 1000 }, // from/to: altitude (world units) it blends in over
+  patrol: { dist: 100, height: 85, side: 60, fov: 60, at: [0.36, 0.66] }, // ≈ 30° down at the city, from her 3/4 rear (her side reads): horizon along the top
   yawRate: 2.6,  // how fast the camera swings round behind her heading (1/s)
   orbitBack: 0.6, // drag-orbit eases back behind her at this rate while she's moving (1/s)
   roll: 0.1,      // camera roll into her turns (rad per unit bank)
@@ -54,6 +57,7 @@ export class FlightCam3D {
     if (!o.patrol && this.patrolK < 0.01) this.patrolK = 0;
     this.boostK = ease(this.boostK, o.boosting ? 1 : 0, o.boosting ? 3 : 1.5);
     this.canyonK = ease(this.canyonK, o.canyon || 0, 2);
+    this.highK = ease(this.highK || 0, clamp((h.z - CAM.high.from) / (CAM.high.to - CAM.high.from), 0, 1) * (o.diving ? 0 : 1), 3);
     this.kick = Math.max(0, this.kick - dt * 1.6);
     // Swing behind her heading (only while she's going somewhere). In the street canyons the
     // target heading snaps to the street axis when she's roughly along it, so the shot looks
@@ -70,10 +74,11 @@ export class FlightCam3D {
     const yaw = this.yaw + this.orbit, fx = Math.cos(yaw), fz = Math.sin(yaw);
     const hx = h.x * M, hy = h.z * M, hz = h.y * M;
     const B = CAM.boost, P = CAM.patrol, K = this.patrolK;
-    const chaseDist = lerp(C.dist[0], C.dist[1], frac) + B.dist * this.boostK;
-    const chaseUp = lerp(lerp(C.height[0], C.height[1], frac), CAM.canyon.height, this.canyonK) + B.height * this.boostK;
+    const A = CAM.high, hk = this.highK * Math.min(1, frac * 3); // (stopped up high: the patrol view takes over)
+    const chaseDist = lerp(lerp(lerp(C.dist[0], C.dist[1], frac), CAM.canyon.dist, this.canyonK * Math.min(1, frac * 4)), A.dist, hk) + B.dist * this.boostK;
+    const chaseUp = lerp(lerp(lerp(C.height[0], C.height[1], frac), CAM.canyon.height, this.canyonK), A.height, hk) + B.height * this.boostK;
     const dist = lerp(chaseDist, P.dist, K), up = lerp(chaseUp, P.height, K);
-    const side = lerp(lerp(C.side[0], C.side[1], frac) * (1 - 0.3 * this.canyonK), P.side, K);
+    const side = lerp(lerp(lerp(C.side[0], C.side[1], frac) * (1 - 0.3 * this.canyonK), A.side, hk), P.side, K);
     // Sphere-cast from her to each candidate spot (her usual shoulder, the other one, then both
     // lifted and pulled in) and take the clearest: a candidate loses for a blocked line of sight,
     // and for a tower face right beside the lens (that's the "one wall fills the frame" shot).
@@ -114,7 +119,7 @@ export class FlightCam3D {
     const fov = lerp(lerp(C.fov[0], C.fov[1], frac) + CAM.canyon.fovUp * this.canyonK + B.fov * this.boostK + B.kickFov * Math.sin(this.kick * Math.PI), P.fov, K);
     if (Math.abs(fov - this.cam.fov) > 0.05) { this.cam.fov = fov; this.cam.updateProjectionMatrix(); }
     // Aim: point the camera at her, then turn it so she lands on her screen spot.
-    const ax = lerp(lerp(C.at[0], CAM.canyon.at[0], this.canyonK), P.at[0], K), ay = lerp(lerp(C.at[1], CAM.canyon.at[1], this.canyonK), P.at[1], K);
+    const ax = lerp(lerp(lerp(C.at[0], CAM.canyon.at[0], this.canyonK), A.at[0], hk), P.at[0], K), ay = lerp(lerp(lerp(C.at[1], CAM.canyon.at[1], this.canyonK), A.at[1], hk), P.at[1], K);
     const ty = Math.tan((this.cam.fov * Math.PI) / 360), tx = ty * this.cam.aspect;
     _c.set((ax * 2 - 1) * tx, -(ay * 2 - 1) * ty, -1).normalize(); // where she should be, camera space
     _d.set(hx, hy + CAM.aimUp, hz).sub(this.cam.position).normalize();
