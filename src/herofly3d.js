@@ -102,7 +102,7 @@ class RibbonCape {
     const uv = new Float32Array(n * 3 * 2);
     for (let i = 0; i < n; i++) uv.set([0, i / (n - 1), 0.5, i / (n - 1), 1, i / (n - 1)], i * 6);
     this.cloth.geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-    this._t = new THREE.Vector3(); this._a = new THREE.Vector3();
+    this._t = new THREE.Vector3(); this._a = new THREE.Vector3(); this._b = new THREE.Vector3();
   }
 
   /** anchor: world point on her upper back; back/up/side: her body axes (unit); v: airspeed m/s. */
@@ -115,10 +115,12 @@ class RibbonCape {
       const k = i / (n - 1);
       // streams back along her body, ripples (a wave running down it, bigger toward the hem),
       // and droops under gravity when she's slow
-      const tgt = this._t.copy(this.p[i - 1]).addScaledVector(back, L * (0.3 + 0.7 * sk))
-        .addScaledVector(up, (Math.sin(t * f - i * 0.95) * amp + Math.sin(t * 1.7 - i * 0.55) * L * 0.3) * k) // ripple + a slow billow
-        .addScaledVector(side, Math.sin(t * f * 0.63 - i * 0.7) * amp * 0.35 * k);
-      tgt.y -= L * (1 - sk) * 0.9;
+      // around a straight line down her back (not chained off the previous point: a chained wave
+      // compounds into a kite standing off her back): an S-wave that travels to the hem
+      const tgt = this._t.copy(anchor).addScaledVector(back, i * L * (0.3 + 0.7 * sk))
+        .addScaledVector(up, (Math.sin(t * f - i * 0.95) * amp * 0.6 + Math.sin(t * 1.7 - i * 0.7) * L * 0.35) * k)
+        .addScaledVector(side, Math.sin(t * f * 0.63 - i * 0.7) * amp * 0.3 * k);
+      tgt.y -= L * (1 - sk) * 0.9 * i;
       this.p[i].lerp(tgt, Math.min(1, dt * (8 + v / 6)));
       // keep the segment length
       const d = this._a.subVectors(this.p[i], this.p[i - 1]), len = d.length() || 1;
@@ -131,10 +133,12 @@ class RibbonCape {
         // the ink strip also runs a little past the hem
         const tail = extra && i === n - 1 ? this._a.subVectors(q, this.p[i - 1]).normalize().multiplyScalar(extra * size) : null;
         const x = q.x + (tail ? tail.x : 0), y = q.y + (tail ? tail.y : 0), z = q.z + (tail ? tail.z : 0);
+        // the hem: a pointed swallow tip (the spine trails past the corners), never a square-cut slab
+        const tip = i === n - 1 ? this._b.subVectors(q, this.p[i - 1]).normalize().multiplyScalar(w * 0.6) : this._b.set(0, 0, 0);
         // the edges curl down away from the spine (more toward the hem) and flutter out of phase
-        const curl = w * (0.25 + 0.35 * f), fl = Math.sin(t * 6 - i * 1.1) * w * 0.18 * f;
+        const curl = w * (0.1 + 0.16 * f), fl = Math.sin(t * 6 - i * 1.1) * w * 0.14 * f;
         pos.setXYZ(i * 3, x + side.x * w - up.x * (curl + fl), y + side.y * w - up.y * (curl + fl), z + side.z * w - up.z * (curl + fl));
-        pos.setXYZ(i * 3 + 1, x, y, z);
+        pos.setXYZ(i * 3 + 1, x + tip.x, y + tip.y, z + tip.z);
         pos.setXYZ(i * 3 + 2, x - side.x * w - up.x * (curl - fl), y - side.y * w - up.y * (curl - fl), z - side.z * w - up.z * (curl - fl));
       }
       pos.needsUpdate = true;
