@@ -15,7 +15,8 @@ const KEY = 'supergirl-settings';
  * flyTileRes: canvas pixels per city block in the flight view's baked ground tiles.
  * flySpriteMax: cap (device px) on her flight sprite, which is otherwise rendered 1:1 with the screen.
  * fly3dDpr: [open sky, street canyons] pixel-ratio caps for the 3D flight view (canyons are fill-rate bound).
- * fly3dHero: [MSAA samples, density × the frame's] for her own sharp pass in 3D flight (0 density = no pass).
+ * fly3dHero: [MSAA samples, density × the canvas's] for her own sharp pass in 3D flight (0 density = no pass).
+ * fly3dOut: the 3D flight canvas's pixel-ratio cap (her pass + overlay); the scene renders at fly3dDpr.
  * fly3dAA: whole-frame anti-aliasing for 3D flight: 'msaa' | 'fxaa' | 'none'.
  * clubLights: real (moving) point lights in a premade club.
  * scanFilter: night-case detective vision darkens the 3D view with a CSS filter.
@@ -30,7 +31,7 @@ export const PROFILES = {
     clubTex: 'full', clubCache: 3, clubMaterials: 'full', clubLights: 5,
     look3d: 'full',
     nightlife: 'full',
-    flyDetail: true, flyTileRes: 144, flySpriteMax: 640, fly3dDpr: [1.25, 1.1], fly3dHero: [2, 2], fly3dAA: 'msaa',
+    flyDetail: true, flyTileRes: 144, flySpriteMax: 640, fly3dDpr: [1.25, 1.1], fly3dHero: [4, 1], fly3dAA: 'msaa', fly3dOut: 3,
     scanFilter: true,
     brawlSprite: 256, brawlBakeMs: 900,
   },
@@ -40,7 +41,7 @@ export const PROFILES = {
     clubTex: 'lite', clubCache: 1, clubMaterials: 'standard', clubLights: 3,
     look3d: 'lite',
     nightlife: 'lite',
-    flyDetail: true, flyTileRes: 144, flySpriteMax: 512, fly3dDpr: [1, 0.75], fly3dHero: [0, 1.75], fly3dAA: 'fxaa',
+    flyDetail: true, flyTileRes: 144, flySpriteMax: 512, fly3dDpr: [1, 0.75], fly3dHero: [4, 1], fly3dAA: 'fxaa', fly3dOut: 2,
     scanFilter: true,
     brawlSprite: 256, brawlBakeMs: 900,
   },
@@ -50,7 +51,7 @@ export const PROFILES = {
     clubTex: 'lite', clubCache: 1, clubMaterials: 'lambert', clubLights: 2,
     look3d: 'min',
     nightlife: 'min',
-    flyDetail: false, flyTileRes: 96, flySpriteMax: 256, fly3dDpr: [0.85, 0.75], fly3dHero: [0, 1.5], fly3dAA: 'none',
+    flyDetail: false, flyTileRes: 96, flySpriteMax: 256, fly3dDpr: [0.85, 0.75], fly3dHero: [0, 1.5], fly3dAA: 'none', fly3dOut: 1.5,
     scanFilter: false,
     brawlSprite: 180, brawlBakeMs: 250,
   },

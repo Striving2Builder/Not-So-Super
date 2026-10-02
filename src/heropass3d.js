@@ -19,8 +19,12 @@ export class HeroPass {
     this.ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.quadScene = new THREE.Scene();
     // the target holds premultiplied colour (MSAA resolves her edges against a clear of 0,0,0,0)
-    this.mat = new THREE.MeshBasicMaterial({
-      transparent: true, depthTest: false, depthWrite: false,
+    // a raw copy: the target already holds display values (premultiplied by her coverage)
+    this.mat = new THREE.ShaderMaterial({
+      uniforms: { map: { value: null }, rep: { value: new THREE.Vector2(1, 1) } },
+      vertexShader: 'uniform vec2 rep; varying vec2 vUv; void main() { vUv = uv * rep; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform sampler2D map; varying vec2 vUv; void main() { gl_FragColor = texture2D(map, vUv); }',
+      transparent: true, depthTest: false, depthWrite: false, toneMapped: false,
       blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
     });
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.mat);
@@ -35,7 +39,12 @@ export class HeroPass {
       const keep = this.rt && this.rt.samples === samples;
       this.rt?.dispose();
       this.rt = new THREE.WebGLRenderTarget(Math.max(W, keep ? this.rt.width : 0), Math.max(H, keep ? this.rt.height : 0), { samples });
-      this.mat.map = this.rt.texture; this.mat.needsUpdate = true;
+      // like the canvas (see flightpost3d): she's tone-mapped and sRGB-encoded in her own pass,
+      // so the 8-bit target holds display values (no banding in her darks)
+      this.rt.isXRRenderTarget = true;
+      this.rt.texture.colorSpace = THREE.SRGBColorSpace;
+      this.rt.texture.internalFormat = 'RGBA8';
+      this.mat.uniforms.map.value = this.rt.texture;
     }
     return this.rt;
   }
@@ -75,7 +84,7 @@ export class HeroPass {
     renderer.setClearColor(_cc, a0);
     LOOK.res.value.copy(_res); LOOK.dpr.value = dpr0;
     // lay it over the frame: a quad on her rectangle sampling the used corner of the target
-    this.mat.map.repeat.set(rw / rt.width, rh / rt.height);
+    this.mat.uniforms.rep.value.set(rw / rt.width, rh / rt.height);
     this.quad.scale.set(w / W, h / H, 1);
     this.quad.position.set(((x0 + w / 2) / W) * 2 - 1, 1 - ((y0 + h / 2) / H) * 2, 0);
     const ac = renderer.autoClear;
