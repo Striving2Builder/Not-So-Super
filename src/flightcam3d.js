@@ -11,8 +11,8 @@ import { clamp, lerp } from './util.js';
 
 /** Framing per mode, in metres / degrees. Pairs are hover → full speed. */
 const CAM = {
-  chase: { dist: [6.2, 4.8], height: [0.7, 2.4], side: [0.4, 1.3], fov: [58, 70], at: [0.46, 0.64] }, // side: to her right → a 3/4 rear view // at = her spot on screen (x, y from top-left)
-  boost: { dist: 0.8, height: 0.2, fov: 9, kickFov: 16 },         // sustained while boosting + a kick on the press
+  chase: { dist: [6.2, 3.8], height: [0.7, 1.9], side: [0.4, 1.2], fov: [58, 66], at: [0.45, 0.62] }, // side: to her right → a 3/4 rear view // at = her spot on screen (x, y from top-left)
+  boost: { dist: 0.8, height: 0.2, fov: 13, kickFov: 8, shake: [0.035, 0.14], lag: 2.6 }, // shake m: sustained / on the punch; lag = spring rate         // sustained while boosting + a kick on the press
   canyon: { height: 2.4, at: [0.47, 0.62], fovUp: 4, snap: 0.62 }, // skim band: lower, along the street (snap ≈ 35°)
   patrol: { dist: 100, height: 85, side: 60, fov: 60, at: [0.5, 0.66] }, // ≈ 30° down at the city, from her 3/4 rear (her side reads): horizon along the top
   yawRate: 2.6,  // how fast the camera swings round behind her heading (1/s)
@@ -103,10 +103,13 @@ export class FlightCam3D {
     // spring would trail 50 m behind. The offset eases, so turns and climbs still swing smoothly.
     _p.x -= hx; _p.y -= hy; _p.z -= hz;
     if (!this.placed) { this.pos.copy(_p); this.placed = true; }
-    this.pos.lerp(_p, Math.min(1, dt * 5.5));
+    this.pos.lerp(_p, Math.min(1, dt * lerp(5.5, B.lag, this.boostK))); // (boost: the camera lags, she pulls ahead)
     // the spring may swing it through a corner: if the eased spot is inside a wall, cut to the safe one
     if (ball(hx + this.pos.x, hy + this.pos.y, hz + this.pos.z)) this.pos.copy(_p);
     this.cam.position.set(hx + this.pos.x, hy + this.pos.y, hz + this.pos.z);
+    // boost shake: a light rattle while boosting, a jolt on the punch
+    const sh = (B.shake[0] * this.boostK + B.shake[1] * this.kick) * (1 - K);
+    if (sh > 0.001) { const t = performance.now() / 1000; this.cam.position.x += Math.sin(t * 71) * sh; this.cam.position.y += Math.sin(t * 53 + 1) * sh; this.cam.position.z += Math.sin(t * 61 + 2) * sh; }
     // lens first (the aim below depends on it)
     const fov = lerp(lerp(C.fov[0], C.fov[1], frac) + CAM.canyon.fovUp * this.canyonK + B.fov * this.boostK + B.kickFov * Math.sin(this.kick * Math.PI), P.fov, K);
     if (Math.abs(fov - this.cam.fov) > 0.05) { this.cam.fov = fov; this.cam.updateProjectionMatrix(); }

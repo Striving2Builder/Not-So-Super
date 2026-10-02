@@ -1,54 +1,115 @@
-// Sky for the three.js flight slice: a gradient dome that follows the game clock (day blue, dusk
-// orange, night navy with a purple city glow on the horizon), the sun or moon, matching sun/moon
-// light for the cel shading, distance fog tinted by the district she's over, and cloud decks she
-// can climb through (merged horizontal puffs: one draw call).
+// Sky for the three.js flight view: a graded dome that follows the game clock (a bright warm band
+// on the horizon rising through a mid tone into a deep blue/violet zenith), the sun as a disc with
+// a glow at dusk, the moon with a halo at night, matching sun/moon light for the cel shading,
+// district-tinted fog, and decks of stylised comic cumulus: flat two-tone shapes with an ink
+// outline, always facing the camera (no paper-thin smears seen edge-on), one draw call.
+//
+// Colours here are DISPLAY values (what you see on screen): the dome writes them as they are, and
+// the city's haze converges on `horizon` in the same space, so the horizon has no seam. At and
+// below the horizon the dome is exactly `horizon`.
 import * as THREE from 'three';
 import { RNG } from './rng.js';
 
-/** Sky colours: [zenith, horizon] per time of day. */
+/** [zenith, mid, horizon] display colours per time of day. */
 const SKY = {
-  day: ['#3f86d6', '#bfd9ef'],
-  dusk: ['#2c3a78', '#ff9b62'],
-  night: ['#050818', '#2b2152'],
+  day: ['#2a63c4', '#69a4e4', '#e8f2fa'],
+  dusk: ['#1d2766', '#9a86c4', '#f2cbc4'], // deep blue over a light peach-lilac band (cool: complements her red)
+  night: ['#04071a', '#141038', '#35275e'],
 };
-const CLOUD = { count: 150, layers: [380, 430, 470], size: [120, 260], alpha: 0.6 }; // metres
+/** Cloud decks (metres) and their two-tone fills + ink, per time of day (display colours). */
+const CLOUD = {
+  count: 70, layers: [380, 430, 470], size: [70, 150],
+  fadeNear: [60, 160], // m from the camera: clouds fade out before they can smear the lens
+  day: ['#ffffff', '#b9cbe6', '#2a3350'], dusk: ['#ffe4d2', '#a58cbc', '#221a40'], night: ['#5d6292', '#2e3060', '#07081a'],
+};
+const linear = (hex) => new THREE.Color().setHex(parseInt(hex.slice(1), 16), THREE.LinearSRGBColorSpace); // as-is (display) values
 
-let puff = null;
-function puffTexture() {
-  if (puff) return puff;
-  const c = document.createElement('canvas'); c.width = c.height = 128;
-  const g = c.getContext('2d'), r = new RNG(77);
-  for (let i = 0; i < 12; i++) {
-    const x = 64 + r.range(-28, 28), y = 64 + r.range(-20, 20), rad = r.range(22, 40);
-    const grd = g.createRadialGradient(x, y, 0, x, y, rad);
-    grd.addColorStop(0, 'rgba(255,255,255,.6)'); grd.addColorStop(0.6, 'rgba(255,255,255,.25)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+const DOME_VS = 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }';
+const DOME_FS = `uniform vec3 top; uniform vec3 mid; uniform vec3 bottom; uniform vec3 sunDir; uniform vec3 sunCol; uniform float sunK; uniform float moonK; varying vec3 vP;
+void main(){
+  float h = max(vP.y, 0.0);
+  // a bright band hugging the horizon, then up through the mid tone into the zenith
+  vec3 c = mix(bottom, mid, smoothstep(0.0, 0.22, h));
+  c = mix(c, top, smoothstep(0.18, 0.75, h));
+  float d = dot(normalize(vP), sunDir);
+  // sun: hard disc + warm glow (dusk), moon: pale disc + halo (night)
+  c += sunCol * (pow(max(d, 0.0), 24.0) * 0.55 + pow(max(d, 0.0), 6.0) * 0.18) * sunK;
+  c = mix(c, sunCol * 1.2 + 0.25, smoothstep(0.9985, 0.9992, d) * sunK);
+  c += vec3(0.55, 0.62, 0.9) * pow(max(d, 0.0), 60.0) * 0.35 * moonK;
+  c = mix(c, vec3(0.92, 0.94, 1.0), smoothstep(0.9993, 0.9996, d) * moonK);
+  if (vP.y <= 0.0) c = bottom; // at and below the horizon: exactly the horizon colour
+  gl_FragColor = vec4(c, 1.0);
+}`;
+
+// Comic cumulus: billboards (corner offsets applied in view space), alpha-tested, two-tone + ink.
+const CLOUD_VS = `attribute vec2 corner; attribute vec2 size; attribute float variant; varying vec2 vUv; varying float vFade; varying float vDist;
+uniform vec2 fadeNear;
+void main(){
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  mv.xy += corner * size;
+  vUv = vec2((corner.x * 0.5 + 0.5 + mod(variant, 2.0)) * 0.5, (corner.y * 0.5 + 0.5 + floor(variant / 2.0)) * 0.5);
+  vDist = -mv.z;
+  vFade = smoothstep(fadeNear.x, fadeNear.y, length(mv.xyz));
+  gl_Position = projectionMatrix * mv;
+}`;
+const CLOUD_FS = `uniform sampler2D map; uniform vec3 lit; uniform vec3 shade; uniform vec3 ink; uniform vec3 fogCol; uniform float fogNear; uniform float fogFar; uniform float alpha;
+varying vec2 vUv; varying float vFade; varying float vDist;
+void main(){
+  vec4 t = texture2D(map, vUv);
+  if (t.a < 0.5 || vFade < 0.02) discard;
+  vec3 c = mix(mix(shade, lit, t.r), ink, t.b);
+  c = mix(c, fogCol, smoothstep(fogNear, fogFar, vDist) * 0.85);
+  gl_FragColor = vec4(c, alpha * vFade);
+}`;
+
+let cloudTex = null;
+/** 2×2 atlas of cumulus shapes. R = lit top, B = ink outline, A = shape. */
+function cloudAtlas() {
+  if (cloudTex) return cloudTex;
+  const S = 256, c = document.createElement('canvas'); c.width = c.height = S * 2;
+  const g = c.getContext('2d'), r = new RNG(4711);
+  for (let v = 0; v < 4; v++) {
+    const ox = (v % 2) * S, oy = Math.floor(v / 2) * S, bumps = [];
+    const n = 4 + (v % 3);
+    for (let i = 0; i < n; i++) {
+      const x = 50 + (i / (n - 1)) * 156 + r.range(-10, 10), rad = r.range(30, 52) * (1 - Math.abs(i / (n - 1) - 0.5) * 0.7);
+      bumps.push([x, 168 - rad * 0.6 - r.range(0, 22), rad]);
+    }
+    const shape = (grow, dy = 0) => {
+      g.beginPath();
+      for (const [x, y, rad] of bumps) { g.moveTo(ox + x + rad + grow, oy + y + dy); g.arc(ox + x, oy + y + dy, rad + grow, 0, Math.PI * 2); }
+      g.rect(ox + 44 - grow, oy + 150 - grow + dy, 168 + grow * 2, 24 + grow * 2); // flat base
+      g.fill();
+    };
+    g.fillStyle = 'rgba(0,0,255,1)'; shape(6);         // ink (B), the outline ring
+    g.fillStyle = 'rgba(0,0,0,1)'; shape(0);           // shade fill
+    g.fillStyle = 'rgba(255,0,0,1)'; g.save(); g.beginPath(); // lit top: the shape, shifted down = cut off at the bottom
+    for (const [x, y, rad] of bumps) { g.moveTo(ox + x + rad, oy + y); g.arc(ox + x, oy + y, rad, 0, Math.PI * 2); }
+    g.rect(ox + 44, oy + 150, 168, 24); g.clip();
+    for (const [x, y, rad] of bumps) { g.beginPath(); g.arc(ox + x - 6, oy + y - 10, rad * 0.92, 0, Math.PI * 2); g.fill(); }
+    g.restore();
   }
-  puff = new THREE.CanvasTexture(c);
-  return puff;
+  cloudTex = new THREE.CanvasTexture(c);
+  cloudTex.colorSpace = THREE.NoColorSpace; // channels are masks, not colours
+  return cloudTex;
 }
 
-const _a = new THREE.Color(), _b = new THREE.Color(), _t = new THREE.Color();
+const _a = new THREE.Color(), _b = new THREE.Color(), _t = new THREE.Color(), _d = new THREE.Vector3();
 
 export class Sky3D {
   constructor(scene, worldW, worldH) {
     this.scene = scene;
-    this.uniforms = { top: { value: new THREE.Color() }, bottom: { value: new THREE.Color() } };
-    const dome = new THREE.Mesh(new THREE.SphereGeometry(4000, 24, 12), new THREE.ShaderMaterial({
-      uniforms: this.uniforms, side: THREE.BackSide, depthWrite: false, fog: false,
-      vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-      fragmentShader: 'uniform vec3 top; uniform vec3 bottom; varying vec3 vP; void main(){ float h = clamp(vP.y * 1.6 + 0.08, 0.0, 1.0); gl_FragColor = vec4(mix(bottom, top, pow(h, 0.7)), 1.0); }',
+    /** The horizon's display colour (the city's haze converges on it). */
+    this.horizon = new THREE.Color();
+    this.uniforms = {
+      top: { value: new THREE.Color() }, mid: { value: new THREE.Color() }, bottom: { value: this.horizon },
+      sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color() }, sunK: { value: 0 }, moonK: { value: 0 },
+    };
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(4000, 32, 16), new THREE.ShaderMaterial({
+      uniforms: this.uniforms, side: THREE.BackSide, depthWrite: false, fog: false, vertexShader: DOME_VS, fragmentShader: DOME_FS,
     }));
     dome.renderOrder = -10; dome.frustumCulled = false;
     this.dome = dome; scene.add(dome);
-    // sun / moon disc
-    const c = document.createElement('canvas'); c.width = c.height = 128;
-    const g = c.getContext('2d'), grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-    grd.addColorStop(0, 'rgba(255,255,255,1)'); grd.addColorStop(0.25, 'rgba(255,255,255,1)'); grd.addColorStop(0.32, 'rgba(255,255,255,.35)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
-    this.disc = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), fog: false, depthWrite: false, transparent: true }));
-    this.disc.scale.setScalar(420);
-    scene.add(this.disc);
     // lights for the toon bands
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x404858, 1.2);
     this.sun = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -58,54 +119,56 @@ export class Sky3D {
   }
 
   addClouds(W, H) {
-    const r = new RNG(9157), pos = [], uv = [], idx = [];
+    const r = new RNG(9157), pos = [], corner = [], size = [], variant = [], idx = [];
     for (let i = 0; i < CLOUD.count; i++) {
-      const cx = r.range(0, W), cz = r.range(0, H), size = r.range(CLOUD.size[0], CLOUD.size[1]);
-      // two or three stacked puffs per cloud, a few metres apart: reads as volume from any angle
-      const layers = 2 + (i % 2);
-      for (let l = 0; l < layers; l++) {
-        const y = CLOUD.layers[i % CLOUD.layers.length] + l * 9, s = size * (1 - l * 0.18), a = r.range(0, Math.PI), base = pos.length / 3;
-        for (const [u, v] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-          const x = u * Math.cos(a) - v * Math.sin(a), z = u * Math.sin(a) + v * Math.cos(a);
-          pos.push(cx + x * s, y, cz + z * s); uv.push((u + 1) / 2, (v + 1) / 2);
-        }
-        idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-      }
+      const cx = r.range(0, W), cz = r.range(0, H), s = r.range(CLOUD.size[0], CLOUD.size[1]), y = CLOUD.layers[i % CLOUD.layers.length] + r.range(-12, 12);
+      const v = Math.floor(r.range(0, 4)), base = pos.length / 3;
+      for (const [u, w] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { pos.push(cx, y, cz); corner.push(u, w); size.push(s, s * 0.5); variant.push(v); }
+      idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    geo.setAttribute('corner', new THREE.Float32BufferAttribute(corner, 2));
+    geo.setAttribute('size', new THREE.Float32BufferAttribute(size, 2));
+    geo.setAttribute('variant', new THREE.Float32BufferAttribute(variant, 1));
     geo.setIndex(idx);
-    this.cloudMat = new THREE.MeshBasicMaterial({ map: puffTexture(), transparent: true, opacity: CLOUD.alpha, depthWrite: false, side: THREE.DoubleSide });
+    this.cloudU = {
+      map: { value: cloudAtlas() }, lit: { value: new THREE.Color() }, shade: { value: new THREE.Color() }, ink: { value: new THREE.Color() },
+      fogCol: { value: this.horizon }, fogNear: { value: 600 }, fogFar: { value: 2400 }, alpha: { value: 1 }, fadeNear: { value: new THREE.Vector2(...CLOUD.fadeNear) },
+    };
+    this.cloudMat = new THREE.ShaderMaterial({ uniforms: this.cloudU, vertexShader: CLOUD_VS, fragmentShader: CLOUD_FS, transparent: true, depthWrite: false, fog: false });
     this.clouds = new THREE.Mesh(geo, this.cloudMat);
+    this.clouds.frustumCulled = false;
     this.clouds.renderOrder = 5;
     this.scene.add(this.clouds);
   }
 
   /**
    * clock: minutes since midnight; night: 0..1 (the game's own); tint: district colour to lean the
-   * horizon/fog toward; eye: the camera (sun and dome follow it); patrol 0..1: the raised map view
-   * thins the cloud deck under the camera (it read as a white haze over the corners) and lets the
-   * depth fog do the layering instead.
+   * fog toward; eye: the camera (sun and dome follow it); patrol 0..1: the raised map view thins
+   * the cloud deck under the camera.
    */
   update(clock, night, tint, eye, fogFar, patrol = 0) {
     const hr = (clock / 60) % 24;
-    const dusk = Math.max(0, 1 - Math.min(Math.abs(hr - 19), Math.abs(hr - 6.5)) / 1.6) * (1 - night * 0.6);
-    const day = 1 - night;
-    this.uniforms.top.value.copy(_a.set(SKY.day[0])).lerp(_b.set(SKY.night[0]), night).lerp(_t.set(SKY.dusk[0]), dusk * 0.6);
-    this.uniforms.bottom.value.copy(_a.set(SKY.day[1])).lerp(_b.set(SKY.night[1]), night).lerp(_t.set(SKY.dusk[1]), dusk);
-    // fog = horizon, leaning toward the district colour (stronger at night: neon haze)
+    const near = Math.max(0, 1 - Math.min(Math.abs(hr - 19), Math.abs(hr - 6.5)) / 1.6); // how close to sunset/sunrise
+    const dusk = near * (1 - night * 0.6), day = 1 - night;
+    // the warm band holds on the horizon well into the evening; the zenith goes dark first
+    const grade = (i) => _a.copy(linear(SKY.day[i])).lerp(_b.copy(linear(SKY.night[i])), night).lerp(_t.copy(linear(SKY.dusk[i])), i === 0 ? dusk * 0.6 : near * (1 - night * 0.25));
+    this.uniforms.top.value.copy(grade(0));
+    this.uniforms.mid.value.copy(grade(1));
+    this.horizon.copy(grade(2));
+    // fog (lit materials work in linear light): the horizon, leaning toward the district colour
     const fog = this.scene.fog;
-    fog.color.copy(this.uniforms.bottom.value).lerp(_t.set(tint || '#808080'), 0.12 + 0.18 * night);
+    fog.color.copy(this.horizon).convertSRGBToLinear().lerp(_t.set(tint || '#808080'), 0.1 + 0.14 * night);
     fog.near = fogFar * (0.25 + 0.1 * patrol); fog.far = fogFar;
-    this.cloudMat.opacity = CLOUD.alpha * (1 - 0.75 * patrol);
     // sun by day, moon by night: an arc across the southern sky (behind a north-flying camera)
-    const a = ((hr - 6) / 12) * Math.PI, up = night > 0.5 ? 0.55 : Math.max(0.05, Math.sin(a));
-    const dir = new THREE.Vector3(night > 0.5 ? 0.5 : -Math.cos(a), up, 0.6).normalize();
+    const a = ((hr - 6) / 12) * Math.PI, up = night > 0.5 ? 0.42 : Math.max(0.04, Math.sin(a) * 0.9);
+    const dir = _d.set(night > 0.5 ? 0.5 : -Math.cos(a), up, 0.6).normalize();
+    this.uniforms.sunDir.value.copy(dir);
+    this.uniforms.sunCol.value.copy(linear(dusk > 0.3 ? '#ffb070' : '#fff2c8'));
+    this.uniforms.sunK.value = night > 0.5 ? 0 : 0.5 + 0.5 * dusk;
+    this.uniforms.moonK.value = night > 0.5 ? 1 : 0;
     this.dome.position.copy(eye);
-    this.disc.position.copy(eye).addScaledVector(dir, 3200);
-    this.disc.material.color.set(night > 0.5 ? '#e8eeff' : dusk > 0.3 ? '#ffb070' : '#fff6d8');
-    this.disc.scale.setScalar(night > 0.5 ? 260 : 420);
     this.sun.position.copy(eye).addScaledVector(dir, 500);
     this.sun.target.position.copy(eye);
     this.sun.color.set(night > 0.5 ? '#8fa6ff' : dusk > 0.3 ? '#ffc08a' : '#fff4e0');
@@ -113,6 +176,10 @@ export class Sky3D {
     this.hemi.color.set(night > 0.5 ? '#5a5ca8' : '#ffffff');
     this.hemi.groundColor.set(night > 0.5 ? '#2a1e3a' : '#505a68');
     this.hemi.intensity = 0.55 + 0.7 * day;
-    this.cloudMat.color.set(night > 0.5 ? '#6a6c96' : dusk > 0.3 ? '#ffd2b0' : '#ffffff');
+    // clouds: two-tone + ink in the light of the hour; thinned in the patrol view
+    const tone = (i) => _a.copy(linear(CLOUD.day[i])).lerp(_b.copy(linear(CLOUD.night[i])), night).lerp(_t.copy(linear(CLOUD.dusk[i])), near * (1 - night * 0.35));
+    this.cloudU.lit.value.copy(tone(0)); this.cloudU.shade.value.copy(tone(1)); this.cloudU.ink.value.copy(tone(2));
+    this.cloudU.fogNear.value = fogFar * 0.5; this.cloudU.fogFar.value = fogFar * 1.6;
+    this.cloudU.alpha.value = 1 - 0.6 * patrol;
   }
 }

@@ -7,7 +7,7 @@ import * as THREE from 'three';
 
 const FX = {
   trail: { n: 24, life: 0.3, width: [0.34, 0.0], from: 140, head: [1, 0.2, 0.18], tail: [1, 0.8, 0.2], alpha: 1 },   // red off her heels → gold // speed (m/s) it starts
-  wind: { n: 40, radius: [2.5, 13], ahead: [14, 70], width: 0.06, from: 0.42 },     // from = speed fraction
+  wind: { n: 28, radius: [5, 14], ahead: [4, 26], width: 0.09, from: 0.62 },       // from = speed fraction; close round her (they read at the screen edges, never as far hairlines)
   ring: { life: 0.9, grow: [3, 70], boostGrow: [2, 26] },
   lines: { from: 0.18, deal: 70 },                                                  // speed fraction; re-deal ms
 };
@@ -139,8 +139,11 @@ export class FlightFX3D {
   }
 
   /**
-   * Comic action lines on the 2D overlay. vp: screen point she's heading for (vanishing point);
-   * walls: { l, r } 0..1 how close a tower face is on each side.
+   * Comic action lines on the 2D overlay: tapered white streaks that live only in the outer band
+   * of the screen and fade out toward the middle (never through her or the view ahead). Sparse at
+   * cruise, a full speed panel at boost; plus wall-rush streaks down the side a tower face is
+   * passing. vp: the screen point she's heading for; walls: { l, r } 0..1 tower-face proximity.
+   * Draw them first on a clear overlay: the centre fade erases what's under it.
    */
   drawLines(ctx, W, H, frac, boosting, vp, walls, night) {
     const f = Math.max(0, Math.min(1, (frac - FX.lines.from) / 0.45));
@@ -150,32 +153,32 @@ export class FlightFX3D {
     if (deal !== this.dealt) {
       this.dealt = deal;
       this.lines = [];
-      const n = Math.floor(8 + f * (boosting ? 16 : 10) + (boosting ? 16 : 0)); // cruise: light and sparse; boost: a full speed panel
-      for (let i = 0; i < n; i++) this.lines.push({ a: Math.random() * Math.PI * 2, in: Math.random(), w: (boosting ? 9 : 5) + Math.random() * (boosting ? 34 : 12), ink: Math.random() < (boosting ? 0.45 : 0.12) });
-      // wall rush: a fan of long streaks down the side the tower face is on
+      const n = Math.floor(boosting ? 26 + f * 14 : 6 + f * 10);
+      for (let i = 0; i < n; i++) this.lines.push({ a: Math.random() * Math.PI * 2, in: Math.random(), w: (boosting ? 5 : 2.5) + Math.random() * (boosting ? 13 : 5) });
       for (const [side, k] of [[-1, walls.l], [1, walls.r]]) {
-        const m = Math.floor(k * 16);
-        for (let i = 0; i < m; i++) this.lines.push({ a: (side < 0 ? Math.PI : 0) + (Math.random() - 0.5) * 1.3, in: 0.5 + Math.random() * 0.5, w: 6 + Math.random() * 14, ink: Math.random() < 0.5, wall: k });
+        const m = Math.floor(k * 14);
+        for (let i = 0; i < m; i++) this.lines.push({ a: (side < 0 ? Math.PI : 0) + (Math.random() - 0.5) * 1.1, in: Math.random(), w: 3 + Math.random() * 8, wall: k });
       }
     }
-    const R = Math.hypot(W, H) * 0.75, ox = vp.x, oy = vp.y;
+    // radii from the vanishing point: the streaks run from past the screen edge in to the outer band
+    const R = Math.hypot(Math.max(vp.x, W - vp.x), Math.max(vp.y, H - vp.y)), ox = vp.x, oy = vp.y;
+    const inner = boosting ? 0.5 : 0.66;
     ctx.save();
-    for (const pass of [true, false]) {
-      const wa = boosting ? 0.92 : 0.6;
-      ctx.fillStyle = pass ? 'rgba(8,10,30,0.8)' : night > 0.5 ? `rgba(228,242,255,${wa})` : `rgba(255,255,255,${wa})`;
-      ctx.beginPath();
-      for (const l of this.lines) {
-        if (l.ink !== pass) continue;
-        const k = l.wall ?? f, c = Math.cos(l.a), s = Math.sin(l.a);
-        // inner tip: the faster, the deeper the lines reach toward where she's going
-        const reach = l.wall ? 0.25 + 0.4 * l.wall : (boosting ? 0.42 : 0.18) + 0.22 * k;
-        const r0 = R * (1 - reach * (0.55 + 0.45 * l.in)), w = l.w * (0.5 + 0.5 * k);
-        const px = -s * w, py = c * w;
-        ctx.moveTo(ox + c * r0, oy + s * r0);
-        ctx.lineTo(ox + c * R * 1.3 + px, oy + s * R * 1.3 + py); ctx.lineTo(ox + c * R * 1.3 - px, oy + s * R * 1.3 - py); ctx.closePath();
-      }
-      ctx.fill();
+    ctx.fillStyle = night > 0.5 ? `rgba(232,244,255,${boosting ? 0.95 : 0.7})` : `rgba(255,255,255,${boosting ? 0.95 : 0.75})`;
+    ctx.beginPath();
+    for (const l of this.lines) {
+      const c = Math.cos(l.a), s = Math.sin(l.a), k = l.wall ?? f;
+      const r0 = R * (inner + (1 - inner) * 0.6 * l.in * (1 - 0.5 * k)), w = l.w * (0.5 + 0.5 * k);
+      // a needle: sharp tip inside, widest at the screen edge
+      ctx.moveTo(ox + c * r0, oy + s * r0);
+      ctx.lineTo(ox + c * R * 1.1 - s * w, oy + s * R * 1.1 + c * w); ctx.lineTo(ox + c * R * 1.1 + s * w, oy + s * R * 1.1 - c * w); ctx.closePath();
     }
+    ctx.fill();
+    // fade toward the middle: erase with a radial ramp (opaque in the centre → nothing at the edge)
+    ctx.globalCompositeOperation = 'destination-out';
+    const g = ctx.createRadialGradient(ox, oy, R * inner, ox, oy, R * 0.98);
+    g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     ctx.restore();
   }
 
