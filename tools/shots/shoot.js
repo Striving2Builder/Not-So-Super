@@ -62,7 +62,9 @@ const AREAS = {
   },
   brawler: {
     street: { type: 'brawl' },
-    downtown: { type: 'brawl', crime: 'gang', clock: 21 * 60, crowd: true, god: true },
+    gang: { type: 'brawl', crime: 'gang', clock: 21 * 60, crowd: true, god: true },
+    redlight: { type: 'brawl', district: 'redlight', clock: 23 * 60, crowd: true, god: true },
+    downtown: { type: 'brawl', district: 'downtown', clock: 12 * 60, crowd: true, god: true },
     shops: { type: 'brawl', crime: 'robbery', district: 'retail', clock: 13 * 60, crowd: true, god: true },
   },
   investigation: {
