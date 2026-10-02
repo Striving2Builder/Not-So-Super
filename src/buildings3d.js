@@ -202,20 +202,21 @@ ${HAZE_GLSL}
 varying vec2 vUv; flat varying vec3 vCol; flat varying vec3 vLit; flat varying vec3 vN; varying vec3 vW;
 flat varying float vStyle; flat varying float vKind;
 float h11(float n) { return fract(sin(n) * 43758.5453); }
-float box1(float q, float lo, float hi, float w) { return smoothstep(lo - w, lo + w, q) * (1. - smoothstep(hi - w, hi + w, q)); }
 // Up close the atlas is magnified to a blur: rebuild the window cell analytically (crisp,
 // anti-aliased edges at any size) from the same layout the atlas was painted with. Per style:
-// window margins (atlas px of a 32 px cell) and the bare wall's shade.
+// window margins (atlas px of a 32 px cell), the bare wall's shade, deco piers. Clamp-based AA
+// (one ramp per feature): this runs on most canyon pixels.
 vec3 crispCell(vec2 A, float style, float lit) {
   vec4 L = style == 0. ? vec4(7., 7., 0.86, 0.) : style == 1. ? vec4(1., 2., 0.7, 0.) : style == 2. ? vec4(8., 8., 0.8, 0.) : vec4(9., 4., 0.62, 1.);
   vec2 q = fract(A * vec2(${WIN.cols}., ${WIN.rows}.)) * 32.; q.y = 32. - q.y; // atlas px, y down like the canvas
-  vec2 w = max(fwidth(q) * 0.75, vec2(0.05));
-  float win = box1(q.x, L.x, 32. - L.x, w.x) * box1(q.y, L.y, 32. - L.y, w.y);
-  float frame = max(box1(q.x, 15., 17., w.x), box1(q.y, L.y + (32. - 2. * L.y) * 0.32 - 0.5, L.y + (32. - 2. * L.y) * 0.32 + 0.5, w.y)) * win;
-  float slab = box1(q.y, 29., 33., w.y), pier = L.w * max(box1(q.x, -1., 6., w.x), box1(q.x, 28., 33., w.x));
+  vec2 iw = 1. / max(fwidth(q), vec2(0.05));
+  vec2 e = min(q - L.xy, 32. - L.xy - q) * iw;                    // distance inside the window, px
+  float win = clamp(min(e.x, e.y) + 0.5, 0., 1.);
+  float ty = L.y + (32. - 2. * L.y) * 0.32;
+  float frame = clamp(1.5 - min((abs(q.x - 16.) - 1.) * iw.x, (abs(q.y - ty) - 0.5) * iw.y), 0., 1.) * win;
+  float slab = clamp((q.y - 29.) * iw.y + 0.5, 0., 1.), pier = L.w * clamp(1.5 - min(q.x - 6., 28. - q.x) * iw.x, 0., 1.) * (1. - win);
   float wall = mix(mix(L.z, L.z * 0.72, slab), 1., pier);
-  float shade = box1(q.y, L.y - 1., L.y + 2., w.y) * win; // recess under the lintel
-  return vec3(mix(wall, 0.45, frame), win * (1. - frame) * (1. - shade * 0.45), lit * win * (1. - frame));
+  return vec3(mix(wall, 0.45, frame), win * (1. - frame), lit * win * (1. - frame));
 }
 void main() {
   float dist = length(vW - cameraPosition);
