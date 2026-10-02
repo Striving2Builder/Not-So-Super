@@ -14,9 +14,9 @@ const CAM = {
   chase: { dist: [6.2, 3.5], height: [0.7, 2.5], side: [0.6, 1.7], fov: [58, 66], at: [0.45, 0.62] }, // side: to her right → a 3/4 rear view; at = her spot on screen (x, y from top-left)
   boost: { dist: 0.8, height: 0.2, fov: 13, kickFov: 8, shake: [0.035, 0.14], lag: 2.6 }, // shake m: sustained / on the punch; lag = spring rate         // sustained while boosting + a kick on the press
   canyon: { height: 2.4, dist: 3.4, at: [0.47, 0.62], fovUp: 4, snap: 0.62 }, // skim band: lower, along the street (snap ≈ 35°)
-  // high patrol, flying: low and a little below her, she sits on the left third against the sky,
-  // the horizon down in the bottom third (the Superman-over-the-city shot)
-  high: { dist: 4.8, height: -0.6, side: 1.4, at: [0.36, 0.5], from: 760, to: 1000 }, // from/to: altitude (world units) it blends in over
+  // high patrol, flying: level with her, she sits on the left third against the sky,
+  // the city's far edge down in the bottom third (the Superman-over-the-city shot)
+  high: { dist: 4.0, height: 0.15, side: 1.4, at: [0.36, 0.5], from: 760, to: 1000 }, // from/to: altitude (world units) it blends in over
   patrol: { dist: 100, height: 85, side: 60, fov: 60, at: [0.36, 0.66] }, // ≈ 30° down at the city, from her 3/4 rear (her side reads): horizon along the top
   yawRate: 2.6,  // how fast the camera swings round behind her heading (1/s)
   orbitBack: 0.6, // drag-orbit eases back behind her at this rate while she's moving (1/s)
