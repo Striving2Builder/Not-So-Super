@@ -216,7 +216,7 @@ export class CityArt {
 
   flat(g, f) {
     switch (f.t) {
-      case 'rect': g.fillStyle = f.c; g.fillRect(f.x, f.y, f.w, f.h); break;
+      case 'rect': g.fillStyle = f.river && this.riverBank ? this.riverBank : f.c; g.fillRect(f.x, f.y, f.w, f.h); break;
       case 'path':
         g.fillStyle = f.c; g.fillRect(f.x, f.y, f.w, f.h);
         g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(f.x, f.y, 1.5, f.h); g.fillRect(f.x + f.w - 1.5, f.y, 1.5, f.h);

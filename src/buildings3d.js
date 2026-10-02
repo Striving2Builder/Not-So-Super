@@ -118,7 +118,7 @@ function atlas() {
 /** Haze reach: far = max(fog far, camera height x perAlt), capped under the camera's far plane. */
 export const HAZE = { perAlt: 7, max: 4200, near: 0.2 };
 /** Key vs ambient: a clear lit / raking / shadow split on every tower, day and dusk too. */
-const KEY = { key: 1.45, amb: 0.72 };
+const KEY = { key: 1.4, amb: 0.86 };
 const _cool = new THREE.Color(0.93, 0.98, 1.1);
 /**
  * Aerial perspective shared by every city material (buildings, ground, sea, street lights): a cool,
@@ -247,6 +247,7 @@ void main() {
     // far: the rows twin, filtered by the vertical footprint only (floor bands, no shimmer)
     float dv = length(vec2(dFdx(vUv.y), dFdy(vUv.y))) * ${CH}. * 0.98;
     vec3 far = textureLod(uRows, vec2((vStyle + 0.5) / 8., u.y * 0.98 + 0.01), log2(max(dv, 1e-4))).rgb;
+    far.b *= 0.35 + 0.65 * smoothstep(0.08, 0.3, far.b); // only the busy floors glow far off: dark floors stay dark
     vec3 m = far;
 #ifndef FAR
     vec2 g = vUv * sc;

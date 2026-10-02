@@ -61,8 +61,12 @@ varying vec2 vUv;
 void main() {
   vec3 m = texture2D(map, vUv).rgb;
   float a = clamp((m.r + m.g) * 2. - 0.6, 0., 1.);
-  vec3 back = mix(uHorizon, uHazeCol, 0.55) * 0.95, front = uHazeCol * 0.86;
+  vec3 back = mix(uHorizon, uHazeCol, 0.6) * 0.88, front = uHazeCol * 0.74;
   vec3 c = m.g > 0.5 ? front : back;
+  // behind the silhouettes: a warm glow band hugging the horizon line, fading up into the sky
+  float hz = ${(CARD.below / (CARD.below + CARD.above)).toFixed(3)};
+  float glow = (1. - smoothstep(hz, 1., vUv.y)) * smoothstep(hz - 0.2, hz, vUv.y) * 0.55;
+  if (a < 0.01) { gl_FragColor = vec4(mix(uHorizon, vec3(1., 0.93, 0.8), 0.4), glow); return; }
   c = mix(c, mix(c, uInk, 0.45), m.b);          // thin ink edge
   c = mix(uHorizon, c, smoothstep(0.0, ${(CARD.below / (CARD.below + CARD.above) + 0.12).toFixed(3)}, vUv.y)); // base melts into the horizon
   gl_FragColor = vec4(c, a);

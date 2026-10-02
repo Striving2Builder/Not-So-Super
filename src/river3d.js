@@ -57,13 +57,10 @@ export function buildRiver(city, scene, look3, seaMat) {
     if (i) { const n = i * 2; idx.push(n - 2, n - 1, n + 1, n - 2, n + 1, n); }
   }
   // ---- the basin: an oval over its blocks and their river partners
-  if (city.riverBasin?.length) {
-    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-    for (const [bx, by] of city.riverBasin) for (const yy of [by, by + 1]) {
-      const [x, z] = cen([bx, yy]);
-      x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z);
-    }
-    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, rx = (x1 - x0) / 2 * 0.8 + hw * 0.5, rz = (z1 - z0) / 2 * 0.8 + hw * 0.5, base = pos.length / 3, n = 48;
+  if (city.riverOval) {
+    // the city's oval of whole river blocks, shrunk so the water never reaches a building's lot
+    const E = city.riverOval, cx = (E.cx * BLOCK + ROAD / 2) * M, cz = (E.cy * BLOCK + ROAD / 2) * M;
+    const rx = (E.rx - 0.75) * BLOCK * M, rz = (E.ry - 0.6) * BLOCK * M, base = pos.length / 3, n = 48;
     pos.push(cx, Y + 0.01, cz); edge.push(0);
     for (let i = 0; i < n; i++) {
       const t = (i / n) * Math.PI * 2, w = 1 + 0.06 * Math.sin(t * 3 + cx);

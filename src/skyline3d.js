@@ -52,7 +52,7 @@ void main() {
 #endif
   gl_FragColor = linearToOutputTexel(vec4(c, 1.));
   gl_FragColor.rgb = pulp(gl_FragColor.rgb);
-  gl_FragColor.rgb = haze(gl_FragColor.rgb, dist, 0., 1.);
+  gl_FragColor.rgb = haze(gl_FragColor.rgb, dist * 1.35, 0., 1.);
 }`,
     }));
     scene.add(this.sea);
@@ -118,7 +118,10 @@ void main() {
   vec3 lot = h < 0.12 ? vec3(0.28, 0.42, 0.24) : mix(vec3(0.42, 0.4, 0.38), vec3(0.5, 0.36, 0.3), step(0.6, h));
   vec3 day = mix(lot, vec3(0.17, 0.17, 0.2), road) * (uAmbUp + uKeyCol * 0.8);
   // night: sodium avenues and a scatter of lit lots
-  vec3 glow = vec3(1., 0.62, 0.25) * road * 0.4 + vec3(1., 0.8, 0.5) * step(0.55, h) * (1. - road) * 0.07;
+  // avenues (every fourth street) lit, side streets dim
+  float avX = step(mod(cell.x, 4.), 0.5), avY = step(mod(cell.y, 4.), 0.5);
+  float lit = max(r.x * (0.25 + 0.75 * avX), r.y * (0.25 + 0.75 * avY));
+  vec3 glow = vec3(1., 0.62, 0.25) * lit * 0.22 + vec3(1., 0.8, 0.5) * step(0.55, h) * (1. - road) * 0.07;
   vec3 c = day * (1. - uNight * 0.6) + glow * uLit;
 #ifdef TONE_MAPPING
   c = toneMapping(c);
