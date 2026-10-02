@@ -21,7 +21,7 @@ export { M, DISTRICT_3D, height3 };
 
 const CHUNK = TILE * BLOCK; // world units per chunk side (one ground tile)
 /** farMat: metres past which a chunk switches to its lite build + flat-tone material (no texture, ink, halftone, roof kit). */
-const LOD = { farMat: 260, farInk: 650, landmarkFog: 0.8, landmarkMax: 0.93, coreR: 4.5 };
+const LOD = { farMat: 260, farInk: 500, landmarkFog: 0.8, landmarkMax: 0.93, coreR: 4.5 };
 
 export class City3D {
   constructor(city, scene, { tileRes = 144 } = {}) {

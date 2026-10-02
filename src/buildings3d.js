@@ -174,7 +174,7 @@ void main() {
   vec2 s = (c1.xy / c1.w - c0.xy / c0.w) * res;
   vec2 dir = dot(s, s) > 1e-8 ? normalize(s) : vec2(1., 0.);
   vWid = uInkW * dpr * uv.y * mix(1., 0.4, smoothstep(25., 600., d)); // wanted width, px
-  vWid = max(vWid, 1.3 * dpr * uv.y); // never a sub-pixel scratch
+  vWid = max(vWid, 1.3 * dpr * uv.y * smoothstep(250., 450., d)); // far lines never a sub-pixel scratch
   float hw = max(vWid, 1.) * 0.5 + 1.; // the quad: a pixel of feather each side
   vAcross = uv.x * hw;
   c0.xy += vec2(-dir.y, dir.x) * uv.x * hw * 2. / res * c0.w;

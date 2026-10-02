@@ -4,7 +4,7 @@
 // read as a fishbowl); its base melts into the horizon colour, its body is a shade of the haze.
 import * as THREE from 'three';
 
-const CARD = { segs: 64, repeat: 4, below: 0.012, above: 0.026, r: [2600, 4300] }; // below/above: of the radius
+const CARD = { segs: 64, repeat: 4, below: 0.012, above: 0.026, r: [2600, 4300], minEye: 100 }; // below/above: of the radius
 
 function silhouettes() {
   const W = 2048, H = 128, c = document.createElement('canvas');
@@ -53,19 +53,19 @@ export class SkyCard {
     for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * CARD.repeat);
     this.U = { map: { value: silhouettes() }, uHazeCol: U.uHazeCol, uHorizon: U.uHorizon, uInk: U.uInk };
     this.mesh = new THREE.Mesh(geo, new THREE.ShaderMaterial({
-      uniforms: this.U, side: THREE.BackSide, depthWrite: false,
+      uniforms: this.U, side: THREE.BackSide, depthWrite: false, transparent: true, // blended, no discard: early depth rejection stays on
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
       fragmentShader: /* glsl */`
 uniform sampler2D map; uniform vec3 uHazeCol; uniform vec3 uHorizon; uniform vec3 uInk;
 varying vec2 vUv;
 void main() {
   vec3 m = texture2D(map, vUv).rgb;
-  if (m.r + m.g < 0.4) discard;
+  float a = clamp((m.r + m.g) * 2. - 0.6, 0., 1.);
   vec3 back = mix(uHorizon, uHazeCol, 0.55) * 0.95, front = uHazeCol * 0.86;
   vec3 c = m.g > 0.5 ? front : back;
   c = mix(c, mix(c, uInk, 0.45), m.b);          // thin ink edge
   c = mix(uHorizon, c, smoothstep(0.0, ${(CARD.below / (CARD.below + CARD.above) + 0.12).toFixed(3)}, vUv.y)); // base melts into the horizon
-  gl_FragColor = vec4(c, 1.);
+  gl_FragColor = vec4(c, a);
 }`,
     }));
     this.mesh.frustumCulled = false;
@@ -75,6 +75,8 @@ void main() {
 
   /** Ride with the camera at eye level, just past the haze's end. */
   update(cam, hazeFar) {
+    // down among the towers the horizon is hidden anyway: skip its fill cost there
+    this.mesh.visible = cam.position.y > CARD.minEye;
     const R = Math.min(CARD.r[1], Math.max(CARD.r[0], hazeFar * 1.02));
     this.mesh.position.set(cam.position.x, cam.position.y - R * CARD.below, cam.position.z);
     this.mesh.scale.set(R, R * (CARD.below + CARD.above), R);
