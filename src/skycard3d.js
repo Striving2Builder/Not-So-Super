@@ -69,7 +69,7 @@ void main() {
 }`,
     }));
     this.mesh.frustumCulled = false;
-    this.mesh.renderOrder = -5;
+    this.mesh.renderOrder = 1; // after the city: only the pixels the towers leave are shaded
     scene.add(this.mesh);
   }
 

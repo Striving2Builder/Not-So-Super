@@ -241,7 +241,8 @@ void main() {
     vec2 g = vUv * sc;
     vec2 gx = dFdx(g) * vec2(${CW * CELLS}., ${CH}.), gy = dFdy(g) * vec2(${CW * CELLS}., ${CH}.);
     float lod = min(0.5 * log2(max(max(dot(gx, gx), dot(gy, gy)), 1e-6)), 5.);
-    vec3 t = textureLod(uAtlas, u * sc + vec2((0.02 + vStyle) / 8., 0.01), lod).rgb;
+    // fully magnified walls (crisp cells below) never need the filtered atlas
+    vec3 t = lod < -1.3 && vStyle < 3.5 ? vec3(0.) : textureLod(uAtlas, u * sc + vec2((0.02 + vStyle) / 8., 0.01), lod).rgb;
     vec3 m = vec3(far.rg, t.b);
 #ifndef FAR
     float k = smoothstep(0.12, 0.28, max(fw.x, fw.y));
@@ -321,7 +322,7 @@ export class CityLook {
     this.ink = new THREE.ShaderMaterial({ uniforms: this.U, vertexShader: INK_VERT, fragmentShader: INK_FRAG, transparent: true, depthWrite: false });
   }
 
-  make(fogK, defines = {}, fogMax = 1, neonFar = 650) {
+  make(fogK, defines = {}, fogMax = 1, neonFar = 550) {
     const uniforms = { ...this.U, uFogK: { value: fogK }, uFogMax: { value: fogMax }, uNeonFar: { value: neonFar } };
     return new THREE.ShaderMaterial({ uniforms, vertexShader: VERT, fragmentShader: FRAG, defines });
   }
