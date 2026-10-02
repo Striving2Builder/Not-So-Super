@@ -362,7 +362,7 @@ export class Overworld {
     else if (kind === 'case') { def = pick(CASES); districts = def.districts; }
     else { venueName = forceVenue || pick(Object.keys(VENUES).filter((v) => !VENUES[v].asylum)); def = VENUES[venueName]; districts = def.districts; }
     const cands = city.blocks.filter((b) => {
-      if (districts !== '*' && !districts.includes(b.d)) return false;
+      if (b.river || (districts !== '*' && !districts.includes(b.d))) return false;
       const cx = b.x0 + LOT / 2, cy = b.y0 + LOT / 2;
       if (near && dist(cx, cy, near.x, near.y) > near.r) return false;
       return dist(cx, cy, h.x, h.y) > (near ? 200 : initial ? 250 : 500) && this.zones.every((z) => dist(z.x, z.y, cx, cy) > 520);

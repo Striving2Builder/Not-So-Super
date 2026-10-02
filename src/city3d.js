@@ -13,6 +13,7 @@ import { chooseLandmarks, buildLandmarks } from './landmarks3d.js';
 import { Horizon, haze } from './skyline3d.js';
 import { Outer } from './outer3d.js';
 import { cityGround } from './ground3d.js';
+import { buildRiver } from './river3d.js';
 import { Street } from './street3d.js';
 
 export { M, DISTRICT_3D, height3 };
@@ -48,7 +49,7 @@ export class City3D {
     this.harbour(HB);
     this.harbourMesh = new THREE.Mesh(HB.geometry(), this.look.near);
     scene.add(this.harbourMesh, new THREE.Mesh(HB.inkGeometry(), this.look.ink));
-    this.lmMat = this.look.make(LOD.landmarkFog, {}, LOD.landmarkMax);
+    this.lmMat = this.look.make(LOD.landmarkFog, {}, LOD.landmarkMax, 1e5); // their crowns glow from anywhere
     this.lmMesh = new THREE.Mesh(LB.geometry(), this.lmMat);
     this.lmMesh.frustumCulled = false;
     scene.add(this.lmMesh, new THREE.Mesh(LB.inkGeometry(), this.look.ink));
@@ -56,6 +57,9 @@ export class City3D {
     scene.add(this.ground);
     this.horizon = new Horizon(scene, this.look.U, [0, 0, city.coastX * M, city.H * M]);
     this.outer = new Outer(city, scene, this.look, this.horizon);
+    this.river = buildRiver(city, scene, this.look, this.horizon.sea.material);
+    /** Optional hook: flight3d may set `city3.sky = sky` so the haze ends on `Sky3D.horizon`. */
+    this.sky = null;
     this.street = new Street(city, scene, this.look.U, M, this.outer.roads);
     this.t0 = performance.now();
   }
@@ -131,7 +135,7 @@ export class City3D {
     let budget = this.built ? 2 : 999;
     for (const ch of this.chunks.values()) for (const k of ['near', 'lite', 'nearInk', 'gl', 'gd']) if (ch[k]) ch[k].visible = false;
     // haze first: from altitude it reaches further than the band's fog, and so do the chunks
-    this.look.light(this.sun, this.hemi, this.scene.fog, night, (performance.now() - this.t0) / 1000, this.dome?.material.uniforms.bottom.value, cam.position.y);
+    this.look.light(this.sun, this.hemi, this.scene.fog, night, (performance.now() - this.t0) / 1000, this.sky?.horizon || this.dome?.material.uniforms.bottom.value, cam.position.y);
     const reach = Math.max(far, this.look.U.uHazeFar.value), cut = reach * 0.92; // the haze is all but solid past this
     for (let cy = ccy - R; cy <= ccy + R; cy++) for (let cx = ccx - R; cx <= ccx + R; cx++) {
       if (cx < 0 || cy < 0 || cx >= this.cols || cy >= this.rows) continue;

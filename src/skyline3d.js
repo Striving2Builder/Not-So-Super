@@ -32,12 +32,16 @@ float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); 
 void main() {
   vec3 V = normalize(cameraPosition - vW);
   float fres = pow(1. - max(V.y, 0.), 4.);
-  vec3 deep = mix(vec3(0.05, 0.17, 0.27), vec3(0.012, 0.025, 0.055), uNight);
-  vec3 c = mix(deep, uSky * 0.85, 0.1 + 0.5 * fres);
-  // cel wave bands (filtered out with distance: no far moire)
-  float w = sin(vW.x * 0.07 + uTime * 0.5 + sin(vW.z * 0.03) * 2.) * sin(vW.z * 0.09 - uTime * 0.35 + vW.x * 0.02);
+  // pulp blue water that reads against the city from any height: saturated body, sky in it at
+  // grazing angles, comic wave-crest strokes (filtered out with distance), city lights by night
+  vec3 deep = mix(vec3(0.03, 0.2, 0.52), vec3(0.012, 0.05, 0.15), uNight);
+  vec3 c = mix(deep, uSky * 0.9, 0.06 + 0.4 * fres);
   float dist = length(vW - cameraPosition);
-  c *= 0.92 + 0.1 * step(0.35, w) * (1. - smoothstep(300., 900., dist));
+  float w = sin(vW.x * 0.07 + uTime * 0.5 + sin(vW.z * 0.03) * 2.) * sin(vW.z * 0.09 - uTime * 0.35 + vW.x * 0.02);
+  float near = 1. - smoothstep(250., 1400., dist);
+  c = mix(c, mix(vec3(0.7, 0.85, 1.), vec3(0.25, 0.3, 0.5), uNight), step(0.9, w) * 0.45 * near);
+  c *= 0.94 + 0.08 * step(0.35, w) * near;
+  c += vec3(1., 0.75, 0.4) * step(0.94, h21(floor(vW.xz / 6.) + floor(uTime * 1.5))) * uNight * 0.5 * near;
   // the glint: a hard comic streak toward the sun/moon, broken into sparkles at its edges
   vec3 R = reflect(-V, vec3(0., 1., 0.));
   float g = dot(R, uKeyDir);

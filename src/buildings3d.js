@@ -122,12 +122,12 @@ vec3 haze(vec3 c, float d, float y, float k) {
   float f = clamp((d - uHazeNear) / (uHazeFar - uHazeNear), 0., 1.);
   f = 1. - (1. - f) * (1. - f); // ease-out: soft layers through the middle distance, solid at the end
   f = clamp(f + (1. - smoothstep(0., 220., y)) * smoothstep(uHazeNear * 0.3, uHazeFar, d) * 0.45, 0., 1.) * k;
-  return mix(c, mix(uHazeCol, uHorizon, smoothstep(0.35, 1., f)), f);
+  return mix(c, mix(uHazeCol, uHorizon, smoothstep(0.15, 1., f)), f);
 }`;
 
 const VERT = /* glsl */`
 attribute vec3 aAux; attribute vec4 aCol; attribute vec4 aLit;
-uniform vec2 res; uniform float dpr; uniform float uInkW;
+uniform vec2 res; uniform float dpr; uniform float uInkW; uniform float uNeonFar;
 // per-face values are flat: exact (they seed hashes) and cheaper than interpolating
 varying vec2 vUv; flat varying vec3 vCol; flat varying vec3 vLit; flat varying vec3 vN; varying vec3 vW;
 flat varying float vStyle; flat varying float vKind;
@@ -137,6 +137,8 @@ void main() {
   vec4 wp = modelMatrix * vec4(position, 1.);
   vW = wp.xyz;
   vec4 mv = viewMatrix * wp;
+  // neon tubes drop out past ~650 m (far off they were a dotted circuit board, not glow)
+  if (vKind == 3. && -mv.z > uNeonFar) { gl_Position = vec4(0., 0., 2., 1.); return; }
   gl_Position = projectionMatrix * mv;
 }`;
 
@@ -183,7 +185,7 @@ const FRAG = /* glsl */`
 uniform sampler2D uAtlas; uniform sampler2D uSigns;
 uniform vec3 uAvg[8];
 uniform vec3 uKeyDir; uniform vec3 uKeyCol; uniform vec3 uAmbUp; uniform vec3 uAmbDn; uniform vec3 uSky; uniform vec3 uInk;
-uniform float uNight; uniform float uLit; uniform float uTime; uniform float uFogK; uniform float dpr;
+uniform float uNight; uniform float uLit; uniform float uTime; uniform float uFogK; uniform float dpr; uniform float uNeonFar;
 uniform float uFogMax;
 ${HAZE_GLSL}
 // per-face values are flat: exact (they seed hashes) and cheaper than interpolating
@@ -198,7 +200,7 @@ void main() {
     col = vec3(0.03, 0.02, 0.05) * s.b;
     emi = (vCol * s.g * 0.85 + mix(vCol, vec3(1.), 0.5) * s.r * 0.6) * mix(0.8, 1.15, uNight);
   } else if (vKind == 3.) {
-    emi = vCol * mix(0.9, 1.3, uNight);
+    emi = vCol * mix(0.9, 1.3, uNight) * (1. - smoothstep(uNeonFar * 0.6, uNeonFar, dist));
   } else if (vKind == 4.) {
     emi = vCol * (0.25 + 2.5 * step(0.6, fract(uTime * 0.7 + vUv.x)));
   } else {
@@ -280,8 +282,8 @@ export class CityLook {
     this.ink = new THREE.ShaderMaterial({ uniforms: this.U, vertexShader: INK_VERT, fragmentShader: INK_FRAG, transparent: true, depthWrite: false });
   }
 
-  make(fogK, defines = {}, fogMax = 1) {
-    const uniforms = { ...this.U, uFogK: { value: fogK }, uFogMax: { value: fogMax } };
+  make(fogK, defines = {}, fogMax = 1, neonFar = 650) {
+    const uniforms = { ...this.U, uFogK: { value: fogK }, uFogMax: { value: fogMax }, uNeonFar: { value: neonFar } };
     return new THREE.ShaderMaterial({ uniforms, vertexShader: VERT, fragmentShader: FRAG, defines });
   }
 
@@ -305,8 +307,10 @@ export class CityLook {
       U.uSky.value.copy(fog.color);
       const c = fog.color, l = 0.3 * c.r + 0.59 * c.g + 0.11 * c.b;
       U.uHorizon.value.copy(horizon || c);
-      // mostly the horizon itself, a little of the district tint, desaturated and cooled
-      U.uHazeCol.value.setRGB(l, l, l).lerp(c, 0.4).lerp(U.uHorizon.value, 0.6).multiply(_cool);
+      // aerial perspective: the horizon's own hue, lighter and a touch bluer (never a muddy brown),
+      // so the far city pales into the sky and the haze meets the dome without a rim
+      const h = U.uHorizon.value, hl = 0.3 * h.r + 0.59 * h.g + 0.11 * h.b;
+      U.uHazeCol.value.copy(h).lerp(_t.setRGB(hl, hl, hl), 0.3).lerp(c, 0.1).multiply(_cool).multiplyScalar(1.12);
       U.uHazeFar.value = Math.min(HAZE.max, Math.max(fog.far, camY * HAZE.perAlt));
       U.uHazeNear.value = U.uHazeFar.value * HAZE.near;
     }
