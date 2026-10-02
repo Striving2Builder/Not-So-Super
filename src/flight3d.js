@@ -11,7 +11,7 @@ import { FlightCam3D } from './flightcam3d.js';
 import { FlightFX3D } from './flightfx3d.js';
 import { HeroPass, HERO_LAYER } from './heropass3d.js';
 import { FlightPost } from './flightpost3d.js';
-import { lookFrame } from './look3d.js';
+import { lookFrame, LOOK } from './look3d.js';
 import { setBandHeights, speedFraction, BANDS } from './flight.js';
 import { DISTRICTS } from './data.js';
 import { quality } from './settings.js';
@@ -51,7 +51,7 @@ const LOOK3 = {
   patrolBelow: 150,             // speed under which high patrol cranes up to the overhead view
   wallProbe: [10, 22],          // m to each side: a tower face this close rushes past (action lines)
   auto: { ahead: 260, step: 26, halfWidth: 24, turn: 0.22, tries: 6 }, // autopilot look-ahead (world units)
-  dynRes: { slow: 1 / 50, fast: 1 / 58, min: 0.8, rate: 0.25, step: 0.05 }, // frame time (s) to drop below / climb above; scale floor
+  dynRes: { slow: 1 / 50, fast: 1 / 58, min: 0.65, rate: 0.25, step: 0.05 }, // frame time (s) to drop below / climb above; scale floor
   chips: 2,                     // edge chips for off-screen incidents (the waypoint is extra)
   chipTop: 92,                  // px: chips stay below the top HUD row
   chip: { inset: 30, pad: 18, slide: 34, merge: 64, label: 25 }, // px
@@ -79,7 +79,7 @@ void main() {
   gl_FragColor = vec4(mix(vCol, vec3(1.0), core / (core + glow + 1e-4) * 0.7), a);
 }`;
 
-const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _uv = new THREE.Vector2(), _c = new THREE.Color();
+const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _uv = new THREE.Vector2(), _c = new THREE.Color(), _s2 = new THREE.Vector2();
 
 export class Flight3D {
   constructor(ow) {
@@ -257,8 +257,11 @@ export class Flight3D {
     if (this.ft > D.slow) this.resK = Math.max(D.min, (this.resK ?? 1) - D.rate * dt);
     else if (this.ft < D.fast) this.resK = Math.min(1, (this.resK ?? 1) + D.rate * dt);
     const k = Math.round((this.resK ?? 1) / D.step) * D.step;
-    const want = Math.min(devicePixelRatio, caps[this.canyon ? 1 : 0]) * k;
-    if (want !== this.dpr) { this.dpr = want; this.renderer.setPixelRatio(want); this.renderer.setSize(this.g.w, this.g.h, false); }
+    // the canvas keeps a crisp output density (her pass + the overlay), the scene renders at
+    // cap × dynamic scale into its own target
+    const out = Math.min(devicePixelRatio, this.outQ || quality().fly3dOut || 1);
+    if (out !== this.dpr) { this.dpr = out; this.renderer.setPixelRatio(out); this.renderer.setSize(this.g.w, this.g.h, false); }
+    this.sceneScale = Math.min(1, (Math.min(devicePixelRatio, caps[this.canyon ? 1 : 0]) * k) / out);
   }
 
   /** How close a tower face is on her left / right (0..1), for the wall-rush lines. */
@@ -314,7 +317,10 @@ export class Flight3D {
     // whole-frame AA (+ the boost streak toward where she's heading)
     _v.set(Math.cos(h.ang), 0, Math.sin(h.ang)).multiplyScalar(400).add(this.hero.group.position).project(this.cam.cam);
     _uv.set(_v.x * 0.5 + 0.5, _v.y * 0.5 + 0.5);
-    this.post.render(r, this.scene, this.cam.cam, this.aaQ || quality().fly3dAA, this.cam.boostK * (1 - this.cam.patrolK), _uv);
+    const outDpr = r.getPixelRatio();
+    this.post.render(r, this.scene, this.cam.cam, this.aaQ || quality().fly3dAA, this.cam.boostK * (1 - this.cam.patrolK), _uv, this.sceneScale ?? 1,
+      (w, hh) => { LOOK.res.value.set(w, hh); LOOK.dpr.value = outDpr * (w / r.getDrawingBufferSize(_s2).x); }); // (ink widths for the scene's own resolution)
+    lookFrame(r); // back to the canvas for her pass
     if (sharp) this.heroPass.render(r, this.scene, this.cam.cam, this.hero.group.position, 3.4 * this.hero.size, W, H, hq); // (radius: her + the cape)
     this.overlay(ctx, night, frac, boosting);
   }

@@ -1,4 +1,7 @@
-// Whole-frame anti-aliasing for the 3D flight view. The shared WebGL renderer is created without
+// Whole-frame anti-aliasing + resolution split for the 3D flight view. The CANVAS stays at a crisp
+// output density (her pass and the comic overlay land on it at that density); only the 3D scene
+// renders smaller (fill rate), into an offscreen target that is upscaled (bilinear + FXAA) to the
+// canvas. Before, the whole canvas was shrunk, so she was rendered sharp and then blurred with it. The shared WebGL renderer is created without
 // MSAA on 2×+ screens (the 3D zones decide that) and the flight renders below native resolution
 // for fill rate, so every tower edge, beam and window grid stair-steps. Here the scene renders
 // into an offscreen target that three treats exactly like the canvas (tone mapping + sRGB output:
@@ -48,8 +51,12 @@ const VERT = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(posit
 
 export class FlightPost {
   constructor() {
-    this.rt = null; this.mode = null;
-    this.mat = new THREE.ShaderMaterial({ uniforms: { tDiffuse: { value: null }, px: { value: new THREE.Vector2() }, streak: { value: 0 }, vp: { value: new THREE.Vector2(0.5, 0.5) } }, vertexShader: VERT, fragmentShader: FRAG, depthTest: false, depthWrite: false, toneMapped: false });
+    this.rt = null; this.rtB = null; this.mode = null;
+    const mk = (defines) => new THREE.ShaderMaterial({ uniforms: { tDiffuse: { value: null }, px: { value: new THREE.Vector2() }, streak: { value: 0 }, vp: { value: new THREE.Vector2(0.5, 0.5) } }, defines, vertexShader: VERT, fragmentShader: FRAG, depthTest: false, depthWrite: false, toneMapped: false });
+    // FXAA runs at the SCENE's resolution (cheap: it's the small target), then a plain bilinear
+    // upscale (+ the boost streak) writes the canvas
+    this.fxaa = mk({ FXAA: '' });
+    this.mat = mk({});
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.mat);
     this.quad.frustumCulled = false;
     this.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -58,11 +65,14 @@ export class FlightPost {
 
   /**
    * mode: 'fxaa' | 'msaa' | 'none' (graphics profile fly3dAA); streak 0..1: the boost zoom smear
-   * toward vp (uv of the vanishing point).
+   * toward vp (uv of the vanishing point); scale: the scene's resolution relative to the canvas.
+   * Returns the scene target's size (the shared screen uniforms must describe it while it renders:
+   * the caller sets them through onSize before the scene draws).
    */
-  render(renderer, scene, camera, mode, streak = 0, vp = null) {
-    if (mode === 'none' || !mode) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
-    const size = renderer.getDrawingBufferSize(this._s), w = size.x, h = size.y, samples = mode === 'msaa' ? 4 : 0;
+  render(renderer, scene, camera, mode, streak = 0, vp = null, scale = 1, onSize = null) {
+    const size = renderer.getDrawingBufferSize(this._s);
+    const w = Math.max(1, Math.round(size.x * scale)), h = Math.max(1, Math.round(size.y * scale)), samples = mode === 'msaa' ? 4 : 0;
+    if ((mode === 'none' || !mode) && scale >= 0.999) { onSize?.(size.x, size.y); renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
     if (!this.rt || this.rt.width !== w || this.rt.height !== h || this.rt.samples !== samples) {
       this.rt?.dispose();
       this.rt = new THREE.WebGLRenderTarget(w, h, { samples, type: THREE.UnsignedByteType });
@@ -71,17 +81,27 @@ export class FlightPost {
       this.rt.isXRRenderTarget = true;
       this.rt.texture.colorSpace = THREE.SRGBColorSpace;
       this.rt.texture.internalFormat = 'RGBA8';
-      this.mat.uniforms.tDiffuse.value = this.rt.texture;
     }
-    if (this.mode !== mode) { this.mode = mode; this.mat.defines = mode === 'fxaa' ? { FXAA: '' } : {}; this.mat.needsUpdate = true; }
-    this.mat.uniforms.px.value.set(1 / w, 1 / h);
+    onSize?.(w, h);
+    this.mat.uniforms.px.value.set(1 / w, 1 / h); this.fxaa.uniforms.px.value.set(1 / w, 1 / h);
     this.mat.uniforms.streak.value = streak;
     if (vp) this.mat.uniforms.vp.value.copy(vp);
     renderer.setRenderTarget(this.rt);
     renderer.render(scene, camera);
+    let src = this.rt.texture;
+    if (mode === 'fxaa') {
+      if (!this.rtB || this.rtB.width !== w || this.rtB.height !== h) { this.rtB?.dispose(); this.rtB = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false }); }
+      this.fxaa.uniforms.tDiffuse.value = this.rt.texture;
+      this.quad.material = this.fxaa;
+      renderer.setRenderTarget(this.rtB);
+      renderer.render(this.quad, this.cam);
+      src = this.rtB.texture;
+    }
+    this.mat.uniforms.tDiffuse.value = src;
+    this.quad.material = this.mat;
     renderer.setRenderTarget(null);
     renderer.render(this.quad, this.cam);
   }
 
-  dispose() { this.rt?.dispose(); this.rt = null; }
+  dispose() { this.rt?.dispose(); this.rtB?.dispose(); this.rt = this.rtB = null; }
 }

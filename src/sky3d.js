@@ -53,12 +53,16 @@ void main(){
 
 // Comic cumulus: billboards (corner offsets applied in view space), alpha-tested, two-tone + ink.
 const BIG = '300.0'; // world size above which a cloud is one of the huge banks
-const CLOUD_VS = `attribute vec2 corner; attribute vec2 size; attribute float variant; varying vec2 vUv; varying float vFade; varying float vDist;
-uniform vec2 fadeNear; uniform float heroDist; uniform float bankK; uniform vec2 heroNdc;
+const CLOUD_VS = `attribute vec2 corner; attribute vec2 size; attribute float variant; varying vec2 vUv; varying float vFade; varying float vDist; varying float vLy;
+uniform vec3 sunDir; uniform vec2 fadeNear; uniform float heroDist; uniform float bankK; uniform vec2 heroNdc;
 void main(){
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   mv.xy += corner * size;
-  vUv = vec2((corner.x * 0.5 + 0.5 + mod(variant, 3.0)) / 3.0, (corner.y * 0.5 + 0.5 + floor(variant / 3.0)) * 0.5);
+  // lit from the sun/moon's side of the screen: the atlas lights its puffs from the upper left, so
+  // mirror the shape when the light is on the right
+  float flip = (viewMatrix * vec4(sunDir, 0.0)).x > 0.0 ? -1.0 : 1.0;
+  vUv = vec2((corner.x * flip * 0.5 + 0.5 + mod(variant, 3.0)) / 3.0, (corner.y * 0.5 + 0.5 + floor(variant / 3.0)) * 0.5);
+  vLy = corner.y * 0.5 + 0.5;
   vDist = -mv.z;
   // the cloud's own centre, not the corner: a whole cloud fades together
   float d = length((modelViewMatrix * vec4(position, 1.0)).xyz) - max(size.x, size.y) * 0.5;
@@ -73,14 +77,18 @@ void main(){
   gl_Position = projectionMatrix * mv;
 }`;
 const CLOUD_FS = `uniform sampler2D map; uniform vec3 lit; uniform vec3 shade; uniform vec3 ink; uniform vec3 fogCol; uniform float fogNear; uniform float fogFar; uniform float alpha;
-varying vec2 vUv; varying float vFade; varying float vDist;
+varying vec2 vUv; varying float vFade; varying float vDist; varying float vLy;
 void main(){
   vec4 t = texture2D(map, vUv);
   // a soft-but-crisp edge: the shape mask is blurred in the atlas, sharpened here by its own
   // screen-space slope (anti-aliased at any size, no jagged alpha-test fringe)
-  float w = fwidth(t.a) * 0.75 + 1e-3, a = smoothstep(0.5 - w, 0.5 + w, t.a);
+  float fw = fwidth(t.a) + 1e-4, w = fw * 0.75, a = smoothstep(0.5 - w, 0.5 + w, t.a);
   if (a < 0.01 || vFade < 0.02) discard;
-  vec3 c = mix(mix(shade, lit, t.r), ink, t.b);
+  // ink: a constant ~2 px band just inside the silhouette (the buildings' ink weight), whatever
+  // the cloud's size on screen; underside in shadow, lit crowns toward the light
+  float px = (t.a - 0.5) / fw, inkK = max(1.0 - smoothstep(1.2, 2.2, px), t.b * smoothstep(0.0, 1.0, px));
+  vec3 under = shade * mix(0.68, 1.0, smoothstep(0.1, 0.6, vLy));
+  vec3 c = mix(mix(under, lit, t.r), ink, inkK);
   c = mix(c, fogCol, smoothstep(fogNear, fogFar, vDist) * 0.85);
   gl_FragColor = vec4(c, a * alpha * vFade);
 }`;
@@ -171,7 +179,7 @@ export class Sky3D {
     geo.setIndex(idx);
     this.cloudU = {
       map: { value: cloudAtlas() }, lit: { value: new THREE.Color() }, shade: { value: new THREE.Color() }, ink: { value: new THREE.Color() },
-      fogCol: { value: this.horizon }, fogNear: { value: 600 }, fogFar: { value: 2400 }, alpha: { value: 1 }, fadeNear: { value: new THREE.Vector2(...CLOUD.fadeNear) }, heroDist: { value: 10 }, bankK: { value: 0 }, heroNdc: { value: new THREE.Vector2() },
+      fogCol: { value: this.horizon }, sunDir: this.uniforms.sunDir, fogNear: { value: 600 }, fogFar: { value: 2400 }, alpha: { value: 1 }, fadeNear: { value: new THREE.Vector2(...CLOUD.fadeNear) }, heroDist: { value: 10 }, bankK: { value: 0 }, heroNdc: { value: new THREE.Vector2() },
     };
     this.cloudMat = new THREE.ShaderMaterial({ uniforms: this.cloudU, vertexShader: CLOUD_VS, fragmentShader: CLOUD_FS, transparent: true, depthWrite: false, fog: false });
     this.cloudMat.extensions = { derivatives: true };
