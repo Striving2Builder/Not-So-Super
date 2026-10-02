@@ -8,7 +8,8 @@ const BURST_COLORS = [
   ['#ffe600', '#ff2d2d'], ['#ff2d2d', '#ffe600'], ['#39c6ff', '#ffe600'], ['#ff9a1f', '#fff36b'],
   ['#b04dff', '#ffe600'], ['#ffffff', '#ff2d2d'], ['#5dff6b', '#1e3cff'],
 ];
-const INK = ['#d8122e', '#1e3cff', '#111111', '#ffffff'];
+// no black: the word already has a black stroke + shadow, so black letters fuse into a solid block
+const INK = ['#d8122e', '#1e3cff', '#ffffff'];
 
 let enabled = true;
 const layer = () => $('comic-layer');
