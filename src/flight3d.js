@@ -10,6 +10,7 @@ import { FlyHero3D } from './herofly3d.js';
 import { FlightCam3D } from './flightcam3d.js';
 import { FlightFX3D } from './flightfx3d.js';
 import { HeroPass, HERO_LAYER } from './heropass3d.js';
+import { FlightPost } from './flightpost3d.js';
 import { lookFrame } from './look3d.js';
 import { setBandHeights, speedFraction, BANDS } from './flight.js';
 import { DISTRICTS } from './data.js';
@@ -96,6 +97,7 @@ export class Flight3D {
     this.hero = new FlyHero3D(this.scene);
     this.fx3 = new FlightFX3D(this.scene);
     this.heroPass = new HeroPass();
+    this.post = new FlightPost();
     // a soft fill from the camera so she (and the façades facing us) never go to black at night
     this.fill = new THREE.DirectionalLight(0xffe8cc, 0.7);
     this.scene.add(this.fill, this.fill.target);
@@ -275,7 +277,7 @@ export class Flight3D {
     if (this.hero.model && !this.layered) { this.layered = true; this.hero.pivot.traverse((o) => o.layers.set(HERO_LAYER)); }
     const hq = this.heroQ || quality().fly3dHero || [0, 0], sharp = this.layered && hq[1] > 0;
     if (sharp) this.cam.cam.layers.disable(HERO_LAYER); else this.cam.cam.layers.enable(HERO_LAYER);
-    r.render(this.scene, this.cam.cam);
+    this.post.render(r, this.scene, this.cam.cam, this.aaQ || quality().fly3dAA); // (whole-frame AA)
     if (sharp) this.heroPass.render(r, this.scene, this.cam.cam, this.hero.group.position, 2.4 * this.hero.size, W, H, hq);
     this.overlay(ctx, night, frac, boosting);
   }
