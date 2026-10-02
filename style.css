@@ -142,7 +142,7 @@ body:not(.touch) #btns { transform: scale(.8); transform-origin: bottom right; }
 
 /* ---------- Toasts, banners ---------- */
 #toasts { position: absolute; left: 50%; top: calc(64px + var(--st)); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; width: min(92vw, 520px); }
-.toast { background: rgba(8, 12, 26, .85); border: 1px solid var(--line); padding: 6px 12px; border-radius: 10px; font-size: 13px; font-weight: 600; animation: tin .25s ease-out; transition: opacity .4s, transform .4s; text-align: center; }
+.toast { background: rgba(10, 10, 20, .96); border: 2px solid #050508; box-shadow: 3px 3px 0 rgba(0, 0, 0, .5); padding: 6px 12px; border-radius: 10px; font-size: 13px; font-weight: 600; animation: tin .25s ease-out; transition: opacity .4s, transform .4s; text-align: center; }
 .toast.good { border-color: rgba(62, 224, 138, .6); color: #b9ffd9; }
 .toast.bad { border-color: rgba(255, 77, 106, .6); color: #ffc2cc; }
 .toast.out { opacity: 0; transform: translateY(-8px); }

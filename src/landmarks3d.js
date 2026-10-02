@@ -54,7 +54,12 @@ export function buildLandmarks(list, S) {
     const [, H, col, lit] = LANDMARKS[lm.district];
     if (lm.kind === 'lighthouse') { lighthouse(B, lm.x * M, lm.y * M, H); continue; }
     const o = lm.o, x0 = o.x * M, z0 = o.y * M, x1 = (o.x + o.w) * M, z1 = (o.y + o.d) * M;
-    BUILD[lm.kind](B, S, { x0, z0, x1, z1, H, cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, S: Math.min(x1 - x0, z1 - z0), col, lit, seed: hash2(o.x | 0, o.y | 0, 5) });
+    const p = { x0, z0, x1, z1, H, cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, S: Math.min(x1 - x0, z1 - z0), col, lit, seed: hash2(o.x | 0, o.y | 0, 5) };
+    BUILD[lm.kind](B, S, p);
+    // the navigation mark: a thick crown band in the tower's signature colour, readable from altitude
+    const s = p.S * 0.36;
+    neonRing(B, p.cx - s, p.cz - s, p.cx + s, p.cz + s, H * 0.94, lit, 2.2);
+    lamp(B, p.cx, H * 1.02 + 6, p.cz, 3.5, lit, KIND.neon);
   }
   return B;
 }

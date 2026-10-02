@@ -61,7 +61,7 @@ render hand-off, enter/exit, the boost kick, and the 3D flight button set (`setB
   one ink-layer draw (near build + a lite far-LOD build past `LOD.farMat`), landmarks (always drawn),
   the 2D view's baked ground art as near ground, horizon, outer boroughs, street life. Reads the key
   light / ambient from Sky3D's lights and the haze's end colour from the dome's `bottom` uniform
-  (found in the scene: no hook). Chunks reach as far as the haze (further than the band's fog when
+  (or `Sky3D.horizon` when flight3d sets the optional hook `city3.sky = sky`). Chunks reach as far as the haze (further than the band's fog when
   high up). Exposes `landmarks` ([{kind, district, x, y, h}], world units) for navigation.
   - `buildings3d.js` — the building kit: mask atlas (5 facades + 3 roofs), the one cel shader
     (`CityLook`: near / far / landmark materials + the anti-aliased `ink` layer; 3 cel bands +
@@ -71,6 +71,8 @@ render hand-off, enter/exit, the boost kick, and the 3D flight button set (`setB
     light, neon trims, facade/silhouette/roof-kit odds), tower archetypes, roof kits, venue signs.
   - `signs3d.js` — neon sign word atlas (comic lettering) + facade / rooftop / blade sign quads.
   - `landmarks3d.js` — one signature tower per district (`LANDMARKS`), chosen near its seed.
+  - `river3d.js` — the river (city.js `blk.river`: water blocks, no buildings, no zones): water,
+    embankments, bridges on the north-south streets.
   - `ground3d.js` — the map's ground from altitude: street-plan texture (lots, parks, plazas) +
     night avenue glow.
   - `outer3d.js` — beyond the map: outer boroughs (far-LOD blocks), bay islands, river bridges, the
