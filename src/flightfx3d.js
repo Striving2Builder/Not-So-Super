@@ -7,7 +7,7 @@ import * as THREE from 'three';
 
 const FX = {
   trail: { n: 24, life: 0.3, width: [0.34, 0.0], from: 140, head: [1, 0.2, 0.18], tail: [1, 0.8, 0.2], alpha: 1 },   // red off her heels → gold // speed (m/s) it starts
-  wind: { n: 28, radius: [5, 14], ahead: [4, 26], width: 0.09, from: 0.42 },       // from = speed fraction; close round her (they read at the screen edges, never as far hairlines)
+  wind: { n: 28, radius: [5, 14], ahead: [4, 26], width: 0.09, from: 0.62 },       // from = speed fraction; close round her (they read at the screen edges, never as far hairlines)
   ring: { life: 0.9, grow: [3, 70], boostGrow: [2, 26] },
   lines: { from: 0.18, deal: 70 },                                                  // speed fraction; re-deal ms
 };

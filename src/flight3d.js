@@ -43,28 +43,38 @@ const LOOK3 = {
   bands: [110, 560, 1100],     // world units (×0.5 m)
   speedMul: [0.5, 1, 1.3],     // top-speed multiplier per band in 3D
   fog: [1100, 1600, 2400],     // fog far (m) per band
-  beam: { radius: 7, height: 420, alpha: 0.6, minPx: 0.012 }, // minPx: radius ≥ this × distance (stays a visible stroke far off)
+  beam: { width: 14, height: 420, alpha: 0.95, minPx: 0.03 }, // m; minPx: width ≥ this × distance (a few px far off)
+  icons: { max: 3, cluster: 40, fade: [300, 1600], heroBox: [90, 80] }, // on-screen incident icons: cap, merge radius (px), fade (m)
   iconPx: 26,
   patrolBelow: 150,             // speed under which high patrol cranes up to the overhead view
   wallProbe: [10, 22],          // m to each side: a tower face this close rushes past (action lines)
   auto: { ahead: 260, step: 26, halfWidth: 24, turn: 0.22, tries: 6 }, // autopilot look-ahead (world units)
-  chips: 3,                     // edge chips for off-screen incidents (the waypoint is extra)
+  chips: 2,                     // edge chips for off-screen incidents (the waypoint is extra)
   chipTop: 92,                  // px: chips stay below the top HUD row
   chip: { inset: 30, pad: 18, slide: 34, merge: 64, label: 25 }, // px
   hudAvoid: '#hud-left, #hud-top, #hud-right, #objectives.on, #prompt.on, #btns .tbtn, #stick-base, .caption',
 };
 
-const BEAM_VS = `varying vec3 vN; varying float vH; uniform float hgt;
-void main() { vN = normalize(normalMatrix * normal); vH = position.y / hgt; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
-// comic light column: inked silhouette edges, a saturated body, white bands rising up it
-const BEAM_FS = `uniform vec3 col; uniform float alpha; uniform float time; varying vec3 vN; varying float vH;
+// Incident beacon: a thin, perfectly vertical shaft of light. A quad that turns about its own
+// vertical axis to face the camera (never leans), a hot core with a soft glow across it, fading up
+// its height; soft edges only, so it never draws a hard stair-stepped one.
+const BEAM_VS = `uniform float hgt; uniform float width; varying vec2 vQ;
 void main() {
-  float e = abs(vN.z), ink = 1.0 - smoothstep(0.22, 0.42, e);
-  float band = step(0.84, fract(vH * 16.0 - time * 0.9)) * (1.0 - ink);
-  vec3 c = mix(mix(col, vec3(1.0), 0.25 * e + 0.55 * band), vec3(0.03, 0.03, 0.08), ink);
-  float a = alpha * (1.0 - smoothstep(0.55, 1.0, vH)) * mix(1.0, 1.5, ink);
-  gl_FragColor = vec4(c, clamp(a, 0.0, 1.0));
-  #include <colorspace_fragment>
+  vec3 base = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+  vec3 to = cameraPosition - base; to.y = 0.0;
+  vec3 right = normalize(vec3(to.z, 0.0, -to.x) + 1e-5);
+  vQ = vec2(position.x * 2.0, position.y / hgt);
+  vec3 p = base + right * position.x * width + vec3(0.0, position.y, 0.0);
+  gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+}`;
+const BEAM_FS = `uniform vec3 col; uniform float alpha; uniform float time; varying vec2 vQ;
+void main() {
+  float x = vQ.x, core = exp(-x * x * 40.0), glow = exp(-x * x * 6.0) * 0.6;
+  float up = pow(1.0 - vQ.y, 1.4) * smoothstep(0.0, 0.02, vQ.y);
+  float pulse = 0.85 + 0.15 * sin(time * 3.0 - vQ.y * 14.0);
+  float a = clamp((core + glow) * up * pulse * alpha, 0.0, 1.0);
+  // a white-hot core in a coloured glow; alpha-blended so it still reads against a bright day sky
+  gl_FragColor = vec4(mix(col, vec3(1.0), core / (core + glow + 1e-4) * 0.7), a);
 }`;
 
 const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _uv = new THREE.Vector2();
@@ -191,21 +201,23 @@ export class Flight3D {
       seen.add(z.uid);
       let b = this.beams.get(z.uid);
       if (!b) {
-        const geo = new THREE.CylinderGeometry(B.radius, B.radius * 1.4, B.height, 14, 1, true);
+        const geo = new THREE.PlaneGeometry(1, B.height, 1, 8);
         geo.translate(0, B.height / 2, 0);
         b = new THREE.Mesh(geo, new THREE.ShaderMaterial({
-          uniforms: { col: { value: new THREE.Color(z.color) }, alpha: { value: B.alpha }, time: { value: 0 }, hgt: { value: B.height } },
-          vertexShader: BEAM_VS, fragmentShader: BEAM_FS, transparent: true, depthWrite: false, toneMapped: false,
+          uniforms: { col: { value: new THREE.Color(z.color) }, alpha: { value: B.alpha }, time: { value: 0 }, hgt: { value: B.height }, width: { value: B.width } },
+          vertexShader: BEAM_VS, fragmentShader: BEAM_FS, transparent: true, depthWrite: false, toneMapped: false, side: THREE.DoubleSide,
         }));
+        b.frustumCulled = false; // (the quad is placed in the vertex shader)
         b.renderOrder = 6;
         this.scene.add(b);
         this.beams.set(z.uid, b);
       }
       b.position.set(z.x * M, 0, z.y * M);
-      b.material.uniforms.time.value = t;
-      // far beams thicken so they stay a readable stroke on a phone instead of a hairline
-      const d = Math.hypot(b.position.x - cp.x, b.position.z - cp.z), s = Math.max(1, (d * B.minPx) / B.radius);
-      b.scale.set(s, 1, s);
+      const u = b.material.uniforms;
+      u.time.value = t;
+      // thin up close, a constant few pixels far off (never a hairline, never a fat stick)
+      const d = Math.hypot(b.position.x - cp.x, b.position.z - cp.z);
+      u.width.value = Math.max(B.width, d * B.minPx);
     }
     for (const [uid, b] of this.beams) if (!seen.has(uid)) { this.scene.remove(b); b.geometry.dispose(); b.material.dispose(); this.beams.delete(uid); }
   }
@@ -301,15 +313,40 @@ export class Flight3D {
     ctx.clip('evenodd');
     this.fx3.drawLines(ctx, W, H, Math.max(frac * k, ow.fx.rush || 0), boosting && k, vp[2] ? { x: vp[0], y: vp[1] } : { x: W / 2, y: H / 2 }, walls, night);
     ctx.restore();
-    // incident icons over everything
+    this.icons(ctx, P, W, H);
+    ow.heroArt.drawPops(ctx, hs[0], hs[1], Math.min(W, H) / 390);
+    this.chips(ctx, P, W, H);
+  }
+
+  /**
+   * Incident icons at the beam tops: at most a few (the one in dive range first, then nearest),
+   * icons within a thumb's width merge into one with a count, far ones fade, never over the HUD.
+   */
+  icons(ctx, P, W, H) {
+    const ow = this.ow, h = ow.hero, I = LOOK3.icons, list = [];
     for (const z of ow.zones) {
       const [x, y, front] = P.proj(z.x, z.y, LOOK3.beam.height / M * 0.55);
       if (!front || x < -20 || y < -20 || x > W + 20 || y > H + 20 || this.underHud(x, y, 4)) continue; // (never printed over the HUD)
-      ow.drawIcon(ctx, x, y, 11, z, ow.g.state && ow.g.state.locked(z.lockKey), z === ow.near);
-      if (z === ow.near && !ow.diving) this.diveTag(ctx, x, y, ow.t);
+      if (Math.abs(x - this.ow.heroScreen.x) < I.heroBox[0] && Math.abs(y - this.ow.heroScreen.y) < I.heroBox[1]) continue; // (nor over her)
+      list.push({ z, x, y, d: Math.hypot(z.x - h.x, z.y - h.y) * M });
     }
-    ow.heroArt.drawPops(ctx, hs[0], hs[1], Math.min(W, H) / 390);
-    this.chips(ctx, P, W, H);
+    list.sort((a, b) => (b.z === ow.near) - (a.z === ow.near) || a.d - b.d);
+    const shown = [];
+    for (const c of list) {
+      const near = shown.find((s) => Math.hypot(s.x - c.x, s.y - c.y) < I.cluster);
+      if (near) { near.n++; continue; }
+      if (shown.length < I.max) shown.push({ ...c, n: 1 });
+    }
+    for (const c of shown) {
+      ctx.globalAlpha = 1 - 0.55 * Math.min(1, Math.max(0, (c.d - I.fade[0]) / (I.fade[1] - I.fade[0])));
+      ow.drawIcon(ctx, c.x, c.y, 11, c.z, ow.g.state && ow.g.state.locked(c.z.lockKey), c.z === ow.near);
+      if (c.n > 1) {
+        ctx.fillStyle = '#fff'; ctx.strokeStyle = '#0b0b16'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(c.x + 11, c.y - 11, 7.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#0b0b16'; ctx.font = '900 10px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(c.n), c.x + 11, c.y - 10.5);
+      }
+      ctx.globalAlpha = 1;
+      if (c.z === ow.near && !ow.diving) this.diveTag(ctx, c.x, c.y, ow.t);
+    }
   }
 
   /** In range of an incident: a pulsing ring and a "DIVE!" tag on it, so the move reads in the world too. */
