@@ -31,6 +31,14 @@ export function flight3dEnabled() {
   }
   return on;
 }
+/** `?dynres=off` pins dynamic resolution at full scale (screenshot harness on slow SwiftShader). */
+let pinned;
+function dynResPinned() {
+  if (pinned === undefined) {
+    try { pinned = new URLSearchParams(location.search).get('dynres') === 'off'; } catch (e) { pinned = false; }
+  }
+  return pinned;
+}
 function hasWebGL() {
   try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; }
 }
@@ -254,7 +262,8 @@ export class Flight3D {
   applyDpr(dt) {
     const caps = quality().fly3dDpr || [1, 1], D = LOOK3.dynRes;
     this.ft = this.ft === undefined ? dt : this.ft + (dt - this.ft) * 0.05; // smoothed frame time
-    if (this.ft > D.slow) this.resK = Math.max(D.min, (this.resK ?? 1) - D.rate * dt);
+    if (dynResPinned()) this.resK = 1; // ?dynres=off: the harness shoots what a phone shows
+    else if (this.ft > D.slow) this.resK = Math.max(D.min, (this.resK ?? 1) - D.rate * dt);
     else if (this.ft < D.fast) this.resK = Math.min(1, (this.resK ?? 1) + D.rate * dt);
     const k = Math.round((this.resK ?? 1) / D.step) * D.step;
     // the canvas keeps a crisp output density (her pass + the overlay), the scene renders at
