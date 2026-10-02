@@ -46,6 +46,8 @@ const AREAS = {
     fly3d_patrolview: { type: 'fly3d', plan: 'patrolview' },
     // night, low, flying north toward the entertainment district's landmark (venue signs, neon, street life)
     fly3d_vice: { type: 'fly3d', plan: 'vice' },
+    // midday: the clean, bright daytime read (cruise, then the patrol view)
+    fly3d_day: { type: 'fly3d', plan: 'day' },
   },
   premade3d: {
     triangle: Z3('special', 'Triangle Club', 'Madame Mesmer'),
@@ -176,6 +178,7 @@ async function shootFly3d(page, dir, name, plan) {
     });
     await page.waitForTimeout(600);
   }
+  if (plan === 'day') await page.evaluate(() => { window.__game.state.clock = 12 * 60; });
   if (plan === 'low' || plan === 'vice') await hold(page, 'KeyF', 4000);
   if (plan === 'high' || plan === 'patrolview') await hold(page, 'KeyR', 4500);
   if (plan === 'patrolview') { // stopped up high: the camera cranes up overhead
