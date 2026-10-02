@@ -109,7 +109,7 @@ function atlas() {
 
 // ---------------------------------------------------------------- the shader
 /** Haze reach: far = max(fog far, camera height x perAlt), capped under the camera's far plane. */
-export const HAZE = { perAlt: 7, max: 4200, near: 0.08 };
+export const HAZE = { perAlt: 7, max: 4200, near: 0.2 };
 const _cool = new THREE.Color(0.93, 0.98, 1.1);
 /**
  * Aerial perspective shared by every city material (buildings, ground, sea, street lights): a cool,
@@ -125,9 +125,12 @@ vec3 pulp(vec3 c) {
   return clamp((c - 0.5) * 1.12 + 0.5 + 0.02, 0., 1.);
 }
 vec3 haze(vec3 c, float d, float y, float k) {
-  float f = clamp((d - uHazeNear) / (uHazeFar - uHazeNear), 0., 1.);
-  f = 1. - (1. - f) * (1. - f); // ease-out: soft layers through the middle distance, solid at the end
-  f = clamp(f + (1. - smoothstep(0., 220., y)) * smoothstep(uHazeNear * 0.3, uHazeFar, d) * 0.45, 0., 1.) * k;
+  // comic aerial perspective: stepped value bands (clear near city, then three paler layers), each
+  // step softened over a third of its width, rather than one uniform wash
+  float f0 = clamp((d - uHazeNear) / (uHazeFar - uHazeNear), 0., 1.) * 3.;
+  float f = (floor(f0) + smoothstep(0.65, 1., fract(f0))) / 3.;
+  f = f * f * (1.3 - 0.3 * f); // the first band stays light
+  f = clamp(f + (1. - smoothstep(0., 160., y)) * smoothstep(uHazeNear, uHazeFar, d) * 0.25, 0., 1.) * k;
   return mix(c, mix(uHazeCol, uHorizon, smoothstep(0.15, 1., f)), f);
 }`;
 

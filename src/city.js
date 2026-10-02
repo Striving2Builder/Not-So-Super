@@ -7,7 +7,7 @@ import { clamp } from './util.js';
 export const BLOCK = 240;
 export const ROAD = 52;
 export const LOT = BLOCK - ROAD;
-const RIVER = '#2f6fa8';
+const RIVER = '#2f6fa8', RIVER_BANK = '#4f7046'; // minimap water; the ground under the 3D ribbon
 
 // Rough ring placement for each district seed: [type, minRadius, maxRadius, count, preferredAngle?]
 const PLAN = [
@@ -82,16 +82,17 @@ export class City {
     const dt = this.seeds.find((s) => s.type === 'downtown');
     if (!dt) return;
     let y = clamp(Math.round(dt.y) - 5, 2, this.rows - 3);
-    const path = [];
+    const path = [], basin = [];
     for (let x = 0; x < this.landCols; x++) {
       path.push([x, y]);
-      if (Math.abs(x - dt.x) < 6) path.push([x, y - 1]); // the basin
+      if (Math.abs(x - dt.x) < 6) basin.push([x, y - 1]); // the basin
       if (x < this.landCols - 1 && hash2(x, y, this.seed + 3) < 0.3) {
         const ny = clamp(y + (hash2(y, x, this.seed + 4) < 0.5 ? -1 : 1), 2, Math.round(dt.y) - 3);
         if (ny !== y) { y = ny; path.push([x, y]); }
       }
     }
-    for (const [bx, by] of path) { const b = this.block(bx, by); if (b) b.river = true; }
+    for (const [bx, by] of [...path, ...basin]) { const b = this.block(bx, by); if (b) b.river = true; }
+    this.riverPath = path; this.riverBasin = basin; // the 3D view draws it as a smooth ribbon
   }
 
   block(bx, by) {
@@ -107,7 +108,7 @@ export class City {
 
   buildBlocks() {
     for (const blk of this.blocks) {
-      if (blk.river) { blk.flats.push({ t: 'rect', x: blk.x0, y: blk.y0, w: LOT, h: LOT, c: RIVER }); continue; }
+      if (blk.river) { blk.flats.push({ t: 'rect', x: blk.x0, y: blk.y0, w: LOT, h: LOT, c: RIVER_BANK }); continue; }
       const r = new RNG((hash2(blk.bx, blk.by, this.seed + 7) * 4294967296) >>> 0);
       const D = DISTRICTS[blk.d];
       const gen = GEN[D.style] || GEN.mixed;
