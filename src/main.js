@@ -10,12 +10,13 @@ import { ClubZone } from './clubzone.js';
 import { NightCase } from './nightcase.js';
 import { AsylumZone } from './asylum.js';
 import { showNewspaper } from './newspaper.js';
-import { HERO, DISTRICTS, THEMES, DEALS, BOSSES, VENUES } from './data.js';
+import { HERO, DISTRICTS, THEMES, DEALS, BOSSES, VENUES, BILLBOARDS } from './data.js';
 import { UI, dialog, toast } from './ui.js';
 import { sfx } from './sfx.js';
 import { $, pick, chance, fmtTime } from './util.js';
 import { loadHero } from './hero3d.js';
 import { loadEnemies } from './enemies.js';
+import { playScreenScene } from './cutscene.js';
 import { comic } from './comic.js';
 import { Commentary } from './commentary.js';
 import { settings, quality, autoTune } from './settings.js';
@@ -100,6 +101,14 @@ game.endZone = async (zone, res) => {
     await showNewspaper({ ...victoryPaper(zone, res), rep: res.rep });
   } else if (res.outcome === 'lose') {
     st.addRep(res.rep, 'Mission failed');
+    if (zone.mode === 'brawl') {
+      // story beat: the city wakes up to her defeat on every billboard
+      const vice = BILLBOARDS.vice.includes(zone.district);
+      await playScreenScene({
+        screens: vice ? BILLBOARDS.rld : BILLBOARDS.downtown, folder: BILLBOARDS.folders, maxSecs: 14, holdSecs: 4,
+        caption: `By morning, every billboard in ${DISTRICTS[zone.district]?.name || 'the city'} is playing it…`,
+      });
+    }
     await dialog({ title: 'Mission failed', text: res.text || 'The crooks got away this time.' });
   } else {
     st.addRep(res.rep, 'Left the scene');

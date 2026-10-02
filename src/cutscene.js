@@ -59,6 +59,7 @@ export async function playCutscene({ folder, caption = '', maxSecs = 12, holdSec
  * loops); after that a tap ends it, or it ends with the clip. With no clip in `folder` the screen
  * shows static for `holdSecs` and the flow carries on.
  * @param screens  still URLs to pick from (see greenscreen.js)
+ * @param folder   assets/video/<folder>/ for the clip, or a list (the first folder with clips wins)
  * @returns Promise that resolves when it's over
  */
 export async function playScreenScene({ screens, folder, caption = '', lockSecs = 0, maxSecs = 60, holdSecs = 3.5 }) {
@@ -67,7 +68,8 @@ export async function playScreenScene({ screens, folder, caption = '', lockSecs 
   const [{ loadScreen, drawScreen }, folders] = await Promise.all([import('./greenscreen.js'), mediaFolders()]);
   const scr = await loadScreen(pick(screens));
   if (!scr) return;
-  const url = (folders[folder] || []).filter((u) => !isImage(u));
+  const pool = [].concat(folder).map((f) => (folders[f] || []).filter((u) => !isImage(u))).find((l) => l.length) || [];
+  const url = pool;
   const clip = pick(url) || null;
   const lock = clip ? lockSecs : 0;
   const cv = document.createElement('canvas');

@@ -90,6 +90,19 @@ export const ASYLUM = {
   ].map((f) => `assets/asylum/tv/${f}.webp`),
   reward: 45,
 };
+// Losing a street fight: by morning the city's billboards are playing the footage. A clip from
+// assets/video/<folders[0]>/ (falling back to the next folder) keyed into a green-screen
+// billboard still: red-light ones for fights in the vice districts, downtown ones elsewhere.
+export const BILLBOARDS = {
+  folders: ['Billboards', 'Captive'],
+  vice: ['redlight', 'naughty', 'nightclub'],
+  rld: [2, 4, 6, 8, 10].map((n) => `assets/billboards/rld/sg-mix-${String(n).padStart(2, '0')}.webp`),
+  downtown: [
+    ...[1, 2, 3, 4, 5].map((n) => `downtown-gs-${String(n).padStart(2, '0')}`),
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => `sg-bb-${String(n).padStart(2, '0')}`),
+    ...[1, 3, 5, 7, 9].map((n) => `sg-mix-${String(n).padStart(2, '0')}`),
+  ].map((f) => `assets/billboards/downtown/${f}.webp`),
+};
 export const ASYLUM_JOBS = ['orderly', 'night nurse', 'staff psychiatrist', 'warden', 'pharmacist', 'janitor', 'administrator', 'visiting doctor'];
 export const ASYLUM_CASES = {
   vanishing:   { name: 'Vanishing Patients', crime: 'the patients who vanished overnight', captives: 2, clueProps: ['Altered Transfer Papers', 'Night-Shift Log', 'Wheelchair Tracks'] },
