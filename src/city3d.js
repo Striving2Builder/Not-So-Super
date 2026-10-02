@@ -21,7 +21,7 @@ export { M, DISTRICT_3D, height3 };
 
 const CHUNK = TILE * BLOCK; // world units per chunk side (one ground tile)
 /** farMat: metres past which a chunk switches to its lite build + flat-tone material (no texture, ink, halftone, roof kit). */
-const LOD = { farMat: 260, farInk: 500, landmarkFog: 0.8, landmarkMax: 0.93, coreR: 4.5 };
+const LOD = { farMat: 260, farInk: 0, landmarkFog: 0.8, landmarkMax: 0.93, coreR: 4.5 };
 
 export class City3D {
   constructor(city, scene, { tileRes = 144 } = {}) {
@@ -29,6 +29,7 @@ export class City3D {
     this.signs = new SignAtlas();
     this.look = new CityLook(this.signs.tex);
     this.art = new CityArt(city, tileRes, 400); // big cache: tile canvases back live textures, never recycle them
+    this.art.riverBank = '#4f7046'; // green banks: the 3D river is a smooth ribbon laid over them
     this.chunks = new Map();
     this.cols = Math.ceil(city.cols / TILE); this.rows = Math.ceil(city.rows / TILE);
     // the skyline peaks over downtown + financial: buildings there get taller toward the core
