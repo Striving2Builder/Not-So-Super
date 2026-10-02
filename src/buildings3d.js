@@ -174,6 +174,7 @@ void main() {
   vec2 s = (c1.xy / c1.w - c0.xy / c0.w) * res;
   vec2 dir = dot(s, s) > 1e-8 ? normalize(s) : vec2(1., 0.);
   vWid = uInkW * dpr * uv.y * mix(1., 0.4, smoothstep(25., 600., d)); // wanted width, px
+  vWid = max(vWid, 1.3 * dpr * uv.y); // never a sub-pixel scratch
   float hw = max(vWid, 1.) * 0.5 + 1.; // the quad: a pixel of feather each side
   vAcross = uv.x * hw;
   c0.xy += vec2(-dir.y, dir.x) * uv.x * hw * 2. / res * c0.w;
@@ -201,6 +202,21 @@ ${HAZE_GLSL}
 varying vec2 vUv; flat varying vec3 vCol; flat varying vec3 vLit; flat varying vec3 vN; varying vec3 vW;
 flat varying float vStyle; flat varying float vKind;
 float h11(float n) { return fract(sin(n) * 43758.5453); }
+float box1(float q, float lo, float hi, float w) { return smoothstep(lo - w, lo + w, q) * (1. - smoothstep(hi - w, hi + w, q)); }
+// Up close the atlas is magnified to a blur: rebuild the window cell analytically (crisp,
+// anti-aliased edges at any size) from the same layout the atlas was painted with. Per style:
+// window margins (atlas px of a 32 px cell) and the bare wall's shade.
+vec3 crispCell(vec2 A, float style, float lit) {
+  vec4 L = style == 0. ? vec4(7., 7., 0.86, 0.) : style == 1. ? vec4(1., 2., 0.7, 0.) : style == 2. ? vec4(8., 8., 0.8, 0.) : vec4(9., 4., 0.62, 1.);
+  vec2 q = fract(A * vec2(${WIN.cols}., ${WIN.rows}.)) * 32.; q.y = 32. - q.y; // atlas px, y down like the canvas
+  vec2 w = max(fwidth(q) * 0.75, vec2(0.05));
+  float win = box1(q.x, L.x, 32. - L.x, w.x) * box1(q.y, L.y, 32. - L.y, w.y);
+  float frame = max(box1(q.x, 15., 17., w.x), box1(q.y, L.y + (32. - 2. * L.y) * 0.32 - 0.5, L.y + (32. - 2. * L.y) * 0.32 + 0.5, w.y)) * win;
+  float slab = box1(q.y, 29., 33., w.y), pier = L.w * max(box1(q.x, -1., 6., w.x), box1(q.x, 28., 33., w.x));
+  float wall = mix(mix(L.z, L.z * 0.72, slab), 1., pier);
+  float shade = box1(q.y, L.y - 1., L.y + 2., w.y) * win; // recess under the lintel
+  return vec3(mix(wall, 0.45, frame), win * (1. - frame) * (1. - shade * 0.45), lit * win * (1. - frame));
+}
 void main() {
   float dist = length(vW - cameraPosition);
   vec3 col = vec3(0.), emi = vec3(0.);
@@ -230,6 +246,13 @@ void main() {
 #ifndef FAR
     float k = smoothstep(0.12, 0.28, max(fw.x, fw.y));
     m.rg = mix(t.rg, far.rg, k);
+    float mag = smoothstep(-0.3, -1.3, lod) * step(vStyle, 3.5);
+    if (mag > 0.) {
+      vec2 A = vec2(u.x * 0.96 + 0.02, u.y * 0.98 + 0.01);
+      vec2 cell = (floor(A * vec2(${WIN.cols}., ${WIN.rows}.)) + 0.5) / vec2(${WIN.cols}., ${WIN.rows}.);
+      float lit = textureLod(uAtlas, vec2((cell.x + vStyle) / 8., cell.y), 0.).b;
+      m = mix(m, crispCell(A, vStyle, lit), mag);
+    }
 #endif
     vec3 N = normalize(vN), V = normalize(cameraPosition - vW);
     float ndl = dot(N, uKeyDir);
@@ -237,16 +260,22 @@ void main() {
     float litK = smoothstep(0.0, 0.05, ndl), fullK = N.y > 0.5 ? 1. : smoothstep(0.32, 0.37, ndl);
     vec3 amb = mix(uAmbDn, uAmbUp, N.y * 0.5 + 0.5);
     vec3 light = amb + uKeyCol * litK * (0.6 + 0.4 * fullK);
+    // each facade orientation keeps its own cel tone (east/west a step darker than north/south),
+    // so a tower's two visible faces always read apart, lit or not
+    if (N.y < 0.5) light *= abs(N.x) > abs(N.z) ? 0.8 : 1.;
     vec3 wall = vCol * m.r * light;
     if (roof) {
       col = mix(wall, vec3(0.9, 0.62, 0.05) * light, m.b);
     } else {
       // glass: dark by night, mirrors the sky (more at grazing angles) by day; curtain walls most
       float fres = pow(1. - max(dot(N, V), 0.), 2.);
-      vec3 glass = mix(vec3(0.03, 0.035, 0.055), uSky * 0.8, (1. - uNight * 0.85) * ((vStyle == 1. ? 0.4 : 0.2) + 0.45 * fres));
+      vec3 dayGlass = mix(vec3(0.07, 0.14, 0.3), uSky * 0.75, (vStyle == 1. ? 0.3 : 0.15) + 0.45 * fres);
+      vec3 glass = mix(dayGlass, vec3(0.03, 0.035, 0.055) + uSky * 0.08 * fres, uNight);
       col = mix(wall, glass * (0.6 + 0.4 * litK), m.g);
       col *= mix(0.42, 1., smoothstep(0., 45., vW.y)); // canyon floors are darker
       emi = vLit * m.b * uLit;
+      // night rim: a cool sky-lit edge on faces turning away from her (the silhouette reads)
+      emi += uSky * 0.45 * uNight * smoothstep(0.55, 0.85, fres) * (1. - m.g * 0.5);
     }
 #ifndef FAR
     // halftone dots in the shade, close up only: fixed dot size (shrinking dots turn to salt),
@@ -306,10 +335,10 @@ export class CityLook {
     const U = this.U;
     if (sun) {
       U.uKeyDir.value.copy(sun.position).sub(sun.target.position).normalize();
-      U.uKeyCol.value.copy(sun.color).multiplyScalar((0.12 + 0.36 * sun.intensity) * (1 - 0.45 * night));
+      U.uKeyCol.value.copy(sun.color).multiplyScalar((0.12 + 0.36 * sun.intensity) * (1 - 0.15 * night));
     }
     if (hemi) {
-      const k = 0.75 * hemi.intensity * (1 - 0.4 * night);
+      const k = 0.75 * hemi.intensity * (1 - 0.55 * night);
       U.uAmbUp.value.copy(hemi.color).multiplyScalar(k);
       U.uAmbDn.value.copy(hemi.groundColor).multiplyScalar(k * 1.2).lerp(U.uAmbUp.value, 0.25);
     }
