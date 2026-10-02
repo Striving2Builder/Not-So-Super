@@ -67,7 +67,7 @@ void main() {
   #include <colorspace_fragment>
 }`;
 
-const _v = new THREE.Vector3(), _f = new THREE.Vector3();
+const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _uv = new THREE.Vector2();
 
 export class Flight3D {
   constructor(ow) {
@@ -277,7 +277,10 @@ export class Flight3D {
     if (this.hero.model && !this.layered) { this.layered = true; this.hero.pivot.traverse((o) => o.layers.set(HERO_LAYER)); }
     const hq = this.heroQ || quality().fly3dHero || [0, 0], sharp = this.layered && hq[1] > 0;
     if (sharp) this.cam.cam.layers.disable(HERO_LAYER); else this.cam.cam.layers.enable(HERO_LAYER);
-    this.post.render(r, this.scene, this.cam.cam, this.aaQ || quality().fly3dAA); // (whole-frame AA)
+    // whole-frame AA (+ the boost streak toward where she's heading)
+    _v.set(Math.cos(h.ang), 0, Math.sin(h.ang)).multiplyScalar(400).add(this.hero.group.position).project(this.cam.cam);
+    _uv.set(_v.x * 0.5 + 0.5, _v.y * 0.5 + 0.5);
+    this.post.render(r, this.scene, this.cam.cam, this.aaQ || quality().fly3dAA, this.cam.boostK * (1 - this.cam.patrolK), _uv);
     if (sharp) this.heroPass.render(r, this.scene, this.cam.cam, this.hero.group.position, 3.4 * this.hero.size, W, H, hq); // (radius: her + the cape)
     this.overlay(ctx, night, frac, boosting);
   }

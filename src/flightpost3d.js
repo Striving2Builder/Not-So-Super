@@ -9,7 +9,7 @@ import * as THREE from 'three';
 // FXAA ("console" variant, Lottes): 5 taps to find an edge and its direction, 4 more to blend along it.
 const FRAG = `
 precision highp float;
-uniform sampler2D tDiffuse; uniform vec2 px; varying vec2 vUv;
+uniform sampler2D tDiffuse; uniform vec2 px; uniform float streak; uniform vec2 vp; varying vec2 vUv;
 #define LUMA vec3(0.299, 0.587, 0.114)
 void main() {
   vec4 cM = texture2D(tDiffuse, vUv);
@@ -18,7 +18,8 @@ void main() {
   vec3 sw = texture2D(tDiffuse, vUv + vec2(-1.0, 1.0) * px).rgb, se = texture2D(tDiffuse, vUv + vec2(1.0, 1.0) * px).rgb;
   float lNW = dot(nw, LUMA), lNE = dot(ne, LUMA), lSW = dot(sw, LUMA), lSE = dot(se, LUMA), lM = dot(cM.rgb, LUMA);
   float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE))), lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
-  if (lMax - lMin < max(0.03, lMax * 0.1)) { gl_FragColor = vec4(cM.rgb, 1.0); return; } // flat: no edge here
+  gl_FragColor = vec4(cM.rgb, 1.0);
+  if (lMax - lMin >= max(0.03, lMax * 0.1)) { // (flat: no edge here)
   vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));
   float red = max((lNW + lNE + lSW + lSE) * 0.03125, 1.0 / 128.0);
   dir = clamp(dir / (min(abs(dir.x), abs(dir.y)) + red), -8.0, 8.0) * px;
@@ -26,24 +27,37 @@ void main() {
   vec3 b = a * 0.5 + 0.25 * (texture2D(tDiffuse, vUv - dir * 0.5).rgb + texture2D(tDiffuse, vUv + dir * 0.5).rgb);
   float lB = dot(b, LUMA);
   gl_FragColor = vec4((lB < lMin || lB > lMax) ? a : b, 1.0);
+  }
 #else
   gl_FragColor = vec4(cM.rgb, 1.0);
 #endif
+  // boost: a zoom streak smeared toward the vanishing point, only in the outer band of the frame
+  if (streak > 0.0) {
+    vec2 d = vUv - vp; float k = smoothstep(0.32, 0.75, length(d * vec2(px.y / px.x, 1.0))) * streak;
+    if (k > 0.0) {
+      vec3 acc = gl_FragColor.rgb;
+      for (int i = 1; i <= 4; i++) acc += texture2D(tDiffuse, vUv - d * (0.025 * float(i) * k)).rgb;
+      gl_FragColor.rgb = acc / 5.0;
+    }
+  }
 }`;
 const VERT = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 
 export class FlightPost {
   constructor() {
     this.rt = null; this.mode = null;
-    this.mat = new THREE.ShaderMaterial({ uniforms: { tDiffuse: { value: null }, px: { value: new THREE.Vector2() } }, vertexShader: VERT, fragmentShader: FRAG, depthTest: false, depthWrite: false, toneMapped: false });
+    this.mat = new THREE.ShaderMaterial({ uniforms: { tDiffuse: { value: null }, px: { value: new THREE.Vector2() }, streak: { value: 0 }, vp: { value: new THREE.Vector2(0.5, 0.5) } }, vertexShader: VERT, fragmentShader: FRAG, depthTest: false, depthWrite: false, toneMapped: false });
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.mat);
     this.quad.frustumCulled = false;
     this.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this._s = new THREE.Vector2();
   }
 
-  /** mode: 'fxaa' | 'msaa' | 'none' (graphics profile fly3dAA). */
-  render(renderer, scene, camera, mode) {
+  /**
+   * mode: 'fxaa' | 'msaa' | 'none' (graphics profile fly3dAA); streak 0..1: the boost zoom smear
+   * toward vp (uv of the vanishing point).
+   */
+  render(renderer, scene, camera, mode, streak = 0, vp = null) {
     if (mode === 'none' || !mode) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
     const size = renderer.getDrawingBufferSize(this._s), w = size.x, h = size.y, samples = mode === 'msaa' ? 4 : 0;
     if (!this.rt || this.rt.width !== w || this.rt.height !== h || this.rt.samples !== samples) {
@@ -58,6 +72,8 @@ export class FlightPost {
     }
     if (this.mode !== mode) { this.mode = mode; this.mat.defines = mode === 'fxaa' ? { FXAA: '' } : {}; this.mat.needsUpdate = true; }
     this.mat.uniforms.px.value.set(1 / w, 1 / h);
+    this.mat.uniforms.streak.value = streak;
+    if (vp) this.mat.uniforms.vp.value.copy(vp);
     renderer.setRenderTarget(this.rt);
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);
