@@ -18,8 +18,9 @@ const SKY = {
 };
 /** Cloud decks (metres) and their two-tone fills + ink, per time of day (display colours). */
 const CLOUD = {
-  count: 70, layers: [380, 430, 470], size: [70, 150],
-  fadeNear: [60, 160], // m from the camera: clouds fade out before they can smear the lens
+  count: 64, layers: [360, 520], size: [50, 240], aspect: [0.42, 0.8], variants: 6,
+  big: { count: 10, size: [320, 520], y: [470, 510] }, // a few huge banks: the foreground at high patrol
+  fadeNear: [40, 130], // m past the camera→hero distance: nothing floats between the lens and her
   day: ['#ffffff', '#b9cbe6', '#2a3350'], dusk: ['#ffe4d2', '#a58cbc', '#221a40'], night: ['#5d6292', '#2e3060', '#07081a'],
 };
 const linear = (hex) => new THREE.Color().setHex(parseInt(hex.slice(1), 16), THREE.LinearSRGBColorSpace); // as-is (display) values
@@ -37,56 +38,80 @@ void main(){
   c = mix(c, sunCol * 1.2 + 0.25, smoothstep(0.9985, 0.9992, d) * sunK);
   c += vec3(0.55, 0.62, 0.9) * pow(max(d, 0.0), 60.0) * 0.35 * moonK;
   c = mix(c, vec3(0.92, 0.94, 1.0), smoothstep(0.9993, 0.9996, d) * moonK);
+  // night: a sparse field of stars, fading out toward the horizon glow
+  if (moonK > 0.0 && vP.y > 0.05) {
+    vec3 q = normalize(vP) * 180.0, cell = floor(q);
+    float rnd = fract(sin(dot(cell, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+    if (rnd > 0.985) {
+      vec3 f = fract(q) - 0.5 - (vec3(fract(rnd * 17.0), fract(rnd * 31.0), fract(rnd * 47.0)) - 0.5) * 0.5;
+      c += vec3(0.9, 0.92, 1.0) * smoothstep(0.16, 0.0, length(f)) * smoothstep(0.05, 0.35, vP.y) * moonK * (0.5 + 0.5 * fract(rnd * 91.0));
+    }
+  }
   if (vP.y <= 0.0) c = bottom; // at and below the horizon: exactly the horizon colour
   gl_FragColor = vec4(c, 1.0);
 }`;
 
 // Comic cumulus: billboards (corner offsets applied in view space), alpha-tested, two-tone + ink.
 const CLOUD_VS = `attribute vec2 corner; attribute vec2 size; attribute float variant; varying vec2 vUv; varying float vFade; varying float vDist;
-uniform vec2 fadeNear;
+uniform vec2 fadeNear; uniform float heroDist;
 void main(){
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   mv.xy += corner * size;
-  vUv = vec2((corner.x * 0.5 + 0.5 + mod(variant, 2.0)) * 0.5, (corner.y * 0.5 + 0.5 + floor(variant / 2.0)) * 0.5);
+  vUv = vec2((corner.x * 0.5 + 0.5 + mod(variant, 3.0)) / 3.0, (corner.y * 0.5 + 0.5 + floor(variant / 3.0)) * 0.5);
   vDist = -mv.z;
-  vFade = smoothstep(fadeNear.x, fadeNear.y, length(mv.xyz));
+  // the cloud's own centre, not the corner: a whole cloud fades together
+  float d = length((modelViewMatrix * vec4(position, 1.0)).xyz) - max(size.x, size.y) * 0.5;
+  vFade = smoothstep(heroDist + fadeNear.x, heroDist + fadeNear.y, d);
   gl_Position = projectionMatrix * mv;
 }`;
 const CLOUD_FS = `uniform sampler2D map; uniform vec3 lit; uniform vec3 shade; uniform vec3 ink; uniform vec3 fogCol; uniform float fogNear; uniform float fogFar; uniform float alpha;
 varying vec2 vUv; varying float vFade; varying float vDist;
 void main(){
   vec4 t = texture2D(map, vUv);
-  if (t.a < 0.5 || vFade < 0.02) discard;
+  // a soft-but-crisp edge: the shape mask is blurred in the atlas, sharpened here by its own
+  // screen-space slope (anti-aliased at any size, no jagged alpha-test fringe)
+  float w = fwidth(t.a) * 0.75 + 1e-3, a = smoothstep(0.5 - w, 0.5 + w, t.a);
+  if (a < 0.01 || vFade < 0.02) discard;
   vec3 c = mix(mix(shade, lit, t.r), ink, t.b);
   c = mix(c, fogCol, smoothstep(fogNear, fogFar, vDist) * 0.85);
-  gl_FragColor = vec4(c, alpha * vFade);
+  gl_FragColor = vec4(c, a * alpha * vFade);
 }`;
 
 let cloudTex = null;
-/** 2×2 atlas of cumulus shapes. R = lit top, B = ink outline, A = shape. */
+/** 3×2 atlas of comic cumulus shapes. R = lit top, B = ink outline, A = shape (soft edge). */
 function cloudAtlas() {
   if (cloudTex) return cloudTex;
-  const S = 256, c = document.createElement('canvas'); c.width = c.height = S * 2;
+  const S = 256, c = document.createElement('canvas'); c.width = S * 3; c.height = S * 2;
   const g = c.getContext('2d'), r = new RNG(4711);
-  for (let v = 0; v < 4; v++) {
-    const ox = (v % 2) * S, oy = Math.floor(v / 2) * S, bumps = [];
-    const n = 4 + (v % 3);
+  for (let v = 0; v < 6; v++) {
+    const ox = (v % 3) * S, oy = Math.floor(v / 3) * S, bumps = [];
+    // a low row of puffs along a flat base, and (most shapes) a taller tier of 1-3 big heads
+    const n = 3 + (v % 3), base = 178;
     for (let i = 0; i < n; i++) {
-      const x = 50 + (i / (n - 1)) * 156 + r.range(-10, 10), rad = r.range(30, 52) * (1 - Math.abs(i / (n - 1) - 0.5) * 0.7);
-      bumps.push([x, 168 - rad * 0.6 - r.range(0, 22), rad]);
+      const x = 46 + (i / (n - 1)) * 164 + r.range(-8, 8), rad = r.range(24, 38);
+      bumps.push([x, base - rad * 0.55, rad]);
     }
-    const shape = (grow, dy = 0) => {
+    const heads = v === 5 ? 0 : 1 + (v % 3);
+    for (let i = 0; i < heads; i++) {
+      const x = 128 + (i - (heads - 1) / 2) * 56 + r.range(-12, 12), rad = r.range(36, 54) * (heads === 1 ? 1.15 : 1);
+      bumps.push([x, base - 40 - rad * 0.75 - r.range(0, 18), rad]);
+    }
+    const shape = (grow, dx = 0, dy = 0) => {
       g.beginPath();
-      for (const [x, y, rad] of bumps) { g.moveTo(ox + x + rad + grow, oy + y + dy); g.arc(ox + x, oy + y + dy, rad + grow, 0, Math.PI * 2); }
-      g.rect(ox + 44 - grow, oy + 150 - grow + dy, 168 + grow * 2, 24 + grow * 2); // flat base
+      for (const [x, y, rad] of bumps) { g.moveTo(ox + x + dx + rad + grow, oy + y + dy); g.arc(ox + x + dx, oy + y + dy, rad + grow, 0, Math.PI * 2); }
+      g.rect(ox + 40 - grow, oy + base - 22 - grow + dy, 176 + grow * 2, 22 + grow * 2); // flat base
       g.fill();
     };
-    g.fillStyle = 'rgba(0,0,255,1)'; shape(6);         // ink (B), the outline ring
-    g.fillStyle = 'rgba(0,0,0,1)'; shape(0);           // shade fill
-    g.fillStyle = 'rgba(255,0,0,1)'; g.save(); g.beginPath(); // lit top: the shape, shifted down = cut off at the bottom
+    g.save(); g.filter = 'blur(2px)';
+    g.fillStyle = 'rgba(0,0,255,1)'; shape(7);          // ink (B), the outline ring
+    g.restore();
+    g.fillStyle = 'rgba(0,0,0,1)'; shape(0);            // shade fill
+    g.save();
+    g.beginPath();
     for (const [x, y, rad] of bumps) { g.moveTo(ox + x + rad, oy + y); g.arc(ox + x, oy + y, rad, 0, Math.PI * 2); }
-    g.rect(ox + 44, oy + 150, 168, 24); g.clip();
-    for (const [x, y, rad] of bumps) { g.beginPath(); g.arc(ox + x - 6, oy + y - 10, rad * 0.92, 0, Math.PI * 2); g.fill(); }
+    g.rect(ox + 40, oy + base - 22, 176, 22); g.clip();
+    g.fillStyle = 'rgba(255,0,0,1)';                   // lit tops: the bumps shifted up-left
+    for (const [x, y, rad] of bumps) { g.beginPath(); g.arc(ox + x - 7, oy + y - 11, rad * 0.9, 0, Math.PI * 2); g.fill(); }
     g.restore();
   }
   cloudTex = new THREE.CanvasTexture(c);
@@ -120,10 +145,14 @@ export class Sky3D {
 
   addClouds(W, H) {
     const r = new RNG(9157), pos = [], corner = [], size = [], variant = [], idx = [];
-    for (let i = 0; i < CLOUD.count; i++) {
-      const cx = r.range(0, W), cz = r.range(0, H), s = r.range(CLOUD.size[0], CLOUD.size[1]), y = CLOUD.layers[i % CLOUD.layers.length] + r.range(-12, 12);
-      const v = Math.floor(r.range(0, 4)), base = pos.length / 3;
-      for (const [u, w] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { pos.push(cx, y, cz); corner.push(u, w); size.push(s, s * 0.5); variant.push(v); }
+    const B = CLOUD.big;
+    for (let i = 0; i < CLOUD.count + B.count; i++) {
+      const big = i >= CLOUD.count, cx = r.range(0, W), cz = r.range(0, H);
+      // sizes skewed small (many little, few large), each with its own aspect
+      const s = big ? r.range(B.size[0], B.size[1]) : CLOUD.size[0] + (CLOUD.size[1] - CLOUD.size[0]) * Math.pow(r.range(0, 1), 1.8);
+      const y = big ? r.range(B.y[0], B.y[1]) : r.range(CLOUD.layers[0], CLOUD.layers[1]), asp = r.range(CLOUD.aspect[0], CLOUD.aspect[1]);
+      const v = Math.floor(r.range(0, CLOUD.variants)), base = pos.length / 3;
+      for (const [u, w] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { pos.push(cx, y, cz); corner.push(u, w); size.push(s, s * asp); variant.push(v); }
       idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
     }
     const geo = new THREE.BufferGeometry();
@@ -134,9 +163,10 @@ export class Sky3D {
     geo.setIndex(idx);
     this.cloudU = {
       map: { value: cloudAtlas() }, lit: { value: new THREE.Color() }, shade: { value: new THREE.Color() }, ink: { value: new THREE.Color() },
-      fogCol: { value: this.horizon }, fogNear: { value: 600 }, fogFar: { value: 2400 }, alpha: { value: 1 }, fadeNear: { value: new THREE.Vector2(...CLOUD.fadeNear) },
+      fogCol: { value: this.horizon }, fogNear: { value: 600 }, fogFar: { value: 2400 }, alpha: { value: 1 }, fadeNear: { value: new THREE.Vector2(...CLOUD.fadeNear) }, heroDist: { value: 10 },
     };
     this.cloudMat = new THREE.ShaderMaterial({ uniforms: this.cloudU, vertexShader: CLOUD_VS, fragmentShader: CLOUD_FS, transparent: true, depthWrite: false, fog: false });
+    this.cloudMat.extensions = { derivatives: true };
     this.clouds = new THREE.Mesh(geo, this.cloudMat);
     this.clouds.frustumCulled = false;
     this.clouds.renderOrder = 5;
@@ -146,9 +176,9 @@ export class Sky3D {
   /**
    * clock: minutes since midnight; night: 0..1 (the game's own); tint: district colour to lean the
    * fog toward; eye: the camera (sun and dome follow it); patrol 0..1: the raised map view thins
-   * the cloud deck under the camera.
+   * the cloud deck under the camera; heroDist: camera→hero (m), clouds nearer than her (+ a margin) fade.
    */
-  update(clock, night, tint, eye, fogFar, patrol = 0) {
+  update(clock, night, tint, eye, fogFar, patrol = 0, heroDist = 10) {
     const hr = (clock / 60) % 24;
     const near = Math.max(0, 1 - Math.min(Math.abs(hr - 19), Math.abs(hr - 6.5)) / 1.6); // how close to sunset/sunrise
     const dusk = near * (1 - night * 0.6), day = 1 - night;
@@ -181,5 +211,6 @@ export class Sky3D {
     this.cloudU.lit.value.copy(tone(0)); this.cloudU.shade.value.copy(tone(1)); this.cloudU.ink.value.copy(tone(2));
     this.cloudU.fogNear.value = fogFar * 0.5; this.cloudU.fogFar.value = fogFar * 1.6;
     this.cloudU.alpha.value = 1 - 0.6 * patrol;
+    this.cloudU.heroDist.value = heroDist;
   }
 }

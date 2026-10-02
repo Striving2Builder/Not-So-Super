@@ -86,14 +86,15 @@ render hand-off, enter/exit, the boost kick, and the 3D flight button set (`setB
   sets `city3.sky = sky` so the city's haze ends on it. Tables: `SKY`, `CLOUD`.
 - `flightpost3d.js` — whole-frame AA: the scene renders into a target three treats like the canvas
   (tone mapping + sRGB output), then one pass to the canvas with FXAA (+ the boost zoom streak);
-  `quality().fly3dAA` = 'fxaa' | 'msaa' | 'none'.
+  `quality().fly3dAA` = 'fxaa' | 'msaa' | 'none'. flight3d adds dynamic resolution on top of the
+  `fly3dDpr` caps (`LOOK3.dynRes`).
 - `herofly3d.js` — the HeroModel posed from the flight state (hover idle / fist-forward with
   trailing legs / bank / cape), her own pushed-saturation suit materials + rim, inked blob shadow,
   enlarged in the patrol view. Tables: `POSE`, `SUIT`.
 - `flightcam3d.js` — chase camera aimed so she sits at a fixed screen spot (lower third, 3/4 rear),
   offset spring, speed FOV, boost pull-back + kick, street-canyon framing at skim (yaw snaps to the
-  street axis), sphere-cast collision (shoulder swap / lift; no wall-only frames), patrol view with
-  capped pitch. Table: `CAM`.
+  street axis), a level left-third shot at high patrol, sphere-cast collision (shoulder swap / lift;
+  no wall-only frames), patrol view with capped pitch. Table: `CAM`.
 - `heropass3d.js` — her sharp pass: the hero layer rendered into a small target over her screen
   rect at 2× the frame's density (optional MSAA; `quality().fly3dHero`), laid over the frame.
 Other 3D hooks in overworld.js: `view3d.autoSteer` (autopilot routes round towers taller than her)

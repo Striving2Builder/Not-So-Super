@@ -20,13 +20,19 @@ const POSE = {
   arch: 0.35,       // cruise: chest lifted (spine aimed this much toward the sky)
   divePitch: 1.15,  // head-first dive angle (rad)
   legs: 0.95,       // how hard the legs straighten and trail (0..1)
+  boot: 0.72,       // boot (foot bone) scale
   patrolScale: 16,  // in the overhead patrol view she becomes a big inked map figure
   shadow: 0x05060f,
 };
 /** Costume read: saturation, self-light (fraction of albedo), cyan-white rim (only the silhouette). */
-const SUIT = { sat: 1.45, self: 0.32, rim: [0.62, 0.95, 1.0], rimK: 1.3 };
+const SUIT = { sat: 1.45, self: 0.32, rim: [0.62, 0.95, 1.0], rimK: [1.3, 2.4] }; // rimK: open sky / against dark walls
+/** Her hair: the model's fur-textured strands (this UV rect of the atlas) become a flat blonde mass. */
+const HAIR = { uv: [0.0, 0.58, 0.6, 1.0], lit: [0.86, 0.52, 0.1], shade: [0.4, 0.17, 0.035] }; // (linear colours)
+/** Rim strength, shared by her materials (raised in the dark street canyons). */
+export const RIM = { value: SUIT.rimK[0] };
+export const RIM_K = SUIT.rimK;
 /** Ribbon cape: segments, segment length / widths at the shoulders and hem (m, × her scale). */
-const CAPE = { segs: 8, len: 0.18, w: [0.16, 0.29], ink: 0.04, color: 0xd0141f, fold: 0x8a0a14 };
+const CAPE = { segs: 8, len: 0.18, w: [0.1, 0.36], ink: 0.035, tones: ['#7d0912', '#c4121d', '#ec2a2a', '#c4121d', '#7d0912'] }; // w: half-width at shoulders / hem
 
 /** Her own cel material for one source material (not the zones' shared cache: these are pushed). */
 function suitMaterial(src, self, rim = true) {
@@ -35,8 +41,20 @@ function suitMaterial(src, self, rim = true) {
     transparent: !!src.transparent && (src.opacity ?? 1) < 0.99, opacity: src.opacity ?? 1, alphaTest: src.alphaTest || 0, side: src.side ?? THREE.FrontSide,
   });
   m.onBeforeCompile = (sh) => {
+    sh.uniforms.suitRim = RIM;
+    const H = HAIR.uv.map((v) => v.toFixed(3));
     sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float suitRim;')
       .replace('#include <map_fragment>', `#include <map_fragment>
+float hairK = 0.0;
+#ifdef USE_MAP
+{ // the hair strands (orange-brown texels in their atlas rect): one flat blonde, lit by the cel bands
+  vec2 hu = vMapUv; vec3 t = diffuseColor.rgb;
+  float inRect = step(${H[0]}, hu.x) * step(hu.x, ${H[2]}) * step(${H[1]}, hu.y) * step(hu.y, ${H[3]});
+  hairK = inRect * step(t.b * 1.25, t.r) * step(t.b, t.g);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(${HAIR.lit.join(', ')}), hairK);
+}
+#endif
 { float l = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114)); diffuseColor.rgb = max(mix(vec3(l), diffuseColor.rgb, ${SUIT.sat.toFixed(2)}), 0.0); }`)
       // a thin rim on the true silhouette edge, from the upper side (limbs seen end-on would
       // otherwise light up all over)
@@ -44,7 +62,10 @@ function suitMaterial(src, self, rim = true) {
 totalEmissiveRadiance += diffuseColor.rgb * ${self.toFixed(2)};
 ${rim ? `{ float rf = 1.0 - abs(dot(normal, normalize(vViewPosition)));
   float rd = smoothstep(-0.2, 0.5, dot(normal, vec3(0.0, 1.0, 0.0)));
-  totalEmissiveRadiance += vec3(${SUIT.rim.join(', ')}) * ${SUIT.rimK.toFixed(2)} * smoothstep(0.8, 0.9, rf) * rd; }` : ''}`);
+  totalEmissiveRadiance += vec3(${SUIT.rim.join(', ')}) * suitRim * (1.0 - 0.75 * hairK) * smoothstep(0.8, 0.9, rf) * rd; }` : ''}`)
+      // hair: two hard cel tones (shade where the light band is low), no texture detail
+      .replace('#include <opaque_fragment>', `outgoingLight = mix(outgoingLight, mix(vec3(${HAIR.shade.join(', ')}), vec3(${HAIR.lit.join(', ')}), step(0.42, dot(outgoingLight, vec3(0.333)) / 0.85)) * 0.95, hairK);
+#include <opaque_fragment>`);
   };
   m.customProgramCacheKey = () => `suit${self}${rim}`;
   return comic(m, { halftone: 0 });
@@ -70,11 +91,16 @@ class RibbonCape {
       return mesh;
     };
     this.ink = strip(new THREE.MeshBasicMaterial({ color: 0x0b0b16, side: THREE.DoubleSide }));
-    // flat comic red, shading from one edge to the other (vertex colours) so it reads as a curved sheet
-    this.cloth = strip(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
-    const col = new Float32Array(n * 2 * 3), a = new THREE.Color(CAPE.color), b = new THREE.Color(CAPE.fold);
-    for (let i = 0; i < n * 2; i++) { const c = i % 2 ? b : a; col.set([c.r, c.g, c.b], i * 3); }
-    this.cloth.geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    // comic red in hard cel bands across its width (dark folds at the edges, a lit crest), so it
+    // reads as a curved sheet from behind, not a flat slab
+    const c = document.createElement('canvas'); c.width = 64; c.height = 4;
+    const g = c.getContext('2d'), bw = 64 / CAPE.tones.length;
+    CAPE.tones.forEach((t, i) => { g.fillStyle = t; g.fillRect(Math.round(i * bw), 0, Math.ceil(bw), 4); });
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    this.cloth = strip(new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    const uv = new Float32Array(n * 2 * 2);
+    for (let i = 0; i < n; i++) uv.set([0, i / (n - 1), 1, i / (n - 1)], i * 4);
+    this.cloth.geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     this._t = new THREE.Vector3(); this._a = new THREE.Vector3();
   }
 
@@ -100,7 +126,7 @@ class RibbonCape {
     for (const [mesh, extra] of [[this.ink, CAPE.ink], [this.cloth, 0]]) {
       const pos = mesh.geometry.attributes.position;
       for (let i = 0; i < n; i++) {
-        const w = ((CAPE.w[0] + (CAPE.w[1] - CAPE.w[0]) * (i / (n - 1))) * POSE.scale + extra) * size, q = this.p[i];
+        const f = i / (n - 1), w = ((CAPE.w[0] + (CAPE.w[1] - CAPE.w[0]) * Math.sqrt(f)) * POSE.scale + extra) * size, q = this.p[i]; // (flares fast, then hangs wide)
         // the ink strip also runs a little past the hem
         const tail = extra && i === n - 1 ? this._a.subVectors(q, this.p[i - 1]).normalize().multiplyScalar(extra * size) : null;
         const x = q.x + (tail ? tail.x : 0), y = q.y + (tail ? tail.y : 0), z = q.z + (tail ? tail.z : 0);
@@ -135,7 +161,7 @@ export class FlyHero3D {
     this.cape = new RibbonCape(scene);
     this.cape.visible = false;
     this._f = new THREE.Vector3(); this._s = new THREE.Vector3(); this._o = new THREE.Vector3(); this._q = new THREE.Quaternion(); this._d = new THREE.Vector3();
-    this._l = new THREE.Vector3(); this._r = new THREE.Vector3();
+    this._l = new THREE.Vector3(); this._r = new THREE.Vector3(); this._mid = new THREE.Vector3(); this._in = new THREE.Vector3();
   }
 
   ensure() {
@@ -187,6 +213,7 @@ export class FlyHero3D {
     if (h.perch || hover) m.play('idle', { fade: 0.3 });
     else m.play('fly', { fade: 0.3 });
     m.update(dt);
+    for (const f of ['LeftFoot', 'RightFoot']) m.bones[f]?.scale.setScalar(POSE.boot); // (the boots read oversized from behind; after the clip, which keys scale)
     const fly = h.perch || hover ? 0 : fk;
     if (fly > 0) this.flyPose(fly, this.boostK, t);
     // cape: chain from between her shoulders, streaming back along her body
@@ -220,10 +247,16 @@ export class FlyHero3D {
     // chest up (an arch through the spine) at cruise; flat and streamlined at boost
     const arch = POSE.arch * (1 - bk);
     if (arch > 0.01) m.aim('Spine1', 'Spine2', this._d.copy(fwd).addScaledVector(sky, arch).normalize(), 0.6 * k);
-    for (const [L, sgn] of [['Left', 1], ['Right', -1]]) {
-      const d = this._d.copy(fwd).negate().addScaledVector(sky, -0.12 * (1 - bk) + 0.015 * sgn * Math.sin(t * 3) * (1 - bk)).addScaledVector(side, 0.025 * sgn * (1 - bk)).normalize();
-      m.aim(`${L}UpLeg`, `${L}Leg`, d, k * POSE.legs);
-      m.aim(`${L}Leg`, `${L}Foot`, d, k * POSE.legs);
+    // legs: together in one streamlined line behind her, knees softly bent (feet lift toward her back),
+    // feet converging on her centre line (seen from behind: one tapering shape, not a frog kick)
+    const hl = m.bones.LeftUpLeg.getWorldPosition(this._l), hr = m.bones.RightUpLeg.getWorldPosition(this._r);
+    const mid = this._mid.addVectors(hl, hr).multiplyScalar(0.5);
+    for (const [L, hip] of [['Left', hl], ['Right', hr]]) {
+      const inward = this._in.subVectors(mid, hip).normalize();
+      const thigh = this._d.copy(fwd).negate().addScaledVector(sky, -0.06).addScaledVector(inward, 0.12).normalize();
+      m.aim(`${L}UpLeg`, `${L}Leg`, thigh, k * POSE.legs);
+      const shin = this._d.copy(fwd).negate().addScaledVector(sky, 0.09 * (1 - bk)).addScaledVector(inward, 0.06 + 0.02 * Math.sin(t * 3)).normalize();
+      m.aim(`${L}Leg`, `${L}Foot`, shin, k * POSE.legs);
     }
   }
 }
