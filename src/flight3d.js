@@ -295,7 +295,8 @@ export class Flight3D {
     RIM.value = lerp(RIM_K[0], RIM_K[1], this.cam.canyonK); // a brighter rim against the dark canyon walls
     this.fill.position.copy(this.cam.cam.position); this.fill.target.position.copy(this.hero.group.position);
     const fogFar = LOOK3.fog[band] || 1600;
-    this.sky.update(clock, night, D?.map, this.cam.cam.position, fogFar, this.cam.patrolK, this.cam.cam.position.distanceTo(this.hero.group.position));
+    _v.copy(this.hero.group.position).project(this.cam.cam); _uv.set(_v.x, _v.y);
+    this.sky.update(clock, night, D?.map, this.cam.cam.position, fogFar, this.cam.patrolK, this.cam.cam.position.distanceTo(this.hero.group.position), Math.max(this.cam.highK || 0, this.cam.patrolK), _uv);
     this.city3.update(this.cam.cam, { far: fogFar, near: Math.min(700, fogFar * 0.5), night, frame: this.frame });
     this.syncBeams(ow.t);
     this.fx3.update(dt, this.hero, h, frac, boosting, this.cam.cam, ow.fx.rings.length);

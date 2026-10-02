@@ -19,7 +19,7 @@ const SKY = {
 /** Cloud decks (metres) and their two-tone fills + ink, per time of day (display colours). */
 const CLOUD = {
   count: 64, layers: [360, 520], size: [50, 240], aspect: [0.42, 0.8], variants: 6,
-  big: { count: 10, size: [320, 520], y: [470, 510] }, // a few huge banks: the foreground at high patrol
+  big: { count: 10, size: [320, 520], y: [400, 440] }, // a few huge banks: the foreground at high patrol
   fadeNear: [40, 130], // m past the camera→hero distance: nothing floats between the lens and her
   day: ['#ffffff', '#b9cbe6', '#2a3350'], dusk: ['#ffe4d2', '#a58cbc', '#221a40'], night: ['#5d6292', '#2e3060', '#07081a'],
 };
@@ -52,8 +52,9 @@ void main(){
 }`;
 
 // Comic cumulus: billboards (corner offsets applied in view space), alpha-tested, two-tone + ink.
+const BIG = '300.0'; // world size above which a cloud is one of the huge banks
 const CLOUD_VS = `attribute vec2 corner; attribute vec2 size; attribute float variant; varying vec2 vUv; varying float vFade; varying float vDist;
-uniform vec2 fadeNear; uniform float heroDist;
+uniform vec2 fadeNear; uniform float heroDist; uniform float bankK; uniform vec2 heroNdc;
 void main(){
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   mv.xy += corner * size;
@@ -62,6 +63,13 @@ void main(){
   // the cloud's own centre, not the corner: a whole cloud fades together
   float d = length((modelViewMatrix * vec4(position, 1.0)).xyz) - max(size.x, size.y) * 0.5;
   vFade = smoothstep(heroDist + fadeNear.x, heroDist + fadeNear.y, d);
+  // the huge banks only exist for the high-patrol shot, seen from above: from below or edge-on
+  // their ink outline would scrawl across the whole sky
+  // nothing sits on her (the lower-left third at high patrol): fade clouds whose centre lands near
+  // her, and keep the banks off to her right
+  vec4 cc = projectionMatrix * modelViewMatrix * vec4(position, 1.0); vec2 n = cc.xy / max(cc.w, 1e-3);
+  vFade *= mix(1.0, smoothstep(0.35, 0.7, length((n - heroNdc) * vec2(0.8, 1.0))), bankK);
+  if (size.x > ${BIG}) vFade *= smoothstep(0.6, 0.9, bankK) * smoothstep(40.0, 90.0, cameraPosition.y - position.y) * smoothstep(0.15, 0.55, n.x - heroNdc.x);
   gl_Position = projectionMatrix * mv;
 }`;
 const CLOUD_FS = `uniform sampler2D map; uniform vec3 lit; uniform vec3 shade; uniform vec3 ink; uniform vec3 fogCol; uniform float fogNear; uniform float fogFar; uniform float alpha;
@@ -163,7 +171,7 @@ export class Sky3D {
     geo.setIndex(idx);
     this.cloudU = {
       map: { value: cloudAtlas() }, lit: { value: new THREE.Color() }, shade: { value: new THREE.Color() }, ink: { value: new THREE.Color() },
-      fogCol: { value: this.horizon }, fogNear: { value: 600 }, fogFar: { value: 2400 }, alpha: { value: 1 }, fadeNear: { value: new THREE.Vector2(...CLOUD.fadeNear) }, heroDist: { value: 10 },
+      fogCol: { value: this.horizon }, fogNear: { value: 600 }, fogFar: { value: 2400 }, alpha: { value: 1 }, fadeNear: { value: new THREE.Vector2(...CLOUD.fadeNear) }, heroDist: { value: 10 }, bankK: { value: 0 }, heroNdc: { value: new THREE.Vector2() },
     };
     this.cloudMat = new THREE.ShaderMaterial({ uniforms: this.cloudU, vertexShader: CLOUD_VS, fragmentShader: CLOUD_FS, transparent: true, depthWrite: false, fog: false });
     this.cloudMat.extensions = { derivatives: true };
@@ -176,9 +184,10 @@ export class Sky3D {
   /**
    * clock: minutes since midnight; night: 0..1 (the game's own); tint: district colour to lean the
    * fog toward; eye: the camera (sun and dome follow it); patrol 0..1: the raised map view thins
-   * the cloud deck under the camera; heroDist: camera→hero (m), clouds nearer than her (+ a margin) fade.
+   * the cloud deck under the camera; heroDist: camera→hero (m), clouds nearer than her (+ a margin) fade;
+   * bankK 0..1: the high-patrol shot (shows the huge banks, clears clouds off her at heroNdc).
    */
-  update(clock, night, tint, eye, fogFar, patrol = 0, heroDist = 10) {
+  update(clock, night, tint, eye, fogFar, patrol = 0, heroDist = 10, bankK = 0, heroNdc = null) {
     const hr = (clock / 60) % 24;
     const near = Math.max(0, 1 - Math.min(Math.abs(hr - 19), Math.abs(hr - 6.5)) / 1.6); // how close to sunset/sunrise
     const dusk = near * (1 - night * 0.6), day = 1 - night;
@@ -212,5 +221,7 @@ export class Sky3D {
     this.cloudU.fogNear.value = fogFar * 0.5; this.cloudU.fogFar.value = fogFar * 1.6;
     this.cloudU.alpha.value = 1 - 0.6 * patrol;
     this.cloudU.heroDist.value = heroDist;
+    this.cloudU.bankK.value = bankK;
+    if (heroNdc) this.cloudU.heroNdc.value.copy(heroNdc);
   }
 }

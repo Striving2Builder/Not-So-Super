@@ -16,7 +16,7 @@ const CAM = {
   canyon: { height: 2.4, dist: 3.4, at: [0.47, 0.62], fovUp: 4, snap: 0.62 }, // skim band: lower, along the street (snap ≈ 35°)
   // high patrol, flying: level with her, she sits on the left third against the sky,
   // the city's far edge down in the bottom third (the Superman-over-the-city shot)
-  high: { dist: 4.0, height: 0.15, side: 1.4, at: [0.36, 0.5], from: 760, to: 1000 }, // from/to: altitude (world units) it blends in over
+  high: { dist: 3.3, height: 0.15, side: 1.4, at: [0.36, 0.5], from: 760, to: 1000 }, // from/to: altitude (world units) it blends in over
   patrol: { dist: 100, height: 85, side: 60, fov: 60, at: [0.36, 0.66] }, // ≈ 30° down at the city, from her 3/4 rear (her side reads): horizon along the top
   yawRate: 2.6,  // how fast the camera swings round behind her heading (1/s)
   orbitBack: 0.6, // drag-orbit eases back behind her at this rate while she's moving (1/s)
