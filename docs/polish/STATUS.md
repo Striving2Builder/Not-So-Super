@@ -1,7 +1,8 @@
 # Polish pass: status and handoff
 
-Read this first when picking the polish pass up in a new thread. Last updated 2026-10-02, during
-flight/city round 6. The companion docs are [BRIEF.md](BRIEF.md) (the builder brief),
+Read this first when picking the polish pass up in a new thread. Last updated 2026-10-02, after
+flight/city round 6 was merged and blind-tested (the r7fly critic). No builders are running: the
+next step is to start round 7 from "Next round" below. The companion docs are [BRIEF.md](BRIEF.md) (the builder brief),
 [ARCHITECTURE.md](ARCHITECTURE.md) (module map and target layout) and [ASSETS.md](ASSETS.md) (incoming art).
 
 ## How the loop runs
@@ -45,7 +46,7 @@ flight/city round 6. The companion docs are [BRIEF.md](BRIEF.md) (the builder br
 ## Scores (blind AAA critic, 1–10; "identified" = critic picked the AAA image)
 | Area | Latest | Notes |
 |---|---|---|
-| 3D flight + city | **3** (r6fly, 8/8 identified at 98–99%) | Earlier rounds scored 3–4. Top tell: the hero looks pixelated. 3D beats 2D in blind tests 6/6. |
+| 3D flight + city | **3.5** (r7fly, 8/8 identified at 100%) | History: 3–4, then 3 (r6fly, "pixelated hero"), then 3.5 after the crisp-hero fix. Hero now "cleaner but not clean". The top tell is now the blurry, upscaled city. 3D beats 2D in blind tests 6/6. |
 | Brawler | round 3 merged, not re-critiqued | Painted façades + bug fixes |
 | Investigation (day) | round 3 merged, not re-critiqued | Painted rooms; the flat code-drawn witness is the weakest part |
 | Premade 3D, self-built 3D, nightlife, night case | ~2.5–3, paused | 3D perf regression and Triangle Club draw-call doubling not fixed |
@@ -53,13 +54,14 @@ flight/city round 6. The companion docs are [BRIEF.md](BRIEF.md) (the builder br
 ## Builds
 - `testdrive-2026-10-02`: the first test build (3D flight default, brawler round 3, billboard/asylum beats).
 - `testdrive-2026-10-02b` (15d95a7): adds flight 5/5b, city round 5 and investigation round 3.
+- `testdrive-2026-10-02c` (dc6e56c): adds the crisp hero, city round 6 and flight round 6. **This is the latest build;** the user should phone-test it.
 
-## In flight right now (round 6)
-- **Flight builder** (flight3d, flightcam3d, herofly3d, heropass3d, flightfx3d, flightpost3d, sky3d):
-  - hero crispness (top: why does heropass3d output look pixelated? Density vs dynRes, quad filtering, texture, outline)
-  - a flowing cape instead of the flat kite seen at high patrol
-  - lit clouds
-  - a safe zone away from the caption and joystick
+## Round 6 (done, merged)
+- **Flight round 6: done and merged** (dc6e56c; files flight3d, flightcam3d, flightpost3d, herofly3d, heropass3d, sky3d, settings.js).
+  - **Root cause of the "pixelated hero":** her sharp pass was composited onto a low-DPR canvas (Balanced 1.0, canyons 0.75, dynRes down to 0.8) that the browser upscaled.
+  - **Now:** the canvas stays at a fixed density (new key `fly3dOut`: High 3, Balanced 1.5, Battery saver 1.5). Only the scene renders smaller (`fly3dDpr` × dynRes, floor 0.65) into an offscreen target, then FXAA and a bilinear upscale. The hero pass renders at canvas density with MSAA (`fly3dHero` High [4,1], Balanced [2,1]), tone-mapped in-pass.
+  - **Also:** a cape with an arched cross-section and an S-wave around a straight spine line; lit and mirrored cloud puffs with constant ~2 px ink; a central safe zone for the hero (cruise (0.5, 0.58), high (0.52, 0.56), patrol (0.55, 0.58)).
+  - **Perf:** 3D/2D is about 1.01–1.11, down from 1.4–1.6; the fixed-density canvas costs fill. Waypoint 7.3 s vs 8.6 s.
 - **City round 6: done and merged** (ec553af; files city3d, buildings3d, blocks3d, skyline3d, skycard3d, ground3d, river3d, city.js, cityart.js).
   - crisp near walls (per-axis magnification), row-averaged far windows (no shimmer), a lit avenue every 4th street with dim side streets
   - the sea fades into the haze; a horizon glow band sits in the skycard; key light ×1.4 by day and dusk; contact rims under low-rise
@@ -68,12 +70,37 @@ flight/city round 6. The companion docs are [BRIEF.md](BRIEF.md) (the builder br
   - its notes for flight: the post pass's speed streak softens the nearest wall when skimming; the horizon glow could move into sky3d
   - its next ideas: painted daytime sign boards for casino/neon, taper the river at the bay, setback-tier collision
 
-If a new thread starts before they report, check for their worktree branches
-(`git branch --list "worktree-*"`; `git log phase-2..<branch>`). Merge what's committed and
-re-brief fresh builders from this file for anything unfinished.
+All worktree branches from round 6 are merged. A new thread should spawn **fresh** builders
+(old agents can't be resumed across threads) and give each this file plus BRIEF.md.
+
+## Next round (7): briefs from the r7fly critic, ranked
+**Harness caveat first:** SwiftShader is slow, so dynamic resolution sits at its 0.65× floor in every
+shot, and the critic sees a much blurrier city than a phone would. Before judging blur, pin dynRes in
+the harness (e.g. a `?dynres=off` or fixed-scale URL hook used by shoot.js/fly3d.js) so shots show
+what a phone shows. Keep the dynRes logic for real devices.
+
+1. **Background resolution and AA (flight builder, flightpost3d):** the city reads as "blur, not depth"; near and mid buildings are as soft as far ones, and both soft and jaggy.
+   - Upscale with a sharpening filter (CAS-style) instead of plain bilinear, and/or raise the scene floor on Balanced.
+   - Building edges must stay crisp at every distance.
+2. **Real aerial perspective (city builder):** blend colour toward the sky or horizon *and* lower saturation and contrast with depth, over about 40–70% of draw distance, while edges stay sharp.
+   - Fix the near-black ground slab (pair 1) and the yellow streak on a near wall (pair 3).
+3. **Cape (flight):** still a flat, rigid, stripe-banded trapezoid that dominates her silhouette; the body is ~30% of her on-screen area.
+   - Use a tapered mesh of 3+ segments with folds and a two-tone cel ramp from real normals, not fixed stripes.
+   - Narrow it at the shoulders and cap its length at ~1.2× body length.
+   - Collapse its width when seen side-on.
+4. **Hero readability (flight):** ~1.3× larger on screen in cruise and skim. Add a rim or inner light on the side away from the camera. Give the hair 2–3 cel tones with a darker underside so the head reads as a solid shape.
+5. **Clouds and speed lines (flight):**
+   - Cloud fills must be as crisp as their ink.
+   - A hollow, outline-only cloud lying across the city (pair 8) is a fill/sync bug.
+   - The screen-wide hard white boost lines read as glitches: shorten and taper them, keep them out of the central ~60%, and fade them in at the edges only.
+6. **City hierarchy (city):**
+   - rooftop clutter (water towers, AC units, antennas, setbacks)
+   - distinct landmark tops per district
+   - dark street lanes with car-light streaks
+   - one glowing district while the rest recede
 
 ## Backlog (rough priority)
-1. Next flight/city rounds from the critic list: the hero render, near walls, altitude noise, lighting, clouds.
+1. Flight/city round 7 (above).
 2. Director: the district caption can lag the district name. A caption clipped at the left edge in
    shots is just its slide-in/out animation caught mid-way; that's by design, not a bug.
 3. Brawler round 4:
