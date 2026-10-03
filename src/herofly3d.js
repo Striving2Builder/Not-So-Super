@@ -1,11 +1,9 @@
 // Supergirl in the three.js flight slice: the real rigged HeroModel (crisp at any distance, cel +
-// ink like the 3D zones), posed from the flight state in three clear silhouettes: CRUISE (one fist
-// forward, chest up, legs together trailing), BOOST (both fists forward, legs locked together) and
-// DIVE (head-first, both fists down); upright hover only near a standstill; rolling into turns.
-// Her cape (capefly3d.js) is a short tapered sheet with folds that streams behind her and ripples
-// harder with speed. Her costume gets its own materials:
-// pushed saturation, a little self-light and a cyan-white rim, so her red reads against a red
-// dusk sky and a night city alike; plus an inked contact shadow on the street or roof below her.
+// ink like the 3D zones), posed from the flight state by heropose3d.js (cruise / boost / dive / slow
+// glide / hover, banking and climbing). Her cape (capefly3d.js) is a short tapered sheet with folds
+// that streams behind her and ripples harder with speed. Her costume uses her own comic materials
+// (herolook3d.js: pushed saturation, self-light, a cyan-white rim, so her red reads against a red
+// dusk sky and a night city alike); plus an inked contact shadow on the street or roof below her.
 import * as THREE from 'three';
 import { HeroModel, heroReady } from './hero3d.js';
 import { inkCharacter } from './look3d.js';

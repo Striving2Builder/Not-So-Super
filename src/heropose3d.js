@@ -48,7 +48,7 @@ export class FlightPose {
     this.lastZ = null; this.vz = 0;
     // body axes (world) and scratch, reused every frame
     this.f = new THREE.Vector3(); this.s = new THREE.Vector3(); this.l = new THREE.Vector3(); this.dn = new THREE.Vector3(0, -1, 0);
-    this.v = [0, 1, 2, 3, 4].map(() => new THREE.Vector3());
+    this.v = [0, 1, 2, 3, 4, 5].map(() => new THREE.Vector3());
     this.hl = new THREE.Vector3(); this.hr = new THREE.Vector3(); this.mid = new THREE.Vector3(); this.inw = new THREE.Vector3();
   }
 
@@ -140,7 +140,7 @@ export class FlightPose {
         [bk, D(4, 1, 0.04, sg * 0.03 + into * 0.15)],
       ]);
       const terms = [];
-      if (up) terms.push([cr + bk, up.clone()]);
+      if (up) terms.push([cr + bk, V[5].copy(up)]);
       terms.push([dv, D(3, -1, 0.15, sg * 0.28)]);
       terms.push([sl, lead ? D(4, 0.6, -0.7, -0.22) : D(4, 0.05, -0.9, 0.5)]);
       const u = this.mix(V[2], terms);

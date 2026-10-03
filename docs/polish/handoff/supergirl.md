@@ -27,5 +27,12 @@ and re-test the sprites (keep the heroMaterial swap in HeroSprite's constructor)
   atlas repainted (flat blue/red/gold blocking, clean skin + blush, comic eyes/brows/lips, blue
   irises, lock swatch). 14.3k tris, 2.35 MB (was 17k, 3.28 MB).
 
+- Merged phase-2 (774c006+ stability: HeroSprite via offscreen3d). `dressHero` / `inkHull` in
+  herolook3d used by herofly3d, special3d (2-line hook: her zone model gets the same look) and
+  HeroSprite (cel + inner ink hull sized per sprite via LOOK.res/dpr swap around renderToCanvas).
+- herofly.js (2D flight sprite) uses FlightPose too (attitude + bone blends), not superFly.
+- Hair shell has smoothed custom normals (soft=30) so the cel bands are big shapes.
+
 ## In progress / next
-- Smoothed custom normals on the hair shell (cel bands as big shapes); check 2D sprites; A/B fps.
+- fps A/B running: `shots/supergirl/ab.sh` (base = git archive of phase-2 in shots/supergirl/base).
+- Harness shots sg2 (flying + brawler street) after the A/B.

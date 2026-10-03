@@ -125,7 +125,7 @@ function sprites(y0) {
   states.forEach((s, i) => {
     g2.setTransform(1, 0, 0, 1, 0, 0); g2.fillStyle = '#6a7f9a'; g2.fillRect(0, 0, c2.width, c2.height);
     g2.scale(DPR, DPR);
-    fhr.last = null;
+    fhr.last = null; fhr.pose = new fhr.pose.constructor();
     fhr.draw(g2, { x: 0, y: 0, z: 300, lean: 0, perch: null, ...s }, 150, 150, 0.9, { t: 1 + i, diving: false, rich: true, night: 0, dpr: DPR, max: 512 });
     sg.drawImage(c2, 90 + i * 220, y0, 210, 210);
   });
