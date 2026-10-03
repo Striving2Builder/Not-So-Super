@@ -25,7 +25,7 @@ export const FLY_POSE = {
   climb: 0.85,                // body pitch per rad of climb angle (atan(vz / speed))
   climbMax: 0.6,
   divePitch: 1.15,
-  chin: [2.2, 1.1, 0.6, 1.4], // head lift toward her back (tan of the crown's angle): cruise / boost / dive / slow
+  chin: [1.6, 0.9, 0.5, 1.2], // head lift toward her back (tan of the crown's angle): cruise / boost / dive / slow
   arch: [0.35, 0.05, 0, 0.55],  // chest lift: cruise / boost / dive / slow
   bob: [0.05, 0.015],         // float bob (m): hover / flying
 };

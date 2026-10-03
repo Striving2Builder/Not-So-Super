@@ -8,7 +8,8 @@
 // dusk sky and a night city alike; plus an inked contact shadow on the street or roof below her.
 import * as THREE from 'three';
 import { HeroModel, heroReady } from './hero3d.js';
-import { inkCharacter, comic, gradMap } from './look3d.js';
+import { inkCharacter } from './look3d.js';
+import { heroMaterial, hullGeometry, SUIT } from './herolook3d.js';
 import { HERO_LAYER } from './heropass3d.js';
 import { M } from './city3d.js';
 import { FlightCape, CAPE_LIGHT } from './capefly3d.js';
@@ -16,20 +17,10 @@ import { FlightPose } from './heropose3d.js';
 
 const POSE = {
   scale: 1.5,       // model metres → scene metres (heroic: she's the star of the shot)
-  bankK: 0.85,      // roll per unit of the flight model's bank (≈50° at a hard turn: her side shows)
-  flyFrom: 14, flyFull: 70, // speed (world units/s) where her horizontal flying pose starts / is full
-  slowPitch: 0.45,  // head-up tilt (rad) while flying slowly
-  arch: 0.35,       // cruise: chest lifted (spine aimed this much toward the sky)
-  divePitch: 1.15,  // head-first dive angle (rad)
-  legs: 0.95,       // how hard the legs straighten and trail (0..1)
   boot: 0.72,       // boot (foot bone) scale
   patrolScale: 18,  // in the overhead patrol view she becomes a big inked map figure
   shadow: 0x05060f,
 };
-/** Costume read: saturation, self-light (fraction of albedo), cyan-white rim (only the silhouette). */
-const SUIT = { sat: 1.45, self: 0.32, rim: [0.62, 0.95, 1.0], rimK: [1.3, 2.4], rimEdge: [0.82, 0.92] }; // rimK: open sky / against dark walls; rimEdge: its fresnel band
-/** Her hair: the model's fur-textured strands (this UV rect of the atlas) become a flat blonde mass. */
-const HAIR = { uv: [0.0, 0.58, 0.6, 1.0], lit: [0.92, 0.66, 0.2], mid: [0.72, 0.42, 0.08], shade: [0.36, 0.16, 0.035], cut: [0.3, 0.55] }; // (linear colours; cut: light-band thresholds mid / lit)
 /**
  * Her silhouette keyline (CSS px, drawn by her sharp pass round body + cape as one shape): ink width
  * in open sky → against a dark or busy background (night, the street canyons, the map below the
@@ -39,51 +30,7 @@ const LINE = { ink: [1.3, 2.3], halo: 1.4 };
 /** Rim strength, shared by her materials (raised in the dark street canyons). */
 export const RIM = { value: SUIT.rimK[0] };
 export const RIM_K = SUIT.rimK;
-/** Her own cel material for one source material (not the zones' shared cache: these are pushed). */
-function suitMaterial(src, self, rim = true) {
-  const m = new THREE.MeshToonMaterial({
-    color: src.color ? src.color.clone() : 0xffffff, map: src.map || null, gradientMap: gradMap(3),
-    transparent: !!src.transparent && (src.opacity ?? 1) < 0.99, opacity: src.opacity ?? 1, alphaTest: src.alphaTest || 0, side: src.side ?? THREE.FrontSide,
-  });
-  m.onBeforeCompile = (sh) => {
-    sh.uniforms.suitRim = RIM; sh.uniforms.suitKey = CAPE_LIGHT.key;
-    const H = HAIR.uv.map((v) => v.toFixed(3));
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float suitRim; uniform vec3 suitKey;')
-      .replace('#include <map_fragment>', `#include <map_fragment>
-float hairK = 0.0;
-#ifdef USE_MAP
-{ // the hair strands (orange-brown texels in their atlas rect): one flat blonde, lit by the cel bands
-  vec2 hu = vMapUv; vec3 t = diffuseColor.rgb;
-  float inRect = step(${H[0]}, hu.x) * step(hu.x, ${H[2]}) * step(${H[1]}, hu.y) * step(hu.y, ${H[3]});
-  hairK = inRect * step(t.b * 1.25, t.r) * step(t.b, t.g);
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(${HAIR.lit.join(', ')}), hairK);
-}
-#endif
-{ float l = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114)); diffuseColor.rgb = max(mix(vec3(l), diffuseColor.rgb, ${SUIT.sat.toFixed(2)}), 0.0); }`)
-      // a back-light rim on the true silhouette (her outline separates from the city behind her):
-      // strongest on the edges turned away from the key light, and along her top
-      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-totalEmissiveRadiance += diffuseColor.rgb * ${self.toFixed(2)};
-${rim ? `{ float rf = 1.0 - abs(dot(normal, normalize(vViewPosition)));
-  vec2 kd = (viewMatrix * vec4(suitKey, 0.0)).xy; kd = kd / max(1e-3, length(kd));
-  vec2 ns = normal.xy / max(1e-3, length(normal.xy));
-  float rd = max(smoothstep(-0.2, 0.5, normal.y), smoothstep(-0.2, 0.6, -dot(ns, kd)));
-  totalEmissiveRadiance += vec3(${SUIT.rim.join(', ')}) * suitRim * (1.0 - 0.75 * hairK) * smoothstep(${SUIT.rimEdge.join(', ')}, rf) * rd; }` : ''}`)
-      // hair: three hard cel tones from the light band, and the underside (facing the ground) always
-      // in the darkest, so her head reads as one solid shape rather than strands
-      .replace('#include <opaque_fragment>', `{ float hl = dot(outgoingLight, vec3(0.333)) / 0.85;
-  float under = smoothstep(-0.05, -0.35, (vec4(normal, 0.0) * viewMatrix).y);
-  float tone = step(${HAIR.cut[0]}, hl) + step(${HAIR.cut[1]}, hl);
-  tone = min(tone, 2.0 * (1.0 - under));
-  vec3 hc = tone > 1.5 ? vec3(${HAIR.lit.join(', ')}) : tone > 0.5 ? vec3(${HAIR.mid.join(', ')}) : vec3(${HAIR.shade.join(', ')});
-  outgoingLight = mix(outgoingLight, hc, hairK); }
-#include <opaque_fragment>`);
-  };
-  m.customProgramCacheKey = () => `suit${self}${rim}`;
-  return comic(m, { halftone: 0 });
-}
-
+const suitMaterial = (src, self) => heroMaterial(src, { self, rim: RIM, key: CAPE_LIGHT.key });
 
 export class FlyHero3D {
   /** Her bounding radius about the pivot (m, before the patrol enlargement): her reach to the punching fist; the short cape stays inside it. Sizes her sharp pass. */
@@ -125,6 +72,7 @@ export class FlyHero3D {
       o.material = suitMaterial(o.material, SUIT.self);
     });
     inkCharacter(this.model.root, { skip: [cloth] }); // outlines (materials are already comic)
+    this.model.root.traverse((o) => { if (o.userData.ink && o.isSkinnedMesh) o.geometry = hullGeometry(o.geometry); }); // (no ink on eyeballs / teeth)
     this.model.root.position.y = -0.9 * POSE.scale; // her body's middle on the pivot
     this.pivot.add(this.model.root);
     this.model.play('fly', { fade: 0 });

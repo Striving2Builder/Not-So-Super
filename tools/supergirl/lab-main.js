@@ -31,12 +31,14 @@ const CAMS = [
   { id: 'front', az: 150, el: 10, d: 7.5 },
   { id: 'below', az: 30, el: -28, d: 7.5 },
   { id: 'head', az: 35, el: 12, d: 2.6, head: true },
-  { id: 'face', az: 160, el: 8, d: 2.4, head: true },
+  { id: 'face', az: 160, el: 8, d: 1.7, head: true },
+  { id: 'nape', az: 15, el: 35, d: 1.7, head: true },
 ];
 
 const sheet = document.getElementById('sheet');
 const only = Q.get('only');
-const flyRows = only === 'sprite' ? [] : STATES;
+const rowsQ = Q.get('rows'); // e.g. rows=hover,cruise
+const flyRows = only === 'sprite' ? [] : rowsQ ? STATES.filter((s) => rowsQ.split(',').includes(s.id)) : STATES;
 const SPR_H = only === 'fly' ? 0 : 340;
 sheet.width = (CAMS.length * T + 90) * DPR; sheet.height = (flyRows.length * T + SPR_H + 20) * DPR;
 sheet.style.width = sheet.width / DPR + 'px';
@@ -83,7 +85,7 @@ async function main() {
       fh.update(h, dt, 10 + t, !!S.dive, 0, 0, !!S.boost);
     }
     first = false;
-    if (fh.model) fh.pivot.traverse((o) => o.layers.set(HERO_LAYER));
+    if (fh.model) fh.pivot.traverse((o) => { o.layers.set(HERO_LAYER); if (Q.has('noink') && o.userData.ink) o.visible = false; });
     const P = fh.group.position.clone();
     if (r === 0) { const B = fh.model.bones, g = (n) => B[n].getWorldPosition(new THREE.Vector3()); const fw = new THREE.Vector3(1, 0, 0);
       const ang = (a, b) => +(Math.acos(g(b).sub(g(a)).normalize().dot(fw)) * 57.3).toFixed(1), up = (a, b) => +g(b).sub(g(a)).normalize().y.toFixed(2);

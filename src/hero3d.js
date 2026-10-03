@@ -8,6 +8,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { Cape, stripModelCape } from './cape.js';
 import { settings, HERO_SKINS } from './settings.js';
+import { heroMaterial } from './herolook3d.js';
 
 // Her costume: the pause-menu choice, or ?hero=classic|ponytail (same rig and atlas layout, so the
 // clips, the cape and the flight shaders work on every variant).
@@ -186,6 +187,9 @@ export class HeroSprite {
     rim.position.set(-3, 2, -4);
     this.scene.add(rim);
     this.hero = new HeroModel();
+    // her comic surface (cel bands, rim, blonde hair mass) like the 3D flight view, not the raw PBR
+    const look = { self: 0.18, rim: { value: 1.1 }, key: { value: key.position.clone().normalize() }, toneMapped: false };
+    this.hero.root.traverse((o) => { if (o.isMesh && o.material && !Array.isArray(o.material) && !o.material.isMeshBasicMaterial) o.material = heroMaterial(o.material, look); });
     this.pivot = new THREE.Group();
     this.pivot.add(this.hero.root);
     this.scene.add(this.pivot);
