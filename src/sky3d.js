@@ -20,12 +20,12 @@ import { RNG } from './rng.js';
  */
 const SKY = [
   [4.6, '#04071a', '#141038', '#35275e', '#35275e'],  // night
-  [5.6, '#1a2364', '#6a6cb4', '#ffb894', '#c69aa8'],  // dawn
+  [5.6, '#1a2364', '#6a6cb4', '#ffb894', '#a48ea8'],  // dawn
   [7.4, '#1f58c0', '#5b98e0', '#f6e6cc', '#a9c4e4'],  // day: deep blue over a pale warm band, a mid-blue haze
   [17.2, '#1f58c0', '#5b98e0', '#f6e6cc', '#a9c4e4'],
-  [18.4, '#2350ad', '#7098d6', '#ffd09a', '#c2bcd0'], // golden hour
-  [19.1, '#1e2b72', '#5e6cb8', '#ff9c5c', '#d39a9a'], // sunset: blue down to an orange band
-  [19.8, '#0f1648', '#2e3482', '#c8706a', '#7a5486'], // last light
+  [18.4, '#2350ad', '#7098d6', '#ffd09a', '#aaaccc'], // golden hour
+  [19.1, '#1e2b72', '#5e6cb8', '#ff9c5c', '#a98a9e'], // sunset: blue down to an orange band
+  [19.8, '#0f1648', '#2e3482', '#c8706a', '#5e4a78'], // last light
   [20.6, '#04071a', '#141038', '#35275e', '#35275e'], // night
 ];
 /** Sun/moon: disc radius (cos of the angle), the disc's highest drawn elevation (sin), day/dusk fills + rim. */
@@ -123,8 +123,8 @@ void main(){
   // ink: a constant ~2 px band just inside the silhouette (the buildings' ink weight) + thinner
   // inner lines where the heads sit on the base row (B: distance to that line)
   // (a small far cloud keeps just its silhouette and lit crown: inner lines and the base shadow at a
-  // few pixels across read as dirt; fa * 16 = atlas texels per screen pixel)
-  float detail = 1.0 - smoothstep(2.5, 5.0, fa * 16.0);
+  // few pixels across read as dirt; fa * 8 = atlas texels per screen pixel)
+  float detail = 1.0 - smoothstep(2.5, 5.0, fa * 8.0);
   float lineK = (1.0 - smoothstep(0.6, 1.4, (1.0 - t.b) / (fwidth(t.b) + 1e-4))) * detail;
   shK *= mix(0.4, 1.0, detail);
   float inkK = max(1.0 - smoothstep(1.3, 2.3, px), lineK * 0.85);
@@ -152,13 +152,13 @@ function cloudShape(kind, r, CW, CH) {
     const n = Math.max(2, Math.ceil((x1 - x0) / (((rr[0] + rr[1]) / 2) * 1.1)) + 1);
     for (let i = 0; i < n; i++) {
       const edge = i === 0 || i === n - 1, rad = r.range(rr[0], rr[1]) * (edge ? 0.8 : 1);
-      row.push([x0 + (i / (n - 1)) * (x1 - x0) + r.range(-6, 6), base - rad * r.range(0.35, 0.6), rad]);
+      row.push([x0 + (i / (n - 1)) * (x1 - x0) + r.range(-6, 6), base - rad * r.range(0.35, 0.6), rad, r.range(0.55, 0.85)]);
     }
   };
   const tier = (n, cx, spread, rr, lift) => {
     for (let i = 0; i < n; i++) {
       const x = cx + (n > 1 ? (i / (n - 1) - 0.5) * spread : 0) + r.range(-12, 12), rad = r.range(rr[0], rr[1]);
-      heads.push([x, base - lift - rad * 0.6 - r.range(0, 14), rad]);
+      heads.push([x, base - lift - rad * 0.6 - r.range(0, 14), rad, r.range(0.3, 0.45)]);
     }
   };
   let x0, x1;
@@ -175,37 +175,50 @@ function cloudShape(kind, r, CW, CH) {
 
 let cloudTex = null;
 /**
- * 4×2 atlas of comic cumulus shapes (8 different silhouettes, 512×256 texels each), every channel
+ * 4×2 atlas of comic cumulus shapes (8 different silhouettes, 256×128 texels each), every channel
  * a signed-distance ramp so the shader can cut AA'd edges at any size. A = shape, R = lit crowns
- * (puffs shifted up-left), G = shadowed base (the shape minus itself lifted: the puffs' undersides),
+ * (puffs shifted up-left), G = shadowed base (the shape minus its puffs lifted: scalloped undersides),
  * B = distance to the inner ink line where the heads sit on the base row.
  */
 function cloudAtlas() {
   if (cloudTex) return cloudTex;
-  const CW = 512, CH = 256, TW = CW * 4, TH = CH * 2, S = 8, L = 6, data = new Uint8Array(TW * TH * 4);
+  // shapes are laid out in 512×256 design units and sampled every K units (the ramps make the
+  // half-resolution atlas as smooth as the full one; it builds 4× faster)
+  const CW = 512, CH = 256, K = 2, TW = (CW * 4) / K, TH = (CH * 2) / K, S = 8, L = 6, data = new Uint8Array(TW * TH * 4);
   const r = new RNG(4711), kinds = ['tower', 'wide', 'anvil', 'small', 'tower', 'wide', 'tower', 'small'];
   const ramp = (sd, k) => Math.max(0, Math.min(255, Math.round((0.5 - sd / (2 * k)) * 255)));
-  const circ = (x, y, c, dx = 0, dy = 0, kr = 1) => Math.hypot(x - c[0] - dx * c[2], y - c[1] - dy * c[2]) - c[2] * kr;
-  const box = (x, y, b, dy = 0) => { const qx = Math.max(b[0] - x, x - b[2], 0), qy = Math.max(b[1] - dy - y, y - b[3] + dy, 0), ix = Math.max(b[0] - x, x - b[2]), iy = Math.max(b[1] - dy - y, y - b[3] + dy); return Math.hypot(qx, qy) + Math.min(Math.max(ix, iy), 0); };
+  const box = (x, y, b, dy = 0) => { const qx = Math.max(b[0] - x, x - b[2], 0), qy = Math.max(b[1] - dy - y, y - b[3] + dy, 0), ix = Math.max(b[0] - x, x - b[2]), iy = Math.max(b[1] - dy - y, y - b[3] + dy); return Math.sqrt(qx * qx + qy * qy) + Math.min(Math.max(ix, iy), 0); };
   for (let v = 0; v < 8; v++) {
-    const { row, heads, rect, base } = cloudShape(kinds[v], r, CW, CH), all = [...row, ...heads], ox = (v % 4) * CW, oy = Math.floor(v / 4) * CH;
-    for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) {
-      let shape = box(x, y, rect), up = box(x, y, rect, 9), lit = 1e9, hd = 1e9, bs = shape;
-      for (const c of all) {
-        shape = Math.min(shape, circ(x, y, c));
-        up = Math.min(up, circ(x, y, c, 0, -0.3, 0.98));
-        lit = Math.min(lit, circ(x, y, c, -0.14, -0.22, 0.84));
+    const { row, heads, rect, base } = cloudShape(kinds[v], r, CW, CH), all = [...row, ...heads.map((c) => [...c, 1])], M = 2 * S + 4, ox = (v % 4) * (CW / K), oy = Math.floor(v / 4) * (CH / K);
+    // only puffs within reach of a texel can change it (past M texels every ramp is clamped): a
+    // per-row list of nearby puffs keeps this to a few tens of ms
+    for (let ty = 0; ty < CH / K; ty++) {
+      const y = (ty + 0.5) * K, near = all.filter((c) => y > c[1] - c[2] * (1 + c[3]) - M && y < c[1] + c[2] + M);
+      for (let tx = 0; tx < CW / K; tx++) {
+        const x = (tx + 0.5) * K;
+        let shape = box(x, y, rect), up = 1e9, lit = 1e9, hd = 1e9, bs = shape;
+        for (let j = 0; j < near.length; j++) {
+          const c = near[j], cx = c[0], cy = c[1], cr = c[2];
+          if (x < cx - cr - M || x > cx + cr + M) continue;
+          let u = x - cx, w = y - cy;
+          const d = Math.sqrt(u * u + w * w) - cr;
+          shape = Math.min(shape, d);
+          if (c[4]) hd = Math.min(hd, d); else bs = Math.min(bs, d);
+          w = y - cy + c[3] * cr; // (each puff lifted its own amount: a scalloped shadow, never a flat strip)
+          up = Math.min(up, Math.sqrt(u * u + w * w) - cr * 0.96);
+          u = x - cx + 0.14 * cr; w = y - cy + 0.22 * cr; // lit crowns: the puffs shifted up-left
+          lit = Math.min(lit, Math.sqrt(u * u + w * w) - cr * 0.84);
+        }
+        if (shape > M) continue; // (outside: all four channels stay 0)
+        shape = Math.max(shape, y - base); // the flat base
+        const line = Math.max(Math.abs(hd), bs + 7); // the heads' outline, only where it crosses the base row
+        // canvas y runs down, texture rows run up
+        const i = ((TH - 1 - (oy + ty)) * TW + ox + tx) * 4;
+        data[i] = ramp(Math.max(lit, shape), S);
+        data[i + 1] = ramp(Math.max(shape, -up), S);
+        data[i + 2] = Math.max(0, Math.min(255, Math.round((1 - line / (2 * L)) * 255)));
+        data[i + 3] = ramp(shape, S);
       }
-      for (const c of row) bs = Math.min(bs, circ(x, y, c));
-      for (const c of heads) hd = Math.min(hd, circ(x, y, c));
-      shape = Math.max(shape, y - base); up = Math.max(up, y - base + 9); // the flat base
-      const line = Math.max(Math.abs(hd), bs + 7); // the heads' outline, only where it crosses the base row
-      // canvas y runs down, texture rows run up
-      const i = ((TH - 1 - (oy + y)) * TW + ox + x) * 4;
-      data[i] = ramp(Math.max(lit, shape), S);
-      data[i + 1] = ramp(Math.max(shape, -up), S);
-      data[i + 2] = Math.max(0, Math.min(255, Math.round((1 - line / (2 * L)) * 255)));
-      data[i + 3] = ramp(shape, S);
     }
   }
   cloudTex = new THREE.DataTexture(data, TW, TH, THREE.RGBAFormat);
