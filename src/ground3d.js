@@ -207,7 +207,7 @@ export function cityGround(city, U, landmarks, rich = true) {
   const g = new THREE.PlaneGeometry(x1, z1); // the canvases span exactly the land
   g.rotateX(-Math.PI / 2); g.translate(x1 / 2, -0.25, z1 / 2);
   return new THREE.Mesh(g, new THREE.ShaderMaterial({
-    uniforms: { day: { value: T.day }, night: { value: T.night }, uKeyCol: U.uKeyCol, uAmbUp: U.uAmbUp, uNight: U.uNight, uLit: U.uLit, uHazeCol: U.uHazeCol, uHorizon: U.uHorizon, uHazeNear: U.uHazeNear, uHazeFar: U.uHazeFar },
+    uniforms: { day: { value: T.day }, night: { value: T.night }, uKeyCol: U.uKeyCol, uAmbUp: U.uAmbUp, uNight: U.uNight, uLit: U.uLit, uHazeCol: U.uHazeCol, uHorizon: U.uHorizon, uHazeLow: U.uHazeLow, uHazeNear: U.uHazeNear, uHazeFar: U.uHazeFar },
     vertexShader: 'varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
     fragmentShader: /* glsl */`
 uniform sampler2D day; uniform sampler2D night; uniform vec3 uKeyCol; uniform vec3 uAmbUp; uniform float uNight; uniform float uLit;
@@ -218,13 +218,16 @@ void main() {
   // colour by day and dusk, the tiles' navy street veil by night. Lit by the scene's own (dim) dusk
   // light it fell to a near-black slab past the tiles.
   vec3 c = texture2D(day, vUv).rgb;
+  // far lots drain toward a darker grey before the haze takes them (no candy tiles at the edge)
+  float dist = length(vW - cameraPosition), far = smoothstep(450., 2000., dist);
+  c = mix(c, vec3(dot(c, vec3(0.299, 0.587, 0.114))), far * 0.6) * (1. - 0.25 * far);
   c = mix(c, c * 0.65 + vec3(0.0006, 0.001, 0.006), smoothstep(0.3, 0.6, uNight)) + texture2D(night, vUv).rgb * uLit * 0.3;
 #ifdef TONE_MAPPING
   c = toneMapping(c);
 #endif
   gl_FragColor = linearToOutputTexel(vec4(c, 1.));
   gl_FragColor.rgb = pulp(gl_FragColor.rgb);
-  gl_FragColor.rgb = haze(gl_FragColor.rgb, length(vW - cameraPosition), 0., 1.);
+  gl_FragColor.rgb = haze(gl_FragColor.rgb, dist, 0., 1.);
 }`,
   }));
 }

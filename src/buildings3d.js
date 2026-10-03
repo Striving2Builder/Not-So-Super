@@ -62,17 +62,24 @@ const AO = { k: 0.42, h: 4 };
  * it starts at near x far, or nearAlt x the camera's height when that's further (from high patrol
  * the nearest ground is already ~600 m off: the haze began under her and swallowed the whole city).
  */
-export const HAZE = { perAlt: 7, max: 4200, near: 0.1, nearAlt: 1.4 };
+export const HAZE = { perAlt: 7, max: 4200, near: 0.1, nearAlt: 1.4, low: 0.48, lowDn: [0.015, 0.2] };
 /** Key vs ambient: a clear lit / raking / shadow split on every tower, day and dusk too. */
-const KEY = { key: 1.4, amb: 0.86 };
+const KEY = { key: 1.4, amb: 0.86, shade: [0.74, 0.8, 0.98] };
 const _cool = new THREE.Color(0.93, 0.98, 1.1);
 /**
  * Aerial perspective shared by every city material (buildings, ground, sea, street lights): a cool,
  * desaturated haze that thickens toward the ground and converges on the sky dome's own horizon
- * colour at uHazeFar, so the world never ends in an edge, a plate or a fog wall.
+ * colour at uHazeFar, so the world never ends in an edge, a plate or a fog wall. The air itself
+ * grades with the view ray: looking level it is the horizon's colour, looking down it is the darker
+ * ground haze (`uHazeLow`, HAZE.low of the haze's value), so from altitude the far ground keeps
+ * its value and grades up into the horizon instead of ending in one flat pale plate.
  */
 export const HAZE_GLSL = /* glsl */`
-uniform vec3 uHazeCol; uniform vec3 uHorizon; uniform float uHazeNear; uniform float uHazeFar;
+uniform vec3 uHazeCol; uniform vec3 uHorizon; uniform vec3 uHazeLow; uniform float uHazeNear; uniform float uHazeFar;
+// the air's colour at haze amount f along a ray dipping dn (sine) below the horizon
+vec3 airAt(float f, float dn) {
+  return mix(mix(uHazeCol, uHorizon, smoothstep(0.35, 1., f)), uHazeLow, smoothstep(${HAZE.lowDn[0]}, ${HAZE.lowDn[1]}, dn));
+}
 // pulp grade: saturation and value contrast up (comic primaries), applied before the haze
 vec3 pulp(vec3 c) {
   float l = dot(c, vec3(0.299, 0.587, 0.114));
@@ -88,7 +95,7 @@ vec3 haze(vec3 c, float d, float y, float k) {
   float t = clamp((d - uHazeNear) / (uHazeFar - uHazeNear), 0., 1.);
   float f = t * t * (3. - 2. * t);
   f = clamp(f + (1. - smoothstep(0., 160., y)) * t * 0.2, 0., 1.) * k; // thicker over the ground
-  vec3 air = mix(uHazeCol, uHorizon, smoothstep(0.35, 1., f));
+  vec3 air = airAt(f, clamp((cameraPosition.y - y) / max(d, 1.), 0., 1.));
   const vec3 LW = vec3(0.299, 0.587, 0.114);
   float l = dot(c, LW), la = dot(air, LW);
   c = mix(c, vec3(l), smoothstep(0., 0.75, f) * 0.72);  // saturation
@@ -176,9 +183,9 @@ float pulse(float x, float a, float b, float w) { return (P1(x + 0.5 * w, a, b) 
  * floor slabs, mullion + transom, lintel recess and sill (near only). Lit windows: per floor (dark,
  * fully lit late-office floors, or runs) and per window, from a hash; once a window is under ~2 px
  * they fade to the style's mean (a solid lit tint, no sparkle). Returns (wall shade, glass, lit),
- * like the old atlas masks.
+ * like the old atlas masks, + the lit windows' halo on the wall (night glow).
  */
-vec3 facade(vec2 c, vec2 w, float style, float seed) {
+vec4 facade(vec2 c, vec2 w, float style, float seed) {
   w = max(w, vec2(1e-3));
   float ty = fract(c.y); // 0 at the foot of a floor, 1 at its top
   if (style == 4.) {
@@ -187,7 +194,7 @@ vec3 facade(vec2 c, vec2 w, float style, float seed) {
     float sx = pulse(c.x, 2. / 32., 30. / 32., w.x), sy = pulse(c.y * 0.25, 12. / 128., 22. / 128., w.y * 0.25);
     float win = sx * sy, on = step(h12(floor(c) + seed), 0.3);
     float lit = mix(on * 0.8, 0.24, smoothstep(0.25, 0.6, max(w.x, w.y)));
-    return vec3(mix(mix(0.72, 0.92, corr), 0.25, win), win, lit * win);
+    return vec4(mix(mix(0.72, 0.92, corr), 0.25, win), win, lit * win, 0.);
   }
   vec4 L = style == 0. ? vec4(7., 7., 0.86, 0.6) : style == 1. ? vec4(1., 2., 0.7, 0.35) : style == 2. ? vec4(8., 8., 0.8, 0.55) : vec4(9., 4., 0.62, 0.55);
   vec2 m = L.xy / 32.;
@@ -215,7 +222,9 @@ vec3 facade(vec2 c, vec2 w, float style, float seed) {
   float mean = (0.08 + 0.62 / 3.) * (0.6 + 0.8 * L.w) * 0.8;
   float lit = mix(on * (0.6 + 0.4 * hw), mean, smoothstep(0.25, 0.6, max(w.x, w.y)));
   float glass = max(0., win * (1. - fr) - rec * 0.45);
-  return vec3(wall * (1. - win) + win * mix(0.25, 0.45, fr), glass, lit * glass);
+  // night glow: a lit window spills onto the wall round it (a soft halo inside its own cell)
+  float halo = max(0., pulse(c.x, m.x * 0.3, 1. - m.x * 0.3, w.x) * pulse(c.y, m.y * 0.35, 1. - m.y * 0.35, w.y) - win);
+  return vec4(wall * (1. - win) + win * mix(0.25, 0.45, fr), glass, lit * glass, lit * halo);
 }
 void main() {
   float dist = length(vW - cameraPosition);
@@ -234,14 +243,14 @@ void main() {
     emi = vCol * (0.25 + 2.5 * step(0.6, fract(uTime * 0.7 + vUv.x)));
   } else {
     bool roof = vStyle > 4.5;
-    vec3 m;
+    vec4 m = vec4(0.);
     if (roof) {
 #ifdef FAR
-      m = vStyle == 5. ? vec3(0.72, 0., 0.) : vStyle == 6. ? vec3(0.41, 0., 0.) : vec3(0.36, 0., 0.18); // the roof cells' means
+      m.rgb = vStyle == 5. ? vec3(0.72, 0., 0.) : vStyle == 6. ? vec3(0.41, 0., 0.) : vec3(0.36, 0., 0.18); // the roof cells' means
 #else
       // gravel / tar / helipad: the roof atlas, its mip level from the unwrapped coords (no seam)
       vec2 u = vStyle == 7. ? clamp(vUv, 0.01, 0.99) : fract(vUv), sc = vec2(0.96, 0.98) / vec2(3., 1.), g = vUv * sc;
-      m = textureGrad(uAtlas, u * sc + vec2((0.02 + vStyle - 5.) / 3., 0.01), dFdx(g), dFdy(g)).rgb;
+      m.rgb = textureGrad(uAtlas, u * sc + vec2((0.02 + vStyle - 5.) / 3., 0.01), dFdx(g), dFdy(g)).rgb;
 #endif
     } else {
       vec2 c = vUv * vec2(${WIN.cols}., ${WIN.rows}.);
@@ -249,13 +258,15 @@ void main() {
     }
     vec3 N = normalize(vN), V = normalize(cameraPosition - vW);
     float ndl = dot(N, uKeyDir);
-    // three cel bands: shadow, raking light, full light (roofs always full when the sun is up)
-    float litK = smoothstep(0.0, 0.05, ndl), fullK = N.y > 0.5 ? 1. : smoothstep(0.32, 0.37, ndl);
-    vec3 amb = mix(uAmbDn, uAmbUp, N.y * 0.5 + 0.5);
-    vec3 light = amb + uKeyCol * litK * (0.6 + 0.4 * fullK);
+    // three cel bands per face: shade (the sky's cool fill alone, a darker, cooler step of the same
+    // paint), raking (half the key), full light (roofs always full while the sun is up): the sun's
+    // side and the shade side read apart on every tower, by day and at dusk
+    float litK = smoothstep(0.0, 0.04, ndl), fullK = N.y > 0.5 ? 1. : smoothstep(0.3, 0.34, ndl);
+    vec3 amb = mix(uAmbDn, uAmbUp, N.y * 0.5 + 0.5) * mix(vec3(${KEY.shade.join(', ')}), vec3(1.), litK);
+    vec3 light = amb + uKeyCol * litK * (0.5 + 0.5 * fullK);
     // each facade orientation keeps its own cel tone (east/west a step darker than north/south),
-    // so a tower's two visible faces always read apart, lit or not
-    if (N.y < 0.5) light *= abs(N.x) > abs(N.z) ? 0.8 : 1.;
+    // so a tower's two visible faces always read apart even when neither is in the sun
+    if (N.y < 0.5) light *= abs(N.x) > abs(N.z) ? mix(0.82, 0.94, litK) : 1.;
     vec3 wall = vCol * m.r * light;
     if (roof) {
       col = mix(wall, vec3(0.9, 0.62, 0.05) * light, m.b);
@@ -264,12 +275,15 @@ void main() {
       float fres = pow(1. - max(dot(N, V), 0.), 2.);
       vec3 dayGlass = mix(vec3(0.07, 0.14, 0.3), uSky * 0.75, (vStyle == 1. ? 0.3 : 0.15) + 0.45 * fres);
       vec3 glass = mix(dayGlass, vec3(0.03, 0.035, 0.055) + uSky * 0.08 * fres, uNight);
-      col = mix(wall, glass * (0.6 + 0.4 * litK), m.g);
+      // (in the shade the glass dims and leans to the wall's own paint: a shaded face is the same
+      // tower in shadow, not a dark blue panel)
+      glass = mix(glass * mix(0.5, 1., litK), wall * 0.55, (1. - litK) * 0.35 * (1. - uNight));
+      col = mix(wall, glass, m.g);
       col *= mix(0.42, 1., smoothstep(0., 45., vW.y)); // canyon floors are darker
       // contact shade: the foot of every wall darkens where it meets the ground, a setback's roof
       // or the roof under a box (cheap AO: the height above the part's own base, per vertex)
       col *= 1. - AO.x * exp(-vHb / AO.y) * (1. - 0.4 * uNight) * step(abs(N.y), 0.5);
-      emi = vLit * m.b * uLit;
+      emi = vLit * (m.b * 1.1 + m.a * 0.4) * uLit;
       // night rim: a cool sky-lit edge on faces turning away from her (the silhouette reads)
       emi += uSky * 0.45 * uNight * smoothstep(0.55, 0.85, fres) * (1. - m.g * 0.5);
     }
@@ -302,7 +316,7 @@ export class CityLook {
   constructor(signTex) {
     this.atlas = atlas();
     const U = {
-      uHazeCol: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() }, uHazeNear: { value: 400 }, uHazeFar: { value: 1600 },
+      uHazeCol: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() }, uHazeLow: { value: new THREE.Color() }, uHazeNear: { value: 400 }, uHazeFar: { value: 1600 },
       uAtlas: { value: this.atlas }, uSigns: { value: signTex },
       uKeyDir: { value: new THREE.Vector3(0.4, 0.7, 0.5).normalize() }, uKeyCol: { value: new THREE.Color(1, 1, 1) },
       uAmbUp: { value: new THREE.Color(0.4, 0.4, 0.5) }, uAmbDn: { value: new THREE.Color(0.2, 0.2, 0.3) },
@@ -345,6 +359,7 @@ export class CityLook {
       // so the far city pales into the sky and the haze meets the dome without a rim
       const h = U.uHorizon.value, hl = 0.3 * h.r + 0.59 * h.g + 0.11 * h.b;
       U.uHazeCol.value.copy(h).lerp(_t.setRGB(hl, hl, hl), 0.3).lerp(c, 0.1).multiply(_cool).multiplyScalar(1.12);
+      U.uHazeLow.value.copy(U.uHazeCol.value).lerp(_t.setRGB(hl, hl, hl), 0.35).multiplyScalar(HAZE.low);
       U.uHazeFar.value = Math.min(HAZE.max, Math.max(fog.far, camY * HAZE.perAlt));
       U.uHazeNear.value = Math.max(U.uHazeFar.value * HAZE.near, camY * HAZE.nearAlt);
     }

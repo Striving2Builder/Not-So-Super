@@ -14,7 +14,7 @@ import { Horizon, haze } from './skyline3d.js';
 import { Outer } from './outer3d.js';
 import { cityGround, tone, dressNear, lotDressing } from './ground3d.js';
 import { buildRiver } from './river3d.js';
-import { SkyCard } from './skycard3d.js';
+import { SkyCard, FarRing } from './skycard3d.js';
 import { Street } from './street3d.js';
 
 export { M, DISTRICT_3D, height3 };
@@ -75,6 +75,7 @@ export class City3D {
     this.outer = new Outer(city, scene, this.look, this.horizon);
     this.river = buildRiver(city, scene, this.look, this.horizon.sea.material);
     this.card = new SkyCard(scene, this.look.U);
+    this.ring = new FarRing(scene, this.look.U, this.card.tex, city.coastX * M, this.outer.islands);
     this.glow = districtGlow(city, scene, this.look.U);
     /** Optional hook: flight3d may set `city3.sky = sky` so the haze ends on `Sky3D.horizon`. */
     this.sky = null;
@@ -204,6 +205,7 @@ export class City3D {
     if (n - (this.trimT || 0) > KEEP.every) { this.trimT = n; this.trim(n); }
     this.outer.update(cam, cut);
     this.card.update(cam, this.look.U.uHazeFar.value);
+    this.ring.update(cam);
     this.street.update(cam);
   }
 }
