@@ -2,7 +2,8 @@
 // Chromium emulating a phone (844x390 landscape, 2x DPR, touch → the "Balanced" profile) and saves
 // PNGs plus metrics (fps over 3 s, WebGL draw calls/triangles for 3D) to shots/<label>/<area>/.
 //
-//   node tools/shots/shoot.js <area|all> [--label NAME] [--port 8120] [--only SCENARIO]
+//   node tools/shots/shoot.js <area|all> [--label NAME] [--port 8120] [--only SCENARIO] [--query k=v&k2=v2]
+//   --query: extra URL parameters for every scenario (e.g. hero=ponytail)
 //   areas: flying premade3d selfbuilt3d brawler investigation nightlife
 //
 // FPS comes from software rendering (SwiftShader): compare runs against each other, not phones.
@@ -27,6 +28,7 @@ const AREA = argv[0] || 'all';
 const LABEL = arg('--label', new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-'));
 const PORT = +arg('--port', 8120);
 const ONLY = arg('--only', null);
+const QUERY = arg('--query', ''); // extra URL params, e.g. hero=classic
 const OUT = path.join(ROOT, 'shots', LABEL);
 
 // ------------------------------------------------------------------ scenarios
@@ -92,6 +94,7 @@ const AREAS = {
 
 // ------------------------------------------------------------------ page helpers
 async function newGame(page, query = '') {
+  if (QUERY) query += (query ? '&' : '?') + QUERY;
   await page.goto(`http://localhost:${PORT}/${query}`);
   await page.waitForFunction(() => window.__game && document.querySelector('#btn-new'), null, { timeout: 30000 });
   await page.evaluate(async () => { (await import('/src/settings.js')).autoTune.done = true; }); // SwiftShader is "slow"

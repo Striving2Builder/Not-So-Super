@@ -63,6 +63,9 @@ export const PROFILES = {
 };
 
 export const GRAPHICS_MODES = ['auto', 'high', 'saver'];
+/** Her costume variants (assets/models/: supergirl.glb, hero_classic.glb, hero_ponytail.glb), same rig. */
+export const HERO_SKINS = ['supergirl', 'classic', 'ponytail'];
+export const HERO_SKIN_LABELS = { supergirl: 'Supergirl', classic: 'Classic', ponytail: 'Ponytail' };
 
 let touch = null; // a phone doesn't stop being a phone: read the media query once
 const isTouch = () => { if (touch === null) touch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches; return touch; };
@@ -71,7 +74,7 @@ function read() {
   try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
 }
 function write() {
-  try { localStorage.setItem(KEY, JSON.stringify({ graphics: state.graphics, autoSlow: state.autoSlow, autopilot: state.autopilot, cityFeed: state.cityFeed })); } catch (e) { /* private mode */ }
+  try { localStorage.setItem(KEY, JSON.stringify({ graphics: state.graphics, autoSlow: state.autoSlow, autopilot: state.autopilot, cityFeed: state.cityFeed, hero: state.hero })); } catch (e) { /* private mode */ }
 }
 
 const saved = read();
@@ -80,6 +83,7 @@ const state = {
   autoSlow: !!saved.autoSlow, // Auto measured this device as too slow once → stay on Battery saver
   autopilot: saved.autopilot !== false, // fly toward the waypoint while the stick is idle
   cityFeed: saved.cityFeed !== false,   // clips in the minimap corner
+  hero: HERO_SKINS.includes(saved.hero) ? saved.hero : 'supergirl', // her costume model (read once at load)
 };
 const listeners = [];
 
@@ -104,6 +108,9 @@ export const settings = {
   get cityFeed() { return state.cityFeed; },
   toggleCityFeed() { state.cityFeed = !state.cityFeed; write(); return state.cityFeed; },
   toggleAutopilot() { state.autopilot = !state.autopilot; write(); return state.autopilot; },
+  /** The chosen costume; the model loads once at start, so a change applies after a reload. */
+  get hero() { return state.hero; },
+  cycleHero() { state.hero = HERO_SKINS[(HERO_SKINS.indexOf(state.hero) + 1) % HERO_SKINS.length]; write(); return state.hero; },
   onChange(fn) { listeners.push(fn); },
 };
 
