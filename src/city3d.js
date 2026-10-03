@@ -28,7 +28,7 @@ const CHUNK = TILE * BLOCK; // world units per chunk side (one ground tile)
  * tiles only below `tileAlt` (from high patrol the street plan carries the ground alone): high patrol
  * draws the skyline's mass, skim and cruise keep everything.
  */
-const LOD = { farMat: 260, farInk: 0, landmarkFog: 0.8, landmarkMax: 0.93, coreR: 4.5, detail: 470, liteDetail: 800, detailAlt: 430, tileAlt: 430 };
+const LOD = { farMat: 260, farInk: 0, landmarkFog: 0.8, landmarkMax: 0.93, coreR: 4.5, detail: 470, liteDetail: 800, detailAlt: 340, tileAlt: 340 }; // (cruise flies at ~280 m)
 /** Memory: at most this many near builds / ground tiles stay built; past that, those unseen for `idle` ms are freed. */
 const KEEP = { near: 30, tiles: 40, idle: 4000, every: 1000 }; // (ms: frame counts would trim far too late on a slow device)
 

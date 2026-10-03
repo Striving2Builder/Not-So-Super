@@ -83,10 +83,34 @@ export function lotDressing(b) {
   return (b.dress = { trees, parks });
 }
 
+/**
+ * A river block's park (the water ribbon covers its middle): mown lawn stripes, a promenade loop
+ * and corner-to-corner paths with inked edges, a round plaza on one corner, then the trees. Read
+ * from altitude as a city park, not a flat green square. World units.
+ */
+function riverPark(g, b) {
+  const { x0, y0 } = b, h = (k) => hash2(b.bx, b.by, 130 + k);
+  g.fillStyle = 'rgba(190,230,140,.07)';
+  for (let x = 4; x < LOT; x += 18) g.fillRect(x0 + x, y0, 9, LOT);
+  const path = (draw) => {
+    g.lineCap = 'round';
+    g.strokeStyle = 'rgba(14,14,22,.6)'; g.lineWidth = 8; g.beginPath(); draw(); g.stroke();
+    g.strokeStyle = '#c4b896'; g.lineWidth = 5; g.beginPath(); draw(); g.stroke();
+  };
+  const i = 12, c = [x0 + i, y0 + i, x0 + LOT - i, y0 + LOT - i];
+  path(() => { g.rect(c[0], c[1], c[2] - c[0], c[3] - c[1]); });
+  path(() => { g.moveTo(c[0], c[1]); g.lineTo(c[2], c[3]); if (h(0) < 0.6) { g.moveTo(c[2], c[1]); g.lineTo(c[0], c[3]); } });
+  const k = (h(1) * 4) | 0, px = k & 1 ? c[2] : c[0], py = k & 2 ? c[3] : c[1];
+  g.fillStyle = 'rgba(14,14,22,.6)'; g.beginPath(); g.arc(px, py, 15, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#d6cdb0'; g.beginPath(); g.arc(px, py, 12.5, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#3a8ab8'; g.beginPath(); g.arc(px, py, 5, 0, Math.PI * 2); g.fill();
+  for (const t of lotDressing(b).trees) canopy(g, t.x, t.y, t.r * 0.8, t.h);
+}
+
 /** The near tiles' hook (CityArt.dress): the parking patches and a soft shade under each 3D tree. */
 export function dressNear(g, b) {
   const D = lotDressing(b);
-  if (b.river) { for (const t of D.trees) canopy(g, t.x, t.y, t.r * 0.8, t.h); return; } // flat: 3D trees would stand in the water
+  if (b.river) { riverPark(g, b); return; } // flat canopies: 3D trees would stand in the water
   for (const p of D.parks) parking(g, ...p);
   g.fillStyle = 'rgba(10,14,8,.35)';
   for (const t of D.trees) { g.beginPath(); g.arc(t.x + 3, t.y + 4, t.r * 0.9, 0, Math.PI * 2); g.fill(); }
@@ -136,7 +160,7 @@ function plan(city, landmarks, PX) {
     // river blocks: green banks with a few trees (the 3D ribbon of water lies on them)
     if (b.river) {
       R(d, b.x0 - ROAD / 2, b.y0 - ROAD / 2, LOT + ROAD, LOT + ROAD, '#4f6a44');
-      for (const t of lotDressing(b).trees) canopy(d, t.x, t.y, t.r * 0.8, t.h);
+      riverPark(d, b);
       continue;
     }
     const { x0, y0 } = b;

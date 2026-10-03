@@ -170,7 +170,8 @@ ${HAZE_GLSL}
 // per-face values are flat: exact (they seed hashes) and cheaper than interpolating
 varying vec2 vUv; flat varying vec3 vCol; flat varying vec3 vLit; flat varying vec3 vN; varying vec3 vW;
 flat varying float vStyle; flat varying float vKind; varying float vHb;
-float h12(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+// (sin-free: cheaper than the usual fract(sin()) where it runs on every lit wall pixel)
+float h12(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
 // A periodic pulse (fract(x) in [a, b]) box-filtered over the pixel's footprint w: exact coverage at
 // any scale, so a feature is crisp up close, soft at a few pixels and melts into its average share
 // (b - a) once a cell is sub-pixel. No texture, no mip level to pick, nothing to shimmer.
@@ -202,28 +203,39 @@ vec4 facade(vec2 c, vec2 w, float style, float seed) {
   float slab = pulse(c.y, 0., 3. / 32., w.y);
   float wall = mix(L.z, L.z * 0.72, slab);
   if (style == 3.) wall = mix(wall, 1., pulse(c.x + 4. / 32., 0., 10. / 32., w.x) * (1. - win)); // deco piers
-  float fr = 0., rec = 0.;
+  float fr = 0.08, rec = 0.; // (the frames' average share, once a window is a few pixels)
 #ifndef FAR
-  if (style == 2.) {
-    wall = mix(wall, 0.68 * L.z / 0.8, pulse(c.y * 4., 0.5, 0.625, w.y * 4.) * 0.6 * (1. - win)); // brick courses
-    wall = mix(wall, 1., pulse(c.x, 6. / 32., 26. / 32., w.x) * pulse(c.y, 0.75, 0.84, w.y));     // pale lintel
+  // the small features only while a window is ~4 px or more (past that they'd be their averages)
+  float k = 1. - smoothstep(0.2, 0.3, max(w.x, w.y));
+  if (k > 0.) {
+    float wl = wall;
+    if (style == 2.) {
+      wl = mix(wl, 0.68 * L.z / 0.8, pulse(c.y * 4., 0.5, 0.625, w.y * 4.) * 0.6 * (1. - win)); // brick courses
+      wl = mix(wl, 1., pulse(c.x, 6. / 32., 26. / 32., w.x) * pulse(c.y, 0.75, 0.84, w.y));     // pale lintel
+    }
+    float sill = pulse(c.x, m.x - 1. / 32., 1. - m.x + 1. / 32., w.x) * pulse(c.y, m.y - 2. / 32., m.y, w.y);
+    wl = mix(wl, min(1., L.z * 1.18), sill);
+    float tr = 1. - (m.y + (1. - 2. * m.y) * 0.32);
+    float f2 = max(pulse(c.x, 15. / 32., 17. / 32., w.x), pulse(c.y, tr - 0.5 / 32., tr + 0.5 / 32., w.y)); // mullion, transom
+    wall = mix(wall, wl, k); fr = mix(fr, f2, k);
+    rec = pulse(c.y, 1. - m.y - 2. / 32., 1. - m.y, w.y) * wx * k;                                         // recess under the lintel
   }
-  float sill = pulse(c.x, m.x - 1. / 32., 1. - m.x + 1. / 32., w.x) * pulse(c.y, m.y - 2. / 32., m.y, w.y);
-  wall = mix(wall, min(1., L.z * 1.18), sill);
-  float tr = 1. - (m.y + (1. - 2. * m.y) * 0.32);
-  fr = max(pulse(c.x, 15. / 32., 17. / 32., w.x), pulse(c.y, tr - 0.5 / 32., tr + 0.5 / 32., w.y)); // mullion, transom
-  rec = pulse(c.y, 1. - m.y - 2. / 32., 1. - m.y, w.y) * wx;                                                  // recess under the lintel
 #endif
   // lit: each floor has its own activity (dark, a few windows, busy), each window its own chance
   // and brightness: scattered lights with busier floors, never solid bands across a tower
-  vec2 id = floor(c);
-  float hf = h12(vec2(id.y, seed)), hw = h12(id + seed * 7.31);
-  float p = (0.08 + 0.62 * hf * hf) * (0.6 + 0.8 * L.w), on = step(h12(id.yx + seed * 3.17), p);
-  float mean = (0.08 + 0.62 / 3.) * (0.6 + 0.8 * L.w) * 0.8;
-  float lit = mix(on * (0.6 + 0.4 * hw), mean, smoothstep(0.25, 0.6, max(w.x, w.y)));
-  float glass = max(0., win * (1. - fr) - rec * 0.45);
-  // night glow: a lit window spills onto the wall round it (a soft halo inside its own cell)
-  float halo = max(0., pulse(c.x, m.x * 0.3, 1. - m.x * 0.3, w.x) * pulse(c.y, m.y * 0.35, 1. - m.y * 0.35, w.y) - win);
+  float lit = (0.08 + 0.62 / 3.) * (0.6 + 0.8 * L.w) * 0.8, fade = smoothstep(0.25, 0.6, max(w.x, w.y)); // (the mean)
+  if (uLit > 0. && fade < 1.) { // (only lit windows care: skipped by day)
+    vec2 id = floor(c);
+    float hf = h12(vec2(id.y, seed)), p = (0.08 + 0.62 * hf * hf) * (0.6 + 0.8 * L.w);
+    lit = mix(step(h12(id.yx + seed * 3.17), p) * (0.6 + 0.4 * h12(id + seed * 7.31)), lit, fade);
+  }
+  float glass = max(0., win * (1. - fr) - rec * 0.45), halo = 0.;
+#ifndef FAR
+  // night glow: a lit window spills onto the wall round it (a soft halo inside its own cell); far
+  // off it only brightens the lit tint (below)
+  if (uLit > 0. && k > 0.) halo = mix(0.25, max(0., pulse(c.x, m.x * 0.3, 1. - m.x * 0.3, w.x) * pulse(c.y, m.y * 0.35, 1. - m.y * 0.35, w.y) - win), k);
+  else halo = 0.25; // (its average share)
+#endif
   return vec4(wall * (1. - win) + win * mix(0.25, 0.45, fr), glass, lit * glass, lit * halo);
 }
 void main() {
@@ -236,8 +248,12 @@ void main() {
   } else if (vKind == 3.) {
     // a tube, not a painted stripe: a white-hot core and deeper-coloured edges across its width
     // (v runs across every tube), so a tube skimmed up close reads as neon rather than a streak
-    float p = 1. - abs(vUv.y * 2. - 1.);
-    emi = (vCol * mix(0.55, 1.05, p) + mix(vCol, vec3(1.), 0.6) * smoothstep(0.55, 0.95, p) * 0.55) * mix(0.9, 1.3, uNight);
+    // A tube under ~3 px across takes its profile's average (its sub-pixel white core broke into
+    // red-white dashes far off), and by day / dusk a tube is barely lit: the thin corner posts and
+    // cornice rings read as stray yellow lines across the canyons before dark
+    float p = 1. - abs(vUv.y * 2. - 1.), thin = smoothstep(0.2, 0.5, fwidth(vUv.y));
+    emi = vCol * mix(mix(0.55, 1.05, p), 0.8, thin) + mix(vCol, vec3(1.), 0.6) * mix(smoothstep(0.55, 0.95, p), 0.25, thin) * 0.55;
+    emi *= mix(0.9, 1.3, uNight) * (0.3 + 0.7 * smoothstep(0.1, 0.6, uLit));
     emi *= 1. - smoothstep(uNeonFar * 0.6, uNeonFar, dist / mix(0.45, 1., uNight));
   } else if (vKind == 4.) {
     emi = vCol * (0.25 + 2.5 * step(0.6, fract(uTime * 0.7 + vUv.x)));
@@ -283,7 +299,11 @@ void main() {
       // contact shade: the foot of every wall darkens where it meets the ground, a setback's roof
       // or the roof under a box (cheap AO: the height above the part's own base, per vertex)
       col *= 1. - AO.x * exp(-vHb / AO.y) * (1. - 0.4 * uNight) * step(abs(N.y), 0.5);
+#ifdef FAR
+      emi = vLit * m.b * 1.35 * uLit;
+#else
       emi = vLit * (m.b * 1.1 + m.a * 0.4) * uLit;
+#endif
       // night rim: a cool sky-lit edge on faces turning away from her (the silhouette reads)
       emi += uSky * 0.45 * uNight * smoothstep(0.55, 0.85, fres) * (1. - m.g * 0.5);
     }
