@@ -242,7 +242,11 @@ void main() {
     col = vec3(0.03, 0.02, 0.05) * s.b;
     emi = (vCol * s.g * 0.85 + mix(vCol, vec3(1.), 0.5) * s.r * 0.6) * mix(0.8, 1.15, uNight);
   } else if (vKind == 3.) {
-    emi = vCol * mix(0.9, 1.3, uNight) * (1. - smoothstep(uNeonFar * 0.6, uNeonFar, dist / mix(0.45, 1., uNight)));
+    // a tube, not a painted stripe: a white-hot core and deeper-coloured edges across its width
+    // (v runs across every tube), so a tube skimmed up close reads as neon rather than a streak
+    float p = 1. - abs(vUv.y * 2. - 1.);
+    emi = (vCol * mix(0.55, 1.05, p) + mix(vCol, vec3(1.), 0.6) * smoothstep(0.55, 0.95, p) * 0.55) * mix(0.9, 1.3, uNight);
+    emi *= 1. - smoothstep(uNeonFar * 0.6, uNeonFar, dist / mix(0.45, 1., uNight));
   } else if (vKind == 4.) {
     emi = vCol * (0.25 + 2.5 * step(0.6, fract(uTime * 0.7 + vUv.x)));
   } else {
@@ -568,9 +572,9 @@ export function lamp(B, x, y, z, s, colour, kind = KIND.neon, phase = 0) {
   const p = [[x, y + s, z], [x + s, y, z], [x, y, z + s], [x - s, y, z], [x, y, z - s], [x, y - s, z]];
   const f = [[0, 2, 1], [0, 3, 2], [0, 4, 3], [0, 1, 4], [5, 1, 2], [5, 2, 3], [5, 3, 4], [5, 4, 1]];
   for (const [a, b, c] of f) {
-    const i = B.v(p[a], [0, 1, 0], phase, 0, _l, kind, _l, 0);
-    B.v(p[b], [0, 1, 0], phase, 0, _l, kind, _l, 0);
-    B.v(p[c], [0, 1, 0], phase, 0, _l, kind, _l, 0);
+    const i = B.v(p[a], [0, 1, 0], phase, 0.3, _l, kind, _l, 0);
+    B.v(p[b], [0, 1, 0], phase, 0.3, _l, kind, _l, 0);
+    B.v(p[c], [0, 1, 0], phase, 0.3, _l, kind, _l, 0);
     B.idx.push(i, i + 1, i + 2);
   }
 }
@@ -589,9 +593,10 @@ export function neonRing(B, x0, z0, x1, z1, y, colour, t = 0.7) {
 export function neonPost(B, x, z, y0, y1, colour, t = 0.6) {
   _l.set(colour);
   const h = t / 2;
-  B.quad([x - h, y0, z + h], [x + h, y0, z + h], [x + h, y1, z + h], [x - h, y1, z + h], [0, 0, 1], UVQ, _l, _l, 0, KIND.neon);
-  B.quad([x + h, y0, z + h], [x + h, y0, z - h], [x + h, y1, z - h], [x + h, y1, z + h], [1, 0, 0], UVQ, _l, _l, 0, KIND.neon);
-  B.quad([x + h, y0, z - h], [x - h, y0, z - h], [x - h, y1, z - h], [x + h, y1, z - h], [0, 0, -1], UVQ, _l, _l, 0, KIND.neon);
-  B.quad([x - h, y0, z - h], [x - h, y0, z + h], [x - h, y1, z + h], [x - h, y1, z - h], [-1, 0, 0], UVQ, _l, _l, 0, KIND.neon);
+  B.quad([x - h, y0, z + h], [x + h, y0, z + h], [x + h, y1, z + h], [x - h, y1, z + h], [0, 0, 1], UVP, _l, _l, 0, KIND.neon);
+  B.quad([x + h, y0, z + h], [x + h, y0, z - h], [x + h, y1, z - h], [x + h, y1, z + h], [1, 0, 0], UVP, _l, _l, 0, KIND.neon);
+  B.quad([x + h, y0, z - h], [x - h, y0, z - h], [x - h, y1, z - h], [x + h, y1, z - h], [0, 0, -1], UVP, _l, _l, 0, KIND.neon);
+  B.quad([x - h, y0, z - h], [x - h, y0, z + h], [x - h, y1, z + h], [x - h, y1, z - h], [-1, 0, 0], UVP, _l, _l, 0, KIND.neon);
 }
-const UVQ = [[0, 0], [1, 0], [1, 1], [0, 1]];
+/** Neon uvs: v runs across the tube (the shader's tube profile); UVP for upright posts. */
+const UVQ = [[0, 0], [1, 0], [1, 1], [0, 1]], UVP = [[0, 0], [0, 1], [1, 1], [1, 0]];

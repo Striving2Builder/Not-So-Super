@@ -50,27 +50,45 @@ export class Street {
       vertexShader: /* glsl */`
 attribute vec4 aSeg; attribute vec2 aCar; attribute vec3 aBody; attribute float aY;
 uniform float uTime; uniform float uNight; uniform vec2 res; uniform float uHazeFar; uniform float uReach;
-varying vec3 vC; varying float vA;
+varying vec3 vC; varying float vA; varying vec4 vSeg; varying float vR;
 void main() {
   vec2 A = aSeg.xy, B = aSeg.zw; float len = length(B - A);
+  vec2 dir = (B - A) / len;
   vec2 p = mix(A, B, fract(aCar.x + uTime * aCar.y / len));
   vec3 wp = vec3(p.x, aY, p.y);
   vec4 mv = viewMatrix * vec4(wp, 1.);
   float d = -mv.z;
-  gl_Position = projectionMatrix * mv;
+  vec4 c0 = projectionMatrix * mv;
   float head = step(0., dot(B - A, cameraPosition.xz - p));
   vec3 light = mix(vec3(1.0, 0.1, 0.06), vec3(1.0, 0.93, 0.72), head);
-  vC = mix(aBody * 0.8, light * 1.5, smoothstep(0.15, 0.5, uNight));
+  float nk = smoothstep(0.15, 0.5, uNight);
+  vC = mix(aBody * 0.8, light * 1.5, nk);
   vA = (1. - smoothstep(uReach * 0.6, uReach, d)) * (1. - smoothstep(uHazeFar * 0.5, uHazeFar * 0.85, d));
-  gl_PointSize = vA <= 0. ? 0. : clamp(2.6 * projectionMatrix[1][1] * res.y * 0.5 / max(d, 1.), 1.5, 12.);
+  float base = clamp(2.6 * projectionMatrix[1][1] * res.y * 0.5 / max(d, 1.), 1.5 + nk * 0.7, 12.);
+  // night: a long-exposure light streak trailing each car (~1.3 s of travel), so the
+  // streets read as rivers of light from the air; by day a plain dot of body colour
+  vec4 c1 = projectionMatrix * viewMatrix * vec4(wp - vec3(dir.x, 0., dir.y) * aCar.y * 1.3, 1.);
+  vec2 s0 = c0.xy / c0.w * 0.5 * res, s1 = c1.w > 0.5 ? c1.xy / c1.w * 0.5 * res : s0;
+  vec2 seg = (s1 - s0) * nk;
+  float sl = min(length(seg), 72.);
+  seg = sl > 0.01 ? normalize(seg) * sl : vec2(0.);
+  float size = base + sl;
+  gl_Position = vec4((s0 + seg * 0.5) / (0.5 * res) * c0.w, c0.z, c0.w);
+  // the streak in sprite units (gl_PointCoord runs y-down): head end, tail end; radius
+  vec2 h = seg * 0.5 / size;
+  vSeg = vec4(-h.x, h.y, h.x, -h.y);
+  vR = base * 0.5 / size;
+  gl_PointSize = vA <= 0. ? 0. : size;
 }`,
       fragmentShader: /* glsl */`
-varying vec3 vC; varying float vA;
+varying vec3 vC; varying float vA; varying vec4 vSeg; varying float vR;
 void main() {
-  float r = length(gl_PointCoord - 0.5);
-  float a = smoothstep(0.5, 0.15, r) * vA;
-  if (a < 0.02) discard;
-  gl_FragColor = vec4(vC, a);
+  vec2 q = gl_PointCoord - 0.5, a = vSeg.xy, ab = vSeg.zw - vSeg.xy;
+  float t = clamp(dot(q - a, ab) / max(dot(ab, ab), 1e-6), 0., 1.);
+  float r = length(q - a - ab * t) / vR;
+  float al = smoothstep(1., 0.3, r) * vA * (1. - 0.75 * t); // bright at the car, fading back along the trail
+  if (al < 0.02) discard;
+  gl_FragColor = vec4(vC, al);
 }`,
     }));
     this.cars.frustumCulled = false;
