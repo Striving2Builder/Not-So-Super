@@ -32,17 +32,17 @@ void main() {
   gl_FragColor = vec4((lB < lMin || lB > lMax) ? a : b, 1.0);
   }
 #else
-  // the upscale to the canvas: bilinear + a contrast-adaptive sharpen (AMD CAS-style) at the
-  // scene's texel spacing. It gives the edge contrast bilinear magnification smears away back,
-  // sharpens least where local contrast is already high (no ringing halos round the ink lines)
-  // and is clamped to its neighbours' range (never overshoots).
+  // the upscale to the canvas: bilinear + a contrast-adaptive sharpen (CAS-style) at the scene's
+  // texel spacing. It gives back the edge contrast bilinear magnification smears away, sharpens
+  // least where local contrast is already high (no ringing halos round the ink lines) and is
+  // clamped to its neighbours' range (never overshoots). Two diagonal taps (each a bilinear blend
+  // of a 2x2 block) stand in for CAS's four: the pass runs at the canvas's full density.
   vec3 c = cM.rgb;
   if (sharp > 0.0) {
-    vec3 n = texture2D(tDiffuse, vUv - vec2(0.0, px.y)).rgb, s = texture2D(tDiffuse, vUv + vec2(0.0, px.y)).rgb;
-    vec3 w = texture2D(tDiffuse, vUv - vec2(px.x, 0.0)).rgb, e = texture2D(tDiffuse, vUv + vec2(px.x, 0.0)).rgb;
-    vec3 mn = min(c, min(min(n, s), min(w, e))), mx = max(c, max(max(n, s), max(w, e)));
-    vec3 k = sqrt(clamp(min(mn, 1.0 - mx) / max(mx, vec3(1e-4)), 0.0, 1.0)) * (-1.0 / mix(8.0, 5.0, sharp));
-    c = clamp((c + k * (n + s + w + e)) / (1.0 + 4.0 * k), mn, mx);
+    vec3 a = texture2D(tDiffuse, vUv + px * vec2(0.75, -0.75)).rgb, b = texture2D(tDiffuse, vUv - px * vec2(0.75, -0.75)).rgb;
+    vec3 mn = min(c, min(a, b)), mx = max(c, max(a, b));
+    vec3 k = sqrt(clamp(min(mn, 1.0 - mx) / max(mx, vec3(1e-4)), 0.0, 1.0)) * mix(0.6, 1.4, sharp);
+    c = clamp(c + (c - 0.5 * (a + b)) * k, mn, mx);
   }
   gl_FragColor = vec4(c, 1.0);
 #endif
