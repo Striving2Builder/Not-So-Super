@@ -1,8 +1,9 @@
 # Polish pass: status and handoff
 
 Read this first when picking the polish pass up in a new thread. Last updated 2026-10-02, after
-flight/city round 7 was merged and blind-tested (the r8fly critic, 4.0). No builders are running: the
-next step is to start round 8 from "Next round" below. The companion docs are [BRIEF.md](BRIEF.md) (the builder brief),
+flight/city round 7 was merged and blind-tested (the r8fly critic, 4.0). **Round 8 is running** (3 builders
+in worktrees: city ground = brief 1 + city parts of 3/5/6; hero framing = 2; sky/clouds/post/speed
+lines = 3/4/5/6). If they're gone in a new thread, check the `worktree-agent-*` branches for WIP. The companion docs are [BRIEF.md](BRIEF.md) (the builder brief),
 [ARCHITECTURE.md](ARCHITECTURE.md) (module map and target layout) and [ASSETS.md](ASSETS.md) (incoming art).
 
 ## How the loop runs
@@ -37,6 +38,8 @@ next step is to start round 8 from "Next round" below. The companion docs are [B
 - **3D flight:** real 3D (three.js) and the default; `?flight=2d` keeps the old view. The Superman UE5 demo is the north star for feel; the blind bar is LEGO Batman mobile, GTA mods, Spider-Man, Prototype and Saints Row IV. The comic-book style stays.
 - **Priority:** flying + city buildings + gameplay first. **Character art is delayed**, but hero *render quality* (aliasing, pixelation) is fair game.
 - **Story through video:** the LIVE feed panel and video keyed into green screens tell the story. Never shrink, hide or move them.
+- **Shadows (2026-10-02):** no real cast shadow maps for now (too costly for HTML5); use cheap contact shading/AO. The user would love real sun shadows later if they become affordable.
+- **Comic style stays** in every round (restated 2026-10-02): outlined, flat-shaded clouds and ink lines are kept; only their execution is fixed.
 - **Brawler:** keep the procedural streets and mix the painted façades in.
 - **Asylum:** after sedation, a forced, unskippable 30 s clip plays on the cell TV.
 - **Billboards:** losing a street fight (health 0) plays your footage on the district's billboards.
