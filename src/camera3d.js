@@ -43,7 +43,7 @@ export const cameraMethods = {
   },
 
   render() {
-    if (!this.scene) return;
+    if (!this.scene || this.warming) return; // (shaders still compiling behind the LOADING card)
     const h = this.hero.position, st = this.g.state;
     const target = this.cameraPitch(h), snap = this.camPitch === null;
     // tilt up quickly to get out from behind a wall; settle back down gently

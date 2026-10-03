@@ -106,6 +106,12 @@ export class CityArt {
     return e.c;
   }
 
+  /** Forget tile (tx, ty): its canvas goes back to the pool (the 3D city freed the texture made from it). */
+  drop(tx, ty, lit) {
+    const k = this.key(tx, ty) * 2 + (lit ? 1 : 0), e = this.ground.get(k);
+    if (e) { this.ground.delete(k); this.pool.push(e.c); }
+  }
+
   evict(map, frame, drop = false) {
     // drop the quarter that was used longest ago
     const es = [...map.entries()].sort((a, b) => a[1].f - b[1].f);

@@ -2,6 +2,8 @@
 // renderers, the main loop and the club loader read. The player picks Auto / High / Battery saver;
 // Auto resolves to a profile from the device type, then from the frame rate it actually measures.
 
+import { IOS } from './gfx.js';
+
 const KEY = 'supergirl-settings';
 
 /**
@@ -34,7 +36,7 @@ export const PROFILES = {
     look3d: 'full',
     nightlife: 'full',
     flyDetail: true, flyTileRes: 144, flySpriteMax: 640, fly3dDpr: [1.25, 1.1], fly3dHero: [4, 1], fly3dAA: 'msaa', fly3dOut: 3, fly3dSharp: 0.6,
-    fly3dSharpTaps: 4,
+    fly3dSharpTaps: 2, // (4 cost ~5% on High for a barely visible gain: see handoff/stability.md)
     scanFilter: true,
     brawlSprite: 256, brawlBakeMs: 900,
   },
@@ -87,11 +89,18 @@ const state = {
 };
 const listeners = [];
 
+/**
+ * iOS / iPadOS (also when the iPad says it's a Mac, or has a trackpad and so a fine pointer): Safari
+ * gives a tab little memory and drops WebGL contexts under pressure, so Auto never picks High there,
+ * and High itself keeps the 3D flight canvas at 2× with FXAA instead of a multisampled full frame.
+ */
+const HIGH_IOS = { ...PROFILES.high, fly3dOut: 2, fly3dAA: 'fxaa', dpr3d: 1.5 };
+
 /** The active graphics profile. */
 export function quality() {
-  if (state.graphics === 'high') return PROFILES.high;
+  if (state.graphics === 'high') return IOS ? HIGH_IOS : PROFILES.high;
   if (state.graphics === 'saver' || state.autoSlow) return PROFILES.saver;
-  return isTouch() ? PROFILES.balanced : PROFILES.high;
+  return isTouch() || IOS ? PROFILES.balanced : PROFILES.high;
 }
 
 export const settings = {
@@ -112,6 +121,12 @@ export const settings = {
   get hero() { return state.hero; },
   cycleHero() { state.hero = HERO_SKINS[(HERO_SKINS.indexOf(state.hero) + 1) % HERO_SKINS.length]; write(); return state.hero; },
   onChange(fn) { listeners.push(fn); },
+  /** After the browser killed the tab (out of memory): Auto drops to Battery saver, like a slow device. */
+  afterCrash() {
+    if (state.graphics !== 'auto' || state.autoSlow) return false;
+    state.autoSlow = true; write(); changed();
+    return true;
+  },
 };
 
 function changed() { const q = quality(); for (const fn of listeners) fn(q); }

@@ -9,12 +9,17 @@ import { RNG } from './rng.js';
 import { sfx } from './sfx.js';
 import { banner, toast } from './ui.js';
 import { comic } from './comic.js';
-import { quality } from './settings.js';
 import { Stage } from './brawlstage.js';
-import { spriteBudget, prewarm, CORE_ANIMS, LOOKS, VARIANTS } from './brawlsprite.js';
+import { spriteBudget, prewarm, spritesReady, CORE_ANIMS, LOOKS, VARIANTS } from './brawlsprite.js';
+import { heroReady, HeroSprite } from './hero3d.js';
+import { loadingPanel } from './gfx.js';
 import { EN, DZ } from './brawldata.js';
 import { actorDraw } from './brawlactors.js';
 import { fxDraw } from './brawlfx.js';
+
+// Zone loading: per-frame bake budget (ms), the longest the card may stay up, and how long to wait
+// for crook models that are still downloading before fighting the procedural stand-ins.
+const LOAD = { stepMs: 40, maxMs: 6000, modelWaitMs: 2500 };
 
 export class Brawler {
   constructor(g) { this.g = g; }
@@ -84,12 +89,12 @@ export class Brawler {
     const lk = (ws) => [...new Set(ws.flatMap((w) => w.looks))].filter((l) => LOOKS[l]);
     this.looks = lk(this.waves);
     this.firstLooks = lk(this.waves.slice(0, 1)).filter((l) => LOOKS[l].model !== 'riddler');
-    // Bake the crooks' sprites up front, behind the zone transition (~0.1 s on a phone GPU); anything
-    // left over trickles in during the banner.
-    this.warm = this.bossWarm = false;
-    spriteBudget(quality().brawlBakeMs || 900);
-    this.warm = false;
-    this.coreWarm = prewarm(this.firstLooks, CORE_ANIMS);
+    // The crooks' sprite bakes, her sprite renderer and the street's painted set load over the next
+    // frames behind a LOADING card (load()); done here in one go they froze the last flight frame
+    // for seconds on an iPad. Anything left over trickles in during the banner.
+    this.warm = this.bossWarm = this.coreWarm = false;
+    this.loading = 0; this.loadT = performance.now();
+    loadingPanel('LOADING…');
 
     g.input.setStick(true);
     g.input.setButtons([
@@ -103,10 +108,32 @@ export class Brawler {
     $('hud-title').textContent = `${zone.name} · ${this.D.name}`;
     $('objectives').classList.add('on');
     g.vice = { active: false };
+  }
+
+  /**
+   * One loading step per frame, then the fight starts. Frames 1–2 only put the card on screen;
+   * then her sprite renderer (shader compile + texture upload), the crooks' core clips at ~40 ms a
+   * frame, and a last frame that paints the street set while the card is still up.
+   */
+  load() {
+    const L = ++this.loading, late = performance.now() - this.loadT > LOAD.maxMs;
+    if (L < 3) return;
+    if (L === 3) { if (heroReady()) { this.sprite = this.sprite || new HeroSprite(220, 300); this.sprite.render({ view: 'side', span: 2.6, lift: 0.12 }); } return; }
+    if (this.paintNext) { this.startFight(); return; }
+    spriteBudget(LOAD.stepMs);
+    if (!this.coreWarm) this.coreWarm = prewarm(this.firstLooks, CORE_ANIMS);
+    // (the crook models still downloading: wait for them, up to the cap; procedural stand-ins after that)
+    if (this.coreWarm || late || (!this.firstLooks.some(spritesReady) && performance.now() - this.loadT > LOAD.modelWaitMs)) this.paintNext = true;
+  }
+
+  startFight() {
+    this.loading = null; this.paintNext = false;
+    loadingPanel(null);
+    const zone = this.zone;
     banner(zone.name.toUpperCase(), this.fire ? 'Put out the fires · Rescue the trapped' : 'Clear the street · Save the captives', '#ffd23f');
   }
 
-  exit() { $('objectives').classList.remove('on'); }
+  exit() { $('objectives').classList.remove('on'); loadingPanel(null); }
 
   /** Screen geometry: bigger fighters than a flat side view, lane in the lower half. */
   geom() {
@@ -128,6 +155,7 @@ export class Brawler {
   // ------------------------------------------------------------------ update
   update(dt) {
     if (this.done) return;
+    if (this.loading !== null) { this.load(); return; }
     const g = this.g;
     this.geom();
     // presentation timers run in real time, even through hit-stop
@@ -739,6 +767,7 @@ export class Brawler {
   // ------------------------------------------------------------------ render
   render(ctx) {
     const g = this.g, W = g.w, H = g.h;
+    if (this.loading !== null && !this.paintNext) { ctx.fillStyle = '#0b0b16'; ctx.fillRect(0, 0, W, H); return; } // (the LOADING card is up)
     this.geom();
     const k = this.k;
     const night = g.state.night;

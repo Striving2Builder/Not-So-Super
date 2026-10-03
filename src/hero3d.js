@@ -8,6 +8,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { Cape, stripModelCape } from './cape.js';
 import { settings, HERO_SKINS } from './settings.js';
+import { renderToCanvas } from './offscreen3d.js';
 
 // Her costume: the pause-menu choice, or ?hero=classic|ponytail (same rig and atlas layout, so the
 // clips, the cape and the flight shaders work on every variant).
@@ -170,13 +171,9 @@ export class HeroModel {
 
 /** Offscreen renderer that turns the 3D heroine into a 2D sprite. */
 export class HeroSprite {
-  /** aa: false skips MSAA (the flight view inks her outline itself, and MSAA is costly on weak GPUs). */
-  constructor(w = 256, h = 256, { aa = true } = {}) {
+  /** Rendered by the shared offscreen renderer (offscreen3d.js) into this sprite's own 2D canvas. */
+  constructor(w = 256, h = 256) {
     this.canvas = document.createElement('canvas');
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: aa, preserveDrawingBuffer: true });
-    this.renderer.setPixelRatio(1);
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.setClearColor(0x000000, 0);
     this.scene = new THREE.Scene();
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x556070, 2.3));
     const key = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -196,7 +193,6 @@ export class HeroSprite {
   setSize(w, h) {
     if (this.w === w && this.h === h) return;
     this.w = w; this.h = h;
-    this.renderer.setSize(w, h, false);
   }
 
   /**
@@ -232,7 +228,7 @@ export class HeroSprite {
     }
     c.updateProjectionMatrix();
     if (!this.still) this.hero.cape.tick(); // cloth advances with real time between sprite frames
-    this.renderer.render(this.scene, c);
+    renderToCanvas(this.canvas, this.scene, c, this.w, this.h);
     return this.canvas;
   }
 }

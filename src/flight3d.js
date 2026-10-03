@@ -17,20 +17,25 @@ import { DISTRICTS } from './data.js';
 import { quality } from './settings.js';
 import { lerp } from './util.js';
 import { sfx } from './sfx.js';
+import { hasWebGL } from './gfx.js';
+import { releaseOffscreen } from './offscreen3d.js';
 
 /**
  * Flight in 3D? The default since it beat the 2D view 6/6 in blind tests (2026-10-02). `?flight=2d`
  * keeps the old top-down view, and so does a device without WebGL. Read once.
  */
-let on;
+let on, blocked = false;
 export function flight3dEnabled() {
   if (on === undefined) {
     let param = null;
     try { param = new URLSearchParams(location.search).get('flight'); } catch (e) { /* no URL */ }
     on = param !== '2d' && hasWebGL();
+    blocked = param !== '2d' && !on;
   }
   return on;
 }
+/** 3D was wanted but the browser gave no WebGL (e.g. iOS after GPU trouble): the 2D view says why. */
+export const flight3dBlocked = () => blocked;
 /** `?dynres=off` pins dynamic resolution at full scale (screenshot harness on slow SwiftShader). */
 let pinned;
 function dynResPinned() {
@@ -38,9 +43,6 @@ function dynResPinned() {
     try { pinned = new URLSearchParams(location.search).get('dynres') === 'off'; } catch (e) { pinned = false; }
   }
   return pinned;
-}
-function hasWebGL() {
-  try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; }
 }
 
 /**
@@ -93,6 +95,7 @@ export class Flight3D {
   constructor(ow) {
     this.ow = ow;
     this.g = ow.g;
+    this.bands2d = BANDS.map((b) => [b.z, b.speedMul]); // (put back if WebGL goes away: drop2D)
     setBandHeights(LOOK3.bands);
     LOOK3.speedMul.forEach((s, i) => { BANDS[i].speedMul = s; });
     this.scene = null;
@@ -129,6 +132,7 @@ export class Flight3D {
     const special = this.g.modes.special;
     special.initRenderer(); // the one WebGL renderer the 3D zones share
     this.renderer = special.renderer;
+    releaseOffscreen(); // (the sprite baker's context: the city wants the memory)
     if (!this.scene || this.city !== this.g.city) this.build();
     document.body.classList.add('fly3d');
     if (!this.dragHooked) {
@@ -147,8 +151,19 @@ export class Flight3D {
 
   exit() {
     document.body.classList.remove('fly3d');
+    // the flight-only render targets (full-screen scene + post + her pass) go while a zone plays;
+    // they are rebuilt on the first frame back
+    this.post?.dispose(); this.heroPass?.dispose();
     if (this.renderer) this.renderer.info.autoReset = true;
     this.g.modes.special.resize(); // hand the shared renderer back at the zones' resolution
+  }
+
+  /** WebGL is gone for good: hand the flight back to the 2D view's bands and free what we can. */
+  drop2D() {
+    document.body.classList.remove('fly3d');
+    this.bands2d.forEach(([z, k], i) => { BANDS[i].z = z; BANDS[i].speedMul = k; });
+    this.post?.dispose(); this.heroPass?.dispose();
+    this.scene = null;
   }
 
   steer(a) { return this.cam ? this.cam.steer(a) : a; }

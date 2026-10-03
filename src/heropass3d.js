@@ -8,9 +8,9 @@ import * as THREE from 'three';
 import { LOOK } from './look3d.js';
 
 export const HERO_LAYER = 1;
-// pad: margin round her bounding sphere; taps: the silhouette ink's dilation samples (the body's
+// pad: her bounding sphere's scale (her radius already holds the cape; the keyline's own width is added in px); taps: the silhouette ink's dilation samples (the body's
 // own ink hull covers gaps at thin limbs); ink: its colour; halo: rgb + alpha of the night halo
-const PASS = { pad: 1.2, bucket: 64, taps: 8, ink: 0x0b0b16, halo: [0.85, 0.9, 1.0, 0.45] };
+const PASS = { pad: 1.0, bucket: 64, taps: 6, ink: 0x0b0b16, halo: [0.85, 0.9, 1.0, 0.45] };
 
 const _v = new THREE.Vector3(), _res = new THREE.Vector2(), _cc = new THREE.Color();
 
@@ -82,7 +82,7 @@ ${halo}  }
     _v.copy(center).project(cam);
     if (_v.z > 1 || _v.z < -1) return;
     const dist = cam.position.distanceTo(center);
-    const pr = (radius * PASS.pad) / (dist * Math.tan((cam.fov * Math.PI) / 360)) * (H / 2) / (cam.zoom || 1);
+    const pr = (radius * PASS.pad) / (dist * Math.tan((cam.fov * Math.PI) / 360)) * (H / 2) / (cam.zoom || 1) + line[0] + line[1] + 2; // (every pixel of her rect pays for the keyline: no spare margin)
     const sx = (_v.x * 0.5 + 0.5) * W, sy = (-_v.y * 0.5 + 0.5) * H;
     const x0 = Math.max(0, Math.floor(sx - pr)), y0 = Math.max(0, Math.floor(sy - pr));
     const x1 = Math.min(W, Math.ceil(sx + pr)), y1 = Math.min(H, Math.ceil(sy + pr));
