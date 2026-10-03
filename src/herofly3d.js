@@ -2,8 +2,8 @@
 // ink like the 3D zones), posed from the flight state in three clear silhouettes: CRUISE (one fist
 // forward, chest up, legs together trailing), BOOST (both fists forward, legs locked together) and
 // DIVE (head-first, both fists down); upright hover only near a standstill; rolling into turns.
-// Her cape is a ribbon (a short chain that streams behind her and ripples harder with speed),
-// inked on both edges so it reads as a shape, not cloth noise. Her costume gets its own materials:
+// Her cape (capefly3d.js) is a short tapered sheet with folds that streams behind her and ripples
+// harder with speed. Her costume gets its own materials:
 // pushed saturation, a little self-light and a cyan-white rim, so her red reads against a red
 // dusk sky and a night city alike; plus an inked contact shadow on the street or roof below her.
 import * as THREE from 'three';
@@ -11,6 +11,7 @@ import { HeroModel, heroReady } from './hero3d.js';
 import { inkCharacter, comic, gradMap } from './look3d.js';
 import { HERO_LAYER } from './heropass3d.js';
 import { M } from './city3d.js';
+import { FlightCape, CAPE_LIGHT } from './capefly3d.js';
 
 const POSE = {
   scale: 1.5,       // model metres → scene metres (heroic: she's the star of the shot)
@@ -25,15 +26,12 @@ const POSE = {
   shadow: 0x05060f,
 };
 /** Costume read: saturation, self-light (fraction of albedo), cyan-white rim (only the silhouette). */
-const SUIT = { sat: 1.45, self: 0.32, rim: [0.62, 0.95, 1.0], rimK: [1.3, 2.4] }; // rimK: open sky / against dark walls
+const SUIT = { sat: 1.45, self: 0.32, rim: [0.62, 0.95, 1.0], rimK: [1.3, 2.4], rimEdge: [0.82, 0.92] }; // rimK: open sky / against dark walls; rimEdge: its fresnel band
 /** Her hair: the model's fur-textured strands (this UV rect of the atlas) become a flat blonde mass. */
-const HAIR = { uv: [0.0, 0.58, 0.6, 1.0], lit: [1.0, 0.74, 0.26], shade: [0.55, 0.28, 0.06] }; // (linear colours)
+const HAIR = { uv: [0.0, 0.58, 0.6, 1.0], lit: [0.92, 0.66, 0.2], mid: [0.72, 0.42, 0.08], shade: [0.36, 0.16, 0.035], cut: [0.3, 0.55] }; // (linear colours; cut: light-band thresholds mid / lit)
 /** Rim strength, shared by her materials (raised in the dark street canyons). */
 export const RIM = { value: SUIT.rimK[0] };
 export const RIM_K = SUIT.rimK;
-/** Ribbon cape: segments, segment length / widths at the shoulders and hem (m, × her scale). */
-const CAPE = { segs: 8, len: 0.18, w: [0.1, 0.36], ink: 0.035, tones: ['#7d0912', '#c4121d', '#ec2a2a', '#c4121d', '#7d0912'] }; // w: half-width at shoulders / hem
-
 /** Her own cel material for one source material (not the zones' shared cache: these are pushed). */
 function suitMaterial(src, self, rim = true) {
   const m = new THREE.MeshToonMaterial({
@@ -41,10 +39,10 @@ function suitMaterial(src, self, rim = true) {
     transparent: !!src.transparent && (src.opacity ?? 1) < 0.99, opacity: src.opacity ?? 1, alphaTest: src.alphaTest || 0, side: src.side ?? THREE.FrontSide,
   });
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.suitRim = RIM;
+    sh.uniforms.suitRim = RIM; sh.uniforms.suitKey = CAPE_LIGHT.key;
     const H = HAIR.uv.map((v) => v.toFixed(3));
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float suitRim;')
+      .replace('#include <common>', '#include <common>\nuniform float suitRim; uniform vec3 suitKey;')
       .replace('#include <map_fragment>', `#include <map_fragment>
 float hairK = 0.0;
 #ifdef USE_MAP
@@ -56,15 +54,23 @@ float hairK = 0.0;
 }
 #endif
 { float l = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114)); diffuseColor.rgb = max(mix(vec3(l), diffuseColor.rgb, ${SUIT.sat.toFixed(2)}), 0.0); }`)
-      // a thin rim on the true silhouette edge, from the upper side (limbs seen end-on would
-      // otherwise light up all over)
+      // a back-light rim on the true silhouette (her outline separates from the city behind her):
+      // strongest on the edges turned away from the key light, and along her top
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 totalEmissiveRadiance += diffuseColor.rgb * ${self.toFixed(2)};
 ${rim ? `{ float rf = 1.0 - abs(dot(normal, normalize(vViewPosition)));
-  float rd = smoothstep(-0.2, 0.5, dot(normal, vec3(0.0, 1.0, 0.0)));
-  totalEmissiveRadiance += vec3(${SUIT.rim.join(', ')}) * suitRim * (1.0 - 0.75 * hairK) * smoothstep(0.8, 0.9, rf) * rd; }` : ''}`)
-      // hair: two hard cel tones (shade where the light band is low), no texture detail
-      .replace('#include <opaque_fragment>', `outgoingLight = mix(outgoingLight, mix(vec3(${HAIR.shade.join(', ')}), vec3(${HAIR.lit.join(', ')}), step(0.42, dot(outgoingLight, vec3(0.333)) / 0.85)) * 0.95, hairK);
+  vec2 kd = (viewMatrix * vec4(suitKey, 0.0)).xy; kd = kd / max(1e-3, length(kd));
+  vec2 ns = normal.xy / max(1e-3, length(normal.xy));
+  float rd = max(smoothstep(-0.2, 0.5, normal.y), smoothstep(-0.2, 0.6, -dot(ns, kd)));
+  totalEmissiveRadiance += vec3(${SUIT.rim.join(', ')}) * suitRim * (1.0 - 0.75 * hairK) * smoothstep(${SUIT.rimEdge.join(', ')}, rf) * rd; }` : ''}`)
+      // hair: three hard cel tones from the light band, and the underside (facing the ground) always
+      // in the darkest, so her head reads as one solid shape rather than strands
+      .replace('#include <opaque_fragment>', `{ float hl = dot(outgoingLight, vec3(0.333)) / 0.85;
+  float under = smoothstep(-0.05, -0.35, (vec4(normal, 0.0) * viewMatrix).y);
+  float tone = step(${HAIR.cut[0]}, hl) + step(${HAIR.cut[1]}, hl);
+  tone = min(tone, 2.0 * (1.0 - under));
+  vec3 hc = tone > 1.5 ? vec3(${HAIR.lit.join(', ')}) : tone > 0.5 ? vec3(${HAIR.mid.join(', ')}) : vec3(${HAIR.shade.join(', ')});
+  outgoingLight = mix(outgoingLight, hc, hairK); }
 #include <opaque_fragment>`);
   };
   m.customProgramCacheKey = () => `suit${self}${rim}`;
@@ -73,82 +79,10 @@ ${rim ? `{ float rf = 1.0 - abs(dot(normal, normalize(vViewPosition)));
 
 const smooth = (a, b, x) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
 
-/** The ribbon cape: a chain from her shoulders, drawn as a red strip over a slightly wider ink strip. */
-class RibbonCape {
-  constructor(scene) {
-    const n = CAPE.segs + 1;
-    this.p = Array.from({ length: n }, () => new THREE.Vector3());
-    this.placed = false;
-    const strip = (mat) => {
-      const g = new THREE.BufferGeometry();
-      // three columns (edge, spine, edge): the cross-section is an arch, so it has body from any side
-      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3 * 3), 3).setUsage(THREE.DynamicDrawUsage));
-      const idx = [];
-      for (let i = 0; i < n - 1; i++) { const a = i * 3; idx.push(a, a + 3, a + 1, a + 1, a + 3, a + 4, a + 1, a + 4, a + 2, a + 2, a + 4, a + 5); }
-      g.setIndex(idx);
-      const mesh = new THREE.Mesh(g, mat);
-      mesh.frustumCulled = false; mesh.layers.set(HERO_LAYER);
-      scene.add(mesh);
-      return mesh;
-    };
-    this.ink = strip(new THREE.MeshBasicMaterial({ color: 0x0b0b16, side: THREE.DoubleSide }));
-    // comic red in hard cel bands across its width (dark folds at the edges, a lit crest), so it
-    // reads as a curved sheet from behind, not a flat slab
-    const c = document.createElement('canvas'); c.width = 64; c.height = 4;
-    const g = c.getContext('2d'), bw = 64 / CAPE.tones.length;
-    CAPE.tones.forEach((t, i) => { g.fillStyle = t; g.fillRect(Math.round(i * bw), 0, Math.ceil(bw), 4); });
-    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-    this.cloth = strip(new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 })); // (wins over the ink sheet it lies on: ink shows only past its edges)
-    const uv = new Float32Array(n * 3 * 2);
-    for (let i = 0; i < n; i++) uv.set([0, i / (n - 1), 0.5, i / (n - 1), 1, i / (n - 1)], i * 6);
-    this.cloth.geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-    this._t = new THREE.Vector3(); this._a = new THREE.Vector3(); this._b = new THREE.Vector3();
-  }
-
-  /** anchor: world point on her upper back; back/up/side: her body axes (unit); v: airspeed m/s. */
-  update(anchor, back, up, side, v, t, dt, size, whip) {
-    const n = this.p.length, L = CAPE.len * POSE.scale * size;
-    const sk = Math.min(1, v / 60), f = 4 + v / 18, amp = (0.12 + 0.5 * sk) * whip * L;
-    if (!this.placed) { this.placed = true; for (let i = 0; i < n; i++) this.p[i].copy(anchor).addScaledVector(back, i * L); }
-    this.p[0].copy(anchor);
-    for (let i = 1; i < n; i++) {
-      const k = i / (n - 1);
-      // streams back along her body, ripples (a wave running down it, bigger toward the hem),
-      // and droops under gravity when she's slow
-      // around a straight line down her back (not chained off the previous point: a chained wave
-      // compounds into a kite standing off her back): an S-wave that travels to the hem
-      const tgt = this._t.copy(anchor).addScaledVector(back, i * L * (0.3 + 0.7 * sk))
-        .addScaledVector(up, (Math.sin(t * f - i * 0.95) * amp * 0.6 + Math.sin(t * 1.7 - i * 0.7) * L * 0.35) * k)
-        .addScaledVector(side, Math.sin(t * f * 0.63 - i * 0.7) * amp * 0.3 * k);
-      tgt.y -= L * (1 - sk) * 0.9 * i;
-      this.p[i].lerp(tgt, Math.min(1, dt * (8 + v / 6)));
-      // keep the segment length
-      const d = this._a.subVectors(this.p[i], this.p[i - 1]), len = d.length() || 1;
-      this.p[i].copy(this.p[i - 1]).addScaledVector(d, L / len);
-    }
-    for (const [mesh, extra] of [[this.ink, CAPE.ink], [this.cloth, 0]]) {
-      const pos = mesh.geometry.attributes.position;
-      for (let i = 0; i < n; i++) {
-        const f = i / (n - 1), w = ((CAPE.w[0] + (CAPE.w[1] - CAPE.w[0]) * Math.sqrt(f)) * POSE.scale + extra) * size, q = this.p[i]; // (flares fast, then hangs wide)
-        // the ink strip also runs a little past the hem
-        const tail = extra && i === n - 1 ? this._a.subVectors(q, this.p[i - 1]).normalize().multiplyScalar(extra * size) : null;
-        const x = q.x + (tail ? tail.x : 0), y = q.y + (tail ? tail.y : 0), z = q.z + (tail ? tail.z : 0);
-        // the hem: a pointed swallow tip (the spine trails past the corners), never a square-cut slab
-        const tip = i === n - 1 ? this._b.subVectors(q, this.p[i - 1]).normalize().multiplyScalar(w * 0.6) : this._b.set(0, 0, 0);
-        // the edges curl down away from the spine (more toward the hem) and flutter out of phase
-        const curl = w * (0.1 + 0.16 * f), fl = Math.sin(t * 6 - i * 1.1) * w * 0.14 * f;
-        pos.setXYZ(i * 3, x + side.x * w - up.x * (curl + fl), y + side.y * w - up.y * (curl + fl), z + side.z * w - up.z * (curl + fl));
-        pos.setXYZ(i * 3 + 1, x + tip.x, y + tip.y, z + tip.z);
-        pos.setXYZ(i * 3 + 2, x - side.x * w - up.x * (curl - fl), y - side.y * w - up.y * (curl - fl), z - side.z * w - up.z * (curl - fl));
-      }
-      pos.needsUpdate = true;
-    }
-  }
-
-  set visible(v) { this.ink.visible = this.cloth.visible = v; }
-}
-
 export class FlyHero3D {
+  /** Her bounding radius about the pivot (m, before the patrol enlargement): her reach to the punching fist; the short cape stays inside it. Sizes her sharp pass. */
+  static RADIUS = 2.1;
+
   constructor(scene) {
     this.scene = scene;
     this.group = new THREE.Group();
@@ -166,7 +100,8 @@ export class FlyHero3D {
     this.shadow = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, color: POSE.shadow, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
     this.shadow.renderOrder = 2;
     scene.add(this.shadow);
-    this.cape = new RibbonCape(scene);
+    this.cape = new FlightCape(scene);
+    this.sun = scene.children.find((o) => o.isDirectionalLight) || null; // Sky3D's sun/moon (added before her; the camera fill comes later)
     this.cape.visible = false;
     this._f = new THREE.Vector3(); this._s = new THREE.Vector3(); this._o = new THREE.Vector3(); this._q = new THREE.Quaternion(); this._d = new THREE.Vector3();
     this._l = new THREE.Vector3(); this._r = new THREE.Vector3(); this._mid = new THREE.Vector3(); this._in = new THREE.Vector3();
@@ -220,7 +155,7 @@ export class FlyHero3D {
     const m = this.model;
     if (h.perch || hover) m.play('idle', { fade: 0.3 });
     else m.play('fly', { fade: 0.3 });
-    m.update(dt);
+    m.mixer.update(dt); // (not m.update: the zones' simulated cloth cape is hidden in flight, don't step it)
     for (const f of ['LeftFoot', 'RightFoot']) m.bones[f]?.scale.setScalar(POSE.boot); // (the boots read oversized from behind; after the clip, which keys scale)
     const fly = h.perch || hover ? 0 : fk;
     if (fly > 0) this.flyPose(fly, this.boostK, t);
@@ -235,7 +170,12 @@ export class FlyHero3D {
     const out = fly > 0.5 ? up : fwd.negate();
     anchor.addScaledVector(out, 0.06 * POSE.scale * this.size);
     this.cape.visible = true;
-    this.cape.update(anchor, back, out, side, h.speed * M, t, dt, this.size, boost ? 1.7 : 1);
+    this.cape.update(anchor, back, out, side, h.speed * M, t, dt, POSE.scale * this.size, boost ? 1.7 : 1);
+    if (this.sun) { // the cape's key light and tint follow the sun/moon (darker, cooler at night)
+      CAPE_LIGHT.key.value.subVectors(this.sun.position, this.sun.target.position).normalize();
+      const day = Math.min(1, Math.max(0, (this.sun.intensity - 0.7) / 1.6));
+      CAPE_LIGHT.tint.value.setRGB(1, 1, 1).lerp(this.sun.color, 0.35).multiplyScalar(0.7 + 0.3 * day);
+    }
   }
 
   /**
