@@ -91,7 +91,10 @@ render hand-off, enter/exit, the boost kick, and the 3D flight button set (`setB
   `fly3dDpr` caps (`LOOK3.dynRes`).
 - `herofly3d.js` — the HeroModel posed from the flight state (hover idle / fist-forward with
   trailing legs / bank / cape), her own pushed-saturation suit materials + rim, inked blob shadow,
-  enlarged in the patrol view. Tables: `POSE`, `SUIT`.
+  enlarged in the patrol view; back-light rim and 3-tone hair. Tables: `POSE`, `SUIT`, `HAIR`.
+- `capefly3d.js` — her flight cape: a tapered, folded sheet on a rippling spine chain, two-tone cel
+  from its real normals (darker lining), screen-space ink outline + fold strokes, flattens side-on.
+  Table: `CAPE`.
 - `flightcam3d.js` — chase camera aimed so she sits at a fixed screen spot (lower third, 3/4 rear),
   offset spring, speed FOV, boost pull-back + kick, street-canyon framing at skim (yaw snaps to the
   street axis), a level left-third shot at high patrol, sphere-cast collision (shoulder swap / lift;
