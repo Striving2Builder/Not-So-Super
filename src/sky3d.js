@@ -29,7 +29,7 @@ const SKY = [
   [20.6, '#04071a', '#141038', '#35275e', '#35275e'], // night
 ];
 /** Sun/moon: disc radius (cos of the angle), the disc's highest drawn elevation (sin), day/dusk fills + rim. */
-const SUN = { disc: 0.9988, maxUp: 0.42, day: ['#fff8d8', '#ffb340'], dusk: ['#ffd27a', '#e0582a'], moonFrom: [0.82, 0.95], setBy: [0.55, 0.72] }; // moonFrom / setBy: the game's night value
+const SUN = { disc: 0.9988, maxUp: 0.42, day: ['#fffbe6', '#ffb340'], dusk: ['#fff2c4', '#d8461e'], moonFrom: [0.82, 0.95], setBy: [0.55, 0.72] }; // moonFrom / setBy: the game's night value
 /** Cloud decks (metres) and their three cel tones + ink, per time of day (display colours). */
 const CLOUD = {
   count: 64, layers: [360, 520], size: [44, 250], aspect: [0.44, 0.62], variants: 8,
@@ -57,7 +57,7 @@ void main(){
   // the sun: a flat comic disc with a darker inked rim and a soft glow; anti-aliased by its own slope
   float d = dot(p, discDir), fw = fwidth(d) + 1e-6;
   c += sunCol * (pow(max(d, 0.0), 40.0) * 0.4 + pow(max(d, 0.0), 8.0) * 0.12) * sunK;
-  float disc = clamp((d - ${SUN.disc.toFixed(5)}) / fw + 0.5, 0.0, 1.0), core = clamp((d - ${(SUN.disc + 0.00022).toFixed(5)}) / fw + 0.5, 0.0, 1.0);
+  float disc = clamp((d - ${SUN.disc.toFixed(5)}) / fw + 0.5, 0.0, 1.0), core = clamp((d - ${(SUN.disc + 0.00035).toFixed(5)}) / fw + 0.5, 0.0, 1.0);
   c = mix(c, mix(sunRim, sunCol, core), disc * sunK);
   // the moon (night only): a pale disc + halo
   float m = dot(p, sunDir);
@@ -102,10 +102,14 @@ void main(){
   // nothing sits on her (the lower-left third at high patrol): fade clouds whose centre lands near
   // her, and keep the banks off to her right
   vec4 cc = projectionMatrix * modelViewMatrix * vec4(position, 1.0); vec2 n = cc.xy / max(cc.w, 1e-3);
-  vFade *= mix(1.0, smoothstep(0.35, 0.7, length((n - heroNdc) * vec2(0.8, 1.0))), bankK);
+  vFade *= mix(1.0, smoothstep(0.42, 0.56, length((n - heroNdc) * vec2(0.8, 1.0))), bankK); // (a short ramp: a half-faded cloud reads as a ghost)
   // the huge banks only exist for the high-patrol shot, seen from above, in the lower half of the
   // frame: from below or edge-on their ink outline would scrawl across the whole sky, and up top
   // they were cut off behind the minimap
+  // and no ordinary cloud so close that it spans most of the frame (a wall of fill + ink overhead);
+  // in the high views no big one up in the top half either (cut off behind the minimap and HUD)
+  float halfW = size.x * 0.5 * projectionMatrix[0][0] / max(vDist, 1.0);
+  if (size.x <= ${BIG}) vFade *= (1.0 - smoothstep(0.7, 1.1, halfW)) * (1.0 - bankK * smoothstep(0.18, 0.3, halfW) * smoothstep(0.1, 0.4, n.y));
   if (size.x > ${BIG}) vFade *= smoothstep(0.6, 0.9, bankK) * smoothstep(40.0, 90.0, cameraPosition.y - position.y) * smoothstep(0.15, 0.55, n.x - heroNdc.x) * (1.0 - smoothstep(-0.15, 0.2, n.y));
   gl_Position = projectionMatrix * mv;
 }`;
