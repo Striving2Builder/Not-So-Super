@@ -29,7 +29,7 @@ const SKY = [
   [20.6, '#04071a', '#141038', '#35275e', '#35275e'], // night
 ];
 /** Sun/moon: disc radius (cos of the angle), the disc's highest drawn elevation (sin), day/dusk fills + rim. */
-const SUN = { disc: 0.9988, maxUp: 0.42, day: ['#fffbe6', '#ffb340'], dusk: ['#fff2c4', '#d8461e'], moonFrom: [0.82, 0.95], setBy: [0.55, 0.72] }; // moonFrom / setBy: the game's night value
+const SUN = { disc: 0.9988, maxUp: 0.42, day: ['#fffbe6', '#ffb340'], dusk: ['#ffdc5e', '#d8461e'], moonFrom: [0.82, 0.95], setBy: [0.55, 0.72] }; // moonFrom / setBy: the game's night value
 /** Cloud decks (metres) and their three cel tones + ink, per time of day (display colours). */
 const CLOUD = {
   count: 64, layers: [360, 520], size: [44, 250], aspect: [0.44, 0.62], variants: 8,
@@ -56,8 +56,8 @@ void main(){
   c += (band - mid) * 0.35 * toSun * (1.0 - smoothstep(0.02, 0.3, h)) * step(0.0, band.r - mid.r);
   // the sun: a flat comic disc with a darker inked rim and a soft glow; anti-aliased by its own slope
   float d = dot(p, discDir), fw = fwidth(d) + 1e-6;
-  c += sunCol * (pow(max(d, 0.0), 40.0) * 0.4 + pow(max(d, 0.0), 8.0) * 0.12) * sunK;
-  float disc = clamp((d - ${SUN.disc.toFixed(5)}) / fw + 0.5, 0.0, 1.0), core = clamp((d - ${(SUN.disc + 0.00035).toFixed(5)}) / fw + 0.5, 0.0, 1.0);
+  c += sunCol * (pow(max(d, 0.0), 60.0) * 0.18 + pow(max(d, 0.0), 8.0) * 0.1) * sunK; // (a modest glow: a disc paler than its halo reads as a hollow ring)
+  float disc = clamp((d - ${SUN.disc.toFixed(5)}) / fw + 0.5, 0.0, 1.0), core = clamp((d - ${(SUN.disc + 0.00025).toFixed(5)}) / fw + 0.5, 0.0, 1.0);
   c = mix(c, mix(sunRim, sunCol, core), disc * sunK);
   // the moon (night only): a pale disc + halo
   float m = dot(p, sunDir);
@@ -109,8 +109,10 @@ void main(){
   // and no ordinary cloud so close that it spans most of the frame (a wall of fill + ink overhead);
   // in the high views no big one up in the top half either (cut off behind the minimap and HUD)
   float halfW = size.x * 0.5 * projectionMatrix[0][0] / max(vDist, 1.0);
-  if (size.x <= ${BIG}) vFade *= (1.0 - smoothstep(0.7, 1.1, halfW)) * (1.0 - bankK * smoothstep(0.18, 0.3, halfW) * smoothstep(0.1, 0.4, n.y));
+  if (size.x <= ${BIG}) vFade *= (1.0 - smoothstep(0.7, 1.1, halfW)) * (1.0 - bankK * smoothstep(0.12, 0.22, halfW) * smoothstep(0.1, 0.4, n.y));
   if (size.x > ${BIG}) vFade *= smoothstep(0.6, 0.9, bankK) * smoothstep(40.0, 90.0, cameraPosition.y - position.y) * smoothstep(0.15, 0.55, n.x - heroNdc.x) * (1.0 - smoothstep(-0.15, 0.2, n.y));
+  // every fade is quick in the middle: a cloud lingering half see-through reads as a hollow ghost
+  vFade = smoothstep(0.2, 0.8, vFade);
   gl_Position = projectionMatrix * mv;
 }`;
 const CLOUD_FS = `uniform sampler2D map; uniform vec3 lit; uniform vec3 shade; uniform vec3 under; uniform vec3 ink; uniform vec3 fogCol; uniform float fogNear; uniform float fogFar; uniform float alpha;
