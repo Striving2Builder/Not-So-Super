@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { watchContext, unwatch } from './gfx.js';
 
-let R = null;
+let R = null, failedAt = -1e9;
 
 function offscreen() {
   if (R) return R;
@@ -28,7 +28,10 @@ function offscreen() {
  * false (and leaves `out` as it was) while the context is lost, so callers don't cache a blank.
  */
 export function renderToCanvas(out, scene, cam, w, h) {
-  const o = offscreen(), r = o.renderer;
+  let o;
+  if (!R && performance.now() - failedAt < 5000) return false;
+  try { o = offscreen(); } catch (e) { failedAt = performance.now(); return false; } // (no WebGL to be had: the callers keep their 2D stand-ins; retried every 5 s)
+  const r = o.renderer;
   if (r.getContext().isContextLost()) return false;
   if (o.w < w || o.h < h) { o.w = Math.max(o.w, w); o.h = Math.max(o.h, h); r.setSize(o.w, o.h, false); }
   // (GL's origin is bottom-left: the canvas's top-left w×h corner is y = h0 - h)

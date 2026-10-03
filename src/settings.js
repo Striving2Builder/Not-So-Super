@@ -36,7 +36,7 @@ export const PROFILES = {
     look3d: 'full',
     nightlife: 'full',
     flyDetail: true, flyTileRes: 144, flySpriteMax: 640, fly3dDpr: [1.25, 1.1], fly3dHero: [4, 1], fly3dAA: 'msaa', fly3dOut: 3, fly3dSharp: 0.6,
-    fly3dSharpTaps: 4,
+    fly3dSharpTaps: 2, // (4 cost ~5% on High for a barely visible gain: see handoff/stability.md)
     scanFilter: true,
     brawlSprite: 256, brawlBakeMs: 900,
   },

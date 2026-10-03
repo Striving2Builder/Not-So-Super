@@ -43,7 +43,7 @@ function replaceRenderer(g, old) {
   old.domElement.remove();
   old.dispose();
   Special3D.sharedRenderer = r;
-  for (const m of [...Object.values(g.modes), g.overworld.view3d]) if (m && m.renderer === old) { m.renderer = r; if (m.post) m.post.dispose(); if (m.heroPass) m.heroPass.dispose(); }
+  for (const m of [...Object.values(g.modes), g.overworld.view3d]) if (m && Object.hasOwn(m, 'renderer') && m.renderer === old) { m.renderer = r; if (m.post) m.post.dispose(); if (m.heroPass) m.heroPass.dispose(); }
   if (!r) { g.gfxFailed?.(); return; } // no WebGL left: the game falls back (2D flight, zones abort)
   for (const m of Object.values(g.modes)) if (m.renderer === r && m.resize) m.resize();
   if (g.overworld.view3d) g.overworld.view3d.dpr = 0; // (its canvas size is re-applied next frame)
