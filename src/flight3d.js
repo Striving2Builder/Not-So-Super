@@ -330,7 +330,7 @@ export class Flight3D {
     this.post.render(r, this.scene, this.cam.cam, this.aaQ || quality().fly3dAA, this.cam.boostK * (1 - this.cam.patrolK), _uv, this.sceneScale ?? 1,
       (w, hh) => { LOOK.res.value.set(w, hh); LOOK.dpr.value = outDpr * (w / r.getDrawingBufferSize(_s2).x); }); // (ink widths for the scene's own resolution)
     lookFrame(r); // back to the canvas for her pass
-    if (sharp) this.heroPass.render(r, this.scene, this.cam.cam, this.hero.group.position, 3.4 * this.hero.size, W, H, hq); // (radius: her + the cape)
+    if (sharp) this.heroPass.render(r, this.scene, this.cam.cam, this.hero.group.position, FlyHero3D.RADIUS * this.hero.size, W, H, hq); // (radius: her + the cape)
     this.overlay(ctx, night, frac, boosting);
   }
 

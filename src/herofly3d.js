@@ -80,6 +80,9 @@ ${rim ? `{ float rf = 1.0 - abs(dot(normal, normalize(vViewPosition)));
 const smooth = (a, b, x) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
 
 export class FlyHero3D {
+  /** Her bounding radius about the pivot (m, before the patrol enlargement): her reach to the punching fist; the short cape stays inside it. Sizes her sharp pass. */
+  static RADIUS = 2.1;
+
   constructor(scene) {
     this.scene = scene;
     this.group = new THREE.Group();
