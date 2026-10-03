@@ -55,7 +55,7 @@ export class City3D {
     this.lmMesh = new THREE.Mesh(LB.geometry(), this.lmMat);
     this.lmMesh.frustumCulled = false;
     scene.add(this.lmMesh, new THREE.Mesh(LB.inkGeometry(), this.look.ink));
-    this.ground = cityGround(city, this.look.U, this.landmarks);
+    this.ground = cityGround(city, this.look.U, this.landmarks, tileRes >= 128); // lean tiles: a lighter plan too
     scene.add(this.ground);
     this.horizon = new Horizon(scene, this.look.U, [0, 0, city.coastX * M, city.H * M]);
     this.outer = new Outer(city, scene, this.look, this.horizon);
