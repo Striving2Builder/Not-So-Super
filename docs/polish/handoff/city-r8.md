@@ -26,9 +26,15 @@ blocks3d, skyline3d, ground3d, river3d, street3d, landmarks3d (+ cityart/city ho
 - blocks3d: the 2nd trim ring now sits on the first setback ledge (cornice light); plain slabs
   outside vice districts get none (was the stray orange line at 30% height).
 
-## Next
-- Perf A/B vs base (fly3d.js), check 2D view, compare shots; maybe day near/far value contrast.
+## Status: done, ready to merge (no flight3d/settings changes)
+
+## Next ideas
+- River-block park banks still read as big flat green squares beside the basin: paths, a quay.
+- Day near/far value contrast (sky/post owner's haze + our AO strength `AO.k`).
+- Inner-corner AO (L-shaped footprints), roof-edge darkening; tree count if triangles matter.
 
 ## Shots / perf
-- Base: shots/r8city-base (fps noisy: patrolview 5.5, calls 96, tris 118.6k).
+- Base shots/r8city-base, after shots/r8city (shoot.js; fps noisy, other builders running).
+- fly3d.js A/B in parallel vs a 02d2bb0 export: 3D fps skim 7.1/7.1, cruise 7.4/7.6, high
+  7.7/7.1 (new/base); calls equal; triangles cruise +7% (3D lot trees), high -2%.
 - Helper: scratchpad multi.js runs fly3d scenarios in parallel (ports 8741+).
