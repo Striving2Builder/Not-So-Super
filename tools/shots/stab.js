@@ -1,0 +1,209 @@
+// Stability harness: flying (3D) → dive into a zone → back to flying, several times, on an iPad
+// descriptor in WebKit (closest to iOS Safari we can run) and/or Chromium. Per transition it reports
+// how long the call blocked, the longest frame gap in the next seconds, the time until frames are
+// steady again, the live WebGL contexts and an estimate of GPU memory across every context
+// (textures, buffers, renderbuffers, drawing buffers), plus the JS heap where the browser has one.
+//
+//   node tools/shots/stab.js [--browser webkit|chromium|both] [--port 8801] [--rounds 2] [--lose]
+//   --lose  also loses + restores the shared WebGL context mid-flight (WEBGL_lose_context)
+const path = require('path');
+const fs = require('fs');
+const { spawn } = require('child_process');
+
+function loadPlaywright() {
+  try { return require('playwright'); } catch (e) { /* fall through to the npx cache */ }
+  const cache = path.join(process.env.LOCALAPPDATA || '', 'npm-cache', '_npx');
+  for (const d of fs.existsSync(cache) ? fs.readdirSync(cache) : []) {
+    const p = path.join(cache, d, 'node_modules', 'playwright');
+    if (fs.existsSync(p)) return require(p);
+  }
+  throw new Error('playwright not found');
+}
+
+const ROOT = path.resolve(__dirname, '..', '..');
+const argv = process.argv.slice(2);
+const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
+const PORT = +arg('--port', 8801);
+const ROUNDS = +arg('--rounds', 2);
+const WHICH = arg('--browser', 'both');
+const LOSE = argv.includes('--lose');
+const QUERY = arg('--query', '');
+const OUT = arg('--out', null);
+
+// Runs in the page before any game code: counts WebGL contexts and estimates their GPU memory.
+const GL_TRACK = `(() => {
+  const S = window.__glt = { made: 0, ctxs: [], bytes: new Map() };
+  const orig = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (type, attrs) {
+    const c = orig.call(this, type, attrs);
+    if (c && /webgl/.test(type) && !S.ctxs.some((x) => x.gl === c)) { S.made++; S.ctxs.push({ gl: c, canvas: this, aa: !attrs || attrs.antialias !== false, id: S.made }); }
+    return c;
+  };
+  const wrap = (P) => {
+    if (!P) return;
+    const o = {}; for (const k of ['bindTexture', 'texImage2D', 'texStorage2D', 'compressedTexImage2D', 'deleteTexture', 'bindBuffer', 'bufferData', 'deleteBuffer', 'bindRenderbuffer', 'renderbufferStorage', 'renderbufferStorageMultisample', 'deleteRenderbuffer', 'texImage3D', 'texStorage3D']) o[k] = P[k];
+    const put = function (obj, key, b) { if (!obj) return; let m = S.bytes.get(obj); if (!m) { m = new Map(); S.bytes.set(obj, m); } m.gl = this; m.set(key, b); };
+    P.bindTexture = function (t, x) { (this.__bt || (this.__bt = {}))[t] = x; return o.bindTexture.apply(this, arguments); };
+    P.bindBuffer = function (t, x) { (this.__bb || (this.__bb = {}))[t] = x; return o.bindBuffer.apply(this, arguments); };
+    P.bindRenderbuffer = function (t, x) { this.__br = x; return o.bindRenderbuffer.apply(this, arguments); };
+    const texT = (gl, target) => (target >= 0x8515 && target <= 0x851A ? 0x8513 : target); // cube faces → cube map
+    P.texImage2D = function (target, level) {
+      let w, h;
+      if (arguments.length >= 8) { w = arguments[3]; h = arguments[4]; } else { const s = arguments[5]; w = s && (s.videoWidth || s.naturalWidth || s.width) || 0; h = s && (s.videoHeight || s.naturalHeight || s.height) || 0; }
+      put.call(this, this.__bt && this.__bt[texT(this, target)], target + ':' + level, w * h * 4);
+      return o.texImage2D.apply(this, arguments);
+    };
+    P.compressedTexImage2D = function (target, level) { const d = arguments[arguments.length - 1]; put.call(this, this.__bt && this.__bt[texT(this, target)], target + ':' + level, d && d.byteLength || 0); return o.compressedTexImage2D.apply(this, arguments); };
+    if (o.texStorage2D) P.texStorage2D = function (target, levels, fmt, w, h) { put.call(this, this.__bt && this.__bt[target], 'st', w * h * 4 * (levels > 1 ? 1.33 : 1) * (target === 0x8513 ? 6 : 1)); return o.texStorage2D.apply(this, arguments); };
+    if (o.texImage3D) P.texImage3D = function (target, level, fmt, w, h, d) { put.call(this, this.__bt && this.__bt[target], target + ':' + level, w * h * d * 4); return o.texImage3D.apply(this, arguments); };
+    if (o.texStorage3D) P.texStorage3D = function (target, levels, fmt, w, h, d) { put.call(this, this.__bt && this.__bt[target], 'st', w * h * d * 4 * (levels > 1 ? 1.33 : 1)); return o.texStorage3D.apply(this, arguments); };
+    P.deleteTexture = function (x) { S.bytes.delete(x); return o.deleteTexture.apply(this, arguments); };
+    P.bufferData = function (t, d) { put.call(this, this.__bb && this.__bb[t], 'b', typeof d === 'number' ? d : (d && d.byteLength) || 0); return o.bufferData.apply(this, arguments); };
+    P.deleteBuffer = function (x) { S.bytes.delete(x); return o.deleteBuffer.apply(this, arguments); };
+    P.renderbufferStorage = function (t, f, w, h) { put.call(this, this.__br, 'r', w * h * 4); return o.renderbufferStorage.apply(this, arguments); };
+    if (o.renderbufferStorageMultisample) P.renderbufferStorageMultisample = function (t, s, f, w, h) { put.call(this, this.__br, 'r', w * h * 4 * Math.max(1, s)); return o.renderbufferStorageMultisample.apply(this, arguments); };
+    P.deleteRenderbuffer = function (x) { S.bytes.delete(x); return o.deleteRenderbuffer.apply(this, arguments); };
+  };
+  wrap(window.WebGLRenderingContext && WebGLRenderingContext.prototype);
+  wrap(window.WebGL2RenderingContext && WebGL2RenderingContext.prototype);
+  // biggest live objects: [MB, kind, context id]
+  S.top = (n = 12) => [...S.bytes.entries()].map(([o, m]) => { let b = 0; for (const v of m.values()) b += v; const c = S.ctxs.find((x) => x.gl === m.gl); return [+(b / 1048576).toFixed(2), o.constructor.name.replace('WebGL', ''), c ? c.id : '?']; }).sort((a, b) => b[0] - a[0]).slice(0, n);
+  S.perCtx = () => { const r = {}; for (const m of S.bytes.values()) { const c = S.ctxs.find((x) => x.gl === m.gl), k = c ? c.id + (c.gl.isContextLost() ? 'x' : '') + ' ' + c.canvas.width + 'x' + c.canvas.height : '?'; let b = 0; for (const v of m.values()) b += v; r[k] = +(((r[k] || 0) + b / 1048576)).toFixed(1); } return r; };
+  S.report = () => {
+    let res = 0, n = 0;
+    for (const m of S.bytes.values()) { if (m.gl && m.gl.isContextLost()) continue; n++; for (const b of m.values()) res += b; }
+    let live = 0, draw = 0;
+    for (const c of S.ctxs) {
+      if (c.gl.isContextLost()) continue;
+      live++;
+      draw += c.canvas.width * c.canvas.height * 4 * (c.aa ? 4 + 1 : 2); // back (+MSAA) + front buffer, roughly
+    }
+    return { made: S.made, live, objects: n, resMB: +(res / 1048576).toFixed(1), drawMB: +(draw / 1048576).toFixed(1) };
+  };
+  // frame gaps
+  const F = window.__frames = [];
+  const tick = (t) => { F.push(t); if (F.length > 20000) F.splice(0, 10000); requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+})();`;
+
+async function heap(page, cdp) {
+  if (cdp) { const m = await cdp.send('Performance.getMetrics'); const v = m.metrics.find((x) => x.name === 'JSHeapUsedSize'); return v ? +(v.value / 1048576).toFixed(0) : null; }
+  return page.evaluate(() => (performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(0) : null));
+}
+
+const ZONES = {
+  brawler: `(() => { const g = window.__game; let z = null; for (let i = 0; i < 60 && !z; i++) z = g.overworld.spawn('street', true); return z; })()`,
+  investigate: `(() => { const g = window.__game; let z = null; for (let i = 0; i < 60 && !(z && z.mode === 'investigate'); i++) { g.state.clock = 12 * 60; z = g.overworld.spawn('case', true); } return z; })()`,
+  special: `(() => window.__game.overworld.spawn('special', true, 'Warehouse'))()`,
+};
+const READY = {
+  overworld: `(() => { const g = window.__game, ow = g.overworld; return g.modeName === 'overworld' && (!ow.view3d || document.body.classList.contains('fly3d')); })()`,
+  brawler: `(() => !!window.__game.mode.coreWarm)()`,
+  investigate: `(() => { const m = window.__game.mode; return !m.paint || !!(m.lay && m.lay.baseKey); })()`,
+  special: `(() => { const m = window.__game.mode; return !!(m.hero && m.scene && !m.warming); })()`,
+};
+
+/** Run fn (a string evaluated in the page) as a transition and measure it. */
+async function transition(page, cdp, label, js, readyJs) {
+  const t0 = await page.evaluate(() => performance.now());
+  const sync = await page.evaluate(`(() => { const a = performance.now(); ${js}; return performance.now() - a; })()`);
+  // wait until ready (≤ 25 s) then 2 s more for stragglers
+  const tReady = await page.evaluate(async (readyJs) => {
+    const a = performance.now();
+    while (performance.now() - a < 25000) { try { if (eval(readyJs)) return performance.now(); } catch (e) { /* not yet */ } await new Promise((r) => setTimeout(r, 50)); }
+    return null;
+  }, readyJs);
+  await page.waitForTimeout(2500);
+  const r = await page.evaluate(([t0, tReady]) => {
+    const F = window.__frames.filter((t) => t >= t0 - 1);
+    const gaps = []; for (let i = 1; i < F.length; i++) gaps.push([F[i], F[i] - F[i - 1]]);
+    const tail = gaps.slice(-40).map((g) => g[1]).sort((a, b) => a - b), med = tail[tail.length >> 1] || 16;
+    // steady: the first frame after which 8 frames in a row run under max(2 × steady median, 50 ms)
+    const lim = Math.max(2 * med, 50);
+    let steady = null;
+    for (let i = 0; i + 8 <= gaps.length; i++) if (gaps.slice(i, i + 8).every((g) => g[1] < lim)) { steady = gaps[i][0] - gaps[i][1]; break; }
+    const longest = gaps.reduce((m, g) => Math.max(m, g[1]), 0);
+    const over = gaps.filter((g) => g[1] > 100).length;
+    return { longest: Math.round(longest), over100: over, readyMs: tReady ? Math.round(tReady - t0) : null, steadyMs: steady !== null ? Math.round(Math.max(steady, tReady || 0) - t0) : null, medFrame: Math.round(med), gl: window.__glt.report(), perCtx: window.__glt.perCtx(), top: window.__glt.top(8) };
+  }, [t0, tReady]);
+  return { label, syncMs: Math.round(sync), ...r, heapMB: await heap(page, cdp) };
+}
+
+async function run(browserType, name, devices) {
+  const browser = await browserType.launch(name === 'chromium' ? { args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-precise-memory-info'] } : {});
+  const dev = devices['iPad Pro 11 landscape'];
+  const ctx = await browser.newContext({ ...dev });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().slice(0, 200)); });
+  await page.addInitScript(GL_TRACK);
+  const cdp = name === 'chromium' ? await ctx.newCDPSession(page) : null;
+  if (cdp) await cdp.send('Performance.enable');
+  await page.goto(`http://localhost:${PORT}/${QUERY}`);
+  await page.waitForFunction(() => window.__game && document.querySelector('#btn-new'), null, { timeout: 60000 });
+  await page.evaluate(async () => { (await import('/src/settings.js')).autoTune.done = true; });
+  const env = await page.evaluate(async () => {
+    const s = await import('/src/settings.js');
+    const c = document.createElement('canvas'), gl = c.getContext('webgl2') || c.getContext('webgl');
+    const dbg = gl && gl.getExtension('WEBGL_debug_renderer_info');
+    return { profile: s.quality().id, dpr: devicePixelRatio, w: innerWidth, h: innerHeight, gpu: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl ? 'webgl' : 'none', ua: navigator.userAgent.slice(0, 80), touch: matchMedia('(pointer: coarse)').matches };
+  });
+  // (that probe context is ours, not the game's: release it so it isn't counted)
+  await page.evaluate(() => { const S = window.__glt, c = S.ctxs.pop(); S.made--; c.gl.getExtension('WEBGL_lose_context')?.loseContext(); });
+  const rows = [];
+  await page.waitForTimeout(500);
+  rows.push(await transition(page, cdp, 'title → fly', `document.getElementById('btn-new').click()`, READY.overworld));
+  const opt = page.locator('#modal-root .opt').first();
+  if (await opt.count()) await opt.click();
+  await page.evaluate(async () => { await (await import('/src/enemies.js')).loadEnemies(); });
+  await page.evaluate(() => { const g = window.__game; g.overworld.nav.autopilot = false; });
+  for (let round = 0; round < ROUNDS; round++) {
+    for (const z of ['brawler', 'investigate', 'special']) {
+      await page.keyboard.down('KeyW'); await page.waitForTimeout(1500); await page.keyboard.up('KeyW');
+      if (LOSE && round === 0 && z === 'brawler') {
+        // lose and restore the shared context while flying
+        const lr = await page.evaluate(async () => {
+          const r = window.__game.modes.special.renderer, ext = r.getContext().getExtension('WEBGL_lose_context');
+          const a = performance.now(); ext.loseContext();
+          await new Promise((res) => setTimeout(res, 1500));
+          const shown = !!document.querySelector('#gfx-restore.on');
+          ext.restoreContext();
+          await new Promise((res) => setTimeout(res, 2500));
+          return { lostShown: shown, lostNow: r.getContext().isContextLost(), mode: window.__game.modeName, fly3d: document.body.classList.contains('fly3d'), ms: Math.round(performance.now() - a) };
+        });
+        rows.push({ label: 'lose+restore', ...lr, gl: await page.evaluate(() => window.__glt.report()) });
+      }
+      rows.push(await transition(page, cdp, `fly → ${z}`, `window.__game.startZone(${ZONES[z]})`, READY[z]));
+      if (z === 'brawler') { await page.keyboard.down('KeyD'); for (let i = 0; i < 6; i++) { await page.keyboard.press('KeyJ'); await page.waitForTimeout(200); } await page.keyboard.up('KeyD'); }
+      else await page.waitForTimeout(1200);
+      rows.push(await transition(page, cdp, `${z} → fly`, `window.__game.setMode('overworld', { returnFrom: window.__game.mode.zone })`, READY.overworld));
+    }
+  }
+  const fly3d = await page.evaluate(() => document.body.classList.contains('fly3d'));
+  await browser.close();
+  return { env, rows, errors: [...new Set(errors)], endedIn3D: fly3d };
+}
+
+(async () => {
+  const pw = loadPlaywright();
+  const srv = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT) }, stdio: 'ignore' });
+  await new Promise((r) => setTimeout(r, 900));
+  const out = {};
+  try {
+    for (const b of WHICH === 'both' ? ['webkit', 'chromium'] : [WHICH]) {
+      const r = await run(pw[b], b, pw.devices);
+      out[b] = r;
+      console.log(`\n== ${b}  ${JSON.stringify(r.env)}`);
+      console.log('transition'.padEnd(22), 'sync', 'ready', 'steady', 'longest', '>100ms', 'frame', 'ctx(live/made)', 'gpuMB(res+draw)', 'heapMB');
+      for (const x of r.rows) {
+        if (x.label === 'lose+restore') { console.log(x.label.padEnd(22), JSON.stringify(x)); continue; }
+        console.log(x.label.padEnd(22), String(x.syncMs).padStart(4), String(x.readyMs).padStart(5), String(x.steadyMs).padStart(6), String(x.longest).padStart(7), String(x.over100).padStart(6), String(x.medFrame).padStart(5),
+          `${x.gl.live}/${x.gl.made}`.padStart(14), `${x.gl.resMB}+${x.gl.drawMB}`.padStart(15), String(x.heapMB).padStart(6));
+      }
+      if (argv.includes('--dump')) for (const x of r.rows) console.log(x.label, JSON.stringify(x.perCtx), JSON.stringify(x.top));
+      console.log('ended in 3D flight:', r.endedIn3D, ' errors:', r.errors.length ? r.errors : 'none');
+    }
+  } finally { srv.kill(); }
+  if (OUT) fs.writeFileSync(OUT, JSON.stringify(out, null, 2));
+})().catch((e) => { console.error(e); process.exit(1); });
