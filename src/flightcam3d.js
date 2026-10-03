@@ -18,7 +18,7 @@ const CAM = {
   // side: to her right, so the camera sits ~25-35° off her tail (a 3/4 rear-side view: her profile,
   // the cape and the punching arm read; straight behind she's a lump of boots and hair)
   chase: { dist: [4.4, 3.2], height: [0.7, 1.15], side: [1.7, 2.1], fov: [58, 66], at: [0.5, 0.58] }, // at = her spot on screen (x, y from top-left)
-  boost: { dist: 0.8, height: 0.2, fov: 13, kickFov: 8, shake: [0.035, 0.14], lag: 2.6 }, // shake m: sustained / on the punch; lag = spring rate         // sustained while boosting + a kick on the press
+  boost: { dist: 0.45, height: 0.15, fov: 13, kickFov: 8, shake: [0.035, 0.14], lag: 2.6 }, // shake m: sustained / on the punch; lag = spring rate         // sustained while boosting + a kick on the press
   canyon: { height: 1.3, dist: 2.6, at: [0.5, 0.58], fovUp: 4, snap: 0.62, side: 0.75 }, // skim band: lower, along the street (snap ≈ 35°); side: × the chase side
   // high patrol, flying: level with her, centred in the safe zone against the sky,
   // the city's far edge down in the bottom third (the Superman-over-the-city shot)
@@ -79,12 +79,11 @@ export class FlightCam3D {
       want = h.ang - off * w;
     }
     this.yaw += wrap(want - this.yaw) * Math.min(1, dt * CAM.yawRate * clamp(h.speed / 200, 0.15, 1));
-    // in a turn the lagging yaw plus the side offset can swing the camera fully side-on (she
-    // fills the frame edge to edge): keep its angle off her tail within maxAz (flying only)
-    if (h.speed > 60 && this.sideA !== undefined) {
-      const lim = (CAM.maxAz * Math.PI) / 180, lag = wrap(this.yaw - h.ang);
-      this.yaw = h.ang + clamp(lag, this.sideA - lim, this.sideA + lim);
-    }
+    // in a hard turn the lagging yaw (plus the side offset) and the offset spring swing the camera
+    // fully side-on (she fills the frame edge to edge, a flat profile): keep the camera within maxAz
+    // of her tail while flying, here for the yaw and below for the sprung offset
+    const azLim = (CAM.maxAz * Math.PI) / 180, flying = h.speed > 60 && this.patrolK < 0.5;
+    if (flying && this.sideA !== undefined) this.yaw = h.ang + clamp(wrap(this.yaw - h.ang), this.sideA - azLim, this.sideA + azLim);
     this.orbit *= 1 - Math.min(1, dt * CAM.orbitBack * clamp(h.speed / 150, 0, 1));
     this.roll = ease(this.roll, (h.bank || 0) * CAM.roll * (1 - this.patrolK), 4);
     const yaw = this.yaw + this.orbit, fx = Math.cos(yaw), fz = Math.sin(yaw);
@@ -129,6 +128,14 @@ export class FlightCam3D {
     _p.x -= hx; _p.y -= hy; _p.z -= hz;
     if (!this.placed) { this.pos.copy(_p); this.placed = true; }
     this.pos.lerp(_p, Math.min(1, dt * lerp(5.5, B.lag, this.boostK))); // (boost: the camera lags, she pulls ahead)
+    if (flying) {
+      const tail = h.ang + Math.PI, cur = Math.atan2(this.pos.z, this.pos.x), off = wrap(cur - tail);
+      const base = wrap(Math.atan2(_p.z, _p.x) - tail), ok = clamp(off, Math.min(base, -azLim), Math.max(base, azLim)); // (unless the wanted spot itself is wider)
+      if (ok !== off && Math.abs(this.orbit) < 0.05) { // (not while the player orbits by hand)
+        const r = Math.hypot(this.pos.x, this.pos.z), a = tail + ok;
+        this.pos.x = Math.cos(a) * r; this.pos.z = Math.sin(a) * r;
+      }
+    }
     // the spring may swing it through a corner: if the eased spot is inside a wall, cut to the safe one
     if (ball(hx + this.pos.x, hy + this.pos.y, hz + this.pos.z)) this.pos.copy(_p);
     this.cam.position.set(hx + this.pos.x, hy + this.pos.y, hz + this.pos.z);

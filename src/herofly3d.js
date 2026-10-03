@@ -22,7 +22,7 @@ const POSE = {
   divePitch: 1.15,  // head-first dive angle (rad)
   legs: 0.95,       // how hard the legs straighten and trail (0..1)
   boot: 0.72,       // boot (foot bone) scale
-  patrolScale: 16,  // in the overhead patrol view she becomes a big inked map figure
+  patrolScale: 18,  // in the overhead patrol view she becomes a big inked map figure
   shadow: 0x05060f,
 };
 /** Costume read: saturation, self-light (fraction of albedo), cyan-white rim (only the silhouette). */
@@ -34,7 +34,7 @@ const HAIR = { uv: [0.0, 0.58, 0.6, 1.0], lit: [0.92, 0.66, 0.2], mid: [0.72, 0.
  * in open sky → against a dark or busy background (night, the street canyons, the map below the
  * patrol view); a pale halo outside it at night, so the dark ink still separates her from dark walls.
  */
-const LINE = { ink: [1.4, 2.6], halo: 1.4 };
+const LINE = { ink: [1.3, 2.3], halo: 1.4 };
 /** Rim strength, shared by her materials (raised in the dark street canyons). */
 export const RIM = { value: SUIT.rimK[0] };
 export const RIM_K = SUIT.rimK;
