@@ -8,8 +8,8 @@ import * as THREE from 'three';
 import { LOOK } from './look3d.js';
 
 export const HERO_LAYER = 1;
-// pad: margin round her bounding sphere; taps: the silhouette ink's dilation samples (+ as many at
-// half width, so thin limbs don't break it up); ink: its colour; halo: rgb + alpha of the night halo
+// pad: margin round her bounding sphere; taps: the silhouette ink's dilation samples (+ half as many
+// at half width, so thin limbs don't break it up); ink: its colour; halo: rgb + alpha of the night halo
 const PASS = { pad: 1.2, bucket: 64, taps: 8, ink: 0x0b0b16, halo: [0.85, 0.9, 1.0, 0.45] };
 
 const _v = new THREE.Vector3(), _res = new THREE.Vector2(), _cc = new THREE.Color();
@@ -27,8 +27,8 @@ export class HeroPass {
     let taps = '', halo = ''; // (unrolled: one line per direction)
     for (let i = 0; i < PASS.taps; i++) {
       const a = (i / PASS.taps) * Math.PI * 2, d = `vec2(${Math.cos(a).toFixed(4)}, ${Math.sin(a).toFixed(4)}) * texel`;
-      taps += `  o = max(o, max(cover(vUv + ${d} * inkW), cover(vUv + ${d} * inkW * 0.5)));
-`;
+      taps += `  o = max(o, cover(vUv + ${d} * inkW));${i % 2 ? '' : ` o = max(o, cover(vUv + ${d} * inkW * 0.5));`}
+`; // (half-width taps on every other direction)
       halo += `    h = max(h, cover(vUv + ${d} * (inkW + haloW)));
 `;
     }
@@ -37,10 +37,10 @@ export class HeroPass {
         ink: { value: new THREE.Color(PASS.ink) }, halo: { value: new THREE.Vector4(...PASS.halo) } },
       vertexShader: 'uniform vec2 rep; varying vec2 vUv; void main() { vUv = uv * rep; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader: `uniform sampler2D map; uniform vec2 rep, texel; uniform float inkW, haloW; uniform vec3 ink; uniform vec4 halo; varying vec2 vUv;
-float cover(vec2 uv) { return all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, rep)) ? texture2D(map, uv).a : 0.0; }
+float cover(vec2 uv) { return texture2D(map, clamp(uv, vec2(0.0), rep - texel * 0.5)).a; } // (her rect's rim is empty margin)
 void main() {
   vec4 c = texture2D(map, vUv);
-  if (inkW <= 0.0) { gl_FragColor = c; return; }
+  if (inkW <= 0.0 || c.a > 0.98) { gl_FragColor = c; return; } // (inside her: nothing to add)
   float o = 0.0, h = 0.0;
 ${taps}  if (haloW > 0.0) {
 ${halo}  }
