@@ -16,5 +16,19 @@ Branch based on phase-2 b1af2f6. Blender 5.2 via blender-mcp.
 ## In progress
 - Bake a texelâ†’3D position/island map (scratchpad), paint variant atlases by rules, mesh edits for hair.
 
-## Next
-- Export hero_classic.glb / hero_ponytail.glb; settings `hero` option + pause menu; `?hero=`; shoot.js `--query`.
+- Game hook: `settings.hero` (persisted with graphics, `cycleHero()`), pause menu "Hero: X" (note says
+  reload needed when it differs from the loaded one), `?hero=classic|ponytail` in hero3d.js (`HERO_SKIN`),
+  shoot.js `--query hero=ponytail`.
+- Blender pose check (Running/Flying/Jump clips from the source file): no tearing; ponytail follows the head,
+  skirt/boots follow legs. Renders: shots/heroskins/anim_*_strip.png, *_strip.png (turnarounds).
+
+## Measured (SwiftShader, flying harness)
+- Shots: shots/skin-base, skin-classic, skin-ponytail (`--query hero=...`); no page errors.
+- Paired fly3d_cruise A/B x2: base 5.5/5.5, classic 5.5/5.2, ponytail 5.7/5.2 fps = noise. Same draw
+  calls (hero is still 1 mesh, 1 material, 2x 1024² textures); ponytail hero -2981 tris (14020 vs 17001).
+- Download: supergirl 3.28 MB (with 5 unused clips) -> classic 2.88 MB, ponytail 2.28 MB.
+
+## Next / known issues
+- Ponytail: faint outline of the old knee-trim V on the thighs; a tiny blue suit seam fleck at her left
+  armpit; slight seam ring at the back of the neck (slimmed collar).
+- Gloss is painted (comic highlight) not a roughness map: the toon flight shader ignores roughness.
