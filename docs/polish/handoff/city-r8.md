@@ -16,14 +16,18 @@ blocks3d, skyline3d, ground3d, river3d, street3d, landmarks3d (+ cityart/city ho
   grows 0.8×altitude (was 1.6×). The "red-white border lines" were these car streaks.
 - cityart.js: optional hooks `this.tone(c, what)` and `this.dress(g, b)` (unset = 2D unchanged).
 
-## In progress
-- Wire `tone`/`dress` hooks from city3d (near tiles match the far plan; export `tone`,
-  `lotDressing`, `dressNear` from ground3d; 3D trees from lotDressing in chunk build).
+- Shared lot dressing (ground3d `lotDressing`/`tone`/`dressNear`): near tiles muted to match the
+  far plan, parking patches + tree shade on tiles, 3D lollipop trees stood up in chunk builds (near
+  LOD only); river blocks = tree-dotted park banks. Farm blocks = 2-3 field patchwork.
+- River: near-black navy linear tones (haze lifts it a lot from 600 m up), haze at true distance.
+- buildings3d: window cells fade thin features per axis when a cell < ~10 px (moire fix);
+  contact AO: aAux length = 1 + height above the part's base (box/prism/wedge set `B.base`),
+  walls darken at their foot (`AO` table, weaker at night).
+- blocks3d: the 2nd trim ring now sits on the first setback ledge (cornice light); plain slabs
+  outside vice districts get none (was the stray orange line at 30% height).
 
 ## Next
-- Window moiré (buildings3d FRAG), contact AO on walls (encode height-above-tier-base in aAux
-  length), downtown 30%-height trim ring (blocks3d ~l.244) → ledge trim or vice-only.
-- Day value contrast near vs far.
+- Perf A/B vs base (fly3d.js), check 2D view, compare shots; maybe day near/far value contrast.
 
 ## Shots / perf
 - Base: shots/r8city-base (fps noisy: patrolview 5.5, calls 96, tris 118.6k).

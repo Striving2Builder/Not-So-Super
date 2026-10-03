@@ -12,7 +12,7 @@ import { hash2 } from './rng.js';
 
 const DECK = { y: 2.2, rail: 1.1, lampEvery: 18 }; // metres
 /** width: × the lot width; smooth: Chaikin passes; bank: per-bank wander [amplitude, wavelength m] ×3; rim: basin harmonics [k, amplitude]. */
-const RIBBON = { width: 0.8, smooth: 4, bank: [[0.16, 61], [0.08, 23], [0.035, 8.5]], rim: [[2, 0.06], [3, 0.05], [5, 0.035], [9, 0.02]] };
+const RIBBON = { width: 0.8, smooth: 4, bank: [[0.16, 61], [0.08, 23], [0.035, 8.5]], rim: [[2, 0.09], [3, 0.08], [5, 0.05], [7, 0.035], [11, 0.02]] };
 
 /** Chaikin corner cutting: the block-centre polyline becomes a gentle meander. */
 function chaikin(P, n) {
@@ -32,7 +32,7 @@ function chaikin(P, n) {
 const bank = (s, ph) => 1 + RIBBON.bank.reduce((a, [amp, wl], k) => a + amp * Math.sin(s / wl + ph * (k + 1.7)), 0);
 /** The basin rim's radius factor at angle t (the shader repeats it: keep the two in step). */
 const RIM_GLSL = RIBBON.rim.map(([k, a], i) => `${a.toFixed(3)} * sin(${k}. * t + ${(i * 1.9 + 0.4).toFixed(2)})`).join(' + ');
-const rim = (t) => 0.9 + RIBBON.rim.reduce((a, [k, amp], i) => a + amp * Math.sin(k * t + i * 1.9 + 0.4), 0);
+const rim = (t) => 0.95 + RIBBON.rim.reduce((a, [k, amp], i) => a + amp * Math.sin(k * t + i * 1.9 + 0.4), 0);
 
 /** The river's own water: deep channel → shallows, sky tint, glint, foam lip, ink shore. */
 function riverMaterial(seaMat, basin, x1) {
@@ -54,29 +54,30 @@ void main() {
   if (uBasin.z > 0.) {
     vec2 q = (vW.xz - uBasin.xy) / uBasin.zw;
     float t = atan(q.y, q.x);
-    e = min(e, length(q) / (0.9 + ${RIM_GLSL}));
+    e = min(e, length(q) / (0.95 + ${RIM_GLSL}));
   }
   float dist = length(vW - cameraPosition);
   vec3 V = normalize(cameraPosition - vW);
   float fres = pow(1. - max(V.y, 0.), 3.);
-  vec3 deep = mix(vec3(0.015, 0.08, 0.2), vec3(0.006, 0.025, 0.07), uNight);
-  vec3 shallow = mix(vec3(0.08, 0.3, 0.38), vec3(0.025, 0.07, 0.12), uNight);
+  // linear values: the haze lifts water a lot from altitude, so the channel starts near-black navy
+  vec3 deep = mix(vec3(0.004, 0.02, 0.055), vec3(0.002, 0.008, 0.025), uNight);
+  vec3 shallow = mix(vec3(0.02, 0.085, 0.11), vec3(0.008, 0.025, 0.045), uNight);
   vec3 c = mix(deep, shallow, smoothstep(0.4, 0.88, e));
   // the sky in it: a tint everywhere, the full colour at grazing angles
-  c = mix(c, uSky * 0.85, 0.14 + 0.5 * fres);
+  c = mix(c, uSky * 0.5, 0.08 + 0.3 * fres);
   // slow broad swells in value only (no strokes), close up
   float w = sin(vW.x * 0.045 + uTime * 0.4 + sin(vW.z * 0.035) * 2.) * sin(vW.z * 0.055 - uTime * 0.3 + vW.x * 0.015);
   c *= 1. + 0.07 * w * (1. - smoothstep(150., 600., dist));
   vec3 R = reflect(-V, vec3(0., 1., 0.));
   c += uKeyCol * smoothstep(0.985, 0.996, dot(R, uKeyDir)) * 1.2;
-  c = mix(c, mix(vec3(0.72, 0.84, 0.86), vec3(0.28, 0.34, 0.48), uNight), smoothstep(0.86, 0.91, e) * 0.4); // foam lip
+  c = mix(c, mix(vec3(0.72, 0.84, 0.86), vec3(0.28, 0.34, 0.48), uNight), smoothstep(0.89, 0.93, e) * 0.3); // foam lip
   c = mix(c, vec3(0.06, 0.05, 0.09), smoothstep(0.93, 0.985, e));                                         // ink shoreline
 #ifdef TONE_MAPPING
   c = toneMapping(c);
 #endif
   gl_FragColor = linearToOutputTexel(vec4(c, 1.));
   gl_FragColor.rgb = pulp(gl_FragColor.rgb);
-  gl_FragColor.rgb = haze(gl_FragColor.rgb, dist * 1.35, 0., 1.);
+  gl_FragColor.rgb = haze(gl_FragColor.rgb, dist, 0., 1.);
 }`,
   });
 }
@@ -106,7 +107,7 @@ export function buildRiver(city, scene, look3, seaMat) {
   if (city.riverOval) {
     // the city's oval of whole river blocks, shrunk so the water never reaches a building's lot
     const E = city.riverOval, cx = (E.cx * BLOCK + ROAD / 2) * M, cz = (E.cy * BLOCK + ROAD / 2) * M;
-    const rx = (E.rx - 0.75) * BLOCK * M, rz = (E.ry - 0.6) * BLOCK * M, base = pos.length / 3, n = 96;
+    const rx = (E.rx - 0.6) * BLOCK * M, rz = (E.ry - 0.45) * BLOCK * M, base = pos.length / 3, n = 96;
     basin = [cx, cz, rx, rz];
     // a hair under the ribbon: where they overlap the ribbon wins (its shore distance already
     // knows the basin), so the basin's rim never draws a shoreline across the channel

@@ -49,6 +49,67 @@ const inside = (o, x, y, pad) => o.kind === 'box' ? x > o.x - pad && x < o.x + o
   : (o.kind === 'round' || o.kind === 'tree') ? Math.hypot(x - o.x, y - o.y) < o.rad + pad : false;
 const covered = (f, x, y) => (f.t === 'lot' || f.t === 'pool' || f.t === 'fountain') && x > f.x - 24 && x < f.x + (f.w || 0) + 24 && y > f.y - 24 && y < f.y + (f.h || 0) + 24;
 
+/** A colour muted toward the common pave tone ('lot' fills more than flats; fields toward a dusty olive). */
+export function tone(c, what = 'rect') {
+  if (what === 'lot') return mix(c, GROUND.pave, GROUND.k);
+  if (what === 'field') return mix(c, '#6b6a48', GROUND.mute + 0.3);
+  if (what === 'field2') return mix(c, '#4a4a32', GROUND.mute + 0.3);
+  return mix(c, GROUND.pave, GROUND.mute);
+}
+
+/**
+ * A lot's open corners (a 3x3 grid of sample cells clear of footprints and paved flats): tree
+ * clusters [{x, y, r, h}] and parking patches [x, y, w, h, seed], world units, cached on the block.
+ * The near tiles paint the patches and the trees' shade, the chunks stand the trees up in 3D, the
+ * far plan paints them as canopies, so all three agree.
+ */
+export function lotDressing(b) {
+  if (b.dress) return b.dress;
+  const trees = [], parks = [];
+  if (b.river) {
+    // the river's banks are a park: trees scattered over the block (the water covers the middle)
+    for (let k = 0; k < 22; k++) {
+      const u = hash2(b.bx * 31 + k, b.by, 91), v = hash2(b.by * 17 + k, b.bx, 92);
+      trees.push({ x: b.x0 + 8 + u * (LOT - 16), y: b.y0 + 8 + v * (LOT - 16), r: 7 + hash2(k, b.bx, 93) * 6, h: hash2(k, b.by, 94) });
+    }
+  } else if (!NO_FILL.has(b.d)) {
+    for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) {
+      const px = b.x0 + LOT * (i + 0.5) / 3, py = b.y0 + LOT * (j + 0.5) / 3, h = hash2(b.bx * 3 + i, b.by * 3 + j, 83);
+      if (b.b.some((o) => inside(o, px, py, 14)) || b.flats.some((f) => covered(f, px, py))) continue;
+      if (h < 0.5 || b.d === 'suburb') for (let k = 0; k < 3; k++) trees.push({ x: px + (hash2(i, k, b.bx + 84) - 0.5) * 34, y: py + (hash2(j, k, b.by + 85) - 0.5) * 34, r: 7 + hash2(k, i + j, 86) * 5, h: hash2(k, b.bx, 87) });
+      else if (h < 0.8) parks.push([px - 24, py - 14, 48, 28, b.bx * 7 + b.by * 13 + i + j * 3]);
+    }
+  }
+  return (b.dress = { trees, parks });
+}
+
+/** The near tiles' hook (CityArt.dress): the parking patches and a soft shade under each 3D tree. */
+export function dressNear(g, b) {
+  const D = lotDressing(b);
+  if (b.river) { for (const t of D.trees) canopy(g, t.x, t.y, t.r * 0.8, t.h); return; } // flat: 3D trees would stand in the water
+  for (const p of D.parks) parking(g, ...p);
+  g.fillStyle = 'rgba(10,14,8,.35)';
+  for (const t of D.trees) { g.beginPath(); g.arc(t.x + 3, t.y + 4, t.r * 0.9, 0, Math.PI * 2); g.fill(); }
+}
+
+/**
+ * A farm block from the air: a patchwork of 2-4 fields (one crop per block read as a board-game
+ * tile), each in muted crop rows of its own direction, inked edges, a dirt track between.
+ */
+function field(d, f, b) {
+  const h = (k) => hash2(b.bx, b.by, 120 + k), split = h(0) < 0.5;
+  const cuts = h(1) < 0.4 ? [[0, 0, 1, 1]] : split ? [[0, 0, 0.4 + h(2) * 0.2, 1], [0.4 + h(2) * 0.2, 0, 1, 1]] : [[0, 0, 1, 0.5], [0, 0.5, 0.55, 1], [0.55, 0.5, 1, 1]];
+  cuts.forEach(([u0, v0, u1, v1], i) => {
+    const x = f.x + u0 * f.w, y = f.y + v0 * f.h, w = (u1 - u0) * f.w, hh = (v1 - v0) * f.h;
+    const c = FARM[(h(3 + i) * FARM.length) | 0], c1 = tone(i ? c : f.c1, 'field'), c2 = mix(c1, '#3a3826', 0.22), vert = (f.vert ? 1 : 0) ^ (i & 1), k = Math.max(4, Math.round((vert ? w : hh) / 11));
+    d.fillStyle = c1; d.fillRect(x, y, w, hh);
+    d.fillStyle = c2;
+    for (let j = 1; j < k; j += 2) if (vert) d.fillRect(x + (w * j) / k, y, w / k, hh); else d.fillRect(x, y + (hh * j) / k, w, hh / k);
+    d.strokeStyle = 'rgba(60,45,25,.75)'; d.lineWidth = 4; d.strokeRect(x + 2, y + 2, w - 4, hh - 4);
+  });
+}
+const FARM = ['#8a8150', '#6f7444', '#857052', '#5f6a3e', '#94875e', '#76603e'];
+
 function plan(city, landmarks, PX) {
   const PN = GROUND.nightPx / BLOCK;
   const day = document.createElement('canvas'), night = document.createElement('canvas');
@@ -71,11 +132,11 @@ function plan(city, landmarks, PX) {
   for (let i = 0; i <= city.landCols; i += 4) R(d, i * BLOCK + ROAD / 2 - 1.5, 0, 3, city.H, 'rgba(210,180,90,.35)');
   for (let j = 0; j <= city.rows; j += 4) R(d, 0, j * BLOCK + ROAD / 2 - 1.5, city.coastX, 3, 'rgba(210,180,90,.35)');
   for (const b of city.blocks) {
-    const D = DISTRICTS[b.d], farm = b.d === 'farm', sub = b.d === 'suburb';
+    const D = DISTRICTS[b.d], farm = b.d === 'farm';
     // river blocks: green banks with a few trees (the 3D ribbon of water lies on them)
     if (b.river) {
       R(d, b.x0 - ROAD / 2, b.y0 - ROAD / 2, LOT + ROAD, LOT + ROAD, '#4f6a44');
-      for (let k = 0; k < 10; k++) canopy(d, b.x0 - ROAD / 2 + hash2(b.bx, k, 81) * (LOT + ROAD), b.y0 - ROAD / 2 + (k % 2 ? 6 : LOT + ROAD - 6), 6, hash2(k, b.by, 82));
+      for (const t of lotDressing(b).trees) canopy(d, t.x, t.y, t.r * 0.8, t.h);
       continue;
     }
     const { x0, y0 } = b;
@@ -84,16 +145,11 @@ function plan(city, landmarks, PX) {
       R(d, x0 - 6, y0 - 6, LOT + 12, LOT + 12, GROUND.walk);
       d.strokeStyle = GROUND.kerb; d.lineWidth = 3; d.strokeRect(x0 - 6, y0 - 6, LOT + 12, LOT + 12);
     }
-    R(d, x0, y0, LOT, LOT, sub ? '#587a45' : farm ? '#6a7a44' : mix(D.lot, GROUND.pave, GROUND.k));
+    R(d, x0, y0, LOT, LOT, tone(farm ? '#6a7a44' : D.lot, 'lot'));
     for (const f of b.flats) {
-      if (f.t === 'rect' || f.t === 'path') R(d, f.x, f.y, f.w, f.h, mix(f.c, GROUND.pave, f.t === 'path' ? 0 : GROUND.mute));
-      else if (f.t === 'field') {
-        // crop rows: two muted tones in stripes, an inked field edge
-        const c1 = mix(f.c1, '#6b6a48', GROUND.mute + 0.1), c2 = mix(f.c2, '#4a4a32', GROUND.mute + 0.15), k = 16;
-        R(d, f.x, f.y, f.w, f.h, c1);
-        for (let i = 1; i < k; i += 2) if (f.vert) R(d, f.x + (f.w * i) / k, f.y, f.w / k, f.h, c2); else R(d, f.x, f.y + (f.h * i) / k, f.w, f.h / k, c2);
-        d.strokeStyle = 'rgba(60,45,25,.7)'; d.lineWidth = 4; d.strokeRect(f.x, f.y, f.w, f.h);
-      } else if (f.t === 'pool') { R(d, f.x - 2, f.y - 2, f.w + 4, f.h + 4, '#e8e8e8'); R(d, f.x, f.y, f.w, f.h, '#2f9cc8'); }
+      if (f.t === 'rect' || f.t === 'path') R(d, f.x, f.y, f.w, f.h, f.t === 'path' ? f.c : tone(f.c));
+      else if (f.t === 'field') field(d, f, b);
+      else if (f.t === 'pool') { R(d, f.x - 2, f.y - 2, f.w + 4, f.h + 4, '#e8e8e8'); R(d, f.x, f.y, f.w, f.h, '#2f9cc8'); }
       else if (f.t === 'lot') parking(d, f.x, f.y, f.w, f.h, b.bx * 31 + b.by);
       else if (f.t === 'fountain') {
         d.fillStyle = '#c8c0b0'; d.beginPath(); d.arc(f.x, f.y, f.r, 0, Math.PI * 2); d.fill();
@@ -109,14 +165,9 @@ function plan(city, landmarks, PX) {
       }
     }
     // the open corners of a lot: tree clusters, or a parking patch in the busy districts
-    if (!NO_FILL.has(b.d)) {
-      for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) {
-        const px = x0 + LOT * (i + 0.5) / 3, py = y0 + LOT * (j + 0.5) / 3, h = hash2(b.bx * 3 + i, b.by * 3 + j, 83);
-        if (b.b.some((o) => inside(o, px, py, 14)) || b.flats.some((f) => covered(f, px, py))) continue;
-        if (h < 0.5 || sub) for (let k = 0; k < 4; k++) canopy(d, px + (hash2(i, k, b.bx + 84) - 0.5) * 34, py + (hash2(j, k, b.by + 85) - 0.5) * 34, 6 + hash2(k, i + j, 86) * 5, hash2(k, b.bx, 87));
-        else if (h < 0.8) parking(d, px - 24, py - 14, 48, 28, b.bx * 7 + b.by * 13 + i + j * 3);
-      }
-    }
+    const L = lotDressing(b);
+    for (const p of L.parks) parking(d, ...p);
+    for (const t of L.trees) canopy(d, t.x, t.y, t.r * 0.8, t.h);
     // the city's own trees (parks, yards) as inked canopies
     for (const o of b.b) if (o.kind === 'tree') canopy(d, o.x, o.y, Math.max(5, o.rad), hash2(o.x | 0, o.y | 0, 88));
     // street trees along the sidewalks; hedgerows along the farm fields
