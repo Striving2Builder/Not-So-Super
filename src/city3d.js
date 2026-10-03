@@ -9,7 +9,7 @@ import { CityArt, TILE } from './cityart.js';
 import { M, Builder, CityLook, box, prism, look, STYLE } from './buildings3d.js';
 import { DISTRICT_3D, height3, building, round, crane, tree } from './blocks3d.js';
 import { SignAtlas } from './signs3d.js';
-import { chooseLandmarks, buildLandmarks } from './landmarks3d.js';
+import { chooseLandmarks, buildLandmarks, districtGlow } from './landmarks3d.js';
 import { Horizon, haze } from './skyline3d.js';
 import { Outer } from './outer3d.js';
 import { cityGround } from './ground3d.js';
@@ -61,6 +61,7 @@ export class City3D {
     this.outer = new Outer(city, scene, this.look, this.horizon);
     this.river = buildRiver(city, scene, this.look, this.horizon.sea.material);
     this.card = new SkyCard(scene, this.look.U);
+    this.glow = districtGlow(city, scene, this.look.U);
     /** Optional hook: flight3d may set `city3.sky = sky` so the haze ends on `Sky3D.horizon`. */
     this.sky = null;
     this.street = new Street(city, scene, this.look.U, M, this.outer.roads);
@@ -152,7 +153,9 @@ export class City3D {
       }
       if (ch[which]) ch[which].visible = true;
       if (ch[which + 'Ink']) ch[which + 'Ink'].visible = which === 'near' || d < LOD.farInk;
-      if (d < near * 1.2) this.groundTile(ch, night > 0.45, frame);
+      // no baked tiles past the coast: those chunks are open bay, and their unpainted canvases were
+      // near-black slabs lying on the sea
+      if (d < near * 1.2 && cx * TILE < this.city.landCols) this.groundTile(ch, night > 0.45, frame);
     }
     this.built = true;
     this.outer.update(cam, cut);

@@ -116,7 +116,7 @@ function atlas() {
 
 // ---------------------------------------------------------------- the shader
 /** Haze reach: far = max(fog far, camera height x perAlt), capped under the camera's far plane. */
-export const HAZE = { perAlt: 7, max: 4200, near: 0.2 };
+export const HAZE = { perAlt: 7, max: 4200, near: 0.1 };
 /** Key vs ambient: a clear lit / raking / shadow split on every tower, day and dusk too. */
 const KEY = { key: 1.4, amb: 0.86 };
 const _cool = new THREE.Color(0.93, 0.98, 1.1);
@@ -134,13 +134,20 @@ vec3 pulp(vec3 c) {
   return clamp((c - 0.5) * 1.12 + 0.5 + 0.02, 0., 1.);
 }
 vec3 haze(vec3 c, float d, float y, float k) {
-  // comic aerial perspective: stepped value bands (clear near city, then three paler layers), each
-  // step softened over a third of its width, rather than one uniform wash
-  float f0 = clamp((d - uHazeNear) / (uHazeFar - uHazeNear), 0., 1.) * 3.;
-  float f = (floor(f0) + smoothstep(0.65, 1., fract(f0))) / 3.;
-  f = f * f * (1.3 - 0.3 * f); // the first band stays light
-  f = clamp(f + (1. - smoothstep(0., 160., y)) * smoothstep(uHazeNear, uHazeFar, d) * 0.25, 0., 1.) * k;
-  return mix(c, mix(uHazeCol, uHorizon, smoothstep(0.15, 1., f)), f);
+  // aerial perspective in three moves, each starting a little later than the last: colour drains
+  // first (distant towers go grey-blue), then values flatten toward the air's own value (darks lift,
+  // lights dim: the far city loses contrast), then the colour itself becomes the air. It works over
+  // ~40-70% of the draw distance; the near city keeps full punch. Shapes keep their edges because
+  // every face moves by the same rule (face-to-face contrast shrinks, never flips).
+  float t = clamp((d - uHazeNear) / (uHazeFar - uHazeNear), 0., 1.);
+  float f = t * t * (3. - 2. * t);
+  f = clamp(f + (1. - smoothstep(0., 160., y)) * t * 0.2, 0., 1.) * k; // thicker over the ground
+  vec3 air = mix(uHazeCol, uHorizon, smoothstep(0.35, 1., f));
+  const vec3 LW = vec3(0.299, 0.587, 0.114);
+  float l = dot(c, LW), la = dot(air, LW);
+  c = mix(c, vec3(l), smoothstep(0., 0.75, f) * 0.72);  // saturation
+  c += (la - l) * 0.55 * f;                              // contrast (value toward the air)
+  return mix(c, air, f * sqrt(f));                       // colour
 }`;
 
 const VERT = /* glsl */`
@@ -197,7 +204,7 @@ void main() {
   float d = length(vP - cameraPosition);
   float a = clamp(max(vWid, 1.) * 0.5 + 0.5 - abs(vAcross), 0., 1.) * min(vWid, 1.) * mix(1., 0.55, smoothstep(300., 700., d)) * (1. - smoothstep(1400., 2000., d));
   if (a < 0.01) discard;
-  gl_FragColor = vec4(haze(uInk, d, vP.y, 1.), a);
+  gl_FragColor = vec4(haze(uInk, d, vP.y, 0.85), a); // a notch under the walls: silhouettes keep their line
 }`;
 
 const FRAG = /* glsl */`
@@ -235,7 +242,11 @@ void main() {
     col = vec3(0.03, 0.02, 0.05) * s.b;
     emi = (vCol * s.g * 0.85 + mix(vCol, vec3(1.), 0.5) * s.r * 0.6) * mix(0.8, 1.15, uNight);
   } else if (vKind == 3.) {
-    emi = vCol * mix(0.9, 1.3, uNight) * (1. - smoothstep(uNeonFar * 0.6, uNeonFar, dist / mix(0.45, 1., uNight)));
+    // a tube, not a painted stripe: a white-hot core and deeper-coloured edges across its width
+    // (v runs across every tube), so a tube skimmed up close reads as neon rather than a streak
+    float p = 1. - abs(vUv.y * 2. - 1.);
+    emi = (vCol * mix(0.55, 1.05, p) + mix(vCol, vec3(1.), 0.6) * smoothstep(0.55, 0.95, p) * 0.55) * mix(0.9, 1.3, uNight);
+    emi *= 1. - smoothstep(uNeonFar * 0.6, uNeonFar, dist / mix(0.45, 1., uNight));
   } else if (vKind == 4.) {
     emi = vCol * (0.25 + 2.5 * step(0.6, fract(uTime * 0.7 + vUv.x)));
   } else {
@@ -512,6 +523,31 @@ export function prism(B, cx, cz, r, rTop, bot, top, n, L, { cap = true, ink = 1,
   }
 }
 
+/**
+ * A slanted crown (the glass-tower wedge): a block from `bot` whose top rises by `rise` toward one
+ * side (dir 0..3 = +x, -z, -x, +z), the sloped face in the facade's style (glass reads as a tilted
+ * curtain wall catching the sky).
+ */
+export function wedge(B, x0, z0, x1, z1, bot, rise, L, dir = 0, ink = 1) {
+  const C = [[x0, z1], [x1, z1], [x1, z0], [x0, z0]];
+  const up = [[0, 1, 1, 0], [0, 0, 1, 1], [1, 0, 0, 1], [1, 1, 0, 0]][dir & 3];
+  const P = C.map(([x, z], i) => [x, bot + rise * up[i], z]);
+  const N = [[0, 0, 1], [1, 0, 0], [0, 0, -1], [-1, 0, 0]];
+  const v0 = L.voff + fv(bot);
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4, a = C[i], b = C[j];
+    if (!up[i] && !up[j]) continue; // the low edge: no wall
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]), u1 = L.uoff + fu(len);
+    B.quad([a[0], bot, a[1]], [b[0], bot, b[1]], P[j], P[i], N[i], [[L.uoff, v0], [u1, v0], [u1, L.voff + fv(P[j][1])], [L.uoff, L.voff + fv(P[i][1])]], L.tint, L.lit, L.style);
+    if (up[i]) B.ink([a[0], bot, a[1]], P[i], ink);
+  }
+  const e1 = [P[1][0] - P[0][0], P[1][1] - P[0][1], P[1][2] - P[0][2]], e2 = [P[3][0] - P[0][0], P[3][1] - P[0][1], P[3][2] - P[0][2]];
+  const n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]], l = Math.hypot(...n);
+  const w = fu(Math.hypot(...e1)), h = fv(Math.hypot(...e2));
+  B.quad(P[0], P[1], P[2], P[3], n.map((c) => c / l), [[L.uoff, v0], [L.uoff + w, v0], [L.uoff + w, v0 + h], [L.uoff, v0 + h]], L.tint, L.lit, L.style);
+  for (let i = 0; i < 4; i++) B.ink(P[i], P[(i + 1) % 4], ink);
+}
+
 /** Gabled house/barn: walls to the eaves, a pitched roof along the long side. */
 export function gable(B, x0, z0, x1, z1, eave, ridge, L) {
   box(B, x0, z0, x1, z1, 0, eave, L, { roof: false });
@@ -561,9 +597,9 @@ export function lamp(B, x, y, z, s, colour, kind = KIND.neon, phase = 0) {
   const p = [[x, y + s, z], [x + s, y, z], [x, y, z + s], [x - s, y, z], [x, y, z - s], [x, y - s, z]];
   const f = [[0, 2, 1], [0, 3, 2], [0, 4, 3], [0, 1, 4], [5, 1, 2], [5, 2, 3], [5, 3, 4], [5, 4, 1]];
   for (const [a, b, c] of f) {
-    const i = B.v(p[a], [0, 1, 0], phase, 0, _l, kind, _l, 0);
-    B.v(p[b], [0, 1, 0], phase, 0, _l, kind, _l, 0);
-    B.v(p[c], [0, 1, 0], phase, 0, _l, kind, _l, 0);
+    const i = B.v(p[a], [0, 1, 0], phase, 0.3, _l, kind, _l, 0);
+    B.v(p[b], [0, 1, 0], phase, 0.3, _l, kind, _l, 0);
+    B.v(p[c], [0, 1, 0], phase, 0.3, _l, kind, _l, 0);
     B.idx.push(i, i + 1, i + 2);
   }
 }
@@ -582,9 +618,10 @@ export function neonRing(B, x0, z0, x1, z1, y, colour, t = 0.7) {
 export function neonPost(B, x, z, y0, y1, colour, t = 0.6) {
   _l.set(colour);
   const h = t / 2;
-  B.quad([x - h, y0, z + h], [x + h, y0, z + h], [x + h, y1, z + h], [x - h, y1, z + h], [0, 0, 1], UVQ, _l, _l, 0, KIND.neon);
-  B.quad([x + h, y0, z + h], [x + h, y0, z - h], [x + h, y1, z - h], [x + h, y1, z + h], [1, 0, 0], UVQ, _l, _l, 0, KIND.neon);
-  B.quad([x + h, y0, z - h], [x - h, y0, z - h], [x - h, y1, z - h], [x + h, y1, z - h], [0, 0, -1], UVQ, _l, _l, 0, KIND.neon);
-  B.quad([x - h, y0, z - h], [x - h, y0, z + h], [x - h, y1, z + h], [x - h, y1, z - h], [-1, 0, 0], UVQ, _l, _l, 0, KIND.neon);
+  B.quad([x - h, y0, z + h], [x + h, y0, z + h], [x + h, y1, z + h], [x - h, y1, z + h], [0, 0, 1], UVP, _l, _l, 0, KIND.neon);
+  B.quad([x + h, y0, z + h], [x + h, y0, z - h], [x + h, y1, z - h], [x + h, y1, z + h], [1, 0, 0], UVP, _l, _l, 0, KIND.neon);
+  B.quad([x + h, y0, z - h], [x - h, y0, z - h], [x - h, y1, z - h], [x + h, y1, z - h], [0, 0, -1], UVP, _l, _l, 0, KIND.neon);
+  B.quad([x - h, y0, z - h], [x - h, y0, z + h], [x - h, y1, z + h], [x - h, y1, z - h], [-1, 0, 0], UVP, _l, _l, 0, KIND.neon);
 }
-const UVQ = [[0, 0], [1, 0], [1, 1], [0, 1]];
+/** Neon uvs: v runs across the tube (the shader's tube profile); UVP for upright posts. */
+const UVQ = [[0, 0], [1, 0], [1, 1], [0, 1]], UVP = [[0, 0], [0, 1], [1, 1], [1, 0]];

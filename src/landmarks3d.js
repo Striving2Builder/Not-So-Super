@@ -3,7 +3,9 @@
 // the red hotel, the villain spike, the lighthouse). They replace a city.js footprint (so she can
 // perch on them / bump into them at their body height), live in one always-drawn mesh that the
 // haze barely touches, and are the city's navigation marks.
+import * as THREE from 'three';
 import { hash2 } from './rng.js';
+import { BLOCK } from './city.js';
 import { M, STYLE, Builder, box, prism, mast, lamp, neonRing, neonPost, look, KIND } from './buildings3d.js';
 import { signQuad, bladeSign } from './signs3d.js';
 
@@ -198,4 +200,43 @@ function lighthouse(B, x, z, H) {
   prism(B, x, z, 2.4, 2.4, H + 1, H + 5, 8, { ...W, style: STYLE.glass }, { cap: false });
   prism(B, x, z, 3, 0, H + 5, H + 8, 8, R);
   lamp(B, x, H + 3, z, 2.6, '#fff2a0', KIND.beacon);
+}
+
+/**
+ * The one district that glows at night (the casino strip): a dome of lit haze over its blocks
+ * (light-polluted air, thickest through the middle), additive, one draw call. Every other
+ * district recedes into the night haze; this one reads from across the city.
+ */
+export const GLOW = { district: 'casino', colours: ['#ffc860', '#ff4fb0'], height: 260, strength: 0.6 };
+
+export function districtGlow(city, scene, U) {
+  const blocks = city.blocks.filter((b) => b.d === GLOW.district);
+  if (!blocks.length) return null;
+  let cx = 0, cz = 0;
+  for (const b of blocks) { cx += (b.bx + 0.5) * BLOCK * M / blocks.length; cz += (b.by + 0.5) * BLOCK * M / blocks.length; }
+  let r = 0;
+  for (const b of blocks) r = Math.max(r, Math.hypot((b.bx + 0.5) * BLOCK * M - cx, (b.by + 0.5) * BLOCK * M - cz));
+  r += BLOCK * M * 0.6;
+  const g = new THREE.SphereGeometry(1, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+  const m = new THREE.Mesh(g, new THREE.ShaderMaterial({
+    uniforms: { uNight: U.uNight, uA: { value: new THREE.Color(GLOW.colours[0]) }, uB: { value: new THREE.Color(GLOW.colours[1]) }, uK: { value: GLOW.strength } },
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
+    vertexShader: 'varying vec3 vN; varying vec3 vW; varying float vH; void main(){ vH = position.y; vN = normalize(normalMatrix * normal); vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+    fragmentShader: /* glsl */`
+uniform float uNight; uniform vec3 uA; uniform vec3 uB; uniform float uK;
+varying vec3 vN; varying vec3 vW; varying float vH;
+void main() {
+  vec3 V = normalize(cameraPosition - vW);
+  // brightest where a ray crosses the most lit air (the middle), fading to nothing at the dome's
+  // rim so it never reads as a bubble; thinner with height
+  float thick = abs(dot(normalize(vN), normalize((viewMatrix * vec4(V, 0.)).xyz)));
+  float k = smoothstep(0.25, 0.7, uNight) * uK * thick * (1. - vH) * (1. - vH);
+  gl_FragColor = vec4(mix(uA, uB, vH) * k, 1.);
+}`,
+  }));
+  m.position.set(cx, 0, cz);
+  m.scale.set(r, GLOW.height, r);
+  m.renderOrder = 4;
+  scene.add(m);
+  return m;
 }

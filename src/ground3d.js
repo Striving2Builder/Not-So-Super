@@ -20,8 +20,8 @@ function plan(city, landmarks) {
   // street classes: every fourth street is a sodium-lit avenue, the rest dim side streets; only
   // avenue crossings get a bright pool (a city plan, not a uniform orange waffle)
   const av = (i) => i % 4 === 0;
-  for (let i = 0; i <= city.landCols; i++) { n.fillStyle = av(i) ? 'rgb(255,150,60)' : 'rgb(90,60,40)'; n.fillRect((i * BLOCK + ROAD * 0.3) * PX, 0, ROAD * 0.4 * PX, city.H * PX); }
-  for (let j = 0; j <= city.rows; j++) { n.fillStyle = av(j) ? 'rgb(255,150,60)' : 'rgb(90,60,40)'; n.fillRect(0, (j * BLOCK + ROAD * 0.3) * PX, city.coastX * PX, ROAD * 0.4 * PX); }
+  for (let i = 0; i <= city.landCols; i++) { n.fillStyle = av(i) ? 'rgb(200,115,45)' : 'rgb(55,38,28)'; n.fillRect((i * BLOCK + ROAD * 0.3) * PX, 0, ROAD * 0.4 * PX, city.H * PX); }
+  for (let j = 0; j <= city.rows; j++) { n.fillStyle = av(j) ? 'rgb(200,115,45)' : 'rgb(55,38,28)'; n.fillRect(0, (j * BLOCK + ROAD * 0.3) * PX, city.coastX * PX, ROAD * 0.4 * PX); }
   n.fillStyle = 'rgb(255,220,150)';
   for (let i = 0; i <= city.landCols; i += 4) for (let j = 0; j <= city.rows; j += 4) n.fillRect((i * BLOCK + ROAD * 0.2) * PX, (j * BLOCK + ROAD * 0.2) * PX, ROAD * 0.6 * PX, ROAD * 0.6 * PX);
   for (const b of city.blocks) {
@@ -45,7 +45,9 @@ function plan(city, landmarks) {
     d.fillStyle = '#2f5a2c';
     for (const o of b.b) if (o.kind === 'tree') { d.beginPath(); d.arc(o.x * PX, o.y * PX, Math.max(1.2, o.rad * PX), 0, Math.PI * 2); d.fill(); }
     // lit lots in the busy districts
-    if (D.neon || b.d === 'downtown' || b.d === 'financial') { n.fillStyle = 'rgba(255,200,140,.18)'; n.fillRect(b.x0 * PX, b.y0 * PX, LOT * PX, LOT * PX); }
+    // (the casino strip's lots blaze: the one district that glows from across the city at night)
+    if (b.d === 'casino') { n.fillStyle = 'rgba(255,190,90,.5)'; n.fillRect(b.x0 * PX, b.y0 * PX, LOT * PX, LOT * PX); }
+    else if (D.neon || b.d === 'downtown' || b.d === 'financial') { n.fillStyle = 'rgba(255,200,140,.18)'; n.fillRect(b.x0 * PX, b.y0 * PX, LOT * PX, LOT * PX); }
   }
   // landmark plazas: pale paving round the tower's block, a fountain, floodlit at night
   for (const lm of landmarks) {
@@ -75,7 +77,11 @@ uniform sampler2D day; uniform sampler2D night; uniform vec3 uKeyCol; uniform ve
 ${HAZE_GLSL}
 varying vec2 vUv; varying vec3 vW;
 void main() {
-  vec3 c = texture2D(day, vUv).rgb * (uAmbUp + uKeyCol * 0.8) * (1. - uNight * 0.55) + texture2D(night, vUv).rgb * uLit * 0.3;
+  // lit like the near ground tiles it continues (the 2D view's baked art, drawn unlit): full plan
+  // colour by day and dusk, the tiles' navy street veil by night. Lit by the scene's own (dim) dusk
+  // light it fell to a near-black slab past the tiles.
+  vec3 c = texture2D(day, vUv).rgb;
+  c = mix(c, c * 0.65 + vec3(0.0006, 0.001, 0.006), smoothstep(0.3, 0.6, uNight)) + texture2D(night, vUv).rgb * uLit * 0.3;
 #ifdef TONE_MAPPING
   c = toneMapping(c);
 #endif
