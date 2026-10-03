@@ -3,7 +3,7 @@
 Read this first when picking the polish pass up in a new thread. Last updated 2026-10-03: round 8 is
 merged (all three builders) and blind-tested (r9fly: 4.0 vs AAA, 6.5 vs the best HTML5 games).
 **Top priority now: iPad stability** (see "Device testing"). Running: a stability builder
-(`handoff/stability.md`) and a hero-variants builder (`handoff/heroskins.md`). The companion docs are [BRIEF.md](BRIEF.md) (the builder brief),
+(`handoff/stability.md`) and a Supergirl visuals builder (`handoff/supergirl.md`). Hero variants Classic/Ponytail are merged (fc7c052; pause menu "Hero", `?hero=`). The companion docs are [BRIEF.md](BRIEF.md) (the builder brief),
 [ARCHITECTURE.md](ARCHITECTURE.md) (module map and target layout) and [ASSETS.md](ASSETS.md) (incoming art).
 
 ## How the loop runs
@@ -44,6 +44,7 @@ merged (all three builders) and blind-tested (r9fly: 4.0 vs AAA, 6.5 vs the best
 - **Priority:** flying + city buildings + gameplay first. **Character art is delayed**, but hero *render quality* (aliasing, pixelation) is fair game.
 - **Story through video:** the LIVE feed panel and video keyed into green screens tell the story. Never shrink, hide or move them.
 - **HTML5 is the platform (2026-10-03):** the goal is "as close to AAA as an HTML5 game can be", not AAA. Every brief has a perf budget (≤5% fps per round unless the user agrees), and the director **raises a flag to the user** whenever a change costs fps, GPU memory or download size, or when a critic's ask isn't feasible in a browser. Filter critic asks for HTML5 feasibility before briefing. Real-phone numbers come from `?perf=1` (fps + worst frame, 3D scene scale, calls, triangles, textures).
+- **Character focus (2026-10-03):** Supergirl only for now (renders, visuals, animation feel). NPCs, enemies, villains and other characters wait until the user drafts the narrative story, which will define them. The current hero redesign is a Supergirl enhancement round (`handoff/supergirl.md`), not a new character.
 - **Shadows (2026-10-02):** no real cast shadow maps for now (too costly for HTML5); use cheap contact shading/AO. The user would love real sun shadows later if they become affordable.
 - **Comic style stays** in every round (restated 2026-10-02): outlined, flat-shaded clouds and ink lines are kept; only their execution is fixed.
 - **Brawler:** keep the procedural streets and mix the painted façades in.
