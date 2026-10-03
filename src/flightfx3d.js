@@ -7,7 +7,7 @@ import * as THREE from 'three';
 
 const FX = {
   trail: { n: 24, life: 0.3, width: [0.34, 0.0], from: 140, head: [1, 0.2, 0.18], tail: [1, 0.8, 0.2], alpha: 1 },   // red off her heels → gold // speed (m/s) it starts
-  wind: { n: 28, radius: [5, 14], ahead: [4, 26], width: 0.09, from: 0.62, len: 14, clear: [0.62, 0.95] }, // from = speed fraction; close round her (they read at the screen edges, never as far hairlines); len cap (m); clear: NDC radius they fade in over
+  wind: { n: 28, radius: [5, 14], ahead: [4, 26], width: 0.09, from: 0.62, len: 9, clear: [0.62, 0.95] }, // from = speed fraction; close round her (they read at the screen edges, never as far hairlines); len cap (m); clear: NDC radius they fade in over
   ring: { life: 0.9, grow: [3, 70], boostGrow: [2, 26] },
   lines: { from: 0.18, deal: 70, clear: [0.6, 1.0], len: [0.22, 0.32] },                               // speed fraction; re-deal ms; clear: the screen ellipse they fade in over (× the half size); len: longest streak × screen height (cruise, boost)
 };
@@ -173,7 +173,7 @@ export class FlightFX3D {
       this.dealt = deal;
       this.lines = [];
       const n = Math.floor(boosting ? 26 + f * 14 : 6 + f * 10);
-      for (let i = 0; i < n; i++) this.lines.push({ a: Math.random() * Math.PI * 2, in: Math.random(), w: (boosting ? 3 : 2) + Math.random() * (boosting ? 7 : 4) });
+      for (let i = 0; i < n; i++) this.lines.push({ a: Math.random() * Math.PI * 2, in: Math.random(), w: 2 + Math.random() * (boosting ? 5 : 4) });
       for (const [side, k] of [[-1, walls.l], [1, walls.r]]) {
         const m = Math.floor(k * 14);
         for (let i = 0; i < m; i++) this.lines.push({ a: (side < 0 ? Math.PI : 0) + (Math.random() - 0.5) * 1.1, in: Math.random(), w: 2.5 + Math.random() * 6, wall: k });

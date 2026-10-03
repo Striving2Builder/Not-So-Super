@@ -50,7 +50,7 @@ void main() {
   // of the frame (the city inside it stays crisp: a wide smear read as a blurry city). Many taps over a short span (≤ ~1.5% of the screen): a smooth smear, never the
   // duplicated "multi-exposure" copies a few wide taps give.
   if (streak > 0.0) {
-    vec2 d = vUv - vp; float k = smoothstep(0.55, 0.95, length(d * vec2(px.y / px.x, 1.0))) * streak;
+    vec2 d = vUv - vp; float k = smoothstep(0.8, 1.3, length((vUv - 0.5) * 2.0)) * streak; // (screen ellipse: mid-edges 1, corners 1.41)
     if (k > 0.01) {
       vec2 step = normalize(d) * 0.0011 * k;
       vec3 acc = gl_FragColor.rgb;
