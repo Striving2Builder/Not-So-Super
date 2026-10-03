@@ -75,7 +75,11 @@ uniform sampler2D day; uniform sampler2D night; uniform vec3 uKeyCol; uniform ve
 ${HAZE_GLSL}
 varying vec2 vUv; varying vec3 vW;
 void main() {
-  vec3 c = texture2D(day, vUv).rgb * (uAmbUp + uKeyCol * 0.8) * (1. - uNight * 0.55) + texture2D(night, vUv).rgb * uLit * 0.3;
+  // lit like the near ground tiles it continues (the 2D view's baked art, drawn unlit): full plan
+  // colour by day and dusk, the tiles' navy street veil by night. Lit by the scene's own (dim) dusk
+  // light it fell to a near-black slab past the tiles.
+  vec3 c = texture2D(day, vUv).rgb;
+  c = mix(c, c * 0.65 + vec3(0.0006, 0.001, 0.006), smoothstep(0.3, 0.6, uNight)) + texture2D(night, vUv).rgb * uLit * 0.3;
 #ifdef TONE_MAPPING
   c = toneMapping(c);
 #endif

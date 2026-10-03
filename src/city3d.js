@@ -152,7 +152,9 @@ export class City3D {
       }
       if (ch[which]) ch[which].visible = true;
       if (ch[which + 'Ink']) ch[which + 'Ink'].visible = which === 'near' || d < LOD.farInk;
-      if (d < near * 1.2) this.groundTile(ch, night > 0.45, frame);
+      // no baked tiles past the coast: those chunks are open bay, and their unpainted canvases were
+      // near-black slabs lying on the sea
+      if (d < near * 1.2 && cx * TILE < this.city.landCols) this.groundTile(ch, night > 0.45, frame);
     }
     this.built = true;
     this.outer.update(cam, cut);

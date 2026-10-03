@@ -116,7 +116,7 @@ function atlas() {
 
 // ---------------------------------------------------------------- the shader
 /** Haze reach: far = max(fog far, camera height x perAlt), capped under the camera's far plane. */
-export const HAZE = { perAlt: 7, max: 4200, near: 0.2 };
+export const HAZE = { perAlt: 7, max: 4200, near: 0.1 };
 /** Key vs ambient: a clear lit / raking / shadow split on every tower, day and dusk too. */
 const KEY = { key: 1.4, amb: 0.86 };
 const _cool = new THREE.Color(0.93, 0.98, 1.1);
@@ -134,13 +134,20 @@ vec3 pulp(vec3 c) {
   return clamp((c - 0.5) * 1.12 + 0.5 + 0.02, 0., 1.);
 }
 vec3 haze(vec3 c, float d, float y, float k) {
-  // comic aerial perspective: stepped value bands (clear near city, then three paler layers), each
-  // step softened over a third of its width, rather than one uniform wash
-  float f0 = clamp((d - uHazeNear) / (uHazeFar - uHazeNear), 0., 1.) * 3.;
-  float f = (floor(f0) + smoothstep(0.65, 1., fract(f0))) / 3.;
-  f = f * f * (1.3 - 0.3 * f); // the first band stays light
-  f = clamp(f + (1. - smoothstep(0., 160., y)) * smoothstep(uHazeNear, uHazeFar, d) * 0.25, 0., 1.) * k;
-  return mix(c, mix(uHazeCol, uHorizon, smoothstep(0.15, 1., f)), f);
+  // aerial perspective in three moves, each starting a little later than the last: colour drains
+  // first (distant towers go grey-blue), then values flatten toward the air's own value (darks lift,
+  // lights dim: the far city loses contrast), then the colour itself becomes the air. It works over
+  // ~40-70% of the draw distance; the near city keeps full punch. Shapes keep their edges because
+  // every face moves by the same rule (face-to-face contrast shrinks, never flips).
+  float t = clamp((d - uHazeNear) / (uHazeFar - uHazeNear), 0., 1.);
+  float f = t * t * (3. - 2. * t);
+  f = clamp(f + (1. - smoothstep(0., 160., y)) * t * 0.2, 0., 1.) * k; // thicker over the ground
+  vec3 air = mix(uHazeCol, uHorizon, smoothstep(0.35, 1., f));
+  const vec3 LW = vec3(0.299, 0.587, 0.114);
+  float l = dot(c, LW), la = dot(air, LW);
+  c = mix(c, vec3(l), smoothstep(0., 0.75, f) * 0.72);  // saturation
+  c += (la - l) * 0.55 * f;                              // contrast (value toward the air)
+  return mix(c, air, f * sqrt(f));                       // colour
 }`;
 
 const VERT = /* glsl */`
@@ -197,7 +204,7 @@ void main() {
   float d = length(vP - cameraPosition);
   float a = clamp(max(vWid, 1.) * 0.5 + 0.5 - abs(vAcross), 0., 1.) * min(vWid, 1.) * mix(1., 0.55, smoothstep(300., 700., d)) * (1. - smoothstep(1400., 2000., d));
   if (a < 0.01) discard;
-  gl_FragColor = vec4(haze(uInk, d, vP.y, 1.), a);
+  gl_FragColor = vec4(haze(uInk, d, vP.y, 0.85), a); // a notch under the walls: silhouettes keep their line
 }`;
 
 const FRAG = /* glsl */`

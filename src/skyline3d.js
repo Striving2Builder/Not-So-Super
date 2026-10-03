@@ -18,9 +18,15 @@ export class Horizon {
   constructor(scene, U, land) {
     this.scene = scene;
     const [x0, z0, x1, z1] = land, R = OUTER.river, E = OUTER.reach;
-    // ---- the water: one sheet under everything (the bay east, the river round the other sides)
-    const sea = new THREE.PlaneGeometry(2 * E + (x1 - x0), 2 * E + (z1 - z0), 1, 1);
-    sea.rotateX(-Math.PI / 2); sea.translate((x0 + x1) / 2, -0.6, (z0 + z1) / 2);
+    // ---- the water: the bay east and the river round the other sides, never under the land. One
+    // sheet under everything z-fought the map's ground from altitude (0.35 m apart, a kilometre
+    // off): from high patrol the sea won and the city stood in a pale blue flood.
+    const sea = flat([
+      [x1, z0 - R - E, x1 + E, z1 + R + E], // the bay
+      [x0 - R, z0 - R, x0, z1 + R],         // the river: west
+      [x0, z0 - R, x1, z0],                 // north
+      [x0, z1, x1, z1 + R],                 // south
+    ], -0.6);
     this.sea = new THREE.Mesh(sea, new THREE.ShaderMaterial({
       uniforms: { uKeyDir: U.uKeyDir, uKeyCol: U.uKeyCol, uNight: U.uNight, uTime: U.uTime, uSky: U.uSky, ...hazeU(U) },
       vertexShader: WORLD_VS,
@@ -57,21 +63,14 @@ void main() {
     }));
     scene.add(this.sea);
     // ---- the outer boroughs' ground: everything outside map + river, except the bay (east)
-    const quads = [
+    const g = flat([
       [x0 - R - E, z0 - R - E, x0 - R, z1 + R + E], // west
       [x0 - R, z0 - R - E, x1, z0 - R],             // north
       [x0 - R, z1 + R, x1, z1 + R + E],             // south
-    ];
-    const pos = [], idx = [];
-    for (const [a, b, c, d] of quads) {
-      const n = pos.length / 3;
-      pos.push(a, -0.3, b, a, -0.3, d, c, -0.3, d, c, -0.3, b);
-      idx.push(n, n + 1, n + 2, n, n + 2, n + 3);
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    g.setIndex(idx);
+    ], -0.3);
     this.carpetMat = carpet(U);
+    // the bay islands lie on the sea: pulled forward in depth so they never z-fight it far off
+    this.carpetMat.polygonOffset = true; this.carpetMat.polygonOffsetFactor = -2; this.carpetMat.polygonOffsetUnits = -8;
     this.carpet = new THREE.Mesh(g, this.carpetMat);
     this.carpet.frustumCulled = false;
     scene.add(this.carpet);
@@ -95,6 +94,21 @@ void main() {
   }
 }
 
+/** Level rectangles [x0, z0, x1, z1] at height y as one geometry (facing up). */
+function flat(rects, y) {
+  const pos = [], idx = [];
+  for (const [a, b, c, d] of rects) {
+    const n = pos.length / 3;
+    pos.push(a, y, b, a, y, d, c, y, d, c, y, b);
+    idx.push(n, n + 1, n + 2, n, n + 2, n + 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeBoundingSphere();
+  return g;
+}
+
 /** The outer street grid, all in the shader: lots and avenues by day, lit avenue grid by night. */
 function carpet(U) {
   return new THREE.ShaderMaterial({
@@ -116,13 +130,15 @@ void main() {
   float road = max(r.x, r.y);
   float h = h21(cell);
   vec3 lot = h < 0.12 ? vec3(0.28, 0.42, 0.24) : mix(vec3(0.42, 0.4, 0.38), vec3(0.5, 0.36, 0.3), step(0.6, h));
-  vec3 day = mix(lot, vec3(0.17, 0.17, 0.2), road) * (uAmbUp + uKeyCol * 0.8);
+  // lit like the map's ground (unlit plan colours, a navy veil by night): under the scene's dim
+  // dusk light the bay islands and boroughs fell to near-black slabs
+  vec3 day = mix(lot, vec3(0.17, 0.17, 0.2), road) * 0.55;
   // night: sodium avenues and a scatter of lit lots
   // avenues (every fourth street) lit, side streets dim
   float avX = step(mod(cell.x, 4.), 0.5), avY = step(mod(cell.y, 4.), 0.5);
   float lit = max(r.x * (0.25 + 0.75 * avX), r.y * (0.25 + 0.75 * avY));
   vec3 glow = vec3(1., 0.62, 0.25) * lit * 0.22 + vec3(1., 0.8, 0.5) * step(0.55, h) * (1. - road) * 0.07;
-  vec3 c = day * (1. - uNight * 0.6) + glow * uLit;
+  vec3 c = mix(day, day * 0.65 + vec3(0.0006, 0.001, 0.006), smoothstep(0.3, 0.6, uNight)) + glow * uLit;
 #ifdef TONE_MAPPING
   c = toneMapping(c);
 #endif
