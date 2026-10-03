@@ -14,10 +14,10 @@ export const SUIT = { sat: 1.45, self: 0.32, rim: [0.62, 0.95, 1.0], rimK: [1.3,
  * (the painted locks, ink and shine modulate the tones around it).
  */
 export const HAIR = {
-  uv: [0.0, 0.58, 0.6, 1.0], cut: [0.32, 0.62], ref: 0.59, // cut: light-band thresholds mid / lit
+  uv: [0.0, 0.58, 0.6, 1.0], cut: [0.24, 0.5], ref: 0.59, // cut: light-band thresholds mid / lit
   // [lit, mid, shade], linear: picked so they land on golden blonde after ACES (3D flight: a bright
   // yellow washes out to beige there) or as they are (the sprites render without tone mapping)
-  aces: [[0.75, 0.36, 0.02], [0.45, 0.16, 0.01], [0.2, 0.05, 0.008]],
+  aces: [[1.05, 0.62, 0.05], [0.74, 0.35, 0.02], [0.36, 0.12, 0.01]],
   raw: [[0.94, 0.62, 0.08], [0.73, 0.35, 0.034], [0.35, 0.107, 0.013]],
 };
 

@@ -33,6 +33,17 @@ and re-test the sprites (keep the heroMaterial swap in HeroSprite's constructor)
 - herofly.js (2D flight sprite) uses FlightPose too (attitude + bone blends), not superFly.
 - Hair shell has smoothed custom normals (soft=30) so the cel bands are big shapes.
 
-## In progress / next
-- fps A/B running: `shots/supergirl/ab.sh` (base = git archive of phase-2 in shots/supergirl/base).
-- Harness shots sg2 (flying + brawler street) after the A/B.
+- Flight hair palette brightened (ACES turned the mid tone brown in-game).
+
+## Measured
+- fps A/B (`shots/supergirl/ab.sh`, fly3d.js --rounds 3, base = git archive of phase-2 34dfef3,
+  3 alternating pairs): raw 3D fps base/new skim 7.0/10.0, cruise 8.9/9.8, high 6.5/10.9; triangles
+  −7..12k; calls same. No cost (3D/2D ratio is noisy: the 2D view's sprite changed too).
+- Shots: `shots/sg2/flying`, `shots/sg2/brawler` (no page errors) vs `shots/sg-base/`; lab sheets
+  `shots/supergirl/lab-base.png` vs `lab-final.png`; montages `ab_fly.png`, `ab_brawl.png`.
+
+## Next / known issues
+- Hair shell hem is a little jagged (remesh tips) and the crown shine reads as a ring of ovals.
+- Classic / Ponytail variants still use hair cards (pipeline in tools/heroskins; run shell() on them).
+- Cape at dusk from the chase cam is a dark maroon block; a lighter outer shade would help.
+- Boost pose (both fists) reads mostly from side/front; from the chase cam it's subtle.
