@@ -24,15 +24,18 @@ import { releaseOffscreen } from './offscreen3d.js';
  * Flight in 3D? The default since it beat the 2D view 6/6 in blind tests (2026-10-02). `?flight=2d`
  * keeps the old top-down view, and so does a device without WebGL. Read once.
  */
-let on;
+let on, blocked = false;
 export function flight3dEnabled() {
   if (on === undefined) {
     let param = null;
     try { param = new URLSearchParams(location.search).get('flight'); } catch (e) { /* no URL */ }
     on = param !== '2d' && hasWebGL();
+    blocked = param !== '2d' && !on;
   }
   return on;
 }
+/** 3D was wanted but the browser gave no WebGL (e.g. iOS after GPU trouble): the 2D view says why. */
+export const flight3dBlocked = () => blocked;
 /** `?dynres=off` pins dynamic resolution at full scale (screenshot harness on slow SwiftShader). */
 let pinned;
 function dynResPinned() {

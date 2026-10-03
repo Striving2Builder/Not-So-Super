@@ -57,6 +57,9 @@ export function gfxLost() {
   return false;
 }
 
+/** WebGL contexts the game holds right now (the ?perf=1 readout). */
+export function liveContexts() { let n = 0; for (const c of watched.keys()) if (!watched.get(c).lost) n++; return n; }
+
 function refresh() { if (!gfxLost() && !loadingText) hidePanel(); }
 
 // ---- the comic panel (also the zones' "LOADING…" card). It sits mid-screen, under the HUD, the

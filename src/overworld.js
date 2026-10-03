@@ -19,7 +19,7 @@ import { FlightHero } from './herofly.js';
 import { drawBuilding, drawLights } from './skyline.js';
 import { drawEdgeMarkers } from './flightmarks.js';
 import { tiltAngle, tiltLeadY, projection, centreOffset } from './tiltcam.js';
-import { Flight3D, flight3dEnabled } from './flight3d.js';
+import { Flight3D, flight3dEnabled, flight3dBlocked } from './flight3d.js';
 import { FlightAudio } from './flightaudio.js';
 import { nightCaseFields } from './nightcase.js';
 import { asylumFields } from './asylum.js';
@@ -124,6 +124,7 @@ export class Overworld {
       this.superJump();
     }
     if (!this.attract) this.audio.start();
+    if (!this.view3d && !this.attract && flight3dBlocked() && !this.told2d) { this.told2d = true; toast("Your browser isn't giving the game 3D graphics right now, so you're flying in 2D. Reload the page later to try 3D again.", 'info'); }
     $('hud-extra').innerHTML = '';
     $('objectives').classList.remove('on');
   }

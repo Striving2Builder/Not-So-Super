@@ -28,7 +28,7 @@ export class HeroPass {
     for (let i = 0; i < PASS.taps; i++) {
       const a = (i / PASS.taps) * Math.PI * 2, d = `vec2(${Math.cos(a).toFixed(4)}, ${Math.sin(a).toFixed(4)}) * texel`;
       taps += `  o = max(o, cover(vUv + ${d} * inkW));\n`;
-      halo += `    h = max(h, cover(vUv + ${d} * (inkW + haloW)));\n`;
+      if (i % 2 === 0) halo += `    h = max(h, cover(vUv + ${d} * (inkW + haloW)));\n`; // (the soft night halo: half the taps do)
     }
     this.mat = new THREE.ShaderMaterial({
       uniforms: { map: { value: null }, rep: { value: new THREE.Vector2(1, 1) }, texel: { value: new THREE.Vector2() }, inkW: { value: 0 }, haloW: { value: 0 },
