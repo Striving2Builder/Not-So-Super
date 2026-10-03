@@ -6,9 +6,11 @@
 //
 //   node tools/shots/stab.js [--browser webkit|chromium|both] [--port 8801] [--rounds 2] [--lose]
 //   --lose  also loses + restores the shared WebGL context mid-flight (WEBGL_lose_context)
+//   --overlay dir  serve dir's files over the checkout's (e.g. a frozen baseline src/)
+//   --tour N  first flies a tour of the whole city (N stops, day and night) and reports memory after it
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const serve = require('./serve.js');
 
 function loadPlaywright() {
   try { return require('playwright'); } catch (e) { /* fall through to the npx cache */ }
@@ -129,6 +131,31 @@ async function transition(page, cdp, label, js, readyJs) {
   return { label, syncMs: Math.round(sync), ...r, heapMB: await heap(page, cdp) };
 }
 
+/**
+ * Lose the shared WebGL context while flying. restore: the browser gives it back after 1.5 s;
+ * never: it doesn't (the game must rebuild the renderer); nogl: it doesn't and no new context can
+ * be made either (the game must fall back to 2D flight, deliberately).
+ */
+async function loseTest(page, how) {
+  const r = await page.evaluate(async (how) => {
+    const g = window.__game, r0 = g.modes.special.renderer, ext = r0.getContext().getExtension('WEBGL_lose_context');
+    const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+    if (how === 'nogl') { const o = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (t, a) { return /webgl/.test(t) ? null : o.call(this, t, a); }; }
+    ext.loseContext();
+    await sleep(1500);
+    const shown = !!document.querySelector('#gfx-panel.on'), tick = g.overworld.t;
+    await sleep(500);
+    const paused = g.overworld.t === tick;
+    if (how === 'restore') ext.restoreContext();
+    await sleep(how === 'restore' ? 2000 : 4500);
+    const r1 = g.modes.special.renderer;
+    return { how, panelWhileLost: shown, simPaused: paused, rebuilt: !!r1 && r1 !== r0, glOk: !!r1 && !r1.getContext().isContextLost(), panelAfter: !!document.querySelector('#gfx-panel.on'),
+      fly3d: document.body.classList.contains('fly3d'), view3d: !!g.overworld.view3d, toast: document.getElementById('toasts')?.textContent.slice(0, 90) };
+  }, how);
+  await page.screenshot({ path: path.join(ROOT, 'shots', 'stab', `lose_${how}.png`) });
+  return { label: `lose (${how})`, ...r, gl: await page.evaluate(() => window.__glt.report()) };
+}
+
 async function run(browserType, name, devices) {
   const browser = await browserType.launch(name === 'chromium' ? { args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-precise-memory-info'] } : {});
   const dev = devices['iPad Pro 11 landscape'];
@@ -158,22 +185,27 @@ async function run(browserType, name, devices) {
   if (await opt.count()) await opt.click();
   await page.evaluate(async () => { await (await import('/src/enemies.js')).loadEnemies(); });
   await page.evaluate(() => { const g = window.__game; g.overworld.nav.autopilot = false; });
+  const TOUR = +arg('--tour', 0);
+  if (TOUR) {
+    const t0 = Date.now();
+    for (let i = 0; i < TOUR; i++) {
+      await page.evaluate(([i, n]) => {
+        const g = window.__game, c = g.city, h = g.overworld.hero, k = Math.ceil(Math.sqrt(n));
+        const fx = ((i % k) + 0.5) / k, fy = (Math.floor(i / k) + 0.5) / k;
+        Object.assign(h, { x: c.coastX * (Math.floor(i / k) % 2 ? 1 - fx : fx), y: c.H * fy, band: i % 3 });
+        g.state.clock = i % 2 ? 23 * 60 : 12 * 60;
+      }, [i, TOUR]);
+      await page.waitForTimeout(1500);
+    }
+    rows.push({ label: `tour (${TOUR} stops, ${Math.round((Date.now() - t0) / 1000)} s)`, syncMs: 0, readyMs: 0, steadyMs: 0, longest: 0, over100: 0, medFrame: 0, gl: await page.evaluate(() => window.__glt.report()), heapMB: await heap(page, cdp),
+      info: await page.evaluate(() => window.__game.overworld.view3d?.renderer?.info.memory) });
+  }
   for (let round = 0; round < ROUNDS; round++) {
     for (const z of ['brawler', 'investigate', 'special']) {
       await page.keyboard.down('KeyW'); await page.waitForTimeout(1500); await page.keyboard.up('KeyW');
-      if (LOSE && round === 0 && z === 'brawler') {
-        // lose and restore the shared context while flying
-        const lr = await page.evaluate(async () => {
-          const r = window.__game.modes.special.renderer, ext = r.getContext().getExtension('WEBGL_lose_context');
-          const a = performance.now(); ext.loseContext();
-          await new Promise((res) => setTimeout(res, 1500));
-          const shown = !!document.querySelector('#gfx-restore.on');
-          ext.restoreContext();
-          await new Promise((res) => setTimeout(res, 2500));
-          return { lostShown: shown, lostNow: r.getContext().isContextLost(), mode: window.__game.modeName, fly3d: document.body.classList.contains('fly3d'), ms: Math.round(performance.now() - a) };
-        });
-        rows.push({ label: 'lose+restore', ...lr, gl: await page.evaluate(() => window.__glt.report()) });
-      }
+      if (LOSE && round === 0 && z === 'brawler') rows.push(await loseTest(page, 'restore'));
+      if (LOSE && round === 0 && z === 'investigate') rows.push(await loseTest(page, 'never'));
+      if (LOSE && round === ROUNDS - 1 && z === 'special') rows.push(await loseTest(page, 'nogl'));
       rows.push(await transition(page, cdp, `fly → ${z}`, `window.__game.startZone(${ZONES[z]})`, READY[z]));
       if (z === 'brawler') { await page.keyboard.down('KeyD'); for (let i = 0; i < 6; i++) { await page.keyboard.press('KeyJ'); await page.waitForTimeout(200); } await page.keyboard.up('KeyD'); }
       else await page.waitForTimeout(1200);
@@ -187,8 +219,7 @@ async function run(browserType, name, devices) {
 
 (async () => {
   const pw = loadPlaywright();
-  const srv = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT) }, stdio: 'ignore' });
-  await new Promise((r) => setTimeout(r, 900));
+  const srv = serve(ROOT, PORT, arg('--overlay', null) && path.resolve(ROOT, arg('--overlay')));
   const out = {};
   try {
     for (const b of WHICH === 'both' ? ['webkit', 'chromium'] : [WHICH]) {
@@ -197,13 +228,14 @@ async function run(browserType, name, devices) {
       console.log(`\n== ${b}  ${JSON.stringify(r.env)}`);
       console.log('transition'.padEnd(22), 'sync', 'ready', 'steady', 'longest', '>100ms', 'frame', 'ctx(live/made)', 'gpuMB(res+draw)', 'heapMB');
       for (const x of r.rows) {
-        if (x.label === 'lose+restore') { console.log(x.label.padEnd(22), JSON.stringify(x)); continue; }
+        if (x.label.startsWith('lose')) { console.log(x.label.padEnd(22), JSON.stringify(x)); continue; }
+        if (x.info) console.log('  three memory:', JSON.stringify(x.info));
         console.log(x.label.padEnd(22), String(x.syncMs).padStart(4), String(x.readyMs).padStart(5), String(x.steadyMs).padStart(6), String(x.longest).padStart(7), String(x.over100).padStart(6), String(x.medFrame).padStart(5),
           `${x.gl.live}/${x.gl.made}`.padStart(14), `${x.gl.resMB}+${x.gl.drawMB}`.padStart(15), String(x.heapMB).padStart(6));
       }
       if (argv.includes('--dump')) for (const x of r.rows) console.log(x.label, JSON.stringify(x.perCtx), JSON.stringify(x.top));
       console.log('ended in 3D flight:', r.endedIn3D, ' errors:', r.errors.length ? r.errors : 'none');
     }
-  } finally { srv.kill(); }
+  } finally { srv.close(); }
   if (OUT) fs.writeFileSync(OUT, JSON.stringify(out, null, 2));
 })().catch((e) => { console.error(e); process.exit(1); });

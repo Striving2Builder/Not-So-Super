@@ -30,7 +30,7 @@ const VARIANTS = arg('--variants', 'head').split(';').filter(Boolean).map((s, i)
   const [overlay, js] = rest.split('|');
   return { name, overlay: overlay ? path.resolve(ROOT, overlay) : null, js: js || '', port: PORT + i };
 });
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.glb': 'model/gltf-binary', '.mp4': 'video/mp4' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.glb': 'model/gltf-binary', '.mp4': 'video/mp4', '.woff2': 'font/woff2' };
 function serve(v) {
   return http.createServer((req, res) => {
     const url = decodeURIComponent(req.url.split('?')[0]);

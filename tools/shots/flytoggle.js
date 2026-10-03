@@ -2,10 +2,11 @@
 // rendered over and over), each feature switched off in turn and measured against the full frame,
 // alternating (base, A, base, B, ...) so drift hits everything equally.
 //   node tools/shots/flytoggle.js [--graphics high|auto|saver] [--bands 0,1,2] [--rounds 4] [--port 8808]
+//        [--overlay dir]  (files in dir replace the checkout's: e.g. a frozen copy of src/ while you edit)
 // Prints fps(full), and per toggle fps(off) and the % of frame time the feature costs.
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const http = require('http');
 
 function loadPlaywright() {
   try { return require('playwright'); } catch (e) { /* npx cache */ }
@@ -22,6 +23,15 @@ const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] :
 const PORT = +arg('--port', 8808), ROUNDS = +arg('--rounds', 4), GFX = arg('--graphics', 'auto');
 const BANDS = arg('--bands', '0,1,2').split(',').map(Number);
 const ONLY = arg('--only', null);
+const OVERLAY = arg('--overlay', null) && path.resolve(ROOT, arg('--overlay'));
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.glb': 'model/gltf-binary', '.mp4': 'video/mp4', '.woff2': 'font/woff2' };
+const serve = () => http.createServer((req, res) => {
+  const url = decodeURIComponent(req.url.split('?')[0]), rel = url === '/' ? 'index.html' : url.slice(1);
+  const file = [OVERLAY && path.join(OVERLAY, rel), path.join(ROOT, rel)].filter(Boolean).find((f) => fs.existsSync(f) && fs.statSync(f).isFile());
+  if (!file) { res.writeHead(404); return res.end(); }
+  res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+  fs.createReadStream(file).pipe(res);
+}).listen(PORT);
 const NIGHT = argv.includes('--day') ? 12 * 60 : 21 * 60;
 
 // [name, off, on] snippets; they see v (Flight3D), P (the active profile object), T (a stash)
@@ -42,8 +52,7 @@ const INIT = `(() => { let s = 4242; Math.random = () => { s = (s + 0x6d2b79f5) 
 try { localStorage.setItem('supergirl-settings', JSON.stringify({ graphics: '${GFX}' })); } catch (e) {}`;
 
 (async () => {
-  const srv = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT) }, stdio: 'ignore' });
-  await new Promise((r) => setTimeout(r, 900));
+  const srv = serve();
   const { chromium } = loadPlaywright();
   const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const out = {};
@@ -94,7 +103,7 @@ try { localStorage.setItem('supergirl-settings', JSON.stringify({ graphics: '${G
         console.log('  ', t[0].padEnd(18), f.toFixed(2).padStart(6), 'fps', `${(cost * 100).toFixed(1)}%`.padStart(7), 'of frame time');
       }
     }
-  } finally { await browser.close(); srv.kill(); }
+  } finally { await browser.close(); srv.close(); }
   const f = arg('--out', null);
   if (f) fs.writeFileSync(f, JSON.stringify(out, null, 2));
 })().catch((e) => { console.error(e); process.exit(1); });

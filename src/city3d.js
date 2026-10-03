@@ -23,6 +23,8 @@ const GREEN3 = ['#2f6b34', '#3a7a3a', '#4a8a3a'];
 const CHUNK = TILE * BLOCK; // world units per chunk side (one ground tile)
 /** farMat: metres past which a chunk switches to its lite build + flat-tone material (no texture, ink, halftone, roof kit). */
 const LOD = { farMat: 260, farInk: 0, landmarkFog: 0.8, landmarkMax: 0.93, coreR: 4.5 };
+/** Memory: at most this many near builds / ground tiles stay built; past that, those unseen for `idle` frames are freed. */
+const KEEP = { near: 30, tiles: 40, idle: 240, every: 60 };
 
 export class City3D {
   constructor(city, scene, { tileRes = 144 } = {}) {
@@ -132,6 +134,30 @@ export class City3D {
       this.scene.add(m);
     }
     for (const k of ['gl', 'gd']) if (ch[k]) ch[k].visible = k === key;
+    ch[key + 'Seen'] = this.n;
+  }
+
+  /**
+   * Give back what she flew away from. Every chunk's near build and ground tiles used to stay on
+   * the GPU for good: one tour of the city piled up ~170 MB more (tiles ~1 MB each, day and night,
+   * plus their 2D canvases), and long sessions took iOS Safari down. Past the KEEP budget, the near
+   * builds and tiles unseen for a while are freed; they're rebuilt on the way back (a couple a frame,
+   * the lite build stands in meanwhile).
+   */
+  trim(n) {
+    const free = (ch, k) => {
+      const m = ch[k];
+      this.scene.remove(m);
+      m.geometry.dispose();
+      if (m.material.map) { m.material.map.dispose(); m.material.dispose(); } // (tile materials are per tile; the city's are shared)
+      delete ch[k];
+    };
+    const prune = (key, max, drop) => {
+      const list = [...this.chunks.values()].filter((ch) => ch[key]).sort((a, b) => (a[key + 'Seen'] || 0) - (b[key + 'Seen'] || 0));
+      for (let i = 0; i < list.length - max; i++) if (n - (list[i][key + 'Seen'] || 0) > KEEP.idle) drop(list[i]);
+    };
+    prune('near', KEEP.near, (ch) => { free(ch, 'near'); if (ch.nearInk) free(ch, 'nearInk'); });
+    for (const k of ['gl', 'gd']) prune(k, KEEP.tiles / 2, (ch) => { free(ch, k); this.art.drop(ch.cx, ch.cy, k === 'gl'); });
   }
 
   /**
@@ -143,6 +169,7 @@ export class City3D {
     const R = Math.ceil(Math.max(far, this.look.U.uHazeFar.value) / M / CHUNK) + 1;
     const ccx = Math.floor(px / CHUNK), ccy = Math.floor(pz / CHUNK);
     let budget = this.built ? 2 : 999;
+    const n = (this.n = (this.n || 0) + 1);
     for (const ch of this.chunks.values()) for (const k of ['near', 'lite', 'nearInk', 'liteInk', 'gl', 'gd']) if (ch[k]) ch[k].visible = false;
     // haze first: from altitude it reaches further than the band's fog, and so do the chunks
     this.look.light(this.sun, this.hemi, this.scene.fog, night, (performance.now() - this.t0) / 1000, this.sky?.horizon || this.dome?.material.uniforms.bottom.value, cam.position.y);
@@ -157,12 +184,14 @@ export class City3D {
         this.build(ch, which);
       }
       if (ch[which]) ch[which].visible = true;
+      if (which === 'near') ch.nearSeen = n;
       if (ch[which + 'Ink']) ch[which + 'Ink'].visible = which === 'near' || d < LOD.farInk;
       // no baked tiles past the coast: those chunks are open bay, and their unpainted canvases were
       // near-black slabs lying on the sea
       if (d < near * 1.2 && cx * TILE < this.city.landCols) this.groundTile(ch, night > 0.45, frame);
     }
     this.built = true;
+    if (n % KEEP.every === 0) this.trim(n);
     this.outer.update(cam, cut);
     this.card.update(cam, this.look.U.uHazeFar.value);
     this.street.update(cam);

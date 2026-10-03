@@ -95,7 +95,9 @@ export class Overworld {
   }
 
   enter(p = {}) {
-    if (this.view3d && !this.attract) this.view3d.enter();
+    if (this.view3d && !this.attract) {
+      try { this.view3d.enter(); } catch (e) { console.error(e); this.drop3D(); } // (no WebGL context to be had)
+    }
     const inp = this.g.input;
     inp.setStick(true);
     // 3D view: a leaner set (one UP/DOWN rocker; DIVE and PERCH only show when they apply)
@@ -124,6 +126,18 @@ export class Overworld {
     if (!this.attract) this.audio.start();
     $('hud-extra').innerHTML = '';
     $('objectives').classList.remove('on');
+  }
+
+  /**
+   * WebGL is gone for good (the browser won't give the page a context): fly on in the 2D view
+   * instead of a black screen, and say so. A reload tries 3D again.
+   */
+  drop3D() {
+    if (!this.view3d) return;
+    this.view3d.drop2D();
+    this.view3d = null;
+    if (this.g.mode === this && !this.attract) this.enter({});
+    toast("3D graphics stopped working on this device, so you're flying in 2D. Reload the page to try 3D again.", 'bad');
   }
 
   exit() {
