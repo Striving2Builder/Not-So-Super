@@ -1,9 +1,9 @@
 # Polish pass: status and handoff
 
-Read this first when picking the polish pass up in a new thread. Last updated 2026-10-02, after
-flight/city round 7 was merged and blind-tested (the r8fly critic, 4.0). **Round 8 is running** (3 builders
-in worktrees: city ground = brief 1 + city parts of 3/5/6; hero framing = 2; sky/clouds/post/speed
-lines = 3/4/5/6). If they're gone in a new thread, check the `worktree-agent-*` branches for WIP. The companion docs are [BRIEF.md](BRIEF.md) (the builder brief),
+Read this first when picking the polish pass up in a new thread. Last updated 2026-10-03: round 8 is
+merged (all three builders) and blind-tested (r9fly: 4.0 vs AAA, 6.5 vs the best HTML5 games).
+**Top priority now: iPad stability** (see "Device testing"). Running: a stability builder
+(`handoff/stability.md`) and a hero-variants builder (`handoff/heroskins.md`). The companion docs are [BRIEF.md](BRIEF.md) (the builder brief),
 [ARCHITECTURE.md](ARCHITECTURE.md) (module map and target layout) and [ASSETS.md](ASSETS.md) (incoming art).
 
 ## How the loop runs
@@ -55,7 +55,7 @@ lines = 3/4/5/6). If they're gone in a new thread, check the `worktree-agent-*` 
 ## Scores (blind AAA critic, 1–10; "identified" = critic picked the AAA image)
 | Area | Latest | Notes |
 |---|---|---|
-| 3D flight + city | **4.0** (r8fly, 8/8 identified at 98–99%) | History: 3–4, 3 (r6fly), 3.5 (r7fly), 4.0 after round 7. Night shots now "read as a stylised comic city"; day and high-altitude shots still "look like a prototype". Top tell: the board-game ground (flat lot tiles, pill-shaped river) seen from altitude. 3D beats 2D in blind tests 6/6. |
+| 3D flight + city | **4.0** vs AAA, **6.5** vs best HTML5 (r9fly, after round 8) | History: 3–4, 3, 3.5, 4.0 (r8fly), 4.0 (r9fly). Sky/sunset better; night skyline sells the comic look. Tells now: one stiff hero pose/silhouette, striped window textures (moiré), the fog void + coloured lot tiles at the world edge, no key-light direction or window bloom, cloud inner outlines. |
 | Brawler | round 3 merged, not re-critiqued | Painted façades + bug fixes |
 | Investigation (day) | round 3 merged, not re-critiqued | Painted rooms; the flat code-drawn witness is the weakest part |
 | Premade 3D, self-built 3D, nightlife, night case | ~2.5–3, paused | 3D perf regression and Triangle Club draw-call doubling not fixed |
@@ -64,6 +64,17 @@ lines = 3/4/5/6). If they're gone in a new thread, check the `worktree-agent-*` 
 - `testdrive-2026-10-02`: the first test build (3D flight default, brawler round 3, billboard/asylum beats).
 - `testdrive-2026-10-02b` (15d95a7): adds flight 5/5b, city round 5 and investigation round 3.
 - `testdrive-2026-10-02c` (dc6e56c): adds the crisp hero, city round 6 and flight round 6. **This is the latest build;** the user should phone-test it.
+
+## Device testing (2026-10-03, iPad, real device)
+- "Plays but crashes and is a bit janky." Diving from flight into a brawler/activity: very long load or freeze. 3D flight: after a few freezes or a black screen it goes back to 2D.
+- Director's read: no `webglcontextlost` handling; 4 WebGL contexts (special3d shared, HeroSprite, brawlsprite, an unreleased `hasWebGL()` probe); the 3D flight scene stays in GPU memory inside zones; High runs the canvas at full Retina density. A stability builder is on it (WebKit iPad repro, context-loss recovery, fewer contexts, iOS caps, staged zone loading).
+
+## Round 8 (done, merged; 2026-10-03)
+- **City** (315b5d0): painted comic street-map ground (streets, sidewalks, parking, trees, farm patchwork), river water shader with irregular banks, car glows (the "border lines" and speckle were car streaks), window moiré fade, per-vertex contact shading, cornice trim. Ground textures ~20 MB GPU (was ~11).
+- **Sky** (1559463): keyframed day/sunset/night sky with an inked sun, SDF cel cloud atlas (8 shapes, 3 tones) with placement rules, haze starts at 1.4× camera height, additive tapered speed lines, 4-tap sharpen on High. Shared haze colours live in sky3d's `SKY` table.
+- **Hero** (merged after 1559463): 3/4 rear-side chase camera (elevation/azimuth caps, shoulder swap before lifting when occluded), one ink outline round body + cape (~5% fps), cape notch fix, hem lift, slow billow.
+- **Perf flag:** whole-round shots ran 10–15% below round 7 with Blender busy on the machine; an r7-vs-r8 alternating A/B (`fly3d.js`) was started to confirm.
+- **r9fly critic fixes (next flight round, filter for HTML5 cost):** 1) hero pose blends (bank into turns, boost/hover poses) and silhouette; 2) window textures: mipmaps + anisotropy, cell shapes not stripes, cap halftone cell size up close; 3) fill the fog void: far skyline ring cards, darker/desaturated far lots, haze toward the sky horizon colour; 4) a clear key-light ramp per face + cheap night window glow; 5) clouds as one union (no inner outlines), cull tiny far clouds; 6) speed lines radial from the vanishing point, boost only. Bugs: a big black box behind her (pair 1), dark-blue triangles at both screen edges and yellow lines in a canyon (pair 8).
 
 ## Round 7 (done, merged; 2026-10-02)
 - **Harness:** `?dynres=off` pins dynamic resolution at 1.0 (c1d53f0); shoot.js uses it for fly3d shots, fly3d.js (perf) doesn't. Shots now show phone sharpness. Baseline: `shots/r7base/`, merged round: `shots/r7/`, blind pairs: `shots/blind/flying3d-r7/`.
@@ -85,7 +96,7 @@ Filter for critics' asks that fight the comic style: outlined, flat-shaded puffs
 6. **Effects:** edge speed lines still read as "white paper shards" and stray white bars at the left edge (pairs 6, 8): thinner, additive, starting inside the frame; car streaks as soft additive trails, not opaque red rectangles; smaller headlight glow splats.
 
 ## Backlog (rough priority)
-1. Flight/city round 8 (above).
+1. iPad stability (above), then flight/city round 9 from the r9fly list.
 2. Hero redesign round (after flight/city rounds; user confirmed this order 2026-10-03): the hero is a Mixamo-rigged GLB (`assets/models/supergirl.glb` + `supergirl_anims.glb`, loaded in hero3d.js; clips retarget via `heroRig()`; the flight cape is procedural in capefly3d.js). A new model on a Mixamo rig is a drop-in plus one round of shader retuning. User answer (2026-10-03): it's a personal learning project, so Supergirl stays for now; original characters come later. The user has other models in mind and also wants to test one generated here: an original comic-style hero behind `?hero=alt` for a phone A/B. Multiple playable heroes would need a select screen + per-hero story footage.
 3. Director: the district caption can lag the district name. A caption clipped at the left edge in
    shots is just its slide-in/out animation caught mid-way; that's by design, not a bug.
