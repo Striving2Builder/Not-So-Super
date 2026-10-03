@@ -12,8 +12,8 @@ capefly3d.js; one-line hook in flight3d.js (keyline arg to heroPass.render); ARC
   camera dollies in to keep her size (boost shots had her ~15%). Canyon dist 3.1 (was 2.6: too big).
   Chase spot x 0.52, high 0.56 (her boots touched the caption in the level high shot).
 - herofly3d: patrolScale 18 (was 16); `LINE` table + `keyline(night, busy)`.
-- heropass3d: silhouette keyline in the composite quad (8-tap dilation of her coverage + half-width
-  taps), pale halo at night. 1.3 px open sky → 2.3 px at night / canyons / patrol view.
+- heropass3d: silhouette keyline in the composite quad (8-tap dilation of her coverage), pale halo
+  at night. 1.3 px open sky → 2.3 px at night / canyons / patrol view.
 - capefly3d: white zigzag (pair 7) = the body's white rim showing through where the cape lies on
   her back (cape had polygonOffset +1, pushed back): cape pulled forward (-1/-2, ink -3/-6) and
   stands off her hips (`clear`). From below, speed lifts the hem (`lift`); slow flight billows.
@@ -22,7 +22,9 @@ Shots: shots/r8hero/flying (all 8 fly3d scenarios OK, no page errors). Baseline:
 shots/r8hero-base/flying (day failed to load there: machine load).
 
 ## Open / next
-- fps A/B running (scratchpad heror8/ab.sh: base copy vs worktree, alternating, 2 rounds).
+- fps (fly3d.js 3D/2D ratio, alternating with a 02d2bb0 copy, 2 rounds each): skim 0.90 → 0.86,
+  cruise 1.03 → 0.98, high 1.11 → 0.92 (high noisy: calls vary 58-81 run to run). Camera alone
+  (keyline off) = baseline within noise; the 8-tap keyline costs ~5% (12 taps was ~10-13%).
 - vice_2 (canyon turn): hard bank rolls her back toward the camera; a bank-aware camera
   (swing to the outside of the turn) would fix it.
 - Patrol view is still ~30° down onto her back (by design for map reading); she's ~25% tall.
