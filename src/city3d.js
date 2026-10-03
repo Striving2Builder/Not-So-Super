@@ -12,13 +12,14 @@ import { SignAtlas } from './signs3d.js';
 import { chooseLandmarks, buildLandmarks, districtGlow } from './landmarks3d.js';
 import { Horizon, haze } from './skyline3d.js';
 import { Outer } from './outer3d.js';
-import { cityGround } from './ground3d.js';
+import { cityGround, tone, dressNear, lotDressing } from './ground3d.js';
 import { buildRiver } from './river3d.js';
 import { SkyCard } from './skycard3d.js';
 import { Street } from './street3d.js';
 
 export { M, DISTRICT_3D, height3 };
 
+const GREEN3 = ['#2f6b34', '#3a7a3a', '#4a8a3a'];
 const CHUNK = TILE * BLOCK; // world units per chunk side (one ground tile)
 /** farMat: metres past which a chunk switches to its lite build + flat-tone material (no texture, ink, halftone, roof kit). */
 const LOD = { farMat: 260, farInk: 0, landmarkFog: 0.8, landmarkMax: 0.93, coreR: 4.5 };
@@ -30,6 +31,8 @@ export class City3D {
     this.look = new CityLook(this.signs.tex);
     this.art = new CityArt(city, tileRes, 400); // big cache: tile canvases back live textures, never recycle them
     this.art.riverBank = '#4f7046'; // green banks: the 3D river is a smooth ribbon laid over them
+    // the near tiles wear the far plan's muted lot tones and lot dressing, so there is no seam where they meet
+    this.art.tone = tone; this.art.dress = dressNear;
     this.chunks = new Map();
     this.cols = Math.ceil(city.cols / TILE); this.rows = Math.ceil(city.rows / TILE);
     // the skyline peaks over downtown + financial: buildings there get taller toward the core
@@ -55,7 +58,7 @@ export class City3D {
     this.lmMesh = new THREE.Mesh(LB.geometry(), this.lmMat);
     this.lmMesh.frustumCulled = false;
     scene.add(this.lmMesh, new THREE.Mesh(LB.inkGeometry(), this.look.ink));
-    this.ground = cityGround(city, this.look.U, this.landmarks);
+    this.ground = cityGround(city, this.look.U, this.landmarks, tileRes >= 128); // lean tiles: a lighter plan too
     scene.add(this.ground);
     this.horizon = new Horizon(scene, this.look.U, [0, 0, city.coastX * M, city.H * M]);
     this.outer = new Outer(city, scene, this.look, this.horizon);
@@ -105,6 +108,8 @@ export class City3D {
         else if (o.kind === 'tree') { if (!B.lite) tree(B, o.x * M, o.y * M, o.rad * M * 0.8, o.h * M * 0.9, o.col); }
         else if (o.kind === 'crane') crane(B, o);
       }
+      // the lot dressing's tree clusters (the far plan paints the same trees as canopies)
+      if (!B.lite && !blk.river) for (const t of lotDressing(blk).trees) tree(B, t.x * M, t.y * M, t.r * M * 0.8, (16 + t.h * 10) * M * 0.9, GREEN3[(t.h * 3) | 0]);
     }
     const geo = B.geometry(), ink = B.inkGeometry();
     ch[which] = geo ? new THREE.Mesh(geo, B.lite ? this.look.far : this.look.near) : null;
