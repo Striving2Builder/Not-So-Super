@@ -7,6 +7,11 @@ lines = 3/4/5/6). If they're gone in a new thread, check the `worktree-agent-*` 
 [ARCHITECTURE.md](ARCHITECTURE.md) (module map and target layout) and [ASSETS.md](ASSETS.md) (incoming art).
 
 ## How the loop runs
+- **Stateless by design (2026-10-03):** no step should need old chat history. The state lives in files:
+  - this file (director state, scores, briefs), and each builder's `docs/polish/handoff/<area>-r<N>.md` on its branch (done / in progress / next / shot+perf notes), committed with every WIP commit.
+  - **Director:** one round per thread is fine. Start a new thread with "Continue the polish pass: read docs/polish/STATUS.md". Update this file at each round boundary.
+  - **After a session limit:** prefer a *fresh* builder pointed at its branch + handoff file (cheap, small context) over resuming a long transcript. Resume only if it was nearly done.
+  - **Critics** are always fresh and see only the blind folder.
 - **Branches:** work happens on `phase-2`; `main` is the last release.
   - Each builder is a sub-agent in its own git worktree (`.claude/worktrees/agent-*`, branch `worktree-agent-*`).
   - The director (the main thread) merges each worktree branch into `phase-2` with `--no-ff`, re-runs the harness, looks at the frames and pushes.

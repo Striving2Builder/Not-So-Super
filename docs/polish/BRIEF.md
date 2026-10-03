@@ -60,3 +60,8 @@ files between rounds; don't move files yourself), split files past ~800 lines, n
 3. The screenshot paths of your best "after" frames.
 4. What you'd do next.
 Commit your work on your branch with a clear message before reporting.
+
+## Handoff file (required)
+Keep `docs/polish/handoff/<area>-r<N>.md` on your branch: what's done, what's in progress, next
+steps, best shots and perf numbers, under ~40 lines. Update and commit it with every WIP commit, so a
+fresh agent can continue from it plus `git log` alone if you're cut off.
