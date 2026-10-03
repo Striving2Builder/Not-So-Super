@@ -12,6 +12,7 @@ import { inkCharacter, comic, gradMap } from './look3d.js';
 import { HERO_LAYER } from './heropass3d.js';
 import { M } from './city3d.js';
 import { FlightCape, CAPE_LIGHT } from './capefly3d.js';
+import { FlightPose } from './heropose3d.js';
 
 const POSE = {
   scale: 1.5,       // model metres → scene metres (heroic: she's the star of the shot)
@@ -83,7 +84,6 @@ ${rim ? `{ float rf = 1.0 - abs(dot(normal, normalize(vViewPosition)));
   return comic(m, { halftone: 0 });
 }
 
-const smooth = (a, b, x) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
 
 export class FlyHero3D {
   /** Her bounding radius about the pivot (m, before the patrol enlargement): her reach to the punching fist; the short cape stays inside it. Sizes her sharp pass. */
@@ -97,6 +97,7 @@ export class FlyHero3D {
     scene.add(this.group);
     this.model = null;
     this.size = 1; // patrol-view enlargement (eased)
+    this.pose = new FlightPose();
     // inked blob: a dark core with a crisp ink ring, so it reads on lit roofs and dark streets alike
     const c = document.createElement('canvas'); c.width = c.height = 128;
     const g = c.getContext('2d'), grd = g.createRadialGradient(64, 64, 4, 64, 64, 60);
@@ -138,17 +139,12 @@ export class FlyHero3D {
     this.group.position.set(h.x * M, h.z * M, h.y * M);
     // heading: her forward (+z model) along (cos ang, sin ang) in the x/z plane
     this.group.rotation.set(0, Math.PI / 2 - h.ang, 0);
-    // Flying vs hovering is her own blend, not the flight model's hover (which only drops below
-    // ~55 m/s): any real forward motion lays her out horizontal; only near a standstill does she
-    // stand upright in the air. It falls back slowly, so a bump off a tower doesn't stand her up.
-    // (in the raised patrol view she glides over the map rather than standing in the sky)
-    const want = h.perch ? 0 : diving ? 1 : Math.max(smooth(POSE.flyFrom, POSE.flyFull, h.speed), patrol > 0.5 ? 0.85 : 0);
-    this.flyK = this.flyK === undefined ? want : this.flyK + (want - this.flyK) * Math.min(1, dt * (want > this.flyK ? 6 : 1.6));
-    this.boostK = (this.boostK || 0) + ((boost || diving ? 1 : 0) - (this.boostK || 0)) * Math.min(1, dt * 6);
-    const fk = this.flyK, hover = !h.perch && !diving && fk < 0.3;
-    const pitch = h.perch || hover ? -h.lean * 0.2 : diving ? -POSE.divePitch : (1 - fk) * POSE.slowPitch - h.lean * 0.25;
-    this.pitch = this.pitch === undefined ? pitch : this.pitch + (pitch - this.pitch) * Math.min(1, dt * 7);
-    this.pivot.rotation.set(-this.pitch, 0, h.perch ? 0 : h.bank * POSE.bankK);
+    // her attitude and pose blends (cruise / boost / dive / slow glide / hover, banking, climbing):
+    // heropose3d.js. Any real forward motion lays her out horizontal; only near a standstill does
+    // she stand upright in the air (in the raised patrol view she glides over the map instead).
+    const A = this.pose.step(h, dt, t, diving, boost, patrol), fk = this.pose.fly, hover = this.pose.hover;
+    this.pivot.rotation.set(-A.pitch, A.yaw, A.roll);
+    this.pivot.position.y = A.bob * POSE.scale * this.size;
     this.size += (1 + (POSE.patrolScale - 1) * patrol - this.size) * Math.min(1, dt * 6);
     this.pivot.scale.setScalar(this.size);
     const above = Math.max(0, h.z - ground) * M;
@@ -164,7 +160,7 @@ export class FlyHero3D {
     m.mixer.update(dt); // (not m.update: the zones' simulated cloth cape is hidden in flight, don't step it)
     for (const f of ['LeftFoot', 'RightFoot']) m.bones[f]?.scale.setScalar(POSE.boot); // (the boots read oversized from behind; after the clip, which keys scale)
     const fly = h.perch || hover ? 0 : fk;
-    if (fly > 0) this.flyPose(fly, this.boostK, t);
+    if (fly > 0) this.pose.flying(m, fly, t); else if (!h.perch) this.pose.hovering(m, this.pose.hoverK);
     // cape: chain from between her shoulders, streaming back along her body
     const q = m.root.getWorldQuaternion(this._q);
     const fwd = this._f.set(0, 0, 1).applyQuaternion(q), up = this._s.set(0, 1, 0).applyQuaternion(q), side = this._o.set(1, 0, 0).applyQuaternion(q);
@@ -188,35 +184,5 @@ export class FlyHero3D {
   keyline(night, busy) {
     const k = Math.max(night, busy);
     return [LINE.ink[0] + (LINE.ink[1] - LINE.ink[0]) * k, LINE.halo * night];
-  }
-
-  /**
-   * The flying silhouette: cruise = right fist forward, left arm tucked, chest lifted; boost (and
-   * dive) = both fists forward. Legs straight and together, trailing.
-   */
-  flyPose(k, bk, t) {
-    const m = this.model;
-    m.superFly(k * (1 - bk));
-    const q = m.root.getWorldQuaternion(this._q);
-    const fwd = this._f.set(0, 0, 1).applyQuaternion(q), sky = this._s.set(0, 1, 0).applyQuaternion(q), side = this._o.set(1, 0, 0).applyQuaternion(q);
-    if (bk > 0.02) for (const [L, sgn] of [['Left', 1], ['Right', -1]]) {
-      const d = this._d.copy(fwd).addScaledVector(sky, 0.04).addScaledVector(side, 0.05 * sgn).normalize();
-      m.aim(`${L}Arm`, `${L}ForeArm`, d, k * bk);
-      m.aim(`${L}ForeArm`, `${L}Hand`, d, k * bk);
-    }
-    // chest up (an arch through the spine) at cruise; flat and streamlined at boost
-    const arch = POSE.arch * (1 - bk);
-    if (arch > 0.01) m.aim('Spine1', 'Spine2', this._d.copy(fwd).addScaledVector(sky, arch).normalize(), 0.6 * k);
-    // legs: together in one streamlined line behind her, knees softly bent (feet lift toward her back),
-    // feet converging on her centre line (seen from behind: one tapering shape, not a frog kick)
-    const hl = m.bones.LeftUpLeg.getWorldPosition(this._l), hr = m.bones.RightUpLeg.getWorldPosition(this._r);
-    const mid = this._mid.addVectors(hl, hr).multiplyScalar(0.5);
-    for (const [L, hip] of [['Left', hl], ['Right', hr]]) {
-      const inward = this._in.subVectors(mid, hip).normalize();
-      const thigh = this._d.copy(fwd).negate().addScaledVector(sky, -0.06).addScaledVector(inward, 0.12).normalize();
-      m.aim(`${L}UpLeg`, `${L}Leg`, thigh, k * POSE.legs);
-      const shin = this._d.copy(fwd).negate().addScaledVector(sky, 0.09 * (1 - bk)).addScaledVector(inward, 0.06 + 0.02 * Math.sin(t * 3)).normalize();
-      m.aim(`${L}Leg`, `${L}Foot`, shin, k * POSE.legs);
-    }
   }
 }
