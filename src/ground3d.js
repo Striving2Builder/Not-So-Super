@@ -196,7 +196,7 @@ function plan(city, landmarks, PX) {
     R(n, x, y, s, s, 'rgba(255,240,200,.55)');
   }
   // anisotropy: the day plan is seen at grazing angles from skim height (4 keeps the streets crisp
-  // there; 8 cost ~5% of the frame in software GL for no visible gain); the night glow is soft anyway
+  // there; 8 cost up to ~10% of the frame in software GL for no visible gain); the night glow is soft anyway
   const tex = (c, aniso) => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = aniso; return t; };
   return { day: tex(day, 4), night: tex(night, 1) };
 }

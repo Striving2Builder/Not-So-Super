@@ -1,34 +1,32 @@
-# Stability (iPad crashes / zone-load freezes / "back to 2D") + 3D flight perf bisect
+# Stability (iPad crashes / zone-load freezes / "back to 2D") + 3D flight perf bisect — DONE
 
 ## Tools
-- `tools/shots/stab.js`: fly → brawler / investigation / Warehouse → fly loop on the iPad Pro 11
-  descriptor (WebKit + Chromium): sync ms, ready, longest frame gap, live/made WebGL contexts, GPU MB
-  estimate over all contexts, JS heap (Chromium). `--tour N` flies the whole city first; `--lose`
-  runs lost-context tests (restore / never restored / no WebGL left); `--overlay dir` = baseline src.
-- `tools/shots/flyab.js` (variants with overlay folders, round-robin) and `tools/shots/flytoggle.js`
-  (frozen frame, each feature off in turn) for the r8 perf bisect. Baseline snapshots in
-  `shots/stabab/{head,r7,nosky,nocity,nohero}` (head = 2213251 src, r7 = 02d2bb0 src).
-- Never run two benches at once (and don't edit src while one serves the live tree: use --overlay).
+- `tools/shots/stab.js`: fly → brawler / investigation / Warehouse → fly loop, iPad Pro 11 descriptor,
+  WebKit + Chromium: sync ms, ready, longest frame gap, live/made WebGL contexts, GPU MB estimate
+  (all contexts), JS heap (Chromium). `--tour N` flies the whole city first; `--lose` runs the
+  lost-context tests (restore / never restored / no WebGL left); `--overlay dir` = baseline src.
+- `tools/shots/flyab.js` (variants round-robin) + `tools/shots/flytoggle.js` (frozen frame, one
+  feature off at a time); `tools/shots/serve.js` (overlay static server). Snapshots (gitignored):
+  `shots/stabab/head` (2213251 src) and `shots/stabab/r7` (02d2bb0 src). Never run two benches at once.
 
-## Root causes found (before)
-- City chunk builds + ground tiles never freed: a 42 s city tour took the GPU estimate 114 → 286 MB
-  (187 textures, 431 geometries), plus ~0.75 MB of 2D canvas per tile. Long sessions → iOS kills tab.
-- hasWebGL() probe context never released (WebKit keeps it: 3 live contexts flying).
-- Every HeroSprite and the crook baker had its own WebGL context (title attract 512², brawler,
-  newspaper, capture room) each with its own 11 MB of hero textures.
-- Brawler entry: 900 ms prewarm budget inside enter() (WebKit 3.0 s sync, ready 8.7 s).
-- No lost-context UI/recovery; if the renderer can't be (re)made the overworld silently drew 2D
-  (Flight3D.enter threw before adding body.fly3d), and a no-WebGL reload starts in 2D silently.
+## Root causes (evidence)
+- City chunk builds + ground tiles never freed: a 40 s city tour took GPU 114 → 286 MB (187 textures,
+  431 geometries) + 0.75 MB 2D canvas per tile. Now trimmed: 125 MB, 48 textures, 208 geometries.
+- hasWebGL probe never released (WebKit: 3 live contexts flying); every HeroSprite + crook baker had
+  its own context with its own 11 MB of hero textures (5 contexts after one brawl). Now 1 / 2.
+- Brawler enter() baked sprites for up to 900 ms synchronously; 3D zones compiled shaders in frame 1.
+- "Back to 2D": Flight3D.enter threw (no context) before body.fly3d → overworld silently drew 2D;
+  a reload with WebGL blocked also went 2D silently; no lost-context handling at all (black screen).
 
-## Changes (WIP, see git log)
-gfx.js (IOS, hasWebGL with release, watchContext/gfxLost/loadingPanel, crash-reload flag),
-offscreen3d.js (one shared sprite renderer, released in 3D flight), special3d.js (makeRenderer +
-replaceRenderer on give-up, warmUp compileAsync behind LOADING), flight3d.js (drop2D, free targets
-on exit, release offscreen), overworld.js (drop3D, try/catch enter, 2D-blocked toast), main.js
-(pause while lost, gfxFailed, startZone try/catch, crash → Battery saver), settings.js (iOS caps,
-afterCrash), city3d.js/cityart.js (trim KEEP), brawler.js/investigate.js (staged LOADING),
-camera3d.js/clubzone.js (warming guards), perfhud.js (gl ctx count), style.css (#gfx-panel).
+## Before → after (WebKit iPad, same session load; Chromium similar)
+- Contexts flying 3 → 1; in a brawl 5 → 2. GPU est. flying 112–132 → 87–112 MB; in zones 122–144 →
+  61–92 MB. First brawl sync 1261 → 756 ms (later brawls 171 → 2 ms), now behind a LOADING card.
+  Warehouse longest frame 702–749 → 265–366 ms. Investigation bake frame unchanged (~700 ms) but
+  behind the card and done once (not stand-in + painting).
+- Flight fps vs r7 (SwiftShader, round-robin): Balanced head 0.86–0.88 → 0.92–0.96;
+  High head 0.82–0.90 → 0.88–1.00. Per-feature costs: shots/stabab/tog-*.json/log.
 
-## Next
-- Test everything (stab.js webkit+chromium, --lose, --tour), shoot.js flying/brawler/investigation.
-- Perf bisect results → fixes (ground plan aniso, keyline, hero pass, sharpen taps on High).
+## Open / next
+- High patrol still ~8% (Balanced) / 12% (High) under r7: more content drawn (+25% tris).
+- Investigation room bake is still one ~0.5–0.7 s frame (could be split over frames).
+- iPad real-device check: ?perf=1 shows `gl ctx`; watch for the RESTORING card / crash toast.
