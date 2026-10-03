@@ -17,15 +17,15 @@ import { clamp, lerp } from './util.js';
 const CAM = {
   // side: to her right, so the camera sits ~25-35° off her tail (a 3/4 rear-side view: her profile,
   // the cape and the punching arm read; straight behind she's a lump of boots and hair)
-  chase: { dist: [4.4, 3.2], height: [0.7, 1.15], side: [1.7, 2.1], fov: [58, 66], at: [0.5, 0.58] }, // at = her spot on screen (x, y from top-left)
+  chase: { dist: [4.4, 3.2], height: [0.7, 1.15], side: [1.7, 2.1], fov: [58, 66], at: [0.52, 0.58] }, // at = her spot on screen (x, y from top-left)
   boost: { dist: 0.45, height: 0.15, fov: 13, kickFov: 8, shake: [0.035, 0.14], lag: 2.6 }, // shake m: sustained / on the punch; lag = spring rate         // sustained while boosting + a kick on the press
-  canyon: { height: 1.3, dist: 2.6, at: [0.5, 0.58], fovUp: 4, snap: 0.62, side: 0.75 }, // skim band: lower, along the street (snap ≈ 35°); side: × the chase side
+  canyon: { height: 1.3, dist: 3.1, at: [0.5, 0.58], fovUp: 4, snap: 0.62, side: 0.75 }, // skim band: lower, along the street (snap ≈ 35°); side: × the chase side
   // high patrol, flying: level with her, centred in the safe zone against the sky,
   // the city's far edge down in the bottom third (the Superman-over-the-city shot)
-  high: { dist: 3.3, height: 0.15, side: 1.6, at: [0.52, 0.56], from: 760, to: 1000 }, // from/to: altitude (world units) it blends in over
+  high: { dist: 3.7, height: 0.15, side: 1.6, at: [0.56, 0.56], from: 760, to: 1000 }, // from/to: altitude (world units) it blends in over
   patrol: { dist: 78, height: 58, side: 60, fov: 60, at: [0.55, 0.58] }, // ≈ 30° down at the city, from her 3/4 rear-side (her side reads): horizon along the top
   maxElev: [24, 36], // camera elevation above her (deg), flying / patrol view: never down onto her back
-  maxAz: 50,         // camera angle off her tail (deg) while flying: 3/4 rear-side, never fully side-on
+  maxAz: 42,         // camera angle off her tail (deg) while flying: 3/4 rear-side, never fully side-on
   yawRate: 2.6,  // how fast the camera swings round behind her heading (1/s)
   orbitBack: 0.6, // drag-orbit eases back behind her at this rate while she's moving (1/s)
   roll: 0.1,      // camera roll into her turns (rad per unit bank)
@@ -138,12 +138,15 @@ export class FlightCam3D {
     }
     // the spring may swing it through a corner: if the eased spot is inside a wall, cut to the safe one
     if (ball(hx + this.pos.x, hy + this.pos.y, hz + this.pos.z)) this.pos.copy(_p);
-    this.cam.position.set(hx + this.pos.x, hy + this.pos.y, hz + this.pos.z);
+    // the boost lens widens (the city rushes out) but she keeps her size: the camera dollies in to match
+    const boostFov = (B.fov * this.boostK + B.kickFov * Math.sin(this.kick * Math.PI)) * (1 - K);
+    const fov0 = lerp(lerp(C.fov[0], C.fov[1], frac) + CAM.canyon.fovUp * this.canyonK, P.fov, K), fov = fov0 + boostFov;
+    const dolly = Math.tan((fov0 * Math.PI) / 360) / Math.tan((fov * Math.PI) / 360);
+    this.cam.position.set(hx + this.pos.x * dolly, hy + this.pos.y * dolly, hz + this.pos.z * dolly);
     // boost shake: a light rattle while boosting, a jolt on the punch
     const sh = (B.shake[0] * this.boostK + B.shake[1] * this.kick) * (1 - K);
     if (sh > 0.001) { const t = performance.now() / 1000; this.cam.position.x += Math.sin(t * 71) * sh; this.cam.position.y += Math.sin(t * 53 + 1) * sh; this.cam.position.z += Math.sin(t * 61 + 2) * sh; }
-    // lens first (the aim below depends on it)
-    const fov = lerp(lerp(C.fov[0], C.fov[1], frac) + CAM.canyon.fovUp * this.canyonK + B.fov * this.boostK + B.kickFov * Math.sin(this.kick * Math.PI), P.fov, K);
+    // the lens (the aim below depends on it)
     if (Math.abs(fov - this.cam.fov) > 0.05) { this.cam.fov = fov; this.cam.updateProjectionMatrix(); }
     // Aim: point the camera at her, then turn it so she lands on her screen spot.
     const ax = lerp(lerp(lerp(C.at[0], CAM.canyon.at[0], this.canyonK), A.at[0], hk), P.at[0], K), ay = lerp(lerp(lerp(C.at[1], CAM.canyon.at[1], this.canyonK), A.at[1], hk), P.at[1], K);
