@@ -46,13 +46,13 @@ void main() {
   }
   gl_FragColor = vec4(c, 1.0);
 #endif
-  // boost: a short motion smear along the line to the vanishing point, only in the outer band of
-  // the frame. Many taps over a short span (≤ ~1.5% of the screen): a smooth smear, never the
+  // boost: a short motion smear along the line to the vanishing point, only in the outermost band
+  // of the frame (the city inside it stays crisp: a wide smear read as a blurry city). Many taps over a short span (≤ ~1.5% of the screen): a smooth smear, never the
   // duplicated "multi-exposure" copies a few wide taps give.
   if (streak > 0.0) {
-    vec2 d = vUv - vp; float k = smoothstep(0.42, 0.8, length(d * vec2(px.y / px.x, 1.0))) * streak;
+    vec2 d = vUv - vp; float k = smoothstep(0.55, 0.95, length(d * vec2(px.y / px.x, 1.0))) * streak;
     if (k > 0.01) {
-      vec2 step = normalize(d) * 0.0016 * k;
+      vec2 step = normalize(d) * 0.0011 * k;
       vec3 acc = gl_FragColor.rgb;
       for (int i = 1; i <= 9; i++) acc += texture2D(tDiffuse, vUv - step * float(i)).rgb;
       gl_FragColor.rgb = acc / 10.0;

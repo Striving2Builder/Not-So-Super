@@ -9,7 +9,7 @@ const FX = {
   trail: { n: 24, life: 0.3, width: [0.34, 0.0], from: 140, head: [1, 0.2, 0.18], tail: [1, 0.8, 0.2], alpha: 1 },   // red off her heels → gold // speed (m/s) it starts
   wind: { n: 28, radius: [5, 14], ahead: [4, 26], width: 0.09, from: 0.62, len: 14, clear: [0.62, 0.95] }, // from = speed fraction; close round her (they read at the screen edges, never as far hairlines); len cap (m); clear: NDC radius they fade in over
   ring: { life: 0.9, grow: [3, 70], boostGrow: [2, 26] },
-  lines: { from: 0.18, deal: 70, clear: [0.6, 1.0] },                               // speed fraction; re-deal ms; clear: the screen ellipse they fade in over (× the half size)
+  lines: { from: 0.18, deal: 70, clear: [0.6, 1.0], len: [0.22, 0.32] },                               // speed fraction; re-deal ms; clear: the screen ellipse they fade in over (× the half size); len: longest streak × screen height (cruise, boost)
 };
 
 // wind streaks: tapered at both ends, soft across, and only out at the screen edges (faded in
@@ -181,16 +181,19 @@ export class FlightFX3D {
     }
     // radii from the vanishing point: the streaks run from past the screen edge in to the outer band
     const R = Math.hypot(Math.max(vp.x, W - vp.x), Math.max(vp.y, H - vp.y)), ox = vp.x, oy = vp.y;
-    const inner = boosting ? 0.6 : 0.7;
+    const inner = boosting ? 0.6 : 0.7, L = H * FX.lines.len[boosting ? 1 : 0];
     ctx.save();
     ctx.fillStyle = night > 0.5 ? `rgba(232,244,255,${boosting ? 0.8 : 0.65})` : `rgba(255,255,255,${boosting ? 0.85 : 0.7})`;
     ctx.beginPath();
     for (const l of this.lines) {
       const c = Math.cos(l.a), s = Math.sin(l.a), k = l.wall ?? f;
-      const r0 = R * (inner + (1 - inner) * 0.6 * l.in * (1 - 0.5 * k)), w = l.w * (0.5 + 0.5 * k);
+      // where this ray leaves the screen: a streak is at most `len` long, measured in from there
+      const ex = Math.min(c > 1e-3 ? (W - ox) / c : c < -1e-3 ? -ox / c : 1e9, s > 1e-3 ? (H - oy) / s : s < -1e-3 ? -oy / s : 1e9);
+      const r1 = ex + 12, r0 = Math.max(R * (inner + (1 - inner) * 0.6 * l.in * (1 - 0.5 * k)), ex - L * (0.6 + 0.4 * l.in)), w = l.w * (0.5 + 0.5 * k);
+      if (r0 >= r1) continue;
       // a needle: sharp tip inside, widest at the screen edge
       ctx.moveTo(ox + c * r0, oy + s * r0);
-      ctx.lineTo(ox + c * R * 1.1 - s * w, oy + s * R * 1.1 + c * w); ctx.lineTo(ox + c * R * 1.1 + s * w, oy + s * R * 1.1 - c * w); ctx.closePath();
+      ctx.lineTo(ox + c * r1 - s * w, oy + s * r1 + c * w); ctx.lineTo(ox + c * r1 + s * w, oy + s * r1 - c * w); ctx.closePath();
     }
     ctx.fill();
     // fade toward the middle: erase with an elliptical ramp round the screen's centre (fully clear
