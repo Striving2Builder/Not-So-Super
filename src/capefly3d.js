@@ -16,7 +16,7 @@ const CAPE = {
   segs: 7, len: 0.16, w: [0.085, 0.2], arch: 0.04, fold: 0.022,
   folds: [0, 0.8, -1, 0.6, -1, 0.8, 0], // across the width, + side edge → − side edge
   key: 0.18,  // N·L cut between the lit and shaded tone
-  outer: ['#e8222c', '#8c0c18'], inner: ['#7a0a16', '#4a0610'], // [lit, shade] (sRGB)
+  outer: ['#e8222c', '#8c0c18'], inner: ['#a01622', '#6a0e18'], // [lit, shade] (sRGB)
   ink: '#0b0b16', inkW: 2.2, foldFrom: 0.38, // inkW: px like the body's hull; fold strokes start this far down
   sideFlat: 0.55, // how much of the out-of-plane shape goes when seen exactly side-on
 };
@@ -155,10 +155,10 @@ export class FlightCape {
       const k = i / (n - 1);
       // around a straight line down her back: an S-wave that travels to the hem (bigger there),
       // a slower sway sideways, and a droop under gravity when she's slow
-      const tgt = this._t.copy(anchor).addScaledVector(back, i * L * (0.3 + 0.7 * sk))
+      const tgt = this._t.copy(anchor).addScaledVector(back, i * L * (0.5 + 0.5 * sk))
         .addScaledVector(up, ((Math.sin(t * f - i * 0.75) + 0.6) * amp + Math.sin(t * 1.7 - i * 0.5) * L * 0.12) * k * flat)
         .addScaledVector(side, Math.sin(t * f * 0.55 - i * 0.6) * amp * 0.6 * k);
-      tgt.y -= L * (1 - sk) * 0.9 * i;
+      tgt.y -= L * (1 - sk) * 0.6 * i;
       this.p[i].lerp(tgt, Math.min(1, dt * (8 + v / 6)));
       const d = this._a.subVectors(this.p[i], this.p[i - 1]), len = d.length() || 1; // keep the segment length
       this.p[i].copy(this.p[i - 1]).addScaledVector(d, L / len);
