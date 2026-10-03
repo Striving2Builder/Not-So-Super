@@ -7,8 +7,14 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { Cape, stripModelCape } from './cape.js';
+import { settings, HERO_SKINS } from './settings.js';
 
-const MODEL_URL = 'assets/models/supergirl.glb';
+// Her costume: the pause-menu choice, or ?hero=classic|ponytail (same rig and atlas layout, so the
+// clips, the cape and the flight shaders work on every variant).
+const HERO_FILES = { supergirl: 'supergirl.glb', classic: 'hero_classic.glb', ponytail: 'hero_ponytail.glb' };
+const qHero = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('hero') : null;
+export const HERO_SKIN = HERO_SKINS.includes(qHero) ? qHero : settings.hero;
+const MODEL_URL = 'assets/models/' + HERO_FILES[HERO_SKIN];
 const ANIMS_URL = 'assets/models/supergirl_anims.glb';
 
 // Clips that should repeat; everything else plays once and holds its last frame.
