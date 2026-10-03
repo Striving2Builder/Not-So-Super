@@ -523,6 +523,31 @@ export function prism(B, cx, cz, r, rTop, bot, top, n, L, { cap = true, ink = 1,
   }
 }
 
+/**
+ * A slanted crown (the glass-tower wedge): a block from `bot` whose top rises by `rise` toward one
+ * side (dir 0..3 = +x, -z, -x, +z), the sloped face in the facade's style (glass reads as a tilted
+ * curtain wall catching the sky).
+ */
+export function wedge(B, x0, z0, x1, z1, bot, rise, L, dir = 0, ink = 1) {
+  const C = [[x0, z1], [x1, z1], [x1, z0], [x0, z0]];
+  const up = [[0, 1, 1, 0], [0, 0, 1, 1], [1, 0, 0, 1], [1, 1, 0, 0]][dir & 3];
+  const P = C.map(([x, z], i) => [x, bot + rise * up[i], z]);
+  const N = [[0, 0, 1], [1, 0, 0], [0, 0, -1], [-1, 0, 0]];
+  const v0 = L.voff + fv(bot);
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4, a = C[i], b = C[j];
+    if (!up[i] && !up[j]) continue; // the low edge: no wall
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]), u1 = L.uoff + fu(len);
+    B.quad([a[0], bot, a[1]], [b[0], bot, b[1]], P[j], P[i], N[i], [[L.uoff, v0], [u1, v0], [u1, L.voff + fv(P[j][1])], [L.uoff, L.voff + fv(P[i][1])]], L.tint, L.lit, L.style);
+    if (up[i]) B.ink([a[0], bot, a[1]], P[i], ink);
+  }
+  const e1 = [P[1][0] - P[0][0], P[1][1] - P[0][1], P[1][2] - P[0][2]], e2 = [P[3][0] - P[0][0], P[3][1] - P[0][1], P[3][2] - P[0][2]];
+  const n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]], l = Math.hypot(...n);
+  const w = fu(Math.hypot(...e1)), h = fv(Math.hypot(...e2));
+  B.quad(P[0], P[1], P[2], P[3], n.map((c) => c / l), [[L.uoff, v0], [L.uoff + w, v0], [L.uoff + w, v0 + h], [L.uoff, v0 + h]], L.tint, L.lit, L.style);
+  for (let i = 0; i < 4; i++) B.ink(P[i], P[(i + 1) % 4], ink);
+}
+
 /** Gabled house/barn: walls to the eaves, a pitched roof along the long side. */
 export function gable(B, x0, z0, x1, z1, eave, ridge, L) {
   box(B, x0, z0, x1, z1, 0, eave, L, { roof: false });

@@ -4,28 +4,28 @@
 // and named venue signs. Everything is appended to the chunk's Builder (one draw call per chunk).
 import { hash2 } from './rng.js';
 import { LOT } from './city.js';
-import { M, STYLE, box, prism, gable, tree, mast, lamp, neonRing, neonPost, look, KIND } from './buildings3d.js';
+import { M, STYLE, box, prism, gable, wedge, tree, mast, lamp, neonRing, neonPost, look, KIND } from './buildings3d.js';
 import { SIGN_WORDS, signQuad, bladeSign } from './signs3d.js';
 
 /**
  * Per district: height (multiplier over the 2D data, random spread, `core` = extra height near the
  * city centre so the skyline peaks), wall / roof / window-light palettes, facade style and
- * silhouette weights, roof kit odds, neon. Districts must read apart from the air. Neon trim
+ * silhouette weights, roof kit odds, crown odds (the district's signature top on plain towers), neon. Districts must read apart from the air. Neon trim
  * (`trimOdds`) is the night hierarchy: the casino strip blazes, the vice districts glow, the rest
  * recede into the haze with only a few lit crowns.
  */
 export const DISTRICT_3D = {
-  financial: { mult: 2.6, spread: 0.9, core: 0.45, walls: ['#7fa3c8', '#5f84ad', '#a9c0d8', '#46658c', '#8ab4bc', '#c4d2e0'], roofs: ['#3f6a96', '#4f7fae', '#5a6a80'], lit: ['#b8d4f0', '#9fc4ea', '#f0e2c0'], styles: { glass: 6, concrete: 1, deco: 1 }, shapes: { slab: 2, podium: 3, setback: 2, spire: 2, octa: 2 }, kit: { helipad: 0.35, antenna: 0.3, hvac: 0.6, sign: 0.08 } , trim: ['#5ff0ff', '#e8f4ff'], trimOdds: 0.22},
-  downtown: { mult: 2.2, spread: 1.1, core: 0.4, walls: ['#d2bf98', '#b88a6a', '#9fa6b4', '#e0d4b8', '#8d7a6a', '#c46a4a'], roofs: ['#a0603a', '#8a7a5a', '#6a6e7a'], lit: ['#ffcf7a', '#ffe0a0', '#ffd890'], styles: { deco: 3, concrete: 3, brick: 1, glass: 1 }, shapes: { setback: 3, deco: 3, slab: 2, podium: 1, spire: 1 }, kit: { water: 0.35, antenna: 0.35, hvac: 0.6, sign: 0.15, garden: 0.1 } , trim: ['#ffd890', '#ff8a5a'], trimOdds: 0.22},
-  casino: { mult: 1.8, spread: 0.6, core: 0.4, walls: ['#e6c66a', '#c9a13b', '#b8784a', '#9a2232', '#d8b24a'], roofs: ['#c9a13b', '#9a2232'], lit: ['#ffd36a', '#ff9a5a'], styles: { glass: 2, deco: 2, concrete: 1 }, shapes: { podium: 3, octa: 2, setback: 1, slab: 1 }, kit: { helipad: 0.2, antenna: 0.2, sign: 0.5 }, neon: ['#ffd84d', '#ff4d4d', '#ffffff'] , trim: ['#ffd84d', '#ff4d4d'], trimOdds: 0.95},
-  entertainment: { mult: 1.5, spread: 1.0, core: 0.3, walls: ['#8e5ab5', '#c24f7a', '#e0a042', '#4e7fc4', '#5ab5a8'], roofs: ['#7a3a9a', '#a03a6a', '#3a5a9a'], lit: ['#ffd27a', '#ff9be0'], styles: { concrete: 2, brick: 2, deco: 1 }, shapes: { slab: 3, setback: 1, podium: 1 }, kit: { water: 0.2, hvac: 0.5, sign: 0.35 }, neon: ['#ffcc33', '#33ddff', '#ff55aa'] , trim: ['#ffcc33', '#33ddff', '#ff55aa'], trimOdds: 0.5},
-  residential: { mult: 1.5, spread: 1.1, core: 0.3, walls: ['#a4553f', '#b8704f', '#8d5a45', '#c9a27e', '#7a4a3a', '#b0603a'], roofs: ['#b04a32', '#8a3a2a', '#c0703a'], lit: ['#ffb45a', '#ffcf7a'], styles: { brick: 5, concrete: 1 }, shapes: { slab: 4, setback: 1 }, kit: { water: 0.5, garden: 0.2, hvac: 0.3, antenna: 0.15 } , trim: ['#ffb45a', '#ff7a8a'], trimOdds: 0.1},
-  nightclub: { mult: 1.3, spread: 0.4, core: 0, walls: ['#2c2440', '#3a2c55', '#46305e', '#1f1b2e'], roofs: ['#3a2a6a', '#2a1a4a'], lit: ['#ff7ae0', '#7ae8ff', '#c08aff'], styles: { concrete: 2, brick: 2 }, shapes: { slab: 3, setback: 1 }, kit: { hvac: 0.5, sign: 0.4 }, neon: true },
-  redlight: { mult: 1.2, spread: 0.4, core: 0, walls: ['#5a1a2a', '#6a2030', '#3a1a22', '#7a2a3a'], roofs: ['#7a1a2a', '#5a1420'], lit: ['#ff5a6a', '#ffaa66'], styles: { brick: 3, concrete: 1 }, shapes: { slab: 3, setback: 1 }, kit: { water: 0.3, sign: 0.4 }, neon: true },
-  naughty: { mult: 1.2, spread: 0.4, core: 0, walls: ['#5a2a66', '#3d1a44', '#6a2a6a', '#4a1e52'], roofs: ['#6a2a7a', '#4a1e52'], lit: ['#ff7ae0', '#cc88ff'], styles: { concrete: 2, brick: 2 }, shapes: { slab: 3, setback: 1 }, kit: { hvac: 0.4, sign: 0.4 }, neon: true },
-  retail: { mult: 1.0, spread: 0.8, core: 0, walls: ['#e8a07a', '#f0c86a', '#7ac8b8', '#e07a9a', '#9ab0e8', '#f0e0c0'], roofs: ['#3aa08a', '#e07a9a', '#e0b04a'], lit: ['#fff0c0'], styles: { concrete: 3, brick: 1 }, shapes: { slab: 1 }, kit: { hvac: 0.7, sign: 0.15 } , trim: ['#ff6fb0', '#4fe0c8', '#ffe05a'], trimOdds: 0.2},
-  warehouse: { mult: 1.0, spread: 0.2, core: 0, walls: ['#8a5a3a', '#7a6a5a', '#9a7a50', '#6a6a70'], roofs: ['#9a5a2a', '#7a6a4a'], lit: ['#ffd080'], styles: { industrial: 3, brick: 2 }, shapes: { slab: 1 }, kit: { water: 0.25, hvac: 0.4 } , trim: ['#ffb03a'], trimOdds: 0.08},
-  factory: { mult: 1.0, spread: 0.2, core: 0, walls: ['#6d6a60', '#807765', '#5b6260', '#8b5a3c'], roofs: ['#6a5a4a', '#7a4a3a'], lit: ['#ffc070'], styles: { industrial: 3, brick: 1 }, shapes: { slab: 1 }, kit: { hvac: 0.6, water: 0.2 } , trim: ['#ff7a3a'], trimOdds: 0.08},
+  financial: { mult: 2.6, spread: 0.9, core: 0.45, walls: ['#7fa3c8', '#5f84ad', '#a9c0d8', '#46658c', '#8ab4bc', '#c4d2e0'], roofs: ['#3f6a96', '#4f7fae', '#5a6a80'], lit: ['#b8d4f0', '#9fc4ea', '#f0e2c0'], styles: { glass: 6, concrete: 1, deco: 1 }, shapes: { slab: 2, podium: 3, setback: 2, spire: 2, octa: 2 }, kit: { helipad: 0.35, antenna: 0.45, hvac: 0.8, sign: 0.08 }, crown: { slant: 0.45 } , trim: ['#5ff0ff', '#e8f4ff'], trimOdds: 0.22},
+  downtown: { mult: 2.2, spread: 1.1, core: 0.4, walls: ['#d2bf98', '#b88a6a', '#9fa6b4', '#e0d4b8', '#8d7a6a', '#c46a4a'], roofs: ['#a0603a', '#8a7a5a', '#6a6e7a'], lit: ['#ffcf7a', '#ffe0a0', '#ffd890'], styles: { deco: 3, concrete: 3, brick: 1, glass: 1 }, shapes: { setback: 3, deco: 3, slab: 2, podium: 1, spire: 1 }, kit: { water: 0.5, antenna: 0.45, hvac: 0.8, sign: 0.15, garden: 0.1 }, crown: { pyramid: 0.2 } , trim: ['#ffd890', '#ff8a5a'], trimOdds: 0.22},
+  casino: { mult: 1.8, spread: 0.6, core: 0.4, walls: ['#e6c66a', '#c9a13b', '#b8784a', '#9a2232', '#d8b24a'], roofs: ['#c9a13b', '#9a2232'], lit: ['#ffd36a', '#ff9a5a'], styles: { glass: 2, deco: 2, concrete: 1 }, shapes: { podium: 3, octa: 2, setback: 1, slab: 1 }, kit: { helipad: 0.2, antenna: 0.2, hvac: 0.5, sign: 0.5 }, crown: { dome: 0.55 }, neon: ['#ffd84d', '#ff4d4d', '#ffffff'] , trim: ['#ffd84d', '#ff4d4d'], trimOdds: 0.95},
+  entertainment: { mult: 1.5, spread: 1.0, core: 0.3, walls: ['#8e5ab5', '#c24f7a', '#e0a042', '#4e7fc4', '#5ab5a8'], roofs: ['#7a3a9a', '#a03a6a', '#3a5a9a'], lit: ['#ffd27a', '#ff9be0'], styles: { concrete: 2, brick: 2, deco: 1 }, shapes: { slab: 3, setback: 1, podium: 1 }, kit: { water: 0.35, hvac: 0.7, antenna: 0.25, sign: 0.35 }, neon: ['#ffcc33', '#33ddff', '#ff55aa'] , trim: ['#ffcc33', '#33ddff', '#ff55aa'], trimOdds: 0.5},
+  residential: { mult: 1.5, spread: 1.1, core: 0.3, walls: ['#a4553f', '#b8704f', '#8d5a45', '#c9a27e', '#7a4a3a', '#b0603a'], roofs: ['#b04a32', '#8a3a2a', '#c0703a'], lit: ['#ffb45a', '#ffcf7a'], styles: { brick: 5, concrete: 1 }, shapes: { slab: 4, setback: 1 }, kit: { water: 0.65, garden: 0.2, hvac: 0.6, antenna: 0.3 } , trim: ['#ffb45a', '#ff7a8a'], trimOdds: 0.1},
+  nightclub: { mult: 1.3, spread: 0.4, core: 0, walls: ['#2c2440', '#3a2c55', '#46305e', '#1f1b2e'], roofs: ['#3a2a6a', '#2a1a4a'], lit: ['#ff7ae0', '#7ae8ff', '#c08aff'], styles: { concrete: 2, brick: 2 }, shapes: { slab: 3, setback: 1 }, kit: { hvac: 0.6, antenna: 0.2, sign: 0.4 }, crown: { neonCap: 0.4 }, neon: true },
+  redlight: { mult: 1.2, spread: 0.4, core: 0, walls: ['#5a1a2a', '#6a2030', '#3a1a22', '#7a2a3a'], roofs: ['#7a1a2a', '#5a1420'], lit: ['#ff5a6a', '#ffaa66'], styles: { brick: 3, concrete: 1 }, shapes: { slab: 3, setback: 1 }, kit: { water: 0.45, hvac: 0.4, sign: 0.4 }, neon: true },
+  naughty: { mult: 1.2, spread: 0.4, core: 0, walls: ['#5a2a66', '#3d1a44', '#6a2a6a', '#4a1e52'], roofs: ['#6a2a7a', '#4a1e52'], lit: ['#ff7ae0', '#cc88ff'], styles: { concrete: 2, brick: 2 }, shapes: { slab: 3, setback: 1 }, kit: { hvac: 0.5, sign: 0.4 }, crown: { neonCap: 0.4 }, neon: true },
+  retail: { mult: 1.0, spread: 0.8, core: 0, walls: ['#e8a07a', '#f0c86a', '#7ac8b8', '#e07a9a', '#9ab0e8', '#f0e0c0'], roofs: ['#3aa08a', '#e07a9a', '#e0b04a'], lit: ['#fff0c0'], styles: { concrete: 3, brick: 1 }, shapes: { slab: 1 }, kit: { hvac: 0.9, sign: 0.15 } , trim: ['#ff6fb0', '#4fe0c8', '#ffe05a'], trimOdds: 0.2},
+  warehouse: { mult: 1.0, spread: 0.2, core: 0, walls: ['#8a5a3a', '#7a6a5a', '#9a7a50', '#6a6a70'], roofs: ['#9a5a2a', '#7a6a4a'], lit: ['#ffd080'], styles: { industrial: 3, brick: 2 }, shapes: { slab: 1 }, kit: { water: 0.45, hvac: 0.6 } , trim: ['#ffb03a'], trimOdds: 0.08},
+  factory: { mult: 1.0, spread: 0.2, core: 0, walls: ['#6d6a60', '#807765', '#5b6260', '#8b5a3c'], roofs: ['#6a5a4a', '#7a4a3a'], lit: ['#ffc070'], styles: { industrial: 3, brick: 1 }, shapes: { slab: 1 }, kit: { hvac: 0.7, water: 0.35 } , trim: ['#ff7a3a'], trimOdds: 0.08},
   docks: { mult: 1.0, spread: 0.1, core: 0, walls: ['#6a7078'], roofs: ['#4a4d52'], lit: ['#ffd080'], styles: { industrial: 1 }, shapes: { slab: 1 }, kit: {} , trim: ['#3ad0ff'], trimOdds: 0.1},
   lair: { mult: 1.0, spread: 0.3, core: 0, walls: ['#1d2a22', '#253228', '#101512'], roofs: ['#1a3a22'], lit: ['#7aff9a'], styles: { concrete: 1, industrial: 1 }, shapes: { slab: 1 }, kit: { antenna: 0.5 }, neon: true },
   suburb: { mult: 1.0, spread: 0.1, core: 0, walls: null, roofs: ['#5a5a5a'], lit: ['#ffcf7a'], styles: { brick: 1, concrete: 1 }, shapes: { slab: 1 }, kit: {} },
@@ -140,7 +140,46 @@ export function building(B, o, blk, S) {
     mast(B, cx, cz, top + H * 0.14, top + H * 0.18, 0.5);
     return roofExtras(B, o, blk, S, D, L, h, face, x0, z0, x1, z1, H, null);
   }
+  if (D.crown && (shape === 'slab' || shape === 'podium' || shape === 'setback') && H >= 60 && Math.min(w, d) >= 14 && crown(B, D, L, h, rx0, rz0, rx1, rz1, top, H)) {
+    return roofExtras(B, o, blk, S, D, L, h, face, x0, z0, x1, z1, H, null);
+  }
   roofExtras(B, o, blk, S, D, L, h, face, x0, z0, x1, z1, H, [rx0, rz0, rx1, rz1, top]);
+}
+
+/**
+ * A district's signature top (`D.crown` odds) on a plain tower, so each district's skyline has its
+ * own read from altitude: financial glass wedges, casino gold domes, downtown pyramids, the club
+ * districts' neon-edged caps. Returns whether one was built (the roof kit is skipped then).
+ */
+function crown(B, D, L, h, x0, z0, x1, z1, top, H) {
+  const r = hash2(x0 * 7 | 0, z0 * 7 | 0, 91), C = D.crown, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, m = Math.min(x1 - x0, z1 - z0);
+  let acc = 0;
+  const pick = (k) => C[k] && r < (acc += C[k]);
+  if (pick('slant')) {
+    wedge(B, x0, z0, x1, z1, top, Math.min(m * 0.55, H * 0.14), { ...L, style: STYLE.glass }, Math.floor(h[5] * 4));
+    return true;
+  }
+  if (pick('dome')) {
+    const G = { ...L, tint: L.tint.clone().set('#e6c66a'), style: STYLE.deco, roofTint: L.tint.clone().set('#ffd84d') }, R = m * 0.46;
+    box(B, cx - R, cz - R, cx + R, cz + R, top, top + 3, L, { ink: 1 });
+    for (let k = 0; k < 4; k++) prism(B, cx, cz, R * Math.cos(k * 0.38) * 0.9, R * Math.cos((k + 1) * 0.38) * 0.9, top + 3 + R * 0.22 * k, top + 3 + R * 0.22 * (k + 1), 10, G, { cap: k === 3, ink: k === 0 ? 1 : 0 });
+    neonRing(B, cx - R * 0.66, cz - R * 0.66, cx + R * 0.66, cz + R * 0.66, top + 3.4, '#ffd84d', 0.6);
+    mast(B, cx, cz, top + 3 + R * 0.88, top + 3 + R * 0.88 + 8, 0.4, '#ffd84d', '#c9a13b');
+    return true;
+  }
+  if (pick('pyramid')) {
+    prism(B, cx, cz, m * 0.5 * 1.41, 0, top, top + m * 0.45, 4, { ...L, tint: L.roofTint.clone().multiplyScalar(1.25) }, { rot: Math.PI / 4 });
+    return true;
+  }
+  if (pick('neonCap')) {
+    const s = m * 0.36, col = Array.isArray(D.neon) ? D.neon[0] : h[3] < 0.5 ? '#ff2fd0' : '#27e0ff';
+    box(B, cx - s, cz - s, cx + s, cz + s, top, top + 5, L, { ink: 1 });
+    prism(B, cx, cz, s * 1.41, 0, top + 5, top + 5 + s, 4, L, { rot: Math.PI / 4, ink: 1 });
+    neonRing(B, cx - s, cz - s, cx + s, cz + s, top + 4.6, col, 0.6);
+    for (const [px, pz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) neonPost(B, cx + px * s, cz + pz * s, top, top + 4.4, col, 0.5);
+    return true;
+  }
+  return false;
 }
 
 /** Lawn, planters and a few trees on a roof terrace. */
@@ -158,6 +197,12 @@ function roofGarden(B, x0, z0, x1, z1, t, h, ex0, ez0, ex1, ez1) {
 /** Roof kit (when `roof` = [x0, z0, x1, z1, top] is free), neon, and signs. */
 function roofExtras(B, o, blk, S, D, L, h, face, x0, z0, x1, z1, H, roof) {
   const K = D.kit;
+  if (roof && B.lite && Math.min(roof[2] - roof[0], roof[3] - roof[1]) >= 10 && H > 20) {
+    // far LOD: one plain penthouse block (no ink), so distant roofs keep their clutter's mass
+    const [rx0, rz0, rx1, rz1, top] = roof, w = rx1 - rx0, d = rz1 - rz0, r = (k) => hash2(o.x | 0, o.y | 0, 200 + k);
+    const pw = w * (0.3 + r(3) * 0.15), pd = d * (0.3 + r(4) * 0.12), px = rx0 + w * (0.1 + r(5) * 0.4), pz = rz0 + d * (0.1 + r(6) * 0.4);
+    box(B, px, pz, px + pw, pz + pd, top, top + 3 + r(7) * 4, { ...L, style: STYLE.concrete, tint: L.roofTint.clone().multiplyScalar(1.5) }, { ink: 0 });
+  }
   if (roof && !B.lite) {
     const [rx0, rz0, rx1, rz1, top] = roof, w = rx1 - rx0, d = rz1 - rz0, m = Math.min(w, d);
     const r = (k) => hash2(o.x | 0, o.y | 0, 200 + k);
@@ -172,9 +217,9 @@ function roofExtras(B, o, blk, S, D, L, h, face, x0, z0, x1, z1, H, roof) {
       const P = { ...L, style: STYLE.concrete, tint: L.roofTint.clone().multiplyScalar(1.5) };
       const pw = w * (0.3 + r(3) * 0.15), pd = d * (0.3 + r(4) * 0.12), px = rx0 + w * (0.1 + r(5) * 0.4), pz = rz0 + d * (0.1 + r(6) * 0.4);
       box(B, px, pz, px + pw, pz + pd, top, top + 3 + r(7) * 4, P);
-      if (K.hvac && r(8) < K.hvac) {
+      if (r(8) < (K.hvac ?? 0.5)) {
         const HV = { ...P, style: STYLE.industrial, tint: P.tint.clone().multiplyScalar(1.15) };
-        const n = 2 + Math.floor(r(9) * 3);
+        const n = 3 + Math.floor(r(9) * (m > 24 ? 5 : 3));
         for (let k = 0; k < n; k++) {
           const hx = rx0 + 2 + hash2(k, o.x | 0, 7) * (w - 6), hz = rz0 + 2 + hash2(k, o.y | 0, 8) * (d - 6);
           if (hx + 2.5 > px && hx < px + pw && hz + 2.5 > pz && hz < pz + pd) continue;
@@ -183,7 +228,10 @@ function roofExtras(B, o, blk, S, D, L, h, face, x0, z0, x1, z1, H, roof) {
       }
     }
     if (K.water && r(10) < K.water && m >= 10) waterTower(B, rx1 - 4, rz1 - 4, top);
-    if (K.antenna && r(11) < K.antenna) mast(B, rx0 + 2, rz0 + 2, top, top + 6 + r(12) * 8);
+    if (K.antenna && r(11) < K.antenna) {
+      mast(B, rx0 + 2, rz0 + 2, top, top + 6 + r(12) * 8);
+      if (r(16) < 0.4 && m >= 14) mast(B, rx1 - 3, rz0 + 3, top, top + 4 + r(17) * 5, 0.35, null); // a second, unlit
+    }
     if (K.sign && r(13) < K.sign && !o.sign && m >= 12) {
       const words = SIGN_WORDS[blk.d];
       if (words) roofBoard(B, S, pick(words, r(14)), neonOf(D, r(15)), rx0, rz0, rx1, rz1, face, top, Math.min(8, m * 0.3));
