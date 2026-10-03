@@ -85,7 +85,7 @@ Filter for critics' asks that fight the comic style: outlined, flat-shaded puffs
 
 ## Backlog (rough priority)
 1. Flight/city round 8 (above).
-2. Hero redesign round (after flight/city rounds; user confirmed this order 2026-10-03): the hero is a Mixamo-rigged GLB (`assets/models/supergirl.glb` + `supergirl_anims.glb`, loaded in hero3d.js; clips retarget via `heroRig()`; the flight cape is procedural in capefly3d.js). A new model on a Mixamo rig is a drop-in plus one round of shader retuning. Open user questions: stay Supergirl or go original (DC trademark if released; `the_riddler.glb` enemy too); multiple playable heroes (needs a select screen + per-hero story footage). Suggested first step: an original comic-style hero behind `?hero=alt` for a phone A/B.
+2. Hero redesign round (after flight/city rounds; user confirmed this order 2026-10-03): the hero is a Mixamo-rigged GLB (`assets/models/supergirl.glb` + `supergirl_anims.glb`, loaded in hero3d.js; clips retarget via `heroRig()`; the flight cape is procedural in capefly3d.js). A new model on a Mixamo rig is a drop-in plus one round of shader retuning. User answer (2026-10-03): it's a personal learning project, so Supergirl stays for now; original characters come later. The user has other models in mind and also wants to test one generated here: an original comic-style hero behind `?hero=alt` for a phone A/B. Multiple playable heroes would need a select screen + per-hero story footage.
 3. Director: the district caption can lag the district name. A caption clipped at the left edge in
    shots is just its slide-in/out animation caught mid-way; that's by design, not a bug.
 4. Brawler round 4:
