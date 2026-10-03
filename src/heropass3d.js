@@ -8,8 +8,8 @@ import * as THREE from 'three';
 import { LOOK } from './look3d.js';
 
 export const HERO_LAYER = 1;
-// pad: margin round her bounding sphere; taps: the silhouette ink's dilation samples (+ half as many
-// at half width, so thin limbs don't break it up); ink: its colour; halo: rgb + alpha of the night halo
+// pad: margin round her bounding sphere; taps: the silhouette ink's dilation samples (the body's
+// own ink hull covers gaps at thin limbs); ink: its colour; halo: rgb + alpha of the night halo
 const PASS = { pad: 1.2, bucket: 64, taps: 8, ink: 0x0b0b16, halo: [0.85, 0.9, 1.0, 0.45] };
 
 const _v = new THREE.Vector3(), _res = new THREE.Vector2(), _cc = new THREE.Color();
@@ -27,10 +27,8 @@ export class HeroPass {
     let taps = '', halo = ''; // (unrolled: one line per direction)
     for (let i = 0; i < PASS.taps; i++) {
       const a = (i / PASS.taps) * Math.PI * 2, d = `vec2(${Math.cos(a).toFixed(4)}, ${Math.sin(a).toFixed(4)}) * texel`;
-      taps += `  o = max(o, cover(vUv + ${d} * inkW));${i % 2 ? '' : ` o = max(o, cover(vUv + ${d} * inkW * 0.5));`}
-`; // (half-width taps on every other direction)
-      halo += `    h = max(h, cover(vUv + ${d} * (inkW + haloW)));
-`;
+      taps += `  o = max(o, cover(vUv + ${d} * inkW));\n`;
+      halo += `    h = max(h, cover(vUv + ${d} * (inkW + haloW)));\n`;
     }
     this.mat = new THREE.ShaderMaterial({
       uniforms: { map: { value: null }, rep: { value: new THREE.Vector2(1, 1) }, texel: { value: new THREE.Vector2() }, inkW: { value: 0 }, haloW: { value: 0 },
