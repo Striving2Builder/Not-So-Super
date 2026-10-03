@@ -22,13 +22,19 @@ const POSE = {
   divePitch: 1.15,  // head-first dive angle (rad)
   legs: 0.95,       // how hard the legs straighten and trail (0..1)
   boot: 0.72,       // boot (foot bone) scale
-  patrolScale: 16,  // in the overhead patrol view she becomes a big inked map figure
+  patrolScale: 18,  // in the overhead patrol view she becomes a big inked map figure
   shadow: 0x05060f,
 };
 /** Costume read: saturation, self-light (fraction of albedo), cyan-white rim (only the silhouette). */
 const SUIT = { sat: 1.45, self: 0.32, rim: [0.62, 0.95, 1.0], rimK: [1.3, 2.4], rimEdge: [0.82, 0.92] }; // rimK: open sky / against dark walls; rimEdge: its fresnel band
 /** Her hair: the model's fur-textured strands (this UV rect of the atlas) become a flat blonde mass. */
 const HAIR = { uv: [0.0, 0.58, 0.6, 1.0], lit: [0.92, 0.66, 0.2], mid: [0.72, 0.42, 0.08], shade: [0.36, 0.16, 0.035], cut: [0.3, 0.55] }; // (linear colours; cut: light-band thresholds mid / lit)
+/**
+ * Her silhouette keyline (CSS px, drawn by her sharp pass round body + cape as one shape): ink width
+ * in open sky → against a dark or busy background (night, the street canyons, the map below the
+ * patrol view); a pale halo outside it at night, so the dark ink still separates her from dark walls.
+ */
+const LINE = { ink: [1.3, 2.3], halo: 1.4 };
 /** Rim strength, shared by her materials (raised in the dark street canyons). */
 export const RIM = { value: SUIT.rimK[0] };
 export const RIM_K = SUIT.rimK;
@@ -176,6 +182,12 @@ export class FlyHero3D {
       const day = Math.min(1, Math.max(0, (this.sun.intensity - 0.7) / 1.6));
       CAPE_LIGHT.tint.value.setRGB(1, 1, 1).lerp(this.sun.color, 0.35).multiplyScalar(0.7 + 0.3 * day);
     }
+  }
+
+  /** [ink, halo] keyline widths for her sharp pass; night 0..1, busy 0..1 (canyon / patrol view). */
+  keyline(night, busy) {
+    const k = Math.max(night, busy);
+    return [LINE.ink[0] + (LINE.ink[1] - LINE.ink[0]) * k, LINE.halo * night];
   }
 
   /**

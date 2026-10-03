@@ -332,7 +332,8 @@ export class Flight3D {
       (w, hh) => { LOOK.res.value.set(w, hh); LOOK.dpr.value = outDpr * (w / r.getDrawingBufferSize(_s2).x); }, // (ink widths for the scene's own resolution)
       quality().fly3dSharp ?? 0.5, quality().fly3dSharpTaps || 2);
     lookFrame(r); // back to the canvas for her pass
-    if (sharp) this.heroPass.render(r, this.scene, this.cam.cam, this.hero.group.position, FlyHero3D.RADIUS * this.hero.size, W, H, hq); // (radius: her + the cape)
+    if (sharp) this.heroPass.render(r, this.scene, this.cam.cam, this.hero.group.position, FlyHero3D.RADIUS * this.hero.size, W, H, hq, // (radius: her + the cape)
+      this.hero.keyline(night, Math.max(this.cam.canyonK, this.cam.patrolK)));
     this.overlay(ctx, night, frac, boosting);
   }
 

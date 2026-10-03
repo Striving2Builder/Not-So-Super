@@ -95,16 +95,20 @@ render hand-off, enter/exit, the boost kick, and the 3D flight button set (`setB
   `fly3dDpr` caps (`LOOK3.dynRes`).
 - `herofly3d.js` — the HeroModel posed from the flight state (hover idle / fist-forward with
   trailing legs / bank / cape), her own pushed-saturation suit materials + rim, inked blob shadow,
-  enlarged in the patrol view; back-light rim and 3-tone hair. Tables: `POSE`, `SUIT`, `HAIR`.
+  enlarged in the patrol view; back-light rim and 3-tone hair. Tables: `POSE`, `SUIT`, `HAIR`, `LINE`.
 - `capefly3d.js` — her flight cape: a tapered, folded sheet on a rippling spine chain, two-tone cel
-  from its real normals (darker lining), screen-space ink outline + fold strokes, flattens side-on.
-  Table: `CAPE`.
-- `flightcam3d.js` — chase camera aimed so she sits at a fixed screen spot (lower third, 3/4 rear),
-  offset spring, speed FOV, boost pull-back + kick, street-canyon framing at skim (yaw snaps to the
-  street axis), a level left-third shot at high patrol, sphere-cast collision (shoulder swap / lift;
-  no wall-only frames), patrol view with capped pitch. Table: `CAM`.
+  from its real normals (darker lining), screen-space ink outline + fold strokes, flattens side-on;
+  seen from below speed lifts the hem, slow flight billows. Table: `CAPE`.
+- `flightcam3d.js` — chase camera aimed so she sits at a fixed screen spot (lower third, 3/4
+  rear-side: elevation and angle off her tail capped by `maxElev` / `maxAz`, so she never reads as a
+  lump seen straight down her back), offset spring, speed FOV, boost lens + kick with a dolly that
+  keeps her size, street-canyon framing at skim (yaw snaps to the street axis), a level shot at high
+  patrol, sphere-cast collision (shoulder swap, pull-in, then a small lift; no wall-only frames),
+  patrol view with capped pitch. Table: `CAM`.
 - `heropass3d.js` — her sharp pass: the hero layer rendered into a small target over her screen
-  rect at 2× the frame's density (optional MSAA; `quality().fly3dHero`), laid over the frame.
+  rect at 2× the frame's density (optional MSAA; `quality().fly3dHero`), laid over the frame with a
+  silhouette keyline round body + cape (wider at night / in canyons / patrol view, pale halo at
+  night; widths from herofly3d's `LINE`). She is always drawn over the city (no scene depth).
 Other 3D hooks in overworld.js: `view3d.autoSteer` (autopilot routes round towers taller than her)
 and `view3d.slide` (she glances off façades instead of the 2D stop-dead).
 Measurements: `tools/shots/fly3d.js` (2D vs 3D fps A/B, beams, time-to-waypoint); harness
