@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { quality } from './settings.js';
 import { watchContext, loadingPanel } from './gfx.js';
 import { HeroModel, heroReady } from './hero3d.js';
+import { dressHero, inkHull } from './herolook3d.js';
 import { Enemy, enemyReady, GUARD_KINDS, bossKind } from './enemies.js';
 import { updateNightlife, disposeNightlife } from './nightlife.js';
 import { VENUES, THEMES, INTOX_ITEMS, BAIT_ITEMS, HERO, FIRST_NAMES, LAST_NAMES } from './data.js';
@@ -115,7 +116,8 @@ export class Special3D {
       this.hero = new THREE.Group();
       this.hero.add(this.heroModel.root);
       this.heroClip('land', 1.4); // she arrives with a superhero landing
-      inkCharacter(this.heroModel.root, { rim: 0xfff4d0, skip: [this.heroModel.cape.mesh] });
+      dressHero(this.heroModel.root, { self: 0.12, rim: { value: 0.9 } }, [this.heroModel.cape.mesh]); // her own cel look (herolook3d)
+      inkHull(inkCharacter(this.heroModel.root, { rim: 0xfff4d0, skip: [this.heroModel.cape.mesh] }));
       inkCharacter(this.heroModel.cape.mesh, { rim: 0xfff4d0, outline: false });
     } else this.hero = inkCharacter(this.makeHero());
     this.shadows.track(this.hero, 0.5);

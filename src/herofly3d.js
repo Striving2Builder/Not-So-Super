@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { HeroModel, heroReady } from './hero3d.js';
 import { inkCharacter } from './look3d.js';
-import { heroMaterial, hullGeometry, SUIT } from './herolook3d.js';
+import { heroMaterial, inkHull, SUIT } from './herolook3d.js';
 import { HERO_LAYER } from './heropass3d.js';
 import { M } from './city3d.js';
 import { FlightCape, CAPE_LIGHT } from './capefly3d.js';
@@ -72,7 +72,7 @@ export class FlyHero3D {
       o.material = suitMaterial(o.material, SUIT.self);
     });
     inkCharacter(this.model.root, { skip: [cloth] }); // outlines (materials are already comic)
-    this.model.root.traverse((o) => { if (o.userData.ink && o.isSkinnedMesh) o.geometry = hullGeometry(o.geometry); }); // (no ink on eyeballs / teeth)
+    inkHull(this.model.root); // (no ink on eyeballs / teeth / face interior)
     this.model.root.position.y = -0.9 * POSE.scale; // her body's middle on the pivot
     this.pivot.add(this.model.root);
     this.model.play('fly', { fade: 0 });

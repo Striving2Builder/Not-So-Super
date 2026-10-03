@@ -93,3 +93,22 @@ export function hullGeometry(geo) {
   g.boundingSphere = geo.boundingSphere; g.boundingBox = geo.boundingBox;
   return (geo.userData.hull = g);
 }
+
+/**
+ * Give a HeroModel her comic surface (heroMaterial on every lit mesh except `skip`, e.g. the cloth
+ * cape); call before inkCharacter (which then keeps these materials and adds the ink hull), then
+ * inkHull(root) to drop the hull's face / eyeball parts.
+ */
+export function dressHero(root, opts, skip = []) {
+  root.traverse((o) => {
+    if (!o.isMesh || skip.includes(o) || o.userData.ink || !o.material || Array.isArray(o.material) || o.material.isMeshBasicMaterial) return;
+    o.material = heroMaterial(o.material, opts);
+  });
+  return root;
+}
+
+/** Her ink hulls (inkCharacter's) skip the eyeballs, teeth, lashes and face interior. */
+export function inkHull(root) {
+  root.traverse((o) => { if (o.userData.ink && o.isSkinnedMesh && o.geometry.index) o.geometry = hullGeometry(o.geometry); });
+  return root;
+}
