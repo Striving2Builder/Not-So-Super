@@ -28,7 +28,7 @@ const POSE = {
 /** Costume read: saturation, self-light (fraction of albedo), cyan-white rim (only the silhouette). */
 const SUIT = { sat: 1.45, self: 0.32, rim: [0.62, 0.95, 1.0], rimK: [1.3, 2.4], rimEdge: [0.82, 0.92] }; // rimK: open sky / against dark walls; rimEdge: its fresnel band
 /** Her hair: the model's fur-textured strands (this UV rect of the atlas) become a flat blonde mass. */
-const HAIR = { uv: [0.0, 0.58, 0.6, 1.0], lit: [1.0, 0.78, 0.3], mid: [0.82, 0.5, 0.1], shade: [0.36, 0.16, 0.035], cut: [0.3, 0.55] }; // (linear colours; cut: light-band thresholds mid / lit)
+const HAIR = { uv: [0.0, 0.58, 0.6, 1.0], lit: [0.92, 0.66, 0.2], mid: [0.72, 0.42, 0.08], shade: [0.36, 0.16, 0.035], cut: [0.3, 0.55] }; // (linear colours; cut: light-band thresholds mid / lit)
 /** Rim strength, shared by her materials (raised in the dark street canyons). */
 export const RIM = { value: SUIT.rimK[0] };
 export const RIM_K = SUIT.rimK;
