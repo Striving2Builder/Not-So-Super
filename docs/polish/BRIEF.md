@@ -65,3 +65,9 @@ Commit your work on your branch with a clear message before reporting.
 Keep `docs/polish/handoff/<area>-r<N>.md` on your branch: what's done, what's in progress, next
 steps, best shots and perf numbers, under ~40 lines. Update and commit it with every WIP commit, so a
 fresh agent can continue from it plus `git log` alone if you're cut off.
+
+## HTML5 budget (required)
+This is an HTML5 game played in a phone browser. Target "as close to AAA as HTML5 allows". Report the
+cost of every change (fps A/B, draw calls, triangles, texture memory, download size) and stay within
+≤5% fps per round unless told otherwise. If an ask can't be done cheaply in a browser, say so and
+propose the cheap version instead of shipping the expensive one.

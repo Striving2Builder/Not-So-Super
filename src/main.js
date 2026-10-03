@@ -20,6 +20,7 @@ import { playScreenScene } from './cutscene.js';
 import { comic } from './comic.js';
 import { Commentary } from './commentary.js';
 import { settings, quality, autoTune } from './settings.js';
+import { perfHud } from './perfhud.js';
 
 loadHero();
 loadEnemies(); // guard and boss models for the 3D zones (procedural stand-ins until they arrive)
@@ -347,6 +348,7 @@ function frame(now) {
       }
     } catch (e) { console.error(e); }
   }
+  perfHud(realDt, game, settings.graphicsLabel); // ?perf=1 only
   game.input.endFrame();
   requestAnimationFrame(frame);
 }
