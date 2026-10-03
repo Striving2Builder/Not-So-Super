@@ -22,7 +22,7 @@ const CAM = {
   canyon: { height: 1.3, dist: 3.1, at: [0.5, 0.58], fovUp: 4, snap: 0.62, side: 0.75 }, // skim band: lower, along the street (snap ≈ 35°); side: × the chase side
   // high patrol, flying: level with her, centred in the safe zone against the sky,
   // the city's far edge down in the bottom third (the Superman-over-the-city shot)
-  high: { dist: 3.7, height: 0.15, side: 1.6, at: [0.56, 0.56], from: 760, to: 1000 }, // from/to: altitude (world units) it blends in over
+  high: { dist: 3.3, height: 0.15, side: 1.6, at: [0.56, 0.56], from: 760, to: 1000 }, // from/to: altitude (world units) it blends in over
   patrol: { dist: 78, height: 58, side: 60, fov: 60, at: [0.55, 0.58] }, // ≈ 30° down at the city, from her 3/4 rear-side (her side reads): horizon along the top
   maxElev: [24, 36], // camera elevation above her (deg), flying / patrol view: never down onto her back
   maxAz: 42,         // camera angle off her tail (deg) while flying: 3/4 rear-side, never fully side-on
