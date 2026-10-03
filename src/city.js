@@ -7,6 +7,7 @@ import { clamp } from './util.js';
 export const BLOCK = 240;
 export const ROAD = 52;
 export const LOT = BLOCK - ROAD;
+const RIVER = '#2f6fa8';
 
 // Rough ring placement for each district seed: [type, minRadius, maxRadius, count, preferredAngle?]
 const PLAN = [
@@ -32,6 +33,7 @@ export class City {
     this.water = [];      // ships / piers drawn over the sea
     this.stacks = [];     // smokestacks (for smoke particles)
     this.assignDistricts();
+    this.carveRiver();
     this.buildBlocks();
     this.buildMinimap();
     this.buildTraffic();
@@ -70,6 +72,34 @@ export class City {
     }
   }
 
+  /**
+   * A river through the city: from the west edge eastward a few blocks north of downtown (it crosses
+   * the view as she sets off and from the patrol view), meandering, widening into a basin near the
+   * centre, out into the bay. River blocks hold water instead of buildings; the streets crossing it
+   * are its bridges. Hash-driven: the rng stream is untouched.
+   */
+  carveRiver() {
+    const dt = this.seeds.find((s) => s.type === 'downtown');
+    if (!dt) return;
+    let y = clamp(Math.round(dt.y) - 5, 2, this.rows - 3);
+    const path = [], basin = [];
+    for (let x = 0; x < this.landCols; x++) {
+      path.push([x, y]);
+      if (x < this.landCols - 1 && hash2(x, y, this.seed + 3) < 0.3) {
+        const ny = clamp(y + (hash2(y, x, this.seed + 4) < 0.5 ? -1 : 1), 2, Math.round(dt.y) - 3);
+        if (ny !== y) { y = ny; path.push([x, y]); }
+      }
+    }
+    // the basin: an oval of whole blocks on the river's north bank, near downtown
+    const at = path.filter(([px]) => px === Math.round(dt.x)), cy = (at.length ? Math.min(...at.map((p) => p[1])) : y) - 0.2;
+    const E = { cx: Math.round(dt.x) + 0.5, cy, rx: 4.6, ry: 1.7 };
+    for (let by = Math.floor(cy - E.ry); by <= Math.ceil(cy + E.ry); by++) for (let bx = Math.floor(E.cx - E.rx); bx <= Math.ceil(E.cx + E.rx); bx++) {
+      if (((bx + 0.5 - E.cx) / E.rx) ** 2 + ((by + 0.5 - E.cy) / E.ry) ** 2 < 1) basin.push([bx, by]);
+    }
+    for (const [bx, by] of [...path, ...basin]) { const b = this.block(bx, by); if (b) b.river = true; }
+    this.riverPath = path; this.riverBasin = basin; this.riverOval = E; // the 3D view draws it smooth
+  }
+
   block(bx, by) {
     if (bx < 0 || by < 0 || bx >= this.landCols || by >= this.rows) return null;
     return this.blocks[by * this.landCols + bx];
@@ -83,6 +113,7 @@ export class City {
 
   buildBlocks() {
     for (const blk of this.blocks) {
+      if (blk.river) { blk.flats.push({ t: 'rect', x: blk.x0, y: blk.y0, w: LOT, h: LOT, c: RIVER, river: true }); continue; }
       const r = new RNG((hash2(blk.bx, blk.by, this.seed + 7) * 4294967296) >>> 0);
       const D = DISTRICTS[blk.d];
       const gen = GEN[D.style] || GEN.mixed;
@@ -105,7 +136,7 @@ export class City {
     const g = c.getContext('2d');
     g.fillStyle = '#1f4f7a'; g.fillRect(0, 0, c.width, c.height);
     for (const b of this.blocks) {
-      g.fillStyle = DISTRICTS[b.d].map;
+      g.fillStyle = b.river ? RIVER : DISTRICTS[b.d].map;
       g.fillRect(b.bx * S, b.by * S, S, S);
     }
     g.fillStyle = 'rgba(0,0,0,.25)';
@@ -160,6 +191,13 @@ export class City {
 // ---------------------------------------------------------------------------
 // Block generators. Buildings: {x,y,w,d,h,col,kind,...}; flats are ground decals.
 // ---------------------------------------------------------------------------
+// Rooftop sign names. signFor() spreads them over the grid so neighbouring blocks never share a
+// name (a screenful of BOWL BOWL BOWL reads as clone-stamped). The rng pick is still drawn so the
+// rest of the block generates exactly as before.
+const VENUE_SIGNS = ['THEATER', 'CINEMA', 'ARCADE', 'BOWL', 'COMEDY', 'JAZZ', 'OPERA', 'KARAOKE', 'BILLIARDS', 'ROXY', 'PALACE', 'DINER'];
+const MALLS = ['MALL', 'MEGAMART', 'OUTLET', 'PLAZA', 'SUPERSTORE', 'MARKET'];
+function signFor(blk, names, _drawn) { return names[(blk.bx * 5 + blk.by * 3) % names.length]; }
+
 function B(blk, x, y, w, d, h, col, extra = {}) {
   blk.b.push({ x, y, w, d, h, col, kind: 'box', ...extra });
 }
@@ -205,7 +243,7 @@ const GEN = {
     const { x0, y0 } = blk;
     blk.flats.push({ t: 'lot', x: x0 + 50, y: y0 + 50, w: LOT - 100, h: LOT - 100 });
     if (r.chance(0.3)) {
-      B(blk, x0 + 20, y0 + 22, LOT - 40, 90, r.range(28, 42), r.pick(D.pal), { skylight: true, sign: r.pick(['MALL', 'MEGAMART', 'OUTLET']) });
+      B(blk, x0 + 20, y0 + 22, LOT - 40, 90, r.range(28, 42), r.pick(D.pal), { skylight: true, sign: signFor(blk, MALLS, r.pick(MALLS)) });
       return;
     }
     // shop row around the perimeter
@@ -240,7 +278,7 @@ const GEN = {
   venues(blk, r, D) {
     const { x0, y0 } = blk;
     blk.flats.push({ t: 'rect', x: x0 + 6, y: y0 + 6, w: LOT - 12, h: LOT - 12, c: '#5a5070' });
-    B(blk, x0 + 20, y0 + 16, 150, 100, r.range(50, 80), r.pick(D.pal), { neon: r.pick(D.neon), sign: r.pick(['THEATER', 'CINEMA', 'ARCADE', 'BOWL']) });
+    B(blk, x0 + 20, y0 + 16, 150, 100, r.range(50, 80), r.pick(D.pal), { neon: r.pick(D.neon), sign: signFor(blk, VENUE_SIGNS, r.pick(VENUE_SIGNS)) });
     B(blk, x0 + 20, y0 + 132, 60, 44, r.range(D.hMin, D.hMax), r.pick(D.pal), { neon: r.pick(D.neon) });
     B(blk, x0 + 100, y0 + 132, 70, 44, r.range(D.hMin, D.hMax), r.pick(D.pal), { neon: r.pick(D.neon) });
   },
@@ -269,8 +307,10 @@ const GEN = {
   warehouses(blk, r, D) {
     const { x0, y0 } = blk;
     blk.flats.push({ t: 'rect', x: x0 + 4, y: y0 + 4, w: LOT - 8, h: LOT - 8, c: '#5a5750' });
-    B(blk, x0 + 12, y0 + 14, LOT - 24, 72, r.range(D.hMin, D.hMax), r.pick(D.pal), { corrugated: true });
-    if (r.chance(0.7)) B(blk, x0 + 12, y0 + 104, LOT - 24, 70, r.range(D.hMin, D.hMax), r.pick(D.pal), { corrugated: true });
+    // roof variety without touching the rng stream: skylight strips on some sheds, bare tin on others
+    const v = hash2(blk.bx, blk.by, 91);
+    B(blk, x0 + 12, y0 + 14, LOT - 24, 72, r.range(D.hMin, D.hMax), r.pick(D.pal), { corrugated: v > 0.35, skylight: v < 0.5 });
+    if (r.chance(0.7)) B(blk, x0 + 12, y0 + 104, LOT - 24, 70, r.range(D.hMin, D.hMax), r.pick(D.pal), { corrugated: v < 0.7, skylight: v > 0.6 });
     else for (let i = 0; i < 3; i++) B(blk, x0 + 20 + i * 52, y0 + 120, 40, 16, 14, '#e8e8e8', { truck: true });
   },
   docks(blk, r, D) {

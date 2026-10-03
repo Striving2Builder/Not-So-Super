@@ -1,11 +1,16 @@
 // A detective case, independent of how it's presented (2D crime scene by day, 3D club by night).
 // Owns the suspects, the clues that point at the culprit, what's been found/photographed,
-// the notebook + accusation dialogs, and the result sent to the newspaper.
+// and the result sent to the newspaper. Its on-screen paper trail (evidence card, case board,
+// accusation splash) lives in caseboard.js.
 import { ATTRS, FIRST_NAMES, LAST_NAMES } from './data.js';
 import { pick, shuffle } from './util.js';
-import { dialog } from './ui.js';
+import { npcLook } from './art.js';
+import { evidenceCard, caseBoard, accuseSplash } from './caseboard.js';
 
 export const CLUES_TO_ACCUSE = 3;
+
+// Suspects' hair shows on their mugshots, so a hair clue can be read off the board as well as the chips.
+const HAIR_COL = { 'bright red hair': '#d8342a', 'silver hair': '#c8ccd4', 'jet-black hair': '#121216' };
 
 export class CaseFile {
   /**
@@ -25,10 +30,15 @@ export class CaseFile {
     }
     const js = shuffle([...jobs]), first = shuffle([...FIRST_NAMES]), last = shuffle([...LAST_NAMES]);
     this.keys = keys;
-    this.suspects = shuffle(attrs.map((a, i) => ({ attrs: a, name: `${first[i]} ${last[i]}`, job: js[i % js.length], culprit: a === culprit })));
+    this.suspects = shuffle(attrs.map((a, i) => {
+      const look = npcLook('civilian');
+      if (a.hair) { look.hair = HAIR_COL[a.hair]; if (look.hairStyle === 'bald') look.hairStyle = 'short'; }
+      return { attrs: a, name: `${first[i]} ${last[i]}`, job: js[i % js.length], culprit: a === culprit, look };
+    }));
     const ms = shuffle([...methods]);
     this.clues = keys.map((k, i) => ({ key: k, value: culprit[k], method: ms[i], found: false, photo: false }));
     this.photos = 0;
+    this.order = []; // discovery order → evidence numbers
   }
 
   get culprit() { return this.suspects.find((s) => s.culprit); }
@@ -39,9 +49,11 @@ export class CaseFile {
   /** Human-readable clue text (HTML). */
   text(c) { return ATTRS[c.key].clue[c.value]; }
   label(c) { return ATTRS[c.key].label; }
+  /** Evidence marker number (1-based, in the order found). */
+  num(c) { const i = this.order.indexOf(c); return i < 0 ? 0 : i + 1; }
 
   /** Mark a clue found. Returns false if it already was. */
-  find(c) { if (c.found) return false; c.found = true; return true; }
+  find(c) { if (c.found) return false; c.found = true; this.order.push(c); return true; }
 
   /** Photograph a found clue. Returns false if not possible. */
   photograph(c) { if (!c.found || c.photo) return false; c.photo = true; this.photos++; return true; }
@@ -49,28 +61,21 @@ export class CaseFile {
   /** Any unfound clue (optionally excluding some discovery methods) — used for bonus tips. */
   anyUnfound(exclude = []) { return this.clues.find((c) => !c.found && !exclude.includes(c.method)); }
 
-  async notes(title, hintWhenEmpty) {
-    const found = this.found;
-    const html = found.length
-      ? found.map((c) => `<div class="item"><b>${this.label(c)}:</b> ${this.text(c)}${c.photo ? ' 📸' : ''}</div>`).join('')
-      : `<div class="item">${hintWhenEmpty}</div>`;
-    await dialog({ title: `Notebook — ${title}`, text: `<div class="list">${html}</div>Clues: ${found.length}/${this.clues.length} · Photos: ${this.photos}` });
+  /** The "CLUE FOUND" moment (caseboard.evidenceCard). `from`: screen point the item flies from. */
+  async reveal(c, how, hint = '', from = null) {
+    if (!c.found) this.find(c);
+    await evidenceCard(this, c, how, hint, from);
   }
 
-  /** Suspect board with trait matching. Resolves to the accused suspect, or null. */
-  async accuse() {
-    const found = this.found;
-    const html = this.suspects.map((s) => `<div class="item"><b>${s.name}</b> — ${s.job}<br>${this.keys.map((k) => {
-      const c = found.find((c) => c.key === k);
-      const cls = c ? (c.value === s.attrs[k] ? 'match' : 'miss') : '';
-      return `<span class="chip ${cls}">${s.attrs[k]}</span>`;
-    }).join('')}</div>`).join('');
-    const v = await dialog({
-      title: 'Suspects',
-      text: `<div class="list">${html}</div>${this.canAccuse ? 'Who did it?' : `Find at least ${CLUES_TO_ACCUSE} clues before you accuse anyone (${found.length}/${CLUES_TO_ACCUSE}).`}`,
-      options: [...(this.canAccuse ? this.suspects.map((s, i) => ({ label: `Accuse ${s.name}`, value: i, cls: 'bad' })) : []), { label: 'Keep investigating', value: null }],
-    });
-    return v === null || v === undefined ? null : this.suspects[v];
+  notes(title, hintWhenEmpty) { return caseBoard(this, title, { hint: this.found.length ? '' : hintWhenEmpty, clues: CLUES_TO_ACCUSE }); }
+
+  /** Suspect board with trait matching, then the splash panel. Resolves to the accused, or null. */
+  async accuse(title = '') {
+    const i = await caseBoard(this, title, { accuse: true, clues: CLUES_TO_ACCUSE });
+    if (i === null || i === undefined) return null;
+    const s = this.suspects[i];
+    await accuseSplash(this, s);
+    return s;
   }
 
   /** endZone() payload for a correct accusation. */

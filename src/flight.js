@@ -18,16 +18,31 @@ export const FLIGHT = {
 
 /**
  * Altitude bands. `speedMul` scales top speed; `vice` scales tabloid heat gained over vice
- * districts (photographers can't snap you from high up). The camera rides CAM_ABOVE units above her,
- * so climbing naturally widens the view and skimming makes the towers loom.
+ * districts (photographers can't snap you from high up); `cam` is how far the camera rides above her.
  */
 export const BANDS = [
-  { id: 'skim', z: 150, speedMul: 0.8, vice: 1.8, label: 'Rooftop skim' },
-  { id: 'cruise', z: 360, speedMul: 1, vice: 1.1, label: 'Cruising' },
-  { id: 'high', z: 620, speedMul: 1.3, vice: 0.4, label: 'High patrol' },
+  { id: 'skim', z: 150, speedMul: 0.8, vice: 1.8, label: 'Rooftop skim', cam: 560 },
+  { id: 'cruise', z: 360, speedMul: 1, vice: 1.1, label: 'Cruising', cam: 740 },
+  { id: 'high', z: 620, speedMul: 1.3, vice: 0.4, label: 'High patrol', cam: 1020 },
 ];
 export const CRUISE_BAND = 1;
-export const CAM_ABOVE = 740;
+
+/** The 3D flight slice re-sets the band heights for its much taller city. */
+export function setBandHeights(zs) { zs.forEach((z, i) => { BANDS[i].z = z; }); }
+export const CAM_ABOVE = 740; // at cruise: the reference for the view scale
+
+/**
+ * How far the camera rides above her at height z. It pulls in close for rooftop skims (towers
+ * loom, she's big) and far back at high patrol (the city opens out, she's small): altitude is
+ * something you see, not just a label. Linear between the bands.
+ */
+export function camAbove(z) {
+  if (z <= BANDS[0].z) return BANDS[0].cam;
+  for (let i = 1; i < BANDS.length; i++) {
+    if (z <= BANDS[i].z) { const a = BANDS[i - 1], b = BANDS[i]; return a.cam + ((z - a.z) / (b.z - a.z)) * (b.cam - a.cam); }
+  }
+  return BANDS[BANDS.length - 1].cam;
+}
 const CLIMB_RATE = 380; // units/s
 
 /** Ease toward the current band's height (or a perch). */
@@ -90,4 +105,5 @@ export function stepFlight(h, a, boosting, dt, speedMul = 1) {
 /** Camera helpers derived from the flight state. */
 export function speedFraction(h) { return clamp((h.speed || 0) / FLIGHT.boost, 0, 1); }
 export function cameraZoom(h) { return 1 - 0.24 * speedFraction(h); }       // pull out with speed
-export function cameraLead(h) { return 0.25 + 0.3 * speedFraction(h); }       // seconds of look-ahead
+// seconds of look-ahead: kept modest on a phone so she stays near the middle of the frame
+export function cameraLead(h) { return 0.18 + 0.2 * speedFraction(h); }

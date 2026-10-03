@@ -14,7 +14,9 @@ import { dialog, toast, banner } from './ui.js';
 import { npcLook, portrait } from './art.js';
 import { sfx } from './sfx.js';
 import { quality } from './settings.js';
-import { STEP, DOWN, capsulePush, buildCollider, scanFloor, unpackFloor } from './clubgeo.js';
+import { STEP, DOWN, capsulePush, buildCollider, scanFloor, unpackFloor, mergeStatic } from './clubgeo.js';
+import { ClubMood } from './clubmood.js';
+import { captureEmitters, dropMeshes, texAverage } from './clubdress.js';
 
 // Premade clubs. Add more by exporting another .blend with tools/export_club.py, then run
 // tools/bake_clubs.js to make the lite (512 px textures) copy and bake the walkable floor.
@@ -91,6 +93,10 @@ function entryFor(key) {
         o.frustumCulled = true;
         if (q.clubMaterials !== 'full') o.material = Array.isArray(o.material) ? o.material.map(simple) : simple(o.material);
       });
+      dropMeshes(scene, key);
+      scene.userData.emitters = captureEmitters(scene); // where the neon is, before merging blurs it
+      collapseDetail(scene, q.clubMaterials);
+      scene.userData.chunks = mergeStatic(scene); // hundreds of props → a few dozen draw calls
       e.stage = 'Building the club';
       return { scene, meta };
     });
@@ -148,6 +154,70 @@ function simplify(m, level) {
   return s;
 }
 
+/**
+ * Small props (bottles, glasses, ashtrays, cables…) each come with their own material: over a
+ * hundred materials per club, so over a hundred draw calls even after merging. At the game's
+ * camera distance their textures are a few pixels wide, so they trade them for a flat colour (the
+ * texture's average, in a vertex colour) and all share one material, merging into a single mesh
+ * per block. Plain untextured surfaces of any size join them. Glass, cut-outs and neon keep theirs.
+ */
+const DETAIL = 0.8; // m: props smaller than this lose their texture
+function collapseDetail(scene, level) {
+  scene.updateMatrixWorld(true);
+  const avg = new Map(), shared = new Map(), box = new THREE.Box3(), used = new Set(), dropped = new Set();
+  const plainMat = (side, glass) => {
+    const key = side + (glass ? 'g' : '');
+    if (!shared.has(key)) {
+      const opts = { vertexColors: true, side, name: glass ? 'club-detail-glass' : 'club-detail' };
+      if (glass) Object.assign(opts, { transparent: true, opacity: 0.45, depthWrite: false });
+      const m = level === 'lambert' ? new THREE.MeshLambertMaterial(opts) : new THREE.MeshStandardMaterial({ ...opts, roughness: glass ? 0.2 : 0.75, metalness: 0.05 });
+      m.userData.solid = !glass;
+      shared.set(key, m);
+    }
+    return shared.get(key);
+  };
+  scene.traverse((o) => {
+    if (!o.isMesh || Array.isArray(o.material)) return;
+    const m = o.material;
+    used.add(m);
+    if (!m.isMeshStandardMaterial && !m.isMeshLambertMaterial) return;
+    if (m.alphaTest > 0 || m.alphaMap) return; // cut-outs (leaves, fringes) need their texture
+    if (m.emissive && m.emissive.getHex() !== 0) return; // neon: keeps its glow
+    const glass = m.transparent || m.transmission > 0, textured = !!m.map;
+    if (textured || glass) { // (big untextured glass: windows, one material anyway)
+      box.setFromObject(o);
+      if (box.getSize(new THREE.Vector3()).length() > DETAIL) return;
+    }
+    const g = o.geometry.clone();
+    const col = m.color.clone();
+    if (textured) col.multiply(texAverage(m.map));
+    // untextured white (doors, plinths, the pole stage) blows out under club lights: tone it down
+    const lum = col.r * 0.3 + col.g * 0.59 + col.b * 0.11;
+    if (lum > 0.45) col.multiplyScalar(0.45 / lum);
+    const n = g.attributes.position.count, arr = new Float32Array(n * 3), old = g.attributes.color;
+    for (let i = 0; i < n; i++) {
+      const k = old ? [old.getX(i), old.getY(i), old.getZ(i)] : [1, 1, 1];
+      arr[i * 3] = col.r * k[0]; arr[i * 3 + 1] = col.g * k[1]; arr[i * 3 + 2] = col.b * k[2];
+    }
+    for (const a of Object.keys(g.attributes)) if (a !== 'position' && a !== 'normal') g.deleteAttribute(a);
+    if (!g.attributes.normal) g.computeVertexNormals();
+    g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+    o.geometry = g; // (the original may be shared with other meshes: mergeStatic disposes it)
+    o.material = plainMat(m.side, glass);
+    dropped.add(m);
+  });
+  // free the textures nothing uses any more (a phone's memory is what runs out first)
+  const still = new Set();
+  scene.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) still.add(m); });
+  const keepTex = new Set();
+  for (const m of still) for (const v of Object.values(m)) if (v && v.isTexture) keepTex.add(v);
+  for (const m of dropped) {
+    if (still.has(m)) continue;
+    for (const v of Object.values(m)) if (v && v.isTexture && !keepTex.has(v)) v.dispose();
+    m.dispose();
+  }
+}
+
 function evict() {
   const limit = quality().clubCache;
   const loaded = [...entries.values()].sort((a, b) => a.used - b.used);
@@ -191,6 +261,7 @@ export class ClubZone extends Special3D {
       if (this.g.mode !== this || this.done) return;
       this.club = club;
       super.enter(p);
+      if (this.mood) this.mood.update(0); // rim the cast now, so their shaders warm up with the club's
       return this.warmShaders().then(() => { this.warming = false; this.busy = false; });
     }).catch((e) => {
       console.error(e);
@@ -261,6 +332,7 @@ export class ClubZone extends Special3D {
   update(dt) {
     if (this.warming) return;
     super.update(dt);
+    if (this.mood && this.scene) this.mood.update(dt);
   }
 
   // the camera isn't placed until the first real frame, so markers would land in the wrong spot
@@ -271,22 +343,15 @@ export class ClubZone extends Special3D {
     const c = this.club, S = this.scene;
     this.wallMat = null;
     S.add(c.scene);
-    S.fog = new THREE.Fog(this.V.bg, 30, 80);
-    S.add(new THREE.HemisphereLight(0xffffff, 0x3a3048, 1.1));
-    S.add(new THREE.AmbientLight(0xffffff, 0.35));
-    // The club's own strongest lights (from the .blend), as a handful of point lights.
-    this.plights = c.meta.lights.slice(0, 6).map((l) => {
-      const pl = new THREE.PointLight(new THREE.Color(...l.color), Math.min(30, Math.max(6, l.power / 30)), 22, 1.3);
-      pl.position.set(...l.pos);
-      S.add(pl);
-      return pl;
-    });
+    // lighting, haze, grade, light pools/beams, contact shadows, rim light (clubmood.js)
+    this.mood = new ClubMood(this, VENUES[this.zone.venue].club);
     this.placeClubGameplay();
   }
 
   detachShared() {
     activeId = null;
     urgentId = null; // back to flying: further loads are background preloads
+    if (this.mood) { this.mood.dispose(); this.mood = null; }
     if (this.club && this.scene) this.scene.remove(this.club.scene); // keep the cached building alive
     if (this.renderer) this.renderer.clippingPlanes = [];
   }
@@ -595,7 +660,7 @@ export class ClubZone extends Special3D {
     const ev = this.evidence.every((e) => e.done), cap = this.captives.every((c) => c.freed);
     const list = [{ t: 'Get a tip from the informant', done: this.hasCode, target: this.informant.mesh.position }];
     if (this.zone.boss) list.push({ t: `Take down ${this.zone.boss}`, done: this.bossDone, target: this.boss.position });
-    list.push({ t: `${this.theme.verb}${this.captives.length ? ` (${this.captives.filter((c) => c.freed).length}/${this.captives.length} freed)` : ''}`, done: ev && cap, target: (this.evidence.find((e) => !e.done) || {}).mesh?.position || (this.captives.find((c) => !c.freed) || {}).person?.position });
+    list.push({ t: `${this.theme.verb}${this.captives.length ? ` (${this.captives.filter((c) => c.freed).length}/${this.captives.length} captives freed)` : ''}`, done: ev && cap, target: (this.evidence.find((e) => !e.done) || {}).mesh?.position || (this.captives.find((c) => !c.freed) || {}).person?.position });
     list.push({ t: 'Escape through the entrance', done: false, target: this.exitRing.position, final: true });
     return list;
   }
@@ -625,6 +690,7 @@ export class ClubZone extends Special3D {
     if (!this._clip) this._clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), y);
     this._clip.constant = y;
     this.renderer.clippingPlanes = [this._clip];
+    if (this.mood) this.mood.cull(y);
   }
 
   render() {

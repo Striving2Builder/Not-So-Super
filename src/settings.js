@@ -8,14 +8,54 @@ const KEY = 'supergirl-settings';
  * What each profile changes. Every renderer reads these through quality().
  * clubMaterials: 'full' as exported · 'standard' drops glass/clearcoat/sheen (no extra render
  * pass) · 'lambert' simple lit materials, no normal/roughness maps (fewest, cheapest shaders).
+ * clubLights: real point lights that follow her round a premade club (the rest are faked).
+ * look3d (3D zones' comic look): 'full' ink outlines on every figure + vignette grade · 'lite' ink
+ * outlines on the heroine and procedural people only, no grade · 'min' heroine only, no light pools.
+ * flyDetail: flight-view extras (roof detail, ink rims, hero rim light, sway, grade, speed lines);
+ * flyTileRes: canvas pixels per city block in the flight view's baked ground tiles.
+ * flySpriteMax: cap (device px) on her flight sprite, which is otherwise rendered 1:1 with the screen.
+ * fly3dDpr: [open sky, street canyons] pixel-ratio caps for the 3D flight view (canyons are fill-rate bound).
+ * fly3dHero: [MSAA samples, density × the canvas's] for her own sharp pass in 3D flight (0 density = no pass).
+ * fly3dOut: the 3D flight canvas's pixel-ratio cap (her pass + overlay); the scene renders at fly3dDpr.
+ * fly3dAA: whole-frame anti-aliasing for 3D flight: 'msaa' | 'fxaa' | 'none'.
+ * fly3dSharp: 0..1 contrast-adaptive sharpening on the 3D flight scene's upscale to the canvas.
+ * clubLights: real (moving) point lights in a premade club.
+ * scanFilter: night-case detective vision darkens the 3D view with a CSS filter.
+ * nightlife (code-built clubs' show): 'full' haze, 4 moving heads, dense specks · 'lite' 2 heads, no
+ * haze · 'min' no lasers, sparse specks.
+ * (One line per area's keys, so each area's additions merge cleanly.)
  */
 export const PROFILES = {
   // desktop: everything on
-  high: { id: 'high', label: 'High', fpsCap: 0, dpr2d: 2, dpr3d: 1.6, heroSprite: 192, clubTex: 'full', clubCache: 3, clubMaterials: 'full' },
+  high: {
+    id: 'high', label: 'High', fpsCap: 0, dpr2d: 2, dpr3d: 1.6, heroSprite: 192,
+    clubTex: 'full', clubCache: 3, clubMaterials: 'full', clubLights: 5,
+    look3d: 'full',
+    nightlife: 'full',
+    flyDetail: true, flyTileRes: 144, flySpriteMax: 640, fly3dDpr: [1.25, 1.1], fly3dHero: [4, 1], fly3dAA: 'msaa', fly3dOut: 3, fly3dSharp: 0.6,
+    scanFilter: true,
+    brawlSprite: 256, brawlBakeMs: 900,
+  },
   // phones/tablets that keep up: full frame rate, but lite club textures (memory is what runs out)
-  balanced: { id: 'balanced', label: 'Balanced', fpsCap: 0, dpr2d: 2, dpr3d: 1.25, heroSprite: 192, clubTex: 'lite', clubCache: 1, clubMaterials: 'standard' },
+  balanced: {
+    id: 'balanced', label: 'Balanced', fpsCap: 0, dpr2d: 2, dpr3d: 1.25, heroSprite: 192,
+    clubTex: 'lite', clubCache: 1, clubMaterials: 'standard', clubLights: 3,
+    look3d: 'lite',
+    nightlife: 'lite',
+    flyDetail: true, flyTileRes: 144, flySpriteMax: 512, fly3dDpr: [1, 0.75], fly3dHero: [2, 1], fly3dAA: 'fxaa', fly3dOut: 1.5, fly3dSharp: 0.6,
+    scanFilter: true,
+    brawlSprite: 256, brawlBakeMs: 900,
+  },
   // older devices / low-power mode: 30 fps, 1× resolution, cheap club materials
-  saver: { id: 'saver', label: 'Battery saver', fpsCap: 30, dpr2d: 1, dpr3d: 1, heroSprite: 128, clubTex: 'lite', clubCache: 1, clubMaterials: 'lambert' },
+  saver: {
+    id: 'saver', label: 'Battery saver', fpsCap: 30, dpr2d: 1, dpr3d: 1, heroSprite: 128,
+    clubTex: 'lite', clubCache: 1, clubMaterials: 'lambert', clubLights: 2,
+    look3d: 'min',
+    nightlife: 'min',
+    flyDetail: false, flyTileRes: 96, flySpriteMax: 256, fly3dDpr: [0.85, 0.75], fly3dHero: [0, 1.5], fly3dAA: 'none', fly3dOut: 1.5, fly3dSharp: 0.5,
+    scanFilter: false,
+    brawlSprite: 180, brawlBakeMs: 250,
+  },
 };
 
 export const GRAPHICS_MODES = ['auto', 'high', 'saver'];

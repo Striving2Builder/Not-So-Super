@@ -12,6 +12,8 @@ import { pick, chance, $ } from './util.js';
 import { dialog, toast, banner, flash } from './ui.js';
 import { npcLook, portrait } from './art.js';
 import { sfx } from './sfx.js';
+import { quality } from './settings.js';
+import { NightScan } from './nightscan.js';
 import { randomPerson } from './casefile.js';
 
 const CONTAINERS = ['Locked Cash Box', 'Staff Locker', 'Sealed Crate', 'Floor Safe', 'DJ Flight Case'];
@@ -76,13 +78,28 @@ export class NightCase extends ClubZone {
 
   placeClueObject(clue, name) {
     const p = this.choose((q) => this.far(q) > 6, 5);
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.18, 0.28), new THREE.MeshLambertMaterial({ color: 0xffc040, emissive: 0x6a4a00 }));
-    mesh.position.set(p.x, p.y + 0.09, p.z);
+    // the evidence itself: a small bagged item catching the light
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.1, 0.26), new THREE.MeshLambertMaterial({ color: 0xd8c8a0, emissive: 0x3a2a08 }));
+    mesh.position.set(p.x - 0.15, p.y + 0.05, p.z); mesh.rotation.y = 0.5;
     this.scene.add(mesh);
+    const tent = evidenceTent(); tent.position.set(p.x + 0.3, p.y, p.z + 0.1); tent.rotation.y = -0.4; tent.scale.setScalar(1.8);
+    this.scene.add(tent);
+    // a soft column of light marks unsearched evidence from across the room
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.5, 3.2, 16, 1, true), new THREE.MeshBasicMaterial({ map: beamTex(), color: 0xffc040, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    beam.position.set(p.x, p.y + 1.6, p.z);
+    this.scene.add(beam);
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.55, 24), new THREE.MeshBasicMaterial({ color: 0xffc040, transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
     ring.rotation.x = -Math.PI / 2; ring.position.set(p.x, p.y + 0.03, p.z);
     this.scene.add(ring);
-    this.anims.push((t) => { ring.material.opacity = clue.found ? 0.12 : 0.35 + Math.sin(t * 4) * 0.2; });
+    let shown = 0;
+    const saver = quality().id === 'saver'; // additive column = overdraw; skip it on low-end
+    this.anims.push((t) => {
+      ring.material.opacity = clue.found ? 0.12 : 0.35 + Math.sin(t * 4) * 0.2;
+      beam.visible = !clue.found && !saver;
+      beam.material.opacity = 0.32 + Math.sin(t * 2.2) * 0.1;
+      const n = clue.found ? this.case.num(clue) : 0;
+      if (n !== shown) { shown = n; tent.userData.paint(n); }
+    });
     const o = { clue, name, pos: new THREE.Vector3(p.x, p.y, p.z) };
     this.clueObjs.push(o);
     this.addClueInteractions(o, () => this.searchClue(o));
@@ -95,9 +112,14 @@ export class NightCase extends ClubZone {
     box.position.set(p.x, p.y + 0.35, p.z);
     this.scene.add(box);
     this.colliders.push({ minX: p.x - 0.4, maxX: p.x + 0.4, minZ: p.z - 0.3, maxZ: p.z + 0.3, mesh: box });
-    const inner = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.15, 0.2), new THREE.MeshBasicMaterial({ color: 0x40e0ff, depthTest: false, transparent: true }));
+    // detective vision: the container's edges light up cyan, the thing inside glows orange
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), new THREE.LineBasicMaterial({ color: 0x8ff4ff, depthTest: false, transparent: true }));
+    edges.position.copy(box.position); edges.renderOrder = 9; edges.visible = false;
+    this.scene.add(edges); this.hidden.push(edges);
+    const inner = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.15, 0.2), new THREE.MeshBasicMaterial({ color: 0xffa630, depthTest: false, transparent: true }));
     inner.position.copy(box.position); inner.renderOrder = 10; inner.visible = false;
     this.scene.add(inner); this.hidden.push(inner);
+    this.anims.push((t) => { const k = 1 + Math.sin(t * 6) * 0.18; inner.scale.set(k, k, k); inner.rotation.y = t * 1.2; });
     const o = { clue, name, pos: new THREE.Vector3(p.x, p.y, p.z), inner };
     this.clueObjs.push(o);
     this.addClueInteractions(o, () => this.searchContainer(o));
@@ -136,15 +158,15 @@ export class NightCase extends ClubZone {
   }
 
   // ------------------------------------------------------------------ interactions
-  async revealClue(c, how) {
+  async revealClue(c, how, at = null) {
     if (!this.case.find(c)) return;
     sfx.pickup();
-    const s = this.screenOf(this.hero.position, 2);
+    const s = this.screenOf(at || this.hero.position, at ? 0.3 : 2);
     if (s) this.g.commentary.hit(s.x, s.y, { big: false });
-    await dialog({ title: 'CLUE FOUND', speaker: this.case.label(c), text: `${how}<br><br>${this.case.text(c)}<span class="hint">Tip: USE it again to photograph it for the Gazette.</span>` });
+    await this.case.reveal(c, how, 'Tip: USE it again to photograph it for the Gazette.', s);
   }
 
-  searchClue(o) { return this.revealClue(o.clue, `You examine the ${o.name.toLowerCase()}.`); }
+  searchClue(o) { return this.revealClue(o.clue, `You examine the ${o.name.toLowerCase()}.`, o.pos); }
 
   async searchContainer(o) {
     if (!this.xray) {
@@ -153,7 +175,7 @@ export class NightCase extends ClubZone {
     }
     o.inner.visible = false;
     this.hidden = this.hidden.filter((h) => h !== o.inner);
-    await this.revealClue(o.clue, `Your X-ray vision spots something hidden inside the ${o.name.toLowerCase()}. You pop it open.`);
+    await this.revealClue(o.clue, `Your X-ray vision spots something hidden inside the ${o.name.toLowerCase()}. You pop it open.`, o.pos);
   }
 
   async photographClue(o) {
@@ -239,6 +261,22 @@ export class NightCase extends ClubZone {
     unlockLead(this.g, 'Informant tip');
   }
 
+  // ------------------------------------------------------------------ detective vision
+  setXray(on) {
+    super.setXray(on);
+    if (this.xray || this.scan) (this.scan || (this.scan = new NightScan(this))).set(this.xray);
+  }
+
+  render() {
+    super.render();
+    if (this.scan) this.scan.draw(this.t);
+  }
+
+  exit() {
+    if (this.scan) { this.scan.dispose(); this.scan = null; }
+    super.exit();
+  }
+
   // ------------------------------------------------------------------ flow
   update(dt) {
     if (!this.done && this.scene && !this.busy) {
@@ -252,7 +290,7 @@ export class NightCase extends ClubZone {
   runBusy(fn) { this.busy = true; Promise.resolve(fn()).finally(() => { this.busy = false; }); }
 
   async accuse() {
-    const s = await this.case.accuse();
+    const s = await this.case.accuse(this.zone.name);
     if (s) this.finish(s);
   }
 
@@ -287,4 +325,43 @@ export class NightCase extends ClubZone {
     list.push({ t: `Accuse the culprit — SUSPECTS (${found}/3 clues)`, done: false, final: true, target: null });
     return list;
   }
+}
+
+// ------------------------------------------------------------------ evidence art (3D)
+
+/** A yellow A-frame evidence tent; userData.paint(n) writes its marker number ('?' for 0). */
+function evidenceTent() {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 64;
+  const g = c.getContext('2d');
+  const tex = new THREE.CanvasTexture(c);
+  const paint = (n) => {
+    g.fillStyle = '#ffd21a'; g.fillRect(0, 0, 64, 64);
+    g.strokeStyle = '#120a16'; g.lineWidth = 6; g.strokeRect(3, 3, 58, 58);
+    g.fillStyle = '#120a16'; g.font = '900 40px Impact, "Arial Black", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(n ? String(n) : '?', 32, 35);
+    tex.needsUpdate = true;
+  };
+  paint(0);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
+  const grp = new THREE.Group();
+  for (const s of [-1, 1]) {
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.3), mat);
+    face.position.set(0, 0.14, s * 0.06); face.rotation.x = s * 0.4;
+    grp.add(face);
+  }
+  grp.userData.paint = paint;
+  return grp;
+}
+
+let beamTexture = null;
+/** Vertical falloff for the light column: bright at the floor, gone at the top. */
+function beamTex() {
+  if (beamTexture) return beamTexture;
+  const c = document.createElement('canvas'); c.width = 4; c.height = 64;
+  const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 0, 64);
+  gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.7, 'rgba(255,255,255,.35)'); gr.addColorStop(1, 'rgba(255,255,255,1)');
+  g.fillStyle = gr; g.fillRect(0, 0, 4, 64);
+  beamTexture = new THREE.CanvasTexture(c);
+  return beamTexture;
 }

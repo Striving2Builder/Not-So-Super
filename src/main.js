@@ -10,12 +10,13 @@ import { ClubZone } from './clubzone.js';
 import { NightCase } from './nightcase.js';
 import { AsylumZone } from './asylum.js';
 import { showNewspaper } from './newspaper.js';
-import { HERO, DISTRICTS, THEMES, DEALS, BOSSES, VENUES } from './data.js';
+import { HERO, DISTRICTS, THEMES, DEALS, BOSSES, VENUES, BILLBOARDS } from './data.js';
 import { UI, dialog, toast } from './ui.js';
 import { sfx } from './sfx.js';
 import { $, pick, chance, fmtTime } from './util.js';
 import { loadHero } from './hero3d.js';
 import { loadEnemies } from './enemies.js';
+import { playScreenScene } from './cutscene.js';
 import { comic } from './comic.js';
 import { Commentary } from './commentary.js';
 import { settings, quality, autoTune } from './settings.js';
@@ -64,6 +65,7 @@ game.setMode = (name, p) => {
   game.input.reset();
   // speech bubbles and bursts point at things in the old scene; captions/headlines/spin survive
   document.querySelectorAll('#comic-layer .bubble, #comic-layer .pow').forEach((e) => e.remove());
+  $('toasts').innerHTML = ''; // the last mode's notices don't stack onto the new scene's intro
   $('prompt').classList.remove('on');
   $('marker').classList.remove('on');
   game.mode.enter(p || {});
@@ -99,6 +101,14 @@ game.endZone = async (zone, res) => {
     await showNewspaper({ ...victoryPaper(zone, res), rep: res.rep });
   } else if (res.outcome === 'lose') {
     st.addRep(res.rep, 'Mission failed');
+    if (zone.mode === 'brawl') {
+      // story beat: the city wakes up to her defeat on every billboard
+      const vice = BILLBOARDS.vice.includes(zone.district);
+      await playScreenScene({
+        screens: vice ? BILLBOARDS.rld : BILLBOARDS.downtown, folder: BILLBOARDS.folders, maxSecs: 14, holdSecs: 4,
+        caption: `By morning, every billboard in ${DISTRICTS[zone.district]?.name || 'the city'} is playing it…`,
+      });
+    }
     await dialog({ title: 'Mission failed', text: res.text || 'The crooks got away this time.' });
   } else {
     st.addRep(res.rep, 'Left the scene');
@@ -290,11 +300,19 @@ function updateHUD() {
   vb.style.width = st.vice + '%';
   ib.parentElement.classList.toggle('warn', st.intox >= INTOX_LIMIT);
   vb.parentElement.classList.toggle('warn', st.vice >= VICE_LIMIT);
+  // empty meters (and their labels) stay out of the way until they mean something
+  for (const [b, v] of [[ib, st.intox], [vb, st.vice]]) {
+    const row = b.parentElement, nil = v < 0.5;
+    if (row._nil !== nil) { row._nil = nil; row.classList.toggle('nil', nil); row.previousElementSibling.classList.toggle('nil', nil); }
+  }
   $('intox-tint').style.opacity = Math.max(0, (st.intox - 25) / 110);
   const lk = Object.entries(st.lockouts).map(([k, s]) => `<div>🔒 ${k} · ${fmtTime(s)}</div>`).join('');
   const el = $('lockouts');
   if (el._h !== lk) { el.innerHTML = lk; el._h = lk; }
 }
+
+// Objectives show just the current step on a phone; tap to see the whole list.
+$('objectives').addEventListener('click', () => $('objectives').classList.toggle('open'));
 
 let last = performance.now();
 function frame(now) {

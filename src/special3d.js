@@ -5,48 +5,24 @@ import * as THREE from 'three';
 import { quality } from './settings.js';
 import { HeroModel, heroReady } from './hero3d.js';
 import { Enemy, enemyReady, GUARD_KINDS, bossKind } from './enemies.js';
+import { updateNightlife, disposeNightlife } from './nightlife.js';
 import { VENUES, THEMES, INTOX_ITEMS, BAIT_ITEMS, HERO, FIRST_NAMES, LAST_NAMES } from './data.js';
 import { pick, shuffle, chance, clamp, rand, wobble, $ } from './util.js';
-import { dialog, toast, banner, qte, keypad, flash } from './ui.js';
-import { drawEmblem, portrait, npcLook } from './art.js';
+import { dialog, toast, banner, qte, keypad, flash, avoidHud } from './ui.js';
+import { portrait, npcLook } from './art.js';
 import { sfx } from './sfx.js';
+import { SPEED, GUARD_RANGE, GUARD_FOV, lam, basic } from './zonekit.js';
+import { cameraMethods } from './camera3d.js';
+import { guardMethods } from './guards3d.js';
+import { peopleMethods } from './people3d.js';
+import { roomMethods } from './rooms3d.js';
+import { inkCharacter, BlobShadows, bakeStatic, gradeQuad, comicScene, inkEdges, groundBackdrop } from './look3d.js';
+import { venueMats, VENUE_KINDS } from './venues3d.js';
 
-const WALL_H = 3.4;
-const SPEED = 5.2;
-const GUARD_RANGE = 7.5;
-const GUARD_FOV = 1.05;
+export { CAM_DIST, CAM_PITCHES } from './zonekit.js';
 
-const lam = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
-const basic = (c, extra = {}) => new THREE.MeshBasicMaterial({ color: c, ...extra });
-
-function segHitsBox(ax, az, bx, bz, c) {
-  let t0 = 0, t1 = 1;
-  const dx = bx - ax, dz = bz - az;
-  for (const [p, d, mn, mx] of [[ax, dx, c.minX, c.maxX], [az, dz, c.minZ, c.maxZ]]) {
-    if (Math.abs(d) < 1e-9) { if (p < mn || p > mx) return false; }
-    else {
-      let ta = (mn - p) / d, tb = (mx - p) / d;
-      if (ta > tb) [ta, tb] = [tb, ta];
-      t0 = Math.max(t0, ta); t1 = Math.min(t1, tb);
-      if (t0 > t1) return false;
-    }
-  }
-  return true;
-}
-
-// Third-person camera: distance behind her, and the pitches it may use (the first is the normal view).
-export const CAM_DIST = 7.6;
-export const CAM_PITCHES = [0.86, 1.05, 1.25, 1.42];
-
-function canvasTex(w, h, draw, repeat) {
-  const c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  draw(c.getContext('2d'), w, h);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat[0], repeat[1]); }
-  return t;
-}
+// The code-built venues' floor plan bounds (main hall, back room, office; see rooms3d.js).
+const FOOTPRINT = { min: { x: -15, z: -22 }, max: { x: 25, z: 12 } };
 
 export class Special3D {
   constructor(g) { this.g = g; }
@@ -63,6 +39,16 @@ export class Special3D {
     }
     this.renderer = Special3D.sharedRenderer;
     this.resize();
+  }
+
+  /**
+   * Tone mapping + exposure for this zone (the renderer is shared, so it's set on every entry).
+   * Filmic contrast with saturated pulp colours; zones may override.
+   */
+  applyLook() {
+    const r = this.renderer;
+    r.toneMapping = THREE.ACESFilmicToneMapping;
+    r.toneMappingExposure = this.exposure ?? 1.1;
   }
 
   resize() {
@@ -85,14 +71,23 @@ export class Special3D {
       code: String(1000 + Math.floor(Math.random() * 9000)),
       colliders: [], inter: [], guards: [], anims: [], hidden: [], itemSpots: [], evidence: [], captives: [], cast: [],
       // per-zone references: this object is reused for every zone, so nothing may carry over
-      boss: null, informant: null, near: null, _lastGood: null,
+      boss: null, informant: null, near: null, _lastGood: null, nl: null, castRim: null, backdrop: null, particles: [],
     });
     const S = (this.scene = new THREE.Scene());
     S.background = new THREE.Color(this.V.bg);
     S.fog = new THREE.Fog(this.V.bg, 24, 62);
     this.cam = new THREE.PerspectiveCamera(58, g.w / g.h, 0.1, 160);
     this.resize();
+    this.applyLook();
+    this.shadows = new BlobShadows(S);
+    // Key light: gives the cel shading a direction to step along (characters read as solid forms).
+    this.key = new THREE.DirectionalLight(0xfff1dc, this.keyK ?? 1.1);
+    this.key.position.set(-6, 14, 8);
+    S.add(this.key);
+    this.particles = [];
     this.buildWorld();
+    this.finishLook();
+    if (quality().look3d === 'full') { this.grade = gradeQuad(this.gradeTint ?? 0x07040c, this.gradeK ?? 0.6); S.add(this.grade); }
     this.heroModel = heroReady() ? new HeroModel() : null;
     this.keepAnimating = false;
     this.camPitch = null; // first frame places the camera directly (no sweep in through walls)
@@ -101,7 +96,10 @@ export class Special3D {
       this.hero = new THREE.Group();
       this.hero.add(this.heroModel.root);
       this.heroClip('land', 1.4); // she arrives with a superhero landing
-    } else this.hero = this.makeHero();
+      inkCharacter(this.heroModel.root, { rim: 0xfff4d0, skip: [this.heroModel.cape.mesh] });
+      inkCharacter(this.heroModel.cape.mesh, { rim: 0xfff4d0, outline: false });
+    } else this.hero = inkCharacter(this.makeHero());
+    this.shadows.track(this.hero, 0.5);
     // Guards can't spot her until she's had 3 s on her feet (after the landing / getting-up clip).
     this.grace = this.landT + 3;
     const sp = this.spawnPoint();
@@ -137,39 +135,43 @@ export class Special3D {
 
   // ---- overridable world hooks (ClubZone replaces these with a premade building)
   buildWorld() {
-    this.wallMat = this.V.kind === 'penthouse'
+    const k = this.V.kind;
+    this.vmats = VENUE_KINDS.has(k) ? venueMats(this, k) : null;
+    this.wallMat = this.vmats ? this.vmats.wall : k === 'penthouse'
       ? lam(0x9fd0ff, { transparent: true, opacity: 0.28 })
       : lam(this.V.wall);
     this.wallBaseOpacity = this.wallMat.opacity;
     this.buildLights();
+    // our own venues: everything built from here to placeGameplay() is merged into a few meshes
+    this._static = this.vmats ? [] : null;
     this.buildRooms();
     this.decorate();
+    if (this._static) { bakeStatic(this.scene, this._static); this._static = null; }
     this.placeGameplay();
   }
 
-  spawnPoint() { return { pos: new THREE.Vector3(0, 0, 10), heading: Math.PI }; }
-
-  /** How far the camera may sit from her along `off` (club raids shorten it past obstacles). */
-  cameraReach(h, off) { return off.length(); }
-
-  /** Camera offset from her at a given pitch (radians above horizontal), behind her along yaw. */
-  cameraOffset(pitch, dist = CAM_DIST) {
-    return new THREE.Vector3(Math.sin(this.yaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist, Math.cos(this.yaw) * Math.cos(pitch) * dist);
-  }
+  // (far enough in that the camera behind her hangs over the entrance, not the street)
+  spawnPoint() { return { pos: new THREE.Vector3(0, 0, 8.2), heading: Math.PI }; }
 
   /**
-   * The lowest camera pitch with a clear view of her. When a wall blocks the usual angle the
-   * camera swings up toward top-down (club ceilings are sliced away above her head, so from
-   * overhead the view is nearly always clear) instead of squashing in against her back.
+   * The shared comic finish for whatever buildWorld() made (own venues, premade clubs, nightlife):
+   * cel bands + halftone in the shade on every lit material, ink lines along a prebuilt
+   * building's hard edges (once per cached building), and ground out to the fog so no room
+   * floats in the void. Zones tune it with this.backdrop = false | { color, y }.
    */
-  cameraPitch(h) {
-    let best = CAM_PITCHES[0], bestReach = -1;
-    for (const p of CAM_PITCHES) {
-      const reach = this.cameraReach(h, this.cameraOffset(p));
-      if (reach >= CAM_DIST * 0.75) return p;
-      if (reach > bestReach) { bestReach = reach; best = p; }
-    }
-    return best;
+  finishLook() {
+    const S = this.scene;
+    comicScene(S);
+    if (this.club && this.club.scene) inkEdges(this.club.scene);
+    const bd = this.backdrop ?? (this.vmats && this.vmats.backdrop);
+    if (bd === false) return;
+    const bg = S.background && S.background.isColor ? S.background.clone() : new THREE.Color(0x101014);
+    const color = bd && bd.color !== undefined ? new THREE.Color(bd.color) : bg.clone().lerp(new THREE.Color(0x3a3a44), 0.25);
+    const y = bd && bd.y !== undefined ? bd.y : this.club && this.club.box ? this.club.box.min.y - 0.06 : -0.04;
+    // leave out what the building's own floors cover (inset so no seam shows at the walls)
+    const fp = this.club && this.club.box ? this.club.box : this.vmats ? FOOTPRINT : null;
+    const hole = fp ? [fp.min.x + 0.6, fp.max.x - 0.6, fp.min.z + 0.6, fp.max.z - 0.6] : null;
+    S.add(groundBackdrop(color, y, { hole }));
   }
 
   /** Should the boss confrontation start now? */
@@ -186,6 +188,7 @@ export class Special3D {
     $('xray-tint').classList.remove('on');
     $('objectives').classList.remove('on');
     $('prompt').classList.remove('on');
+    disposeNightlife(this);
     if (this.scene) {
       this.scene.traverse((o) => {
         if (o.geometry) o.geometry.dispose();
@@ -196,316 +199,15 @@ export class Special3D {
     this.renderer && this.renderer.renderLists.dispose();
   }
 
-  // ------------------------------------------------------------------ building
-  box(w, h, d, x, y, z, mat, { collide = true, wall = false } = {}) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-    m.position.set(x, y, z);
-    this.scene.add(m);
-    if (collide) this.colliders.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, wall, mesh: m });
-    return m;
-  }
-
-  cyl(rt, rb, h, x, y, z, mat, collide = false) {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, 16), mat);
-    m.position.set(x, y, z);
-    this.scene.add(m);
-    if (collide) this.colliders.push({ minX: x - rb, maxX: x + rb, minZ: z - rb, maxZ: z + rb, mesh: m });
-    return m;
-  }
-
-  wall(x1, z1, x2, z2) {
-    const t = 0.4;
-    const w = Math.abs(x2 - x1) || t, d = Math.abs(z2 - z1) || t;
-    this.box(w, WALL_H, d, (x1 + x2) / 2, WALL_H / 2, (z1 + z2) / 2, this.wallMat, { wall: true });
-  }
-
-  buildLights() {
-    const S = this.scene, V = this.V;
-    const bright = V.kind === 'penthouse';
-    S.add(new THREE.HemisphereLight(0xffffff, new THREE.Color(V.floor), bright ? 0.55 : 1.0));
-    S.add(new THREE.AmbientLight(0xffffff, bright ? 0.15 : 0.35));
-    const pos = [[-8, 3, -3], [8, 3, -3], [0, 3, 7], [0, 3, -17]];
-    this.plights = pos.map((p, i) => {
-      const l = new THREE.PointLight(V.lights[i % V.lights.length], bright ? 14 : 30, 26, 1.3);
-      l.position.set(...p);
-      S.add(l);
-      return l;
-    });
-    const office = new THREE.PointLight(0xfff0d0, 18, 14, 1.3);
-    office.position.set(20, 3, 0);
-    S.add(office);
-  }
-
-  buildRooms() {
-    const V = this.V;
-    const tile = V.kind === 'warehouse' || V.kind === 'lair' ? 'concrete' : V.kind === 'penthouse' ? 'marble' : 'tile';
-    const floorTex = canvasTex(256, 256, (c, w, h) => {
-      c.fillStyle = V.floor; c.fillRect(0, 0, w, h);
-      if (tile === 'concrete') {
-        for (let i = 0; i < 400; i++) { c.fillStyle = `rgba(${Math.random() < 0.5 ? '0,0,0' : '255,255,255'},.05)`; c.fillRect(Math.random() * w, Math.random() * h, 4, 4); }
-        c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = 3; c.strokeRect(0, 0, w, h);
-      } else if (tile === 'marble') {
-        c.strokeStyle = 'rgba(120,110,100,.35)'; c.lineWidth = 2;
-        for (let i = 0; i < 6; i++) { c.beginPath(); c.moveTo(Math.random() * w, 0); c.bezierCurveTo(Math.random() * w, h / 3, Math.random() * w, (2 * h) / 3, Math.random() * w, h); c.stroke(); }
-        c.strokeStyle = 'rgba(0,0,0,.2)'; c.strokeRect(0, 0, w, h);
-      } else {
-        c.fillStyle = 'rgba(255,255,255,.05)'; c.fillRect(0, 0, w / 2, h / 2); c.fillRect(w / 2, h / 2, w / 2, h / 2);
-        c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = 2; c.strokeRect(0, 0, w, h);
-      }
-    }, [8, 8]);
-    const floorMat = lam(0xffffff, { map: floorTex });
-    const floor = (w, d, x, z) => {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), floorMat);
-      m.rotation.x = -Math.PI / 2; m.position.set(x, 0, z);
-      this.scene.add(m);
-    };
-    floor(30, 24, 0, 0);
-    floor(12, 10, 0, -17);
-    floor(10, 10, 20, 0);
-    floor(4.4, 3, 0, 13); // entrance mat
-    // main hall
-    this.wall(-15, -12, -1.6, -12); this.wall(1.6, -12, 15, -12);
-    this.wall(-15, 12, -2.2, 12); this.wall(2.2, 12, 15, 12);
-    this.wall(-15, -12, -15, 12);
-    this.wall(15, -12, 15, -1.8); this.wall(15, 1.8, 15, 12);
-    // back room
-    this.wall(-6, -22, -6, -12); this.wall(6, -22, 6, -12); this.wall(-6, -22, 6, -22);
-    // office
-    this.wall(15, -5, 25, -5); this.wall(15, 5, 25, 5); this.wall(25, -5, 25, 5);
-    // entrance blocker (invisible) — you leave by finishing or aborting
-    this.colliders.push({ minX: -2.2, maxX: 2.2, minZ: 13.6, maxZ: 14.2 });
-    // security door + keypad
-    this.door = this.box(3.2, 3.2, 0.3, 0, 1.6, -12, lam(0x5a6270));
-    this.doorCol = this.colliders[this.colliders.length - 1];
-    const stripe = this.box(3.2, 0.25, 0.32, 0, 2.6, -12, basic(0xf2c21a), { collide: false });
-    this.door.add(stripe); stripe.position.set(0, 1, 0);
-    this.keypadMesh = this.box(0.35, 0.5, 0.12, 2.1, 1.45, -11.75, basic(0x39ff6a), { collide: false });
-    // exit ring
-    this.exitRing = new THREE.Mesh(new THREE.RingGeometry(1.1, 1.5, 32), basic(0x3ee08a, { transparent: true, opacity: 0.25, side: THREE.DoubleSide }));
-    this.exitRing.rotation.x = -Math.PI / 2; this.exitRing.position.set(0, 0.03, 10.8);
-    this.scene.add(this.exitRing);
-    // venue sign above the door
-    const sign = canvasTex(512, 96, (c, w, h) => {
-      c.fillStyle = '#000'; c.fillRect(0, 0, w, h);
-      c.font = '900 56px system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.shadowColor = '#' + this.V.lights[0].toString(16).padStart(6, '0'); c.shadowBlur = 20;
-      c.fillStyle = c.shadowColor; c.fillText('PRIVATE — STAFF ONLY', w / 2, h / 2);
-    });
-    const sm = new THREE.Mesh(new THREE.PlaneGeometry(4, 0.75), new THREE.MeshBasicMaterial({ map: sign }));
-    sm.position.set(0, 3.0, -11.78); this.scene.add(sm);
-  }
-
-  decorate() {
-    const V = this.V, k = V.kind;
-    const spot = (x, y, z) => this.itemSpots.push(new THREE.Vector3(x, y, z));
-    const table = (x, z, top = 0x3a2a1a) => {
-      this.cyl(0.6, 0.6, 0.08, x, 0.78, z, lam(top));
-      this.cyl(0.08, 0.1, 0.78, x, 0.39, z, lam(0x222222), true);
-      spot(x, 0.86, z);
-    };
-    const sofa = (x, z, w, rot, col) => {
-      const m = this.box(rot ? 1 : w, 0.6, rot ? w : 1, x, 0.3, z, lam(col));
-      const back = this.box(rot ? 0.3 : w, 0.7, rot ? w : 0.3, x + (rot ? rot * 0.35 : 0), 0.85, z + (rot ? 0 : 0.35), lam(col), { collide: false });
-      return [m, back];
-    };
-    const bar = (x, z, len, vertical) => {
-      this.box(vertical ? 1.2 : len, 1.1, vertical ? len : 1.2, x, 0.55, z, lam(0x3a1a0a));
-      this.box(vertical ? 1.4 : len + 0.2, 0.08, vertical ? len + 0.2 : 1.4, x, 1.12, z, lam(0x8a5a2a), { collide: false });
-      for (let i = 0; i < 8; i++) {
-        const t = (i / 7 - 0.5) * (len - 1);
-        const bx = vertical ? x - 0.9 : x + t, bz = vertical ? z + t : z - 0.9;
-        this.cyl(0.06, 0.06, 0.35, bx, 1.35, bz, basic([0x3aff8a, 0xffc040, 0xff5a5a, 0x5ab0ff][i % 4]));
-      }
-      for (let i = 0; i < 3; i++) spot(vertical ? x : x + (i - 1) * len * 0.3, 1.2, vertical ? z + (i - 1) * len * 0.3 : z);
-    };
-
-    if (k === 'club' || k === 'gentlemens' || k === 'redlight') {
-      bar(-13, -1, 11, true);
-      if (k === 'club') {
-        this.tiles = [];
-        for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) {
-          const m = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 1.15), basic(0xffffff));
-          m.rotation.x = -Math.PI / 2; m.position.set(-3 + i * 1.2 + 0.6 - 0.6, 0.02, -2.5 + j * 1.2);
-          this.scene.add(m); this.tiles.push(m);
-        }
-        this.ball = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 10), lam(0xdddddd, { emissive: 0x555555 }));
-        this.ball.position.set(0, 3.1, 0.5); this.scene.add(this.ball);
-        this.box(3.5, 1.2, 1.4, -8, 0.6, -10.2, lam(0x222233));
-        this.box(3.3, 0.1, 1.2, -8, 1.25, -10.2, basic(0x27e0ff), { collide: false });
-        for (const x of [-10.5, -5.5]) this.box(0.9, 2, 0.9, x, 1, -10.8, lam(0x111111));
-      }
-      if (k === 'gentlemens') {
-        this.box(4, 0.5, 8, 11.5, 0.25, -3, lam(0x3a1a2a));
-        for (const z of [-7.2, 1.2]) this.box(0.3, 3.2, 1.2, 13.2, 1.6, z, lam(0xa0204a), { collide: false });
-        this.cyl(0.06, 0.06, 3, 11.5, 1.5, -3, lam(0xdddddd));
-        for (let i = 0; i < 4; i++) table(3 + (i % 2) * 3.5, -6 + Math.floor(i / 2) * 5, 0x1a1a1a);
-      }
-      if (k === 'redlight') {
-        for (let i = 0; i < 6; i++) {
-          const x = -12 + i * 4.8;
-          this.box(1.6, 3.2, 0.2, x, 1.6, 11.7, lam(0xb01030), { collide: false });
-          const lan = new THREE.Mesh(new THREE.SphereGeometry(0.25, 10, 8), basic(0xff3355));
-          lan.position.set(x, 2.8, 10.5); this.scene.add(lan);
-        }
-        for (let i = 0; i < 3; i++) table(4 + i * 3.2, -6, 0x5a0a1a);
-      }
-      sofa(12, 7, 5, -1, k === 'redlight' ? 0x8a1a2a : 0x4a2a6a);
-      sofa(12, -7, 4, -1, k === 'redlight' ? 0x8a1a2a : 0x4a2a6a);
-      for (let i = 0; i < 3; i++) table(-5 + i * 5, 7);
-    } else if (k === 'warehouse') {
-      const r = () => rand(-0.3, 0.3);
-      const crates = [[-11, -8], [-11, -5], [-8, -8], [10, 8], [10, 5], [7, 9], [-10, 7], [-7, 8], [11, -8], [8, -6], [4, 7], [-4, -7]];
-      for (const [x, z] of crates) {
-        const h = chance(0.5) ? 2 : 1;
-        for (let i = 0; i < h; i++) this.box(1.4, 1.2, 1.4, x + r(), 0.6 + i * 1.2, z + r(), lam([0x8a6a3a, 0x7a5a2a, 0x3a5a3a][(x + z + i) & 1 ? 0 : 2]), { collide: i === 0 });
-        spot(x, h * 1.2 + 0.02, z);
-      }
-      for (const x of [-3, 3]) {
-        this.box(0.3, 3, 6, x, 1.5, 1, lam(0x3a4a8a));
-        for (let y = 0.4; y < 3; y += 0.9) this.box(1.3, 0.06, 6, x, y, 1, lam(0xd07a2a), { collide: false });
-      }
-      this.box(1.6, 1.4, 2.6, 7, 0.7, -2, lam(0xf2c21a));
-      this.box(0.1, 2.4, 1.2, 7, 1.2, -3.4, lam(0x333333), { collide: false });
-    } else if (k === 'penthouse') {
-      const lights = new THREE.BufferGeometry();
-      const pts = [];
-      for (let i = 0; i < 700; i++) {
-        const a = Math.random() * Math.PI * 2, d = rand(30, 55);
-        pts.push(Math.cos(a) * d, rand(-18, 6), Math.sin(a) * d);
-      }
-      lights.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-      this.scene.add(new THREE.Points(lights, new THREE.PointsMaterial({ color: 0xffd98a, size: 0.35 })));
-      this.box(8, 0.03, 5, 4, 0.02, 3, lam(0x7a2a2a), { collide: false });
-      sofa(4, 5.8, 5, 0, 0xe8e0d0);
-      sofa(7.5, 3, 4, -1, 0xe8e0d0);
-      table(4, 3, 0xffffff);
-      this.box(2.2, 1, 1.4, -9, 0.5, 6, lam(0x111111));
-      this.box(2.2, 0.06, 1.6, -9, 1.2, 6.3, lam(0x111111), { collide: false });
-      bar(-12.5, -5, 7, true);
-      table(9, -7, 0xffffff); table(-4, -6, 0xffffff);
-    } else if (k === 'lair') {
-      for (let x = -13; x <= 13; x += 2.2) if (Math.abs(x) > 2) this.cyl(0.12, 0.12, 3.2, x, 1.6, -11.4, basic(0x2a8a3a));
-      for (let z = -10; z <= 10; z += 2.5) this.cyl(0.12, 0.12, 3.2, -14.4, 1.6, z, basic(0x2a8a3a));
-      for (let i = 0; i < 3; i++) {
-        this.box(2.5, 1.3, 1, -9 + i * 3, 0.65, -9.8, lam(0x2a322c));
-        this.box(2.3, 0.9, 0.05, -9 + i * 3, 1.8, -10.2, basic(0x39ff6a), { collide: false });
-        spot(-9 + i * 3, 1.32, -9.6);
-      }
-      for (const [x, z] of [[10, 6], [10, -4], [-10, 6]]) {
-        this.cyl(1, 1, 3, x, 1.5, z, lam(0x39ff6a, { transparent: true, opacity: 0.45, emissive: 0x0a3a14 }), true);
-        this.cyl(1.05, 1.05, 0.2, x, 3.05, z, lam(0x333333));
-      }
-      const screen = canvasTex(256, 128, (c, w, h) => { c.fillStyle = '#021'; c.fillRect(0, 0, w, h); c.fillStyle = '#39ff6a'; c.font = '900 80px Georgia'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('☠', w / 2, h / 2); });
-      const sm = new THREE.Mesh(new THREE.PlaneGeometry(6, 3), new THREE.MeshBasicMaterial({ map: screen }));
-      sm.position.set(0, 2.4, 11.75); sm.rotation.y = Math.PI; this.scene.add(sm);
-      for (let i = 0; i < 3; i++) table(-2 + i * 4, 4, 0x2a322c);
-    } else if (k === 'casino') {
-      for (let i = 0; i < 4; i++) {
-        const x = -7 + (i % 2) * 8, z = -5 + Math.floor(i / 2) * 8;
-        this.cyl(1.5, 1.5, 0.1, x, 0.85, z, lam(0x1a6a3a));
-        this.cyl(0.25, 0.3, 0.85, x, 0.42, z, lam(0x3a2410), true);
-        this.colliders.push({ minX: x - 1.5, maxX: x + 1.5, minZ: z - 1.5, maxZ: z + 1.5 });
-        spot(x + 0.6, 0.92, z);
-      }
-      for (let i = 0; i < 6; i++) {
-        this.box(0.9, 1.9, 0.8, -13.6, 0.95, -8 + i * 2, lam(0x8a1a2a));
-        this.box(0.05, 0.6, 0.6, -13.1, 1.3, -8 + i * 2, basic(0xffd84d), { collide: false });
-      }
-      const ch = new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 8), basic(0xfff1c0));
-      ch.position.set(0, 3.1, 0); this.scene.add(ch);
-      bar(11, 4, 7, true);
-    }
-    // everywhere: some plants/columns for cover
-    for (const [x, z] of [[-14, 11], [14, 11], [-14, -11], [14, -11]]) this.cyl(0.35, 0.35, WALL_H, x, WALL_H / 2, z, lam(0x333333), true);
-    // office furniture
-    this.box(2.6, 0.8, 1.2, 20, 0.4, 0, lam(0x5a3a1a));
-    this.box(0.5, 0.35, 0.05, 20, 1.0, -0.3, basic(0x6ab0ff), { collide: false });
-    spot(20.8, 0.82, 0.2);
-    // back room
-    this.box(12, 0.02, 10, 0, 0.01, -17, lam(0x222222, { transparent: true, opacity: 0.5 }), { collide: false });
-  }
-
-  // ------------------------------------------------------------------ characters
-  emblemTex() {
-    return canvasTex(128, 128, (c) => { c.translate(64, 60); drawEmblem(c, 44); });
-  }
-
-  makeHero() {
-    const G = new THREE.Group();
-    const skin = lam(0xf6d1b3), blue = lam(0x7ec8f4), red = lam(0xd82630), boots = lam(0xc91f2b), gold = lam(0xf7d31e), hair = lam(0xf5d442);
-    const add = (geo, mat, x, y, z, parent = G) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
-    const leg = (x) => {
-      const p = new THREE.Group(); p.position.set(x, 0.92, 0); G.add(p);
-      add(new THREE.CylinderGeometry(0.085, 0.075, 0.44, 10), skin, 0, -0.22, 0, p);
-      add(new THREE.CylinderGeometry(0.08, 0.065, 0.48, 10), boots, 0, -0.67, 0, p);
-      add(new THREE.BoxGeometry(0.12, 0.07, 0.2), boots, 0, -0.9, 0.05, p);
-      return p;
-    };
-    this.legL = leg(-0.1); this.legR = leg(0.1);
-    add(new THREE.CylinderGeometry(0.19, 0.28, 0.22, 16), red, 0, 0.93, 0);
-    add(new THREE.CylinderGeometry(0.195, 0.195, 0.06, 16), gold, 0, 1.05, 0);
-    const torso = add(new THREE.CylinderGeometry(0.2, 0.16, 0.52, 14), blue, 0, 1.33, 0);
-    torso.scale.z = 0.8;
-    add(new THREE.SphereGeometry(0.085, 10, 8), blue, -0.075, 1.43, 0.1);
-    add(new THREE.SphereGeometry(0.085, 10, 8), blue, 0.075, 1.43, 0.1);
-    const em = add(new THREE.PlaneGeometry(0.2, 0.2), new THREE.MeshBasicMaterial({ map: this.emblemTex(), transparent: true }), 0, 1.42, 0.19);
-    em.rotation.x = -0.1;
-    const arm = (x) => {
-      const p = new THREE.Group(); p.position.set(x, 1.55, 0); G.add(p);
-      add(new THREE.CylinderGeometry(0.055, 0.05, 0.56, 8), blue, 0, -0.28, 0, p);
-      add(new THREE.SphereGeometry(0.058, 8, 6), skin, 0, -0.58, 0, p);
-      return p;
-    };
-    this.armL = arm(-0.26); this.armR = arm(0.26);
-    add(new THREE.CylinderGeometry(0.05, 0.055, 0.12, 8), skin, 0, 1.63, 0);
-    add(new THREE.SphereGeometry(0.14, 14, 12), skin, 0, 1.78, 0.01);
-    const h1 = add(new THREE.SphereGeometry(0.155, 14, 12), hair, 0, 1.81, -0.025); h1.scale.set(1, 0.95, 1);
-    add(new THREE.BoxGeometry(0.28, 0.42, 0.08), hair, 0, 1.6, -0.13);
-    for (const x of [-0.05, 0.05]) add(new THREE.SphereGeometry(0.018, 6, 4), lam(0x1a4aa8), x, 1.79, 0.135);
-    this.cape = new THREE.Group(); this.cape.position.set(0, 1.56, -0.17); G.add(this.cape);
-    add(new THREE.PlaneGeometry(0.52, 1.0), lam(0xc11d27, { side: THREE.DoubleSide }), 0, -0.5, 0, this.cape);
-    return G;
-  }
-
-  makeNPC(look, size = 1) {
-    const G = new THREE.Group();
-    const col = (c) => parseInt(c.slice(1), 16);
-    const skin = lam(col(look.skin)), top = lam(col(look.top)), bottom = lam(col(look.bottom || look.skirt || '#333333'));
-    const add = (geo, mat, x, y, z, p = G) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); p.add(m); return m; };
-    G.legs = [];
-    for (const x of [-0.12, 0.12]) {
-      const p = new THREE.Group(); p.position.set(x, 0.9, 0); G.add(p);
-      add(new THREE.CylinderGeometry(0.09, 0.08, 0.9, 8), look.skirt ? skin : bottom, 0, -0.45, 0, p);
-      G.legs.push(p);
-    }
-    add(new THREE.BoxGeometry(0.5, 0.65, 0.3), top, 0, 1.25, 0);
-    G.arms = [];
-    for (const x of [-0.31, 0.31]) {
-      const p = new THREE.Group(); p.position.set(x, 1.52, 0); G.add(p);
-      add(new THREE.CylinderGeometry(0.06, 0.055, 0.6, 8), top, 0, -0.3, 0, p);
-      add(new THREE.SphereGeometry(0.06, 8, 6), skin, 0, -0.62, 0, p);
-      G.arms.push(p);
-    }
-    add(new THREE.SphereGeometry(0.15, 12, 10), skin, 0, 1.77, 0);
-    if (look.hairStyle !== 'bald') {
-      const hm = add(new THREE.SphereGeometry(0.16, 12, 10, 0, Math.PI * 2, 0, Math.PI / 2), lam(col(look.hair)), 0, 1.79, -0.01);
-      if (look.hairStyle === 'long') add(new THREE.BoxGeometry(0.3, 0.4, 0.08), lam(col(look.hair)), 0, 1.6, -0.13);
-      hm.scale.y = 1.1;
-    }
-    if (look.shades) add(new THREE.BoxGeometry(0.26, 0.06, 0.04), lam(0x050505), 0, 1.8, 0.14);
-    else for (const x of [-0.05, 0.05]) add(new THREE.SphereGeometry(0.02, 6, 4), lam(0x111111), x, 1.79, 0.14);
-    if (look.tie) add(new THREE.BoxGeometry(0.06, 0.4, 0.02), lam(col(look.tie)), 0, 1.3, 0.16);
-    G.scale.setScalar(size * (look.size || 1));
-    this.scene.add(G);
-    return G;
-  }
-
   /** A cast enemy model (enemies.js) once it has loaded, else the procedural NPC in `look`. */
   makeCharacter(kind, look, scale = 1) {
     if (!enemyReady(kind)) return this.makeNPC(look);
     const e = new Enemy(kind, scale);
+    // ink hulls on the skinned cast double their vertex skinning: only on the High profile
+    inkCharacter(e.model, { rim: this.castRim ?? 0xffd6a0, outline: quality().look3d === 'full' });
     this.scene.add(e.root);
     this.cast.push(e);
+    this.shadows && this.shadows.track(e.root, 0.5 * scale);
     return e.root;
   }
 
@@ -864,7 +566,7 @@ export class Special3D {
       { t: 'Get into the back room', done: this.doorOpen, target: new THREE.Vector3(2.1, 0, -11) },
     ];
     if (this.zone.boss) list.push({ t: `Take down ${this.zone.boss}`, done: this.bossDone, target: this.boss.position });
-    list.push({ t: `${this.theme.verb}${this.captives.length ? ` (${this.captives.filter((c) => c.freed).length}/${this.captives.length} freed)` : ''}`, done: ev && cap, target: (this.evidence.find((e) => !e.done) || {}).mesh?.position || (this.captives.find((c) => !c.freed) || {}).person?.position });
+    list.push({ t: `${this.theme.verb}${this.captives.length ? ` (${this.captives.filter((c) => c.freed).length}/${this.captives.length} captives freed)` : ''}`, done: ev && cap, target: (this.evidence.find((e) => !e.done) || {}).mesh?.position || (this.captives.find((c) => !c.freed) || {}).person?.position });
     list.push({ t: 'Escape through the front entrance', done: false, target: this.exitRing.position, final: true });
     return list;
   }
@@ -903,6 +605,8 @@ export class Special3D {
     this.collide(h.position, 0.38);
     this.punchT = Math.max(0, this.punchT - dt);
     this.animateHero(dt, mag > 0.05 && !this.busy && this.landT <= 0 ? mag : 0);
+    this.frameDt = dt;
+    this.moving = (this.moving || 0) + ((mag > 0.05 && !this.busy ? mag : 0) - (this.moving || 0)) * Math.min(1, dt * 3);
 
     // X-ray
     if (inp.pressed('xray')) this.setXray(!this.xray);
@@ -943,9 +647,7 @@ export class Special3D {
     if (done && Math.hypot(h.position.x - ex.x, h.position.z - ex.z) < 1.4) this.win();
 
     for (const f of this.anims) f(this.t, dt);
-    if (this.tiles) this.tiles.forEach((m, i) => m.material.color.setHSL(((i * 0.13 + this.t * 0.3) % 1), 0.9, 0.5 + 0.2 * Math.sin(this.t * 6 + i)));
-    if (this.ball) this.ball.rotation.y += dt;
-    this.plights.forEach((l, i) => { if (this.V.kind === 'club' || this.V.kind === 'redlight') l.intensity = 22 + Math.sin(this.t * 4 + i * 2) * 10; });
+    updateNightlife(this, dt);
   }
 
   punch() {
@@ -973,53 +675,6 @@ export class Special3D {
         return;
       }
     }
-  }
-
-  updateGuards(dt) {
-    const h = this.hero.position;
-    for (const gd of this.guards) {
-      gd.seeing = false;
-      if (gd.ko) continue;
-      const m = gd.mesh;
-      gd.t += dt;
-      const dx = h.x - m.position.x, dz = h.z - m.position.z, d = Math.hypot(dx, dz);
-      const fx = Math.sin(m.rotation.y), fz = Math.cos(m.rotation.y);
-      if (this.t > this.grace && d < GUARD_RANGE && d > 0.01 && (dx * fx + dz * fz) / d > Math.cos(GUARD_FOV / 2) && this.clearLOS(m.position, h)) {
-        gd.seeing = true;
-        if (gd.look <= 0) { const s = this.screenOf(m.position, 2.1); if (s) this.g.commentary.guardShout(s.x, s.y); }
-        gd.look = 1.2;
-        this.alert = Math.min(100, this.alert + dt * (30 + (GUARD_RANGE - d) * 9));
-      }
-      if (m.enemy) { if (gd.look > 0) m.enemy.play('combatIdle'); else m.enemy.play('walk', { speed: 1.2 }); } // walk clip at 1.7 m/s
-      if (gd.look > 0) {
-        gd.look -= dt;
-        if (gd.seeing) m.rotation.y = Math.atan2(dx, dz);
-      } else {
-        const tgt = gd.route[gd.wp];
-        const tx = tgt.x - m.position.x, tz = tgt.z - m.position.z, td = Math.hypot(tx, tz);
-        if (td < 0.2) gd.wp = (gd.wp + 1) % gd.route.length;
-        else {
-          m.position.x += (tx / td) * 1.7 * dt; m.position.z += (tz / td) * 1.7 * dt;
-          let da = Math.atan2(tx, tz) - m.rotation.y;
-          while (da > Math.PI) da -= Math.PI * 2;
-          while (da < -Math.PI) da += Math.PI * 2;
-          m.rotation.y += da * Math.min(1, dt * 5);
-        }
-        const s = Math.sin(gd.t * 8) * 0.4;
-        m.legs[0].rotation.x = s; m.legs[1].rotation.x = -s;
-      }
-      gd.cone.material.color.set(gd.seeing ? 0xff3030 : 0xffe040);
-      gd.cone.material.opacity = gd.seeing ? 0.3 : 0.16;
-    }
-  }
-
-  clearLOS(a, b) {
-    for (const c of this.colliders) {
-      if (!c.wall || c.disabled) continue;
-      if (segHitsBox(a.x, a.z, b.x, b.z, c)) return false;
-    }
-    if (!this.doorOpen && segHitsBox(a.x, a.z, b.x, b.z, this.doorCol)) return false;
-    return true;
   }
 
   collide(p, r) {
@@ -1066,7 +721,7 @@ export class Special3D {
     }).join('');
     const el = $('objectives');
     if (el._h !== html) { el.innerHTML = html; el._h = html; }
-    $('hud-sub').textContent = `Inside ${Math.floor(this.inside)}s${this.V.vice ? ' · tabloids watching' : ''}${this.xray ? ' · X-RAY' : ''}`;
+    $('hud-sub').textContent = [this.V.vice && 'Tabloids watching', this.xray && 'X-RAY'].filter(Boolean).join(' · ') || this.zone.venue || '';
     // objective marker
     const mk = $('marker');
     if (cur && cur.target && !this.done) {
@@ -1074,6 +729,7 @@ export class Special3D {
       let x = (v.x * 0.5 + 0.5) * this.g.w, y = (-v.y * 0.5 + 0.5) * this.g.h;
       if (v.z > 1) { x = this.g.w - x; y = this.g.h - 40; }
       x = clamp(x, 30, this.g.w - 30); y = clamp(y, 70, this.g.h - 40);
+      [x, y] = avoidHud(x, y); // never over HUD text or under a thumb button
       mk.style.transform = `translate(${x}px,${y}px)`;
       mk.querySelector('span').textContent = `${Math.round(Math.hypot(cur.target.x - this.hero.position.x, cur.target.z - this.hero.position.z))}m`;
       mk.classList.add('on');
@@ -1089,22 +745,7 @@ export class Special3D {
     this.g.input.setButton('interact', { lit: !!this.near });
   }
 
-  render() {
-    if (!this.scene) return;
-    const h = this.hero.position, st = this.g.state;
-    const target = this.cameraPitch(h), snap = this.camPitch === null;
-    // tilt up quickly to get out from behind a wall; settle back down gently
-    this.camPitch = snap ? target : this.camPitch + (target - this.camPitch) * (target > this.camPitch ? 0.3 : 0.08);
-    const off = this.cameraOffset(this.camPitch);
-    const want = h.clone().add(off.multiplyScalar(this.cameraReach(h, off) / CAM_DIST));
-    if (snap) this.cam.position.copy(want); else this.cam.position.lerp(want, 0.2);
-    this.cam.lookAt(h.x, h.y + 1.1, h.z);
-    if (st.intox > 30) {
-      const k = (st.intox - 30) / 70;
-      this.cam.rotation.z += Math.sin(this.t * 1.3) * 0.08 * k;
-      this.cam.fov = 58 + Math.sin(this.t * 0.9) * 6 * k;
-      this.cam.updateProjectionMatrix();
-    }
-    this.renderer.render(this.scene, this.cam);
-  }
 }
+
+// The zone's parts, each in its own module (camera, guards + cones, people, floor plan).
+Object.assign(Special3D.prototype, cameraMethods, guardMethods, peopleMethods, roomMethods);

@@ -8,7 +8,8 @@ const BURST_COLORS = [
   ['#ffe600', '#ff2d2d'], ['#ff2d2d', '#ffe600'], ['#39c6ff', '#ffe600'], ['#ff9a1f', '#fff36b'],
   ['#b04dff', '#ffe600'], ['#ffffff', '#ff2d2d'], ['#5dff6b', '#1e3cff'],
 ];
-const INK = ['#d8122e', '#1e3cff', '#111111', '#ffffff'];
+// no black: the word already has a black stroke + shadow, so black letters fuse into a solid block
+const INK = ['#d8122e', '#1e3cff', '#ffffff'];
 
 let enabled = true;
 const layer = () => $('comic-layer');
@@ -33,10 +34,42 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 function clampX(x, halfW) { return Math.max(halfW + 8, Math.min(innerWidth - halfW - 8, x)); }
 
+// The story slot: narrator captions and news flashes share one comic panel in the lower left and
+// take turns there, so they never pile up. A new caption replaces any caption still showing or
+// waiting (she's moved on); headlines queue behind. Nothing plays more than STALE ms late.
+const STORY_GAP = 250, STORY_MAX = 3, STORY_STALE = 9000;
+const story = { el: null, q: [] };
+function storyEnd(el) {
+  if (!el.isConnected || el._ending) return;
+  el._ending = true;
+  el.classList.add('out');
+  setTimeout(() => { el.remove(); if (story.el === el) story.el = null; setTimeout(storyNext, STORY_GAP); }, 350);
+}
+function storyNext() {
+  if (story.el || !layer()) return;
+  const now = performance.now();
+  story.q = story.q.filter((it) => now - it.at < STORY_STALE);
+  const it = story.q.shift();
+  if (!it) return;
+  const el = it.make();
+  el._key = it.key; el._kind = it.kind;
+  layer().appendChild(el);
+  story.el = el;
+  setTimeout(() => storyEnd(el), it.ms);
+}
+function storyPush(kind, key, make, ms) {
+  if (story.el && story.el._key === key && !story.el._ending) return; // already on screen
+  story.q = story.q.filter((it) => it.key !== key && !(kind === 'caption' && it.kind === 'caption'));
+  story.q.push({ kind, key, make, ms, at: performance.now() });
+  while (story.q.length > STORY_MAX) story.q.shift();
+  if (kind === 'caption' && story.el && story.el._kind === 'caption') storyEnd(story.el); // superseded
+  storyNext();
+}
+
 export const comic = {
   get enabled() { return enabled; },
   toggle() { enabled = !enabled; if (!enabled) this.clear(); return enabled; },
-  clear() { const l = layer(); if (l) l.innerHTML = ''; },
+  clear() { const l = layer(); if (l) l.innerHTML = ''; story.el = null; story.q = []; },
 
   /** POW! BAM! etc. at a screen position. size 1 = normal, 1.6 = finisher. */
   pow(word, x, y, { size = 1, colors } = {}) {
@@ -70,7 +103,8 @@ export const comic = {
   say(text, x, y, { kind = 'speech', speaker = '', ms, anchor } = {}) {
     if (!enabled) return;
     const l = layer();
-    while (count('bubble') >= MAX_BUBBLES) l.querySelector('.bubble').remove();
+    const max = innerHeight < 480 ? 2 : MAX_BUBBLES; // phones: two voices at a time is plenty
+    while (count('bubble') >= max) l.querySelector('.bubble').remove();
     const el = document.createElement('div');
     el.className = `bubble ${kind}`;
     el.innerHTML = `${speaker ? `<b>${esc(speaker)}</b>` : ''}${esc(text)}`;
@@ -81,7 +115,8 @@ export const comic = {
     const place = (px, py) => {
       const left = clampX(px, r.width / 2) - r.width / 2;
       el.style.left = left + 'px';
-      el.style.top = (below ? py + 26 : py - r.height - 26) + 'px';
+      // whole bubble stays on screen (tall three-line rumours used to run off the bottom)
+      el.style.top = Math.max(56, Math.min(innerHeight - r.height - 8, below ? py + 26 : py - r.height - 26)) + 'px';
       el.style.setProperty('--tail', Math.max(18, Math.min(r.width - 18, px - left)) + 'px');
     };
     place(x, y);
@@ -102,29 +137,27 @@ export const comic = {
     }
   },
 
-  /** Yellow narrator caption box ("MEANWHILE..."). */
-  caption(text, { ms, where = 'top' } = {}) {
+  /** Yellow narrator caption box ("MEANWHILE..."), in the story slot. */
+  caption(text, { ms } = {}) {
     if (!enabled) return;
-    const l = layer();
-    l.querySelectorAll('.caption').forEach((c) => c.remove());
-    const el = document.createElement('div');
-    el.className = `caption ${where}`;
-    el.textContent = text;
-    l.appendChild(el);
-    drop(el, ms || 2600 + text.length * 40);
+    storyPush('caption', text, () => {
+      const el = document.createElement('div');
+      el.className = 'caption';
+      el.textContent = text;
+      return el;
+    }, ms || 2600 + text.length * 40);
   },
 
   /** Newspaper flash about her reputation. tone: 'good' | 'bad' | 'neutral'. */
   headline(text, { tone = 'neutral', kicker } = {}) {
     if (!enabled) return;
-    const l = layer();
-    l.querySelectorAll('.newsflash').forEach((c) => c.remove());
-    const el = document.createElement('div');
-    el.className = `newsflash ${tone}`;
-    const k = kicker || (tone === 'good' ? 'EXTRA! EXTRA!' : tone === 'bad' ? 'SCANDAL!' : 'NEWS FLASH');
-    el.innerHTML = `<i>${esc(k)}</i><span>${esc(text)}</span>${tone === 'bad' ? '<em>BOO!</em>' : tone === 'good' ? '<em>★</em>' : ''}`;
-    l.appendChild(el);
-    drop(el, 4200);
+    storyPush('headline', text, () => {
+      const el = document.createElement('div');
+      el.className = `newsflash ${tone}`;
+      const k = kicker || (tone === 'good' ? 'EXTRA! EXTRA!' : tone === 'bad' ? 'SCANDAL!' : 'NEWS FLASH');
+      el.innerHTML = `<i>${esc(k)}</i><span>${esc(text)}</span>${tone === 'bad' ? '<em>BOO!</em>' : tone === 'good' ? '<em>★</em>' : ''}`;
+      return el;
+    }, 4200);
   },
 
   /** The spinning-emblem scene transition (sweeps the screen, plays over whatever loads underneath). */

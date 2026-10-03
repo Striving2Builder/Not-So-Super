@@ -2,19 +2,24 @@
 // straight-down perspective camera, so rooftops grow and lean away from screen centre.
 import { BLOCK, ROAD, LOT } from './city.js';
 import { DISTRICTS, STREET_CRIMES, CASES, VENUES, THEMES, BOSSES, HERO, NIGHT_DISTRICTS, ASYLUM } from './data.js';
-import { drawHeroTop, glow } from './art.js';
-import { clamp, lerp, pick, chance, rand, dist, shade, rgba, easeOut, easeInOut, fmtClock, fmtTime, wobble, $ } from './util.js';
-import { heroReady, HeroSprite } from './hero3d.js';
+import { drawHeroTop } from './art.js'; // placeholder art until her model loads
+import { clamp, lerp, pick, chance, rand, dist, rgba, easeOut, easeInOut, fmtClock, fmtTime, wobble, $ } from './util.js';
 import { loadClub, preloadClub } from './clubzone.js';
 import { quality, settings } from './settings.js';
 import { AirEvents } from './airevents.js';
 import { Paparazzi } from './paparazzi.js';
 import { Navigator } from './nav.js';
 import { CityFeed } from './cityfeed.js';
-import { stepFlight, stepAltitude, speedFraction, cameraZoom, cameraLead, FLIGHT, BANDS, CRUISE_BAND, CAM_ABOVE } from './flight.js';
+import { stepFlight, stepAltitude, speedFraction, cameraZoom, cameraLead, FLIGHT, BANDS, CRUISE_BAND, CAM_ABOVE, camAbove } from './flight.js';
 import { Airspace } from './airspace.js';
 import { drawAtmosphere, FOG_Z } from './atmosphere.js';
 import { Sky, SpeedFX } from './sky.js';
+import { CityArt, TILE, SUN, grade, glow } from './cityart.js';
+import { FlightHero } from './herofly.js';
+import { drawBuilding, drawLights } from './skyline.js';
+import { drawEdgeMarkers } from './flightmarks.js';
+import { tiltAngle, tiltLeadY, projection, centreOffset } from './tiltcam.js';
+import { Flight3D, flight3dEnabled } from './flight3d.js';
 import { FlightAudio } from './flightaudio.js';
 import { nightCaseFields } from './nightcase.js';
 import { asylumFields } from './asylum.js';
@@ -29,6 +34,9 @@ const DIVE_T = 1.1;
 const NEAR_R = 130;
 const PRELOAD_R = 1600; // start downloading a club's building when she's this close to its zone
 const TARGET = { street: 5, case: 2, special: 2 };
+// Flight-view look. heroScale: her sprite vs the world (she's the star of every frame);
+// sway: px the view slides out along her bank; haze: aerial-perspective veil at full height.
+const LOOK = { heroScale: 1.9, sway: 14, breathe: 2.5, haze: 0.3, hazeSaver: 0.2, punch: 0.07 };
 
 export class Overworld {
   constructor(g) {
@@ -55,6 +63,10 @@ export class Overworld {
     this.paps = new Paparazzi(this);     // tabloid drones in vice districts at night
     this.nav = new Navigator();          // waypoint + autopilot
     this.feed = new CityFeed();          // clips in the minimap corner
+    this.frame = 0;
+    this.kick = 0;                       // boost punch (0..1), widens the view for a beat
+    this.view3d = flight3dEnabled() ? new Flight3D(this) : null; // 3D flight (default); ?flight=2d = top-down
+    this.heroArt = new FlightHero();     // her inked 3/4 sprite, ground shadow, boost lettering
   }
 
   reset() {
@@ -83,9 +95,19 @@ export class Overworld {
   }
 
   enter(p = {}) {
+    if (this.view3d && !this.attract) this.view3d.enter();
     const inp = this.g.input;
     inp.setStick(true);
-    inp.setButtons([
+    // 3D view: a leaner set (one UP/DOWN rocker; DIVE and PERCH only show when they apply)
+    if (this.view3d) inp.setButtons([
+      { id: 'boost', label: 'BOOST', key: 'Shift', cls: 'f3 f3-boost' },
+      { id: 'dive', label: '▼<br>DIVE!', key: 'Space', cls: 'f3 f3-dive gone' },
+      { id: 'climb', label: '▲', key: 'R', cls: 'f3 f3-up' },
+      { id: 'descend', label: '▼', key: 'F', cls: 'f3 f3-down' },
+      { id: 'perch', label: 'PERCH<br>⤓', key: 'H', cls: 'f3 f3-perch gone' },
+      { id: 'map', label: 'MAP', key: 'M', cls: 'f3 f3-map' },
+    ]);
+    else inp.setButtons([
       { id: 'dive', label: 'DIVE', key: 'Space', cls: 'big' },
       { id: 'boost', label: 'BOOST', key: 'Shift' },
       { id: 'map', label: 'MAP', key: 'M', slot: 2 },
@@ -105,6 +127,7 @@ export class Overworld {
   }
 
   exit() {
+    this.view3d?.exit();
     $('prompt').classList.remove('on');
     this.audio.stop();
     this.feed.stop();
@@ -127,8 +150,7 @@ export class Overworld {
   // ------------------------------------------------------------------ altitude, perching, hearing
   /** World-units to offset the camera so the tilted view still centres on her. */
   tiltOffset() {
-    const P = this.camH / (this.camH - this.hero.z), T = this.g.h * TILT;
-    return ((P - 1) * T) / (this.k * P);
+    return centreOffset(this.hero.z, this.camH, this.k, this.g.h * TILT, tiltAngle(this.hero.z));
   }
 
   altitudeInput(inp, a) {
@@ -142,6 +164,12 @@ export class Overworld {
     if (h.perch && Math.hypot(a.x, a.y) > 0.45) this.leavePerch(); // push off to take flight
   }
 
+  /** The WebGL renderer while the 3D flight slice is showing (the harness reads its draw stats). */
+  get renderer() { return this.view3d && document.body.classList.contains('fly3d') ? this.view3d.renderer : null; }
+
+  /** A structure's height for flying into/onto it (the 3D slice's city stands taller). */
+  hOf(o) { return this.view3d ? this.view3d.heightOf(o) : o.h; }
+
   /** The tallest building footprint under (x, y), or null. */
   buildingAt(x, y) {
     const c = this.g.city, bx = Math.floor(x / BLOCK), by = Math.floor(y / BLOCK);
@@ -152,7 +180,7 @@ export class Overworld {
       for (const o of blk.b) {
         const inside = o.kind === 'box' ? x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.d
           : o.kind === 'round' ? Math.hypot(x - o.x, y - o.y) <= o.rad : false;
-        if (inside && (!best || o.h > best.h)) best = o;
+        if (inside && (!best || this.hOf(o) > this.hOf(best))) best = o;
       }
     }
     return best;
@@ -163,14 +191,14 @@ export class Overworld {
     const h = this.hero;
     if (h.perch || h.speed > 140) return null;
     const b = this.buildingAt(h.x, h.y);
-    return b && b.h >= 35 ? b : null;
+    return b && this.hOf(b) >= 35 ? b : null;
   }
 
   tryPerch() {
     const b = this.perchTarget();
     if (!b) { toast('Slow down over a rooftop to perch', 'info'); return; }
     const h = this.hero;
-    h.perch = { z: b.h + 2 };
+    h.perch = { z: this.hOf(b) + 2 };
     h.speed = 0;
     this.feed.onPerch(DISTRICTS[this.district]?.name);
     this.perchT = 0;
@@ -219,12 +247,12 @@ export class Overworld {
       const blk = c.block(bx + dx, by + dy);
       if (!blk) continue;
       for (const o of blk.b) {
-        if ((o.kind !== 'box' && o.kind !== 'round') || o.h <= h.z) continue; // only structures taller than her
+        if ((o.kind !== 'box' && o.kind !== 'round') || this.hOf(o) <= h.z) continue; // only structures taller than her
         // Already above the footprint (descending onto it, rising out of a zone on its lot):
         // she floats over the roof instead of being shoved sideways through the walls.
         const inside = o.kind === 'box' ? h.x >= o.x && h.x <= o.x + o.w && h.y >= o.y && h.y <= o.y + o.d
           : Math.hypot(h.x - o.x, h.y - o.y) <= o.rad;
-        if (inside) { h.z = o.h + 2; continue; }
+        if (inside) { h.z = this.hOf(o) + 2; continue; }
         // Flying into its side: it's a wall.
         let px, py;
         if (o.kind === 'box') { px = clamp(h.x, o.x, o.x + o.w); py = clamp(h.y, o.y, o.y + o.d); }
@@ -232,6 +260,7 @@ export class Overworld {
         const ddx = h.x - px, ddy = h.y - py, d = Math.hypot(ddx, ddy);
         if (d >= R || d < 1e-6) continue;
         h.x = px + (ddx / d) * R; h.y = py + (ddy / d) * R;
+        if (this.view3d) { this.view3d.slide(h, ddx / d, ddy / d); continue; } // (3D: glance along the façade)
         if (h.speed > 350) { this.shake = Math.max(this.shake, 8); sfx.hit(); }
         h.speed *= 0.35;
       }
@@ -284,11 +313,13 @@ export class Overworld {
     if (!V || !hs || !this.peds?.length) return null;
     const near = this.peds.filter((p) => {
       const d = dist(V.SX(p.x), V.SY(p.y), hs.x, hs.y);
-      return d > 110 && d < 340;
+      const sx = V.SX(p.x), sy = V.SY(p.y);
+      return d > 110 && d < 340 && sx > 70 && sx < V.W - 70 && sy > 90 && sy < V.H - 80;
     });
     if (!near.length) return null;
     const p = pick(near);
-    const anchor = () => (this.g.modeName === 'overworld' && this.V ? { x: this.V.SX(p.x), y: this.V.SY(p.y) } : null);
+    // the tail follows them as the street scrolls, but the bubble never leaves the safe area
+    const anchor = () => (this.g.modeName === 'overworld' && this.V ? { x: clamp(this.V.SX(p.x), 70, this.V.W - 70), y: clamp(this.V.SY(p.y), 90, this.V.H - 80) } : null);
     return { ...anchor(), anchor };
   }
 
@@ -331,7 +362,7 @@ export class Overworld {
     else if (kind === 'case') { def = pick(CASES); districts = def.districts; }
     else { venueName = forceVenue || pick(Object.keys(VENUES).filter((v) => !VENUES[v].asylum)); def = VENUES[venueName]; districts = def.districts; }
     const cands = city.blocks.filter((b) => {
-      if (districts !== '*' && !districts.includes(b.d)) return false;
+      if (b.river || (districts !== '*' && !districts.includes(b.d))) return false;
       const cx = b.x0 + LOT / 2, cy = b.y0 + LOT / 2;
       if (near && dist(cx, cy, near.x, near.y) > near.r) return false;
       return dist(cx, cy, h.x, h.y) > (near ? 200 : initial ? 250 : 500) && this.zones.every((z) => dist(z.x, z.y, cx, cy) > 520);
@@ -389,7 +420,7 @@ export class Overworld {
       h.x = lerp(d.sx, d.z.x + d.ox * (1 - f * 0.3), e); h.y = lerp(d.sy, d.z.y + d.oy * (1 - f * 0.3), e);
       h.z = lerp(d.z0, 30, f * f);
       this.zoom = lerp(d.zoom0, 1.6, e);
-      this.camH = h.z + CAM_ABOVE;
+      this.camH = h.z + camAbove(h.z);
       this.cam.x = h.x; this.cam.y = h.y - this.tiltOffset();
       this.fx.setRush(f);
       if (f > 0.88 && !d.impact) {
@@ -407,7 +438,7 @@ export class Overworld {
       const e = easeOut(Math.min(1, this.rising / 1.1));
       h.z = lerp(40, BANDS[h.band].z, e);
       this.zoom = lerp(1.6, 1, e);
-      this.camH = h.z + CAM_ABOVE;
+      this.camH = h.z + camAbove(h.z);
       if (this.rising >= 1.1) this.rising = null;
     }
 
@@ -419,32 +450,41 @@ export class Overworld {
       const m = Math.hypot(tx - h.x, ty - h.y) || 1;
       a = { x: (tx - h.x) / m, y: (ty - h.y) / m };
     } else {
-      a = wobble(inp.axis(), st ? st.intox : 0, this.t);
+      a = wobble(this.view3d ? this.view3d.steer(inp.axis()) : inp.axis(), st ? st.intox : 0, this.t); // (3D: stick is camera-relative)
       // Autopilot: steer to the waypoint while the stick is idle; any input takes over.
       // (Still subject to the drunk wobble: autopilot is not a way around intoxication.)
-      if (this.nav.autopilot && this.nav.target && !h.perch && Math.hypot(a.x, a.y) < 0.12) a = wobble(this.nav.steer(h), st ? st.intox : 0, this.t);
+      if (this.nav.autopilot && this.nav.target && !h.perch && Math.hypot(a.x, a.y) < 0.12) a = wobble(this.view3d ? this.view3d.autoSteer(h, this.nav.steer(h)) : this.nav.steer(h), st ? st.intox : 0, this.t); // (3D: routes round towers taller than her)
     }
     const boost = !this.attract && inp.down('boost');
     if (!this.attract) this.altitudeInput(inp, a);
     const ev = stepFlight(h, h.perch ? { x: 0, y: 0 } : a, boost && !h.perch, dt, BANDS[h.band].speedMul);
     if (this.rising === null) stepAltitude(h, dt);
-    this.camH += (h.z + CAM_ABOVE - this.camH) * Math.min(1, dt * 4);
+    this.camH += (h.z + camAbove(h.z) - this.camH) * Math.min(1, dt * 4);
     // perched = standing on the roof; rising out of a zone = the camera move owns her position
-    if (h.z < 300 && !h.perch && this.rising === null) this.collideBuildings(h);
+    if (h.z < (this.view3d ? this.view3d.maxBuilding : 300) && !h.perch && this.rising === null) this.collideBuildings(h);
     h.x = clamp(h.x, 0, city.W);
     h.y = clamp(h.y, 0, city.H);
     if (h.perch) this.updatePerch(dt);
     const frac = speedFraction(h);
     if (!this.attract) {
-      if (ev.boostStart) { sfx.boost(); this.shake = Math.max(this.shake, 5); }
+      if (ev.boostStart) { sfx.boost(); this.shake = Math.max(this.shake, 7); this.kick = 1; this.heroArt.whoosh(h.ang); this.view3d?.boost(); }
       if (ev.sonic) { sfx.sonicBoom(); this.shake = 12; this.fx.sonicBoom(); }
     }
     // Camera: look further ahead and pull out as she speeds up (dive/rise animations own the zoom).
-    const lead = cameraLead(h);
-    this.cam.x += (h.x + h.vx * lead - this.cam.x) * Math.min(1, dt * 4);
-    this.cam.y += (h.y + h.vy * lead - this.tiltOffset() - this.cam.y) * Math.min(1, dt * 4);
+    // The look-ahead is capped on screen (a fifth of the half-width, an eighth of the height) so at
+    // full boost she never slides to the edge of a phone screen: she stays the centre of the shot.
+    const lead = cameraLead(h), kk = this.k || 0.5;
+    const reach = 0.1 + 0.05 * clamp((frac - 0.5) * 2, 0, 1); // fraction of the screen, more at boost
+    // (tilt prototype: a longer vertical look-ahead, since a landscape phone sees far less up/down)
+    const ry = tiltLeadY() ?? reach, lyT = tiltLeadY() ? 2.2 : 1;
+    const lx = clamp(h.vx * lead, -reach * this.g.w / kk, reach * this.g.w / kk), ly = clamp(h.vy * lead * lyT, -ry * this.g.h / kk, ry * this.g.h / kk);
+    this.cam.x += (h.x + lx - this.cam.x) * Math.min(1, dt * 4);
+    const lift = h.speed > 1 ? Math.max(0, h.vy / h.speed) * h.z * Math.tan(tiltAngle(h.z)) : 0; // (tilt only)
+    this.cam.y += (h.y + ly + lift - this.tiltOffset() - this.cam.y) * Math.min(1, dt * 4);
     if (this.rising === null) this.zoom += (cameraZoom(h) - this.zoom) * Math.min(1, dt * 2);
     this.shake = Math.max(0, this.shake - dt * 20);
+    this.kick = Math.max(0, this.kick - dt * 1.8);
+    this.heroArt.update(dt);
     // Contrail at top speed.
     if (h.speed > FLIGHT.sonic && chance(dt * 40)) this.parts.push({ x: h.x - h.vx * 0.04, y: h.y - h.vy * 0.04, z: h.z, vx: 0, vy: 0, vz: 0, life: 0.6, max: 0.6, size: 5, col: '#dff4ff', glow: true });
     this.sky.update(dt);
@@ -587,6 +627,7 @@ export class Overworld {
     const el = $('prompt');
     const z = this.near;
     this.g.input.setButton('dive', { lit: !!z });
+    if (this.view3d) this.g.input.buttons.dive?.classList.toggle('gone', !z || !!this.diving);
     if (!z || this.diving) { el.classList.remove('on'); return; }
     const lock = this.g.state.locked(z.lockKey);
     const rc = z.risk === 'CAPTURE' ? '#ff3fb8' : z.risk === 'Traps' ? '#3fd0ff' : '#ffd23f';
@@ -606,7 +647,9 @@ export class Overworld {
     const nav = this.nav.target ? ` · 🧭 ${Math.round(this.nav.distance(this.hero) / 10)}m${this.nav.autopilot ? ' (auto)' : ''}` : '';
     const drones = this.paps.drones.some((d) => !d.leaving) ? ' · 📸 drones!' : '';
     $('hud-sub').textContent = `${fmtClock(st.clock)} · ${alt} · ${this.zones.length} incidents${D && D.vice ? ' · ⚠ vice' : ''}${drones}${nav}`;
-    this.g.input.setButton('perch', { lit: !this.hero.perch && !!this.perchTarget() });
+    const canPerch = !this.hero.perch && !!this.perchTarget();
+    this.g.input.setButton('perch', { lit: canPerch });
+    if (this.view3d) this.g.input.buttons.perch?.classList.toggle('gone', !canPerch && !this.hero.perch); // (perched: it's the take-off button)
     this.drawMinimap();
   }
 
@@ -700,37 +743,49 @@ export class Overworld {
 
   // ------------------------------------------------------------------ render
   render(ctx) {
+    if (this.view3d && document.body.classList.contains('fly3d')) { this.view3d.render(ctx); return; }
     const g = this.g, W = g.w, H = g.h, city = g.city, st = g.state;
     const night = st ? st.night : 0.8;
+    const q = quality(), rich = q.flyDetail;
+    this.frame++;
+    if (!this.art || this.art.city !== city || this.art.res !== q.flyTileRes) this.art = new CityArt(city, q.flyTileRes, 56);
     // The ground gets smaller as the camera climbs (true perspective); she stays the same size.
-    const k = (Math.min(W, H) / 760) * this.zoom * ((ALT + CAM_ABOVE) / this.camH);
+    // A boost kicks the view wider for a beat, like a camera FOV punch.
+    const punch = this.kick > 0 ? Math.sin(this.kick * Math.PI) * LOOK.punch : 0;
+    const k = (Math.min(W, H) / 760) * this.zoom * ((ALT + CAM_ABOVE) / this.camH) * (1 - punch);
     this.k = k;
     const cx = W / 2, scy = H / 2, camX = this.cam.x, camY = this.cam.y, camH = this.camH;
     // Perspective centre below the screen centre = a slight oblique view: roofs lean up-screen,
     // south faces show. Ground points are unaffected; height lifts things by (P-1)·T.
     const T = H * TILT, cy = scy + T;
-    const P = (z) => camH / (camH - z);
-    const SX = (x, z = 0) => cx + (x - camX) * k * P(z);
-    const SY = (y, z = 0) => scy + (y - camY) * k * P(z) - (P(z) - 1) * T;
-    const V = { cx, cy, scy, k, P, SX, SY, night, lights: [], t: this.t, W, H, camH };
+    const pr = projection({ cx, scy, k, camX, camY, camH, T, th: tiltAngle(this.hero.z) });
+    const { P, SX, SY } = pr;
+    const V = { cx, cy, scy, k, P, SX, SY, tilt: pr, night, lights: [], t: this.t, W, H, camH, rich };
     this.V = V; // for things that place speech bubbles in world space
+    const h = this.hero;
 
     ctx.save();
     if (this.shake > 0) ctx.translate(rand(-this.shake, this.shake), rand(-this.shake, this.shake));
+    // Camera sway: the view slides out along her bank and breathes at speed. (A translation, not a
+    // roll: rotating the whole world turns every cheap axis-aligned fill into a slow AA polygon.)
+    if (rich && !h.perch) {
+      const sw = h.bank * LOOK.sway, br = Math.sin(this.t * 1.7) * LOOK.breathe * speedFraction(h);
+      ctx.translate(-Math.sin(h.ang) * sw + br, Math.cos(h.ang) * sw);
+    }
     if (st && st.intox > 30) {
       const a = Math.sin(this.t * 1.1) * (st.intox - 30) * 0.0009;
       ctx.translate(cx, scy); ctx.rotate(a); ctx.scale(1 + (st.intox - 30) * 0.0008, 1 + (st.intox - 30) * 0.0008); ctx.translate(-cx, -scy);
     }
     // outskirts + roads
-    ctx.fillStyle = '#26402a'; ctx.fillRect(-60, -60, W + 120, H + 120);
+    ctx.fillStyle = '#26402a'; ctx.fillRect(-120, -120, W + 240, H + 240);
     const land = { x0: SX(0), y0: SY(0), x1: SX(city.coastX), y1: SY(city.H) };
-    ctx.fillStyle = '#2d3038'; ctx.fillRect(land.x0, land.y0, land.x1 - land.x0, land.y1 - land.y0);
+    ctx.fillStyle = '#2a2d35'; ctx.fillRect(land.x0, land.y0, land.x1 - land.x0, land.y1 - land.y0);
 
-    const hw = W / 2 / k + 280, hh = H / 2 / k + 280;
+    const hw = W / 2 / k + 280, hh = H / 2 / (k * pr.c) + 280 + 340 * Math.tan(pr.th); // (tall towers below the frame rise into it)
     // ocean
     if (camX + hw > city.coastX) {
       const sx = SX(city.coastX);
-      ctx.fillStyle = '#1d4f78'; ctx.fillRect(sx, -60, W - sx + 60, H + 120);
+      ctx.fillStyle = '#1d4f78'; ctx.fillRect(sx, -120, W - sx + 120, H + 240);
       ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 2;
       for (let i = 0; i < 18; i++) {
         const wy = Math.floor((camY - hh) / 90) * 90 + i * 90;
@@ -744,30 +799,32 @@ export class Overworld {
 
     const bx0 = Math.max(0, Math.floor((camX - hw) / BLOCK)), bx1 = Math.min(city.landCols - 1, Math.floor((camX + hw) / BLOCK));
     const by0 = Math.max(0, Math.floor((camY - hh) / BLOCK)), by1 = Math.min(city.rows - 1, Math.floor((camY + hh) / BLOCK));
-    const L = LOT * k;
-    const blds = [];
-    for (let by = by0; by <= by1; by++) {
-      for (let bx = bx0; bx <= bx1; bx++) {
-        const b = city.block(bx, by);
-        const D = DISTRICTS[b.d];
-        const x = SX(b.x0), y = SY(b.y0);
-        const farm = b.d === 'farm';
-        ctx.fillStyle = farm ? '#6f8a42' : b.d === 'suburb' ? '#9a9a90' : '#8d8b86';
-        ctx.fillRect(x, y, L, L);
-        ctx.fillStyle = D.lot;
-        ctx.fillRect(x + 5 * k, y + 5 * k, L - 10 * k, L - 10 * k);
-        for (const f of b.flats) this.drawFlat(ctx, f, V);
-        for (const o of b.b) blds.push(o);
-      }
+    // Ground: pre-painted cells (roads, sidewalks, lots, cast shadows) just need the right on-screen
+    // bounds (a ground point maps linearly), plus a margin for the camera sway and shake.
+    const TW = TILE * BLOCK, margin = 90 / k;
+    const tx0 = Math.max(0, Math.floor((camX - W / 2 / k - margin) / TW)), tx1 = Math.floor((camX + W / 2 / k + margin) / TW);
+    const ty0 = Math.max(0, Math.floor((camY - H / 2 / (k * pr.c) - margin) / TW)), ty1 = Math.floor((camY + H / 2 / (k * pr.c) + margin) / TW);
+    const TS = TW * k + 0.6, TSY = TW * k * pr.c + 0.6; // a hair of overlap hides seams between tiles
+    // Tiles in view are painted when needed; the ring just outside is pre-painted one tile per
+    // frame, so flying fast rarely has to paint on the spot. (Day/night tiles swap over at dusk.)
+    const art = this.art, limit = art.painted + 1;
+    for (let ty = ty0 - 1; ty <= ty1 + 1; ty++) for (let tx = tx0 - 1; tx <= tx1 + 1; tx++) {
+      if (tx < 0 || ty < 0 || tx * TILE >= city.cols || ty * TILE >= city.rows) continue;
+      const inView = tx >= tx0 && tx <= tx1 && ty >= ty0 && ty <= ty1;
+      const c = art.tile(tx, ty, this.frame, inView || art.painted < limit, night > 0.45);
+      if (!inView) continue;
+      // not painted yet (e.g. dusk just flipped every tile): show the other variant meanwhile
+      const img = c || art.ground.get(art.key(tx, ty) * 2 + (night > 0.45 ? 0 : 1))?.c;
+      if (img) ctx.drawImage(img, SX(tx * TW), SY(ty * TW), TS, TSY);
     }
-    // lane markings
-    ctx.strokeStyle = 'rgba(230,200,90,.55)'; ctx.lineWidth = Math.max(1, 1.5 * k);
-    ctx.setLineDash([12 * k, 12 * k]);
-    ctx.beginPath();
-    for (let i = bx0; i <= bx1 + 1; i++) { const x = SX(i * BLOCK + ROAD / 2); ctx.moveTo(x, SY(by0 * BLOCK)); ctx.lineTo(x, SY((by1 + 1) * BLOCK + ROAD)); }
-    for (let j = by0; j <= by1 + 1; j++) { const y = SY(j * BLOCK + ROAD / 2); ctx.moveTo(SX(bx0 * BLOCK), y); ctx.lineTo(SX(Math.min(city.landCols, bx1 + 1) * BLOCK + ROAD), y); }
-    ctx.stroke();
-    ctx.setLineDash([]);
+    const blds = [];
+    for (let by = by0; by <= by1; by++) for (let bx = bx0; bx <= bx1; bx++) for (const o of city.block(bx, by).b) if (o.kind !== 'tree') blds.push(o); // trees are baked into the ground tiles
+    // Aerial perspective: the higher she flies, the more the street sinks into haze under the roofs.
+    const haze = clamp((camH - 950) / 700, 0, 1) * (rich ? LOOK.haze : LOOK.hazeSaver);
+    if (haze > 0.01) {
+      ctx.fillStyle = night > 0.5 ? `rgba(40,44,90,${haze})` : `rgba(170,190,215,${haze})`;
+      ctx.fillRect(-120, -120, W + 240, H + 240);
+    }
 
     // water objects
     for (const o of city.water) {
@@ -776,26 +833,32 @@ export class Overworld {
       else { blds.push({ kind: 'box', x: o.x, y: o.y, w: o.w, d: o.h, h: 16, col: o.col, ship: true }); blds.push({ kind: 'box', x: o.x + o.w - 44, y: o.y + 6, w: 30, d: o.h - 12, h: 34, col: '#e8e8e8' }); }
     }
 
-    // traffic
+    // traffic: inked car bodies, a glossy roof, headlight cones and tail lights after dark
+    ctx.strokeStyle = '#0c0c16'; ctx.lineWidth = Math.max(1, 1.2 * k);
     for (const c of city.cars) {
       if (Math.abs(c.x - camX) > hw || Math.abs(c.y - camY) > hh) continue;
       const horiz = c.dir === 0 || c.dir === 2;
       const ox = c.dir === 1 ? -9 : c.dir === 3 ? 9 : 0, oy = c.dir === 0 ? 9 : c.dir === 2 ? -9 : 0;
       const w = horiz ? 22 : 11, d = horiz ? 11 : 22;
-      const x = c.x + ox - w / 2, y = c.y + oy - d / 2;
-      ctx.fillStyle = c.col; ctx.fillRect(SX(x), SY(y), w * k, d * k);
-      ctx.fillStyle = 'rgba(20,30,50,.75)';
+      const x = c.x + ox - w / 2, y = c.y + oy - d / 2, sx = SX(x), sy = SY(y);
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(sx + 2 * k, sy + 3 * k, w * k, d * k * pr.c);
+      ctx.fillStyle = c.col; ctx.fillRect(sx, sy, w * k, d * k * pr.c);
+      if (k > 0.3) ctx.strokeRect(sx, sy, w * k, d * k * pr.c);
+      ctx.fillStyle = 'rgba(20,30,50,.8)';
       ctx.fillRect(SX(x + (horiz ? 6 : 2)), SY(y + (horiz ? 2 : 6)), (horiz ? 9 : 7) * k, (horiz ? 7 : 9) * k);
+      ctx.fillStyle = 'rgba(255,255,255,.35)';
+      ctx.fillRect(SX(x + (horiz ? 7 : 3)), SY(y + (horiz ? 3 : 7)), (horiz ? 3 : 5) * k, (horiz ? 5 : 3) * k);
       if (night > 0.3) {
         const fx = c.x + ox + [11, 0, -11, 0][c.dir], fy = c.y + oy + [0, 11, 0, -11][c.dir];
-        V.lights.push({ t: 'glow', x: SX(fx), y: SY(fy), r: 16 * k, c: '#fff4c0' });
+        const bx = c.x + ox - [11, 0, -11, 0][c.dir], by = c.y + oy - [0, 11, 0, -11][c.dir];
+        V.lights.push({ t: 'beam', x: SX(fx), y: SY(fy), a: c.dir * Math.PI / 2, r: 46 * k });
+        V.lights.push({ t: 'glow', x: SX(bx), y: SY(by), r: 7 * k, c: '#ff3030', a: 0.9 });
       }
     }
 
     if (!this.attract) this.events.drawGround(ctx, V);
 
     // street life, visible when she's low
-    const h = this.hero;
     this.peds = []; // pedestrians on screen this frame (world coords), for citizen chatter
     if (h.z < 260) this.drawPedestrians(ctx, V, city, bx0, bx1, by0, by1);
 
@@ -824,17 +887,24 @@ export class Overworld {
       ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.stroke();
     }
 
-    // hero shadow (sun from the north-west)
-    ctx.fillStyle = 'rgba(0,0,0,.28)';
-    ctx.beginPath(); ctx.ellipse(SX(h.x + h.z * 0.12), SY(h.y + h.z * 0.2), 20 * k, 9 * k, h.ang, 0, Math.PI * 2); ctx.fill();
+    const sprite = this.heroArt.ready;
+    if (!sprite) {
+      // placeholder art: a plain shadow ellipse (sun from the north-west)
+      ctx.fillStyle = 'rgba(0,0,0,.28)';
+      ctx.beginPath(); ctx.ellipse(SX(h.x + h.z * SUN.x), SY(h.y + h.z * SUN.y), 20 * k, 9 * k, h.ang, 0, Math.PI * 2); ctx.fill();
+    }
 
     // buildings, far from screen centre first so near ones overlap correctly
     for (const b of blds) {
       const bx = b.kind === 'crane' ? b.x : b.x + (b.w || 0) / 2, by = b.kind === 'crane' ? (b.y + b.y2) / 2 : b.y + (b.d || 0) / 2;
-      b._d = (bx - camX) * (bx - camX) + (by - camY) * (by - camY);
+      b._d = (bx - pr.eye.x) * (bx - pr.eye.x) + (by - pr.eye.y) * (by - pr.eye.y);
     }
     blds.sort((a, b) => b._d - a._d);
-    for (const b of blds) this.drawBuilding(ctx, b, V);
+    for (const b of blds) drawBuilding(ctx, b, V);
+
+    // Her shadow, cast along the sun onto whatever is under it (street or rooftop): it slides
+    // away from her and softens the higher she is above that surface, which reads as altitude.
+    const HS = LOOK.heroScale;
 
     // smoke (under the night overlay)
     for (const p of this.parts) {
@@ -843,16 +913,13 @@ export class Overworld {
       ctx.beginPath(); ctx.arc(SX(p.x, p.z), SY(p.y, p.z), p.size * k * P(p.z), 0, Math.PI * 2); ctx.fill();
     }
 
-    // night
-    if (night > 0) {
-      ctx.fillStyle = `rgba(6,10,32,${0.6 * night})`;
-      ctx.fillRect(-60, -60, W + 120, H + 120);
-      // street lamps at intersections
-      for (let i = bx0; i <= bx1 + 1; i++) for (let j = by0; j <= by1 + 1; j++) {
-        V.lights.push({ t: 'glow', x: SX(i * BLOCK + ROAD / 2), y: SY(j * BLOCK + ROAD / 2), r: 60 * k, c: '#ffcf7a', a: 0.35 });
-      }
+    // Night grade + vignette in one alpha blit (the street lights are baked into the night tiles).
+    if ((night > 0 || rich)) {
+      if (rich) ctx.drawImage(grade(night, 0.6 + 0.4 * speedFraction(h)), -130, -130, W + 260, H + 260);
+      else { ctx.fillStyle = `rgba(6,10,32,${0.56 * night})`; ctx.fillRect(-120, -120, W + 240, H + 240); }
     }
-    this.drawLights(ctx, V);
+    if (sprite) this.heroArt.drawShadow(ctx, V, h, HS, (x, y) => this.buildingAt(x, y));
+    drawLights(ctx, V);
 
     for (const p of this.parts) {
       if (!p.glow) continue;
@@ -888,34 +955,12 @@ export class Overworld {
     if (!this.attract) { this.events.drawAir(ctx, V); this.paps.draw(ctx, V); }
 
     // heroine
-    const hs = k * P(h.z) * 1.3;
+    const hs = k * P(h.z) * HS;
     this.fx.draw(ctx, SX(h.x, h.z), SY(h.y, h.z), hs);
     const hx = SX(h.x, h.z), hy = SY(h.y, h.z) + Math.sin(this.t * 2.2) * 2 * k;
     this.heroScreen = { x: hx, y: hy };
-    if (heroReady()) {
-      // Real rigged model rendered top-down with the Flying clip; heading is +x on the sprite.
-      const px = quality().heroSprite;
-      if (!this.sprite) this.sprite = new HeroSprite(px, px);
-      const sp = this.sprite;
-      sp.setSize(px, px);
-      if (h.perch) sp.hero.pose('idle', this.t); // standing on the roof (seen from above)
-      else {
-        sp.hero.pose(this.diving ? 'jump' : 'fly', this.diving ? 0.9 : this.t);
-        // Arms relax out of the punch-forward pose as she slows into a hover.
-        if (!this.diving) sp.hero.superFly(1 - 0.8 * h.hover);
-      }
-      // Airspeed drives the cape: it streams behind her (-z) and lifts a little off her back (+y).
-      // Airflow over her back holds the cape up against gravity (y ≈ 10) and streams it to her feet.
-      const air = 8 + h.speed / 50;
-      sp.hero.setWind(Math.sin(this.t * 2.3) * 1.8, 10.5 * (1 - 0.6 * h.hover), -air);
-      // Bank into turns, pitch up into a hover when slow, dip the head when accelerating.
-      const img = sp.render({ view: 'top', yaw: 0, span: 2.6, roll: h.perch ? 0 : h.bank * 0.45, pitch: h.perch ? 0 : h.hover * 1.15 - h.lean * 0.25 });
-      const size = 2.6 * 40 * hs; // 1 sprite metre ≈ 40 art units
-      ctx.save();
-      ctx.translate(hx, hy); ctx.rotate(h.ang);
-      ctx.drawImage(img, -size / 2, -size / 2, size, size);
-      ctx.restore();
-    } else drawHeroTop(ctx, hx, hy, hs, h.ang, this.t, h.bank);
+    if (sprite) this.heroArt.draw(ctx, h, hx, hy, hs, { t: this.t, diving: !!this.diving, rich, night, dpr: Math.min(devicePixelRatio || 1, q.dpr2d), max: q.flySpriteMax });
+    else drawHeroTop(ctx, hx, hy, hs, h.ang, this.t, h.bank);
     // super-hearing: sound rings pulsing out while perched
     if (h.perch) for (const r of this.hearRings || []) {
       const e = r.t / 1.6;
@@ -928,11 +973,15 @@ export class Overworld {
     this.airspace.drawFlyers(ctx, V, h.z, true);
     this.sky.draw(ctx, V, h.z, true);
     this.airspace.drawPlanes(ctx, V);
-    for (const [x, y, r, z, locked] of icons) this.drawIcon(ctx, x, y, r, z, locked, z === this.near);
-
-    // off-screen zone arrows
-    if (!this.attract && !this.diving) this.drawArrows(ctx, V);
+    const worldT = ctx.getTransform(); // incident icons go on last of all (below)
     ctx.restore();
+
+    // comic speed lines when she really moves
+    if (rich) this.fx.drawComic(ctx, hx, hy, W, H, night);
+    this.heroArt.drawPops(ctx, hx, hy, Math.min(W, H) / 390);
+
+    // off-screen zone arrows (screen space)
+    if (!this.attract && !this.diving) this.drawArrows(ctx, V);
 
     // Inside a cloud: brief white-out.
     if (this.inCloud > 0.05) {
@@ -941,6 +990,11 @@ export class Overworld {
     }
 
     this.paps.drawFlash(ctx, W, H);
+
+    // Incident icons over everything (speed lines, cloud white-out, flashes): never hidden.
+    ctx.save(); ctx.setTransform(worldT);
+    for (const [x, y, r, z, locked] of icons) this.drawIcon(ctx, x, y, r, z, locked, z === this.near);
+    ctx.restore();
 
     if (this.diving) {
       const e = Math.min(1, this.diving.t / DIVE_T);
@@ -959,226 +1013,11 @@ export class Overworld {
   }
 
   drawArrows(ctx, V) {
-    const W = this.g.w, H = this.g.h, m = 34;
     const marks = [...this.zones, ...this.events.markers()];
     if (this.nav.target) marks.push({ ...this.nav.target, color: '#78ffc8', waypoint: true });
-    for (const z of marks) {
-      const sx = V.SX(z.x), sy = V.SY(z.y);
-      if (sx > m && sx < W - m && sy > m + 50 && sy < H - m) continue;
-      const a = Math.atan2(sy - V.scy, sx - V.cx);
-      const tx = Math.cos(a), ty = Math.sin(a);
-      const s = Math.min((W / 2 - m) / Math.abs(tx || 1e-6), (H / 2 - m - 20) / Math.abs(ty || 1e-6));
-      const ax = V.cx + tx * s, ay = V.scy + ty * s;
-      ctx.save(); ctx.translate(ax, ay); ctx.rotate(a);
-      ctx.fillStyle = z.color; ctx.strokeStyle = z.waypoint ? '#fff' : 'rgba(0,0,0,.6)'; ctx.lineWidth = z.waypoint ? 3 : 2;
-      const sc = z.waypoint ? 1.4 : 1;
-      ctx.beginPath(); ctx.moveTo(14 * sc, 0); ctx.lineTo(-4 * sc, -9 * sc); ctx.lineTo(-4 * sc, 9 * sc); ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.restore();
-      ctx.fillStyle = '#fff'; ctx.font = '700 10px system-ui'; ctx.textAlign = 'center';
-      ctx.fillText(`${Math.round(dist(z.x, z.y, this.hero.x, this.hero.y) / 10)}m`, ax - tx * 18, ay - ty * 18 + 3);
-    }
+    drawEdgeMarkers(ctx, V, marks, this.hero, this.g.w, this.g.h);
   }
 
-  drawFlat(ctx, f, V) {
-    const { SX, SY, k } = V;
-    const x = SX(f.x), y = SY(f.y);
-    switch (f.t) {
-      case 'rect': case 'path': ctx.fillStyle = f.c; ctx.fillRect(x, y, f.w * k, f.h * k); break;
-      case 'lot':
-        ctx.fillStyle = '#4a4a4c'; ctx.fillRect(x, y, f.w * k, f.h * k);
-        ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 1;
-        ctx.beginPath();
-        for (let i = 1; i < 6; i++) { const xx = x + (f.w * k * i) / 6; ctx.moveTo(xx, y + 3); ctx.lineTo(xx, y + f.h * k * 0.4); ctx.moveTo(xx, y + f.h * k * 0.6); ctx.lineTo(xx, y + f.h * k - 3); }
-        ctx.stroke();
-        break;
-      case 'field': {
-        ctx.fillStyle = f.c1; ctx.fillRect(x, y, f.w * k, f.h * k);
-        ctx.fillStyle = f.c2;
-        const n = 12;
-        for (let i = 0; i < n; i += 2) {
-          if (f.vert) ctx.fillRect(x + (f.w * k * i) / n, y, (f.w * k) / n, f.h * k);
-          else ctx.fillRect(x, y + (f.h * k * i) / n, f.w * k, (f.h * k) / n);
-        }
-        break;
-      }
-      case 'pool': ctx.fillStyle = '#4ac8e8'; ctx.fillRect(x, y, f.w * k, f.h * k); ctx.strokeStyle = '#e8e8e8'; ctx.lineWidth = 2; ctx.strokeRect(x, y, f.w * k, f.h * k); break;
-      case 'fountain':
-        ctx.fillStyle = '#c8c0b0'; ctx.beginPath(); ctx.arc(x, y, f.r * k, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#5ab8e0'; ctx.beginPath(); ctx.arc(x, y, f.r * k * 0.8, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.arc(x, y, f.r * k * (0.2 + 0.1 * Math.sin(V.t * 6)), 0, Math.PI * 2); ctx.fill();
-        break;
-      case 'hazard':
-        ctx.strokeStyle = 'rgba(230,200,40,.5)'; ctx.lineWidth = 3 * k; ctx.setLineDash([8 * k, 8 * k]);
-        ctx.strokeRect(x, y, f.w * k, f.h * k); ctx.setLineDash([]);
-        break;
-    }
-  }
-
-  drawBuilding(ctx, b, V) {
-    const { cx, cy, k, P, SX, SY, night } = V;
-    if (b.kind === 'tree') {
-      const s = P(b.h), gx = SX(b.x), gy = SY(b.y);
-      const x = cx + (gx - cx) * s, y = cy + (gy - cy) * s, r = b.rad * k * s;
-      ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.arc(gx + 4 * k, gy + 6 * k, b.rad * k, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = shade(b.col, -0.25); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = b.col; ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 0.2, r * 0.75, 0, Math.PI * 2); ctx.fill();
-      return;
-    }
-    if (b.kind === 'round') {
-      const s = P(b.h), gx = SX(b.x), gy = SY(b.y);
-      const rx = cx + (gx - cx) * s, ry = cy + (gy - cy) * s;
-      const gr = b.rad * k, rr = b.rad * k * s;
-      ctx.fillStyle = shade(b.col, -0.3);
-      ctx.beginPath(); ctx.arc(gx, gy, gr, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = shade(b.col, -0.3); ctx.lineWidth = gr * 2; ctx.lineCap = 'butt';
-      ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(rx, ry); ctx.stroke();
-      if (b.dome) {
-        const grd = ctx.createRadialGradient(rx - rr * 0.3, ry - rr * 0.3, rr * 0.1, rx, ry, rr);
-        grd.addColorStop(0, '#4a5a4e'); grd.addColorStop(1, '#1a201c');
-        ctx.fillStyle = grd;
-      } else ctx.fillStyle = shade(b.col, 0.05);
-      ctx.beginPath(); ctx.arc(rx, ry, rr, 0, Math.PI * 2); ctx.fill();
-      if (b.stack) { ctx.fillStyle = '#1a1a1a'; ctx.beginPath(); ctx.arc(rx, ry, rr * 0.6, 0, Math.PI * 2); ctx.fill(); }
-      if (b.neon) V.lights.push({ t: 'ring', x: rx, y: ry, r: rr, c: b.neon });
-      return;
-    }
-    if (b.kind === 'crane') {
-      const s = P(b.h);
-      const a = [SX(b.x), SY(b.y)], c = [SX(b.x2), SY(b.y2)];
-      const at = [cx + (a[0] - cx) * s, cy + (a[1] - cy) * s], ct = [cx + (c[0] - cx) * s, cy + (c[1] - cy) * s];
-      ctx.strokeStyle = shade(b.col, -0.3); ctx.lineWidth = 4 * k; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(at[0], at[1]); ctx.moveTo(c[0], c[1]); ctx.lineTo(ct[0], ct[1]); ctx.stroke();
-      ctx.strokeStyle = b.col; ctx.lineWidth = 7 * k * s;
-      ctx.beginPath(); ctx.moveTo(at[0], at[1]); ctx.lineTo(ct[0], ct[1]);
-      const mx = (at[0] + ct[0]) / 2, my = (at[1] + ct[1]) / 2, bx = SX(b.x + 190, b.h), byy = SY((b.y + b.y2) / 2, b.h);
-      ctx.moveTo(mx, my); ctx.lineTo(bx, byy); ctx.stroke();
-      return;
-    }
-
-    const s = P(b.h);
-    const gx0 = SX(b.x), gx1 = SX(b.x + b.w), gy0 = SY(b.y), gy1 = SY(b.y + b.d);
-    const rx0 = cx + (gx0 - cx) * s, rx1 = cx + (gx1 - cx) * s, ry0 = cy + (gy0 - cy) * s, ry1 = cy + (gy1 - cy) * s;
-    const base = b.col;
-    const quad = (x1, y1, x2, y2, x3, y3, x4, y4, c) => { ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.lineTo(x3, y3); ctx.lineTo(x4, y4); ctx.closePath(); ctx.fill(); };
-    const walls = [];
-    if (gy1 < cy) { quad(gx0, gy1, gx1, gy1, rx1, ry1, rx0, ry1, shade(base, -0.16)); walls.push('s'); }
-    if (gy0 > cy) { quad(gx0, gy0, gx1, gy0, rx1, ry0, rx0, ry0, shade(base, -0.34)); walls.push('n'); }
-    if (gx1 < cx) { quad(gx1, gy0, gx1, gy1, rx1, ry1, rx1, ry0, shade(base, -0.24)); walls.push('e'); }
-    if (gx0 > cx) { quad(gx0, gy0, gx0, gy1, rx0, ry1, rx0, ry0, shade(base, -0.42)); walls.push('w'); }
-
-    // floor lines by day / lit window rows by night
-    if (b.h >= 36 && !b.container && !b.house && !b.ship) {
-      const floors = Math.min(16, Math.floor(b.h / 13));
-      const seed = hash2(b.x | 0, b.y | 0);
-      ctx.strokeStyle = b.glass ? 'rgba(220,240,255,.22)' : 'rgba(0,0,0,.2)'; ctx.lineWidth = 1;
-      ctx.beginPath();
-      for (let f = 1; f < floors; f++) {
-        const p = P((f * b.h) / floors);
-        for (const w of walls) {
-          let x1, y1, x2, y2;
-          if (w === 's') { x1 = cx + (gx0 - cx) * p; x2 = cx + (gx1 - cx) * p; y1 = y2 = cy + (gy1 - cy) * p; }
-          else if (w === 'n') { x1 = cx + (gx0 - cx) * p; x2 = cx + (gx1 - cx) * p; y1 = y2 = cy + (gy0 - cy) * p; }
-          else if (w === 'e') { x1 = x2 = cx + (gx1 - cx) * p; y1 = cy + (gy0 - cy) * p; y2 = cy + (gy1 - cy) * p; }
-          else { x1 = x2 = cx + (gx0 - cx) * p; y1 = cy + (gy0 - cy) * p; y2 = cy + (gy1 - cy) * p; }
-          ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
-          if (night > 0.2 && hash2(f, walls.length, (seed * 1e6) | 0) > 0.35) V.lights.push({ t: 'win', x1, y1, x2, y2 });
-        }
-      }
-      ctx.stroke();
-    }
-
-    // roof
-    const rw = rx1 - rx0, rh = ry1 - ry0;
-    if (b.house || b.barn) {
-      ctx.fillStyle = b.roofCol; ctx.fillRect(rx0, ry0, rw, rh);
-      ctx.fillStyle = shade(b.roofCol, -0.25);
-      if (rw > rh) ctx.fillRect(rx0, ry0 + rh / 2, rw, rh / 2); else ctx.fillRect(rx0 + rw / 2, ry0, rw / 2, rh);
-      if (b.barn) { ctx.strokeStyle = '#eee'; ctx.lineWidth = 1.5; ctx.strokeRect(rx0 + 2, ry0 + 2, rw - 4, rh - 4); }
-    } else {
-      ctx.fillStyle = b.gold ? '#d8b24a' : b.ship ? shade(base, 0.1) : shade(base, 0.1);
-      ctx.fillRect(rx0, ry0, rw, rh);
-      ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = 1.5; ctx.strokeRect(rx0 + 1, ry0 + 1, rw - 2, rh - 2);
-      if (b.container || b.corrugated || b.sawtooth) {
-        ctx.strokeStyle = b.sawtooth ? 'rgba(180,220,255,.45)' : 'rgba(0,0,0,.2)'; ctx.lineWidth = b.sawtooth ? 3 : 1;
-        ctx.beginPath();
-        const n = b.container ? 8 : 10;
-        for (let i = 1; i < n; i++) {
-          if (rw > rh || b.sawtooth) { const x = rx0 + (rw * i) / n; ctx.moveTo(x, ry0 + 2); ctx.lineTo(x, ry1 - 2); }
-          else { const y = ry0 + (rh * i) / n; ctx.moveTo(rx0 + 2, y); ctx.lineTo(rx1 - 2, y); }
-        }
-        ctx.stroke();
-      }
-      if (b.rooftop && rw > 20) {
-        ctx.fillStyle = 'rgba(0,0,0,.25)';
-        ctx.fillRect(rx0 + rw * 0.12, ry0 + rh * 0.2, rw * 0.12, rh * 0.18);
-        ctx.fillRect(rx0 + rw * 0.7, ry0 + rh * 0.55, rw * 0.1, rh * 0.18);
-        ctx.fillStyle = '#6b4a2a'; ctx.beginPath(); ctx.arc(rx0 + rw * 0.4, ry0 + rh * 0.5, Math.min(rw, rh) * 0.12, 0, Math.PI * 2); ctx.fill();
-      }
-      if (b.skylight) { ctx.fillStyle = 'rgba(160,210,240,.6)'; ctx.fillRect(rx0 + rw * 0.2, ry0 + rh * 0.35, rw * 0.6, rh * 0.3); }
-      if (b.helipad) {
-        const r = Math.min(rw, rh) * 0.3;
-        ctx.strokeStyle = '#f2f2f2'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(rx0 + rw / 2, ry0 + rh / 2, r, 0, Math.PI * 2); ctx.stroke();
-        ctx.fillStyle = '#f2f2f2'; ctx.font = `900 ${r * 1.1}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('H', rx0 + rw / 2, ry0 + rh / 2 + 1);
-      }
-      if (b.vents) {
-        ctx.fillStyle = '#39ff6a';
-        for (let i = 0; i < 3; i++) ctx.fillRect(rx0 + rw * (0.2 + i * 0.25), ry0 + rh * 0.4, rw * 0.08, rh * 0.2);
-      }
-      if (b.antenna) V.lights.push({ t: 'blink', x: rx0 + rw / 2, y: ry0 + rh / 2, c: '#ff3030' });
-      if (b.awning) {
-        ctx.fillStyle = b.awning;
-        const t = 5 * k * s;
-        if (b.face === 'n') ctx.fillRect(rx0, ry0, rw, t); else if (b.face === 's') ctx.fillRect(rx0, ry1 - t, rw, t);
-        else if (b.face === 'e') ctx.fillRect(rx1 - t, ry0, t, rh); else ctx.fillRect(rx0, ry0, t, rh);
-      }
-      if (b.sign && rw > 40) {
-        ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.font = `900 ${Math.min(rh * 0.3, rw / b.sign.length * 1.4)}px system-ui`;
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(b.sign, rx0 + rw / 2, ry0 + rh / 2);
-      }
-    }
-    if (b.neon) V.lights.push({ t: 'neon', x: rx0, y: ry0, w: rw, h: rh, c: b.neon, c2: b.neon2, seed: b.x });
-  }
-
-  drawLights(ctx, V) {
-    const n = V.night;
-    const L = V.lights;
-    if (n > 0.2) {
-      ctx.strokeStyle = `rgba(255,214,130,${0.75 * n})`; ctx.lineWidth = Math.max(1.5, 2.2 * V.k);
-      ctx.setLineDash([3, 4]);
-      ctx.beginPath();
-      for (const l of L) if (l.t === 'win') { ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); }
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-    ctx.globalCompositeOperation = 'lighter';
-    for (const l of L) {
-      if (l.t === 'glow') {
-        if (n < 0.2) continue;
-        ctx.globalAlpha = (l.a ?? 0.6) * n;
-        ctx.drawImage(glow(l.c), l.x - l.r, l.y - l.r, l.r * 2, l.r * 2);
-      } else if (l.t === 'neon') {
-        const flick = Math.sin(V.t * 7 + l.seed) > -0.9 ? 1 : 0.3;
-        ctx.globalAlpha = (0.35 + 0.65 * n) * flick;
-        ctx.strokeStyle = l.c; ctx.lineWidth = 6; ctx.globalAlpha *= 0.35;
-        ctx.strokeRect(l.x, l.y, l.w, l.h);
-        ctx.globalAlpha = (0.35 + 0.65 * n) * flick;
-        ctx.lineWidth = 2; ctx.strokeRect(l.x + 1, l.y + 1, l.w - 2, l.h - 2);
-        if (l.c2) { ctx.strokeStyle = l.c2; ctx.strokeRect(l.x + 6, l.y + 6, l.w - 12, l.h - 12); }
-      } else if (l.t === 'ring') {
-        ctx.globalAlpha = 0.4 + 0.6 * n;
-        ctx.strokeStyle = l.c; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(l.x, l.y, l.r, 0, Math.PI * 2); ctx.stroke();
-      } else if (l.t === 'blink') {
-        if (Math.sin(V.t * 4) < 0) continue;
-        ctx.globalAlpha = 1;
-        ctx.drawImage(glow(l.c), l.x - 12, l.y - 12, 24, 24);
-      }
-    }
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-  }
 }
 
 export { ALT };

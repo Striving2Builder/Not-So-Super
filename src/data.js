@@ -79,7 +79,29 @@ export const ASYLUM = {
   districts: ['suburb', 'farm', 'lair'],
   cellsPerSide: 3,        // padded cells on each side of each of the four wings
   videoFolder: 'Asylum',  // clips in assets/video/Asylum/ play when she's sedated
+  // Back in her cell she must watch the cell TV: a clip from assets/video/AsylumTV/ keyed into a
+  // green-screen still, unskippable for tvSecs (it loops if it's shorter). No clips yet → brief static.
+  tvFolder: 'AsylumTV',
+  tvSecs: 30,
+  tvScreens: [
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => `asylum-tv${String(n).padStart(2, '0')}`),
+    ...[2, 4, 5, 7, 8, 9, 10].map((n) => `asylum-tv2-${String(n).padStart(2, '0')}`),
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => `asylum-tv3-${String(n).padStart(2, '0')}`),
+  ].map((f) => `assets/asylum/tv/${f}.webp`),
   reward: 45,
+};
+// Losing a street fight: by morning the city's billboards are playing the footage. A clip from
+// assets/video/<folders[0]>/ (falling back to the next folder) keyed into a green-screen
+// billboard still: red-light ones for fights in the vice districts, downtown ones elsewhere.
+export const BILLBOARDS = {
+  folders: ['Billboards', 'Captive'],
+  vice: ['redlight', 'naughty', 'nightclub'],
+  rld: [2, 4, 6, 8, 10].map((n) => `assets/billboards/rld/sg-mix-${String(n).padStart(2, '0')}.webp`),
+  downtown: [
+    ...[1, 2, 3, 4, 5].map((n) => `downtown-gs-${String(n).padStart(2, '0')}`),
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => `sg-bb-${String(n).padStart(2, '0')}`),
+    ...[1, 3, 5, 7, 9].map((n) => `sg-mix-${String(n).padStart(2, '0')}`),
+  ].map((f) => `assets/billboards/downtown/${f}.webp`),
 };
 export const ASYLUM_JOBS = ['orderly', 'night nurse', 'staff psychiatrist', 'warden', 'pharmacist', 'janitor', 'administrator', 'visiting doctor'];
 export const ASYLUM_CASES = {

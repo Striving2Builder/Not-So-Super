@@ -54,14 +54,44 @@ export function dialog({ title, speaker, text, options = [{ label: 'Continue', v
   });
 }
 
+// ---------------------------------------------------------------- HUD-safe placement
+let hudRects = [], hudRectsT = 0;
+const HUD_AVOID = '#hud-left, #hud-top, #hud-right, #objectives.on, #prompt.on, #btns .tbtn, #stick-base, .caption';
+/**
+ * Nudge a screen point (e.g. an objective marker) out of every visible HUD panel / button, so
+ * world markers never print over UI text or hide under a thumb button. Rects are cached for 250 ms.
+ */
+export function avoidHud(x, y, pad = 18) {
+  const now = performance.now();
+  if (now - hudRectsT > 250) {
+    hudRectsT = now;
+    hudRects = [...document.querySelectorAll(HUD_AVOID)].map((e) => e.getBoundingClientRect()).filter((r) => r.width && r.height);
+  }
+  for (let pass = 0; pass < 4; pass++) { // a nudge out of one button can land in its neighbour
+    for (const r of hudRects) {
+      const l = r.left - pad, t = r.top - pad, rr = r.right + pad, b = r.bottom + pad;
+      if (x < l || x > rr || y < t || y > b) continue;
+      // leave by the shortest way out that stays on screen
+      const opts = [[l, y, x - l], [rr, y, rr - x], [x, t, y - t], [x, b, b - y]]
+        .filter(([ox, oy]) => ox > 12 && ox < innerWidth - 12 && oy > 12 && oy < innerHeight - 12)
+        .sort((a, c) => a[2] - c[2]);
+      if (opts.length) [x, y] = opts[0];
+    }
+  }
+  return [x, y];
+}
+
 export function toast(msg, kind = 'info') {
   const host = $('toasts');
   if (!host) return;
+  // the same message twice just refreshes the one on screen
+  for (const old of host.children) if (old.textContent === msg && !old.classList.contains('out')) old.remove();
   const d = document.createElement('div');
   d.className = 'toast ' + kind;
   d.textContent = msg;
   host.appendChild(d);
-  while (host.children.length > 4) host.firstChild.remove();
+  const max = innerHeight < 480 ? 2 : 4; // phones: don't stack a wall of toasts over the view
+  while (host.children.length > max) host.firstChild.remove();
   setTimeout(() => d.classList.add('out'), 2600);
   setTimeout(() => d.remove(), 3100);
 }

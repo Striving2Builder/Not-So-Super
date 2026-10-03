@@ -1,78 +1,25 @@
 // Investigation zones: a hotspot crime scene. Search props, use X-ray vision on sealed things,
 // question a witness, photograph evidence for the paper, then accuse the suspect who matches the clues.
+// The room is a painting (assets/scenes, hotspots in scenespots.js) with the live layers drawn over it
+// and graded into its light: witness, bait, story dressing, evidence tents, dust, detective vision.
+// Until the painting has loaded (or if it fails) the code painter (crimescene.js) stands in.
+// X-RAY is detective vision; clue finds punch in.
 import { ATTRS, FIRST_NAMES, LAST_NAMES, JOBS, WITNESS_MOODS, INTOX_ITEMS, HERO, DISTRICTS } from './data.js';
-import { drawHumanoid, pose, npcLook, portrait, drawEmblem } from './art.js';
-import { pick, shuffle, chance, fitScene, shade, $ } from './util.js';
+import { drawHumanoid, pose, npcLook, portrait } from './art.js';
+import { pick, shuffle, chance, fitScene, $ } from './util.js';
 import { dialog, toast, banner, flash } from './ui.js';
 import { sfx } from './sfx.js';
 import { CaseFile } from './casefile.js';
 import { comic } from './comic.js';
-
-const LW = 1000, LH = 600, FLOOR = 380;
-
-const SETTINGS = {
-  office: { wall: '#4f5d70', floor: '#3d3326', window: [560, 60, 240, 150], props: [
-    ['desk', 'Executive Desk', 330, 330, 280, 120, 'Paperwork, a stapler and three coffee rings.'],
-    ['computer', 'Computer', 420, 262, 96, 70, 'Password-locked. The screensaver scrolls "SELL SELL SELL".'],
-    ['cabinet', 'Filing Cabinet', 70, 240, 110, 220, 'Alphabetized folders. Mostly tax forms.'],
-    ['shelf', 'Bookshelf', 830, 160, 150, 300, 'Business books nobody has opened.'],
-    ['painting', 'Oil Painting', 220, 90, 150, 110, 'A stern portrait of the company founder.'],
-    ['coat', 'Coat Rack', 700, 240, 60, 230, 'An umbrella and a lonely scarf.'],
-    ['bin', 'Wastebasket', 640, 410, 50, 60, 'Crumpled memos about the coffee machine.'],
-    ['plant', 'Potted Plant', 200, 380, 60, 100, 'A ficus. Surprisingly healthy.'],
-  ] },
-  apartment: { wall: '#7a5f55', floor: '#5a4030', window: [560, 60, 200, 150], props: [
-    ['sofa', 'Sofa', 360, 350, 270, 120, 'Lumpy cushions. Someone left in a hurry.'],
-    ['tv', 'Television', 90, 290, 160, 120, 'The news is on mute.'],
-    ['fridge', 'Fridge', 830, 190, 110, 280, 'Expired milk and a sad lemon.'],
-    ['painting', 'Framed Photo', 380, 100, 150, 100, 'A family at the beach, all smiles.'],
-    ['coat', 'Coat Hooks', 720, 240, 60, 230, 'A rain jacket, still damp.'],
-    ['bin', 'Trash Can', 290, 420, 50, 60, 'Takeout boxes. Lots of them.'],
-    ['lamp', 'Floor Lamp', 660, 290, 40, 180, 'The bulb flickers.'],
-    ['shelf', 'Wall Shelf', 130, 110, 160, 110, 'Knick-knacks and a snow globe.'],
-  ] },
-  alley: { wall: '#5a3a33', floor: '#2e2e33', brick: true, props: [
-    ['dumpster', 'Dumpster', 90, 330, 230, 140, 'It smells exactly how you would expect.'],
-    ['crate', 'Wooden Crate', 420, 380, 110, 90, 'Stamped "PRODUCE". It rattles like glass.'],
-    ['barrel', 'Oil Drum', 570, 370, 70, 110, 'Half-full of rainwater.'],
-    ['painting', 'Torn Poster', 330, 130, 120, 160, 'A peeling club flyer: "LADIES NIGHT — FREE DRINKS".'],
-    ['pipe', 'Drainpipe', 900, 40, 34, 440, 'Rusty, loose at the joint.'],
-    ['door', 'Back Door', 690, 180, 120, 250, 'Steel. Locked from the inside.'],
-    ['bin', 'Trash Can', 850, 410, 60, 70, 'Broken bottles and cigarette butts.'],
-  ] },
-  barn: { wall: '#7a3b2a', floor: '#8a7443', planks: true, props: [
-    ['hay', 'Hay Bales', 60, 350, 220, 130, 'Stacked neat and tight.'],
-    ['tractor', 'Tractor', 560, 300, 260, 180, 'The engine is still warm.'],
-    ['trough', 'Feed Trough', 310, 430, 190, 50, 'The feed smells chemical.'],
-    ['crate', 'Seed Crate', 330, 340, 100, 80, 'Seed packets, some torn open.'],
-    ['barrel', 'Chemical Drum', 860, 370, 70, 110, 'A skull-and-crossbones label, half scraped off.'],
-    ['shelf', 'Tool Shelf', 820, 110, 150, 170, 'Pitchforks, rope, a rusty sickle.'],
-    ['door', 'Hayloft Door', 380, 90, 170, 200, 'The latch has been forced.'],
-  ] },
-  casino: { wall: '#3a1a24', floor: '#5a1830', carpet: true, props: [
-    ['pokertable', 'Roulette Table', 300, 380, 300, 100, 'The wheel lands on 17. Again. And again.'],
-    ['slot', 'Slot Machine', 50, 220, 100, 240, 'JACKPOT lights, no jackpots.'],
-    ['slot', 'Slot Machine', 160, 220, 100, 240, 'It eats your quarter and blinks smugly.'],
-    ['bar', 'Cocktail Bar', 690, 320, 290, 140, 'Bottles glitter under the lights.'],
-    ['painting', 'Gilded Mirror', 420, 90, 160, 110, 'Two-way glass? Could be.'],
-    ['tv', 'Security Monitor', 820, 90, 130, 90, 'Camera 4 shows static.'],
-    ['cabinet', 'Cashier Cage', 580, 170, 100, 160, 'Chips stacked in neat towers.'],
-  ] },
-  factory: { wall: '#4a4d52', floor: '#35373b', props: [
-    ['machine', 'Press Machine', 60, 230, 270, 240, 'Hydraulic press. Someone jammed a wrench in it.'],
-    ['crate', 'Parts Crate', 420, 380, 100, 90, 'Bolts and brackets.'],
-    ['barrel', 'Oil Drum', 540, 370, 70, 110, 'Leaking a rainbow puddle.'],
-    ['cabinet', 'Staff Lockers', 860, 190, 110, 280, 'Names taped on each door.'],
-    ['painting', 'Shift Board', 400, 110, 170, 110, 'The night shift roster, pinned with darts.'],
-    ['shelf', 'Parts Shelf', 650, 180, 150, 270, 'Everything labeled, one gap.'],
-    ['bin', 'Scrap Bin', 350, 440, 50, 50, 'Metal shavings.'],
-  ] },
-};
-const CONTAINERS = ['cabinet', 'painting', 'crate', 'barrel', 'dumpster', 'fridge', 'sofa', 'machine', 'hay', 'slot', 'desk', 'tv', 'door', 'tractor'];
-const SURFACES = ['desk', 'bar', 'pokertable', 'crate', 'sofa', 'trough', 'hay', 'dumpster'];
+import { quality } from './settings.js';
+import { LW, LH, FLOOR, INK, CAPTION, ease, paintRoom, paintFixture, paintLight, paintDust, makeDust, makeGrade, paintStory, paintForeground, paintBackdrop, paintSceneLight, paintSceneFx } from './crimescene.js';
+import { SCENES, pickScene, loadScene, sceneImage, dropScene } from './scenespots.js';
+import { SETTINGS, CONTAINERS, SURFACES, ANIM, drawProp, drawPropAnim, shadeProp, contactShadow, tent } from './sceneprops.js';
+import { ScanView } from './scanview.js';
+import { LensFX } from './lensfx.js';
 
 export class Investigate {
-  constructor(g) { this.g = g; }
+  constructor(g) { this.g = g; this.dust = makeDust(); this.lay = null; }
 
   enter({ zone }) {
     const g = this.g;
@@ -81,9 +28,18 @@ export class Investigate {
     this.t = 0;
     this.en = 100;
     this.xray = false;
+    this.xrayAt = 0;
     this.camera = false;
+    this.focus = null;
+    this.snapReq = null;
     this.setting = SETTINGS[zone.def.setting];
+    this.settingKey = zone.def.setting;
+    this.paint = pickScene(zone.def.setting, zone.def.id, zone.paint); // zone.paint: debug/harness override
+    this.scene = this.paint ? SCENES[this.paint] : null;
+    if (this.paint) loadScene(this.paint); // the bake picks it up once decoded (baseKey)
     this.buildCase();
+    if (this.lay) this.lay.baseKey = ''; // new case, new room
+    if (document.fonts && document.fonts.load) document.fonts.load('20px Bangers').catch(() => {});
 
     g.input.setStick(false);
     g.input.setButtons([
@@ -103,7 +59,10 @@ export class Investigate {
     }, 1500);
   }
 
-  exit() { $('objectives').classList.remove('on'); }
+  exit() {
+    $('objectives').classList.remove('on');
+    dropScene(); this.lay = null; // the painting and the full-screen layers go with the scene
+  }
 
   get photos() { return this.case.photos; }
 
@@ -111,7 +70,12 @@ export class Investigate {
     const S = this.setting;
     this.case = new CaseFile(JOBS[this.zone.def.setting]);
     this.clues = this.case.clues;
-    this.props = S.props.map(([type, name, x, y, w, h, desc]) => ({ type, name, x, y, w, h, desc }));
+    const sc = this.scene;
+    // in a painted room each prop is the painted thing at its spot (renamed to what the painting shows)
+    this.props = S.props.map(([type, name, x, y, w, h, desc], i) => {
+      const sp = sc && sc.spots[i];
+      return sp ? { type, name: sp[4] || name, x: sp[0], y: sp[1], w: sp[2], h: sp[3], desc: sp[5] || desc } : { type, name, x, y, w, h, desc };
+    });
     const pool = shuffle([...this.props]);
     for (const c of this.clues) {
       if (c.method === 'witness') continue;
@@ -121,11 +85,29 @@ export class Investigate {
     }
     const mood = pick(WITNESS_MOODS);
     const wl = npcLook('civilian');
-    this.witness = { x: 780, y: 520, look: wl, mood, clue: this.clues.find((c) => c.method === 'witness'), talked: false, name: `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}` };
+    const [wx, wy, ws] = sc ? sc.witness : [780, 520, 2.1];
+    this.witness = { x: wx, y: wy, s: ws, look: wl, mood, clue: this.clues.find((c) => c.method === 'witness'), talked: false, name: `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}` };
     const surf = this.props.filter((p) => SURFACES.includes(p.type));
     const th = surf.length ? pick(surf) : pick(this.props);
     const item = pick(INTOX_ITEMS);
-    this.trap = { item, x: th.x + th.w * 0.72 - 18, y: th.y - 34, w: 36, h: 36, taken: false, givesClue: chance(0.5) };
+    const [bx, by] = sc ? sc.bait : [th.x + th.w * 0.72, th.y + 2];
+    this.trap = { item, x: bx - 18, y: by - 36, w: 36, h: 36, taken: false, givesClue: chance(0.5) };
+    this.chalk = sc ? { x: sc.chalk[0], y: sc.chalk[1], wallX: sc.chalk[2] } : this.freeFloorSpot();
+  }
+
+  /** A patch of floor clear of furniture and the witness, for the chalk outline. */
+  freeFloorSpot() {
+    const spots = [[480, 528], [250, 532], [640, 522], [150, 540], [900, 545]];
+    const clear = ([x, y]) => Math.hypot(x - this.witness.x, y - this.witness.y) > 150 &&
+      this.props.every((p) => p.y + p.h < FLOOR + 10 || x + 90 < p.x || x - 90 > p.x + p.w || y - 28 > p.y + p.h + 8);
+    const s = spots.find(clear) || spots[0];
+    // a stretch of back wall no tall prop hides (for scorch marks and the like)
+    let wallX = s[0], best = 1e9;
+    for (let x = 140; x <= 860; x += 20) {
+      const open = this.props.every((p) => p.y > FLOOR - 120 || p.y + p.h < FLOOR - 200 || x + 70 < p.x || x - 70 > p.x + p.w);
+      if (open && Math.abs(x - s[0]) < best) { best = Math.abs(x - s[0]); wallX = x; }
+    }
+    return { x: s[0], y: s[1], wallX };
   }
 
   // ------------------------------------------------------------------ input
@@ -136,7 +118,7 @@ export class Investigate {
     if (this.xray) { this.en -= dt * 11; if (this.en <= 0) { this.en = 0; this.setXray(false); toast('X-ray power drained', 'bad'); } }
     else this.en = Math.min(100, this.en + dt * 6);
     if (inp.pressed('xray')) this.setXray(!this.xray);
-    if (inp.pressed('camera')) { this.camera = !this.camera; inp.setButton('camera', { toggled: this.camera }); toast(this.camera ? '📷 Camera ready — tap a found clue to photograph it' : 'Camera away', 'info'); }
+    if (inp.pressed('camera')) { this.camera = !this.camera; inp.setButton('camera', { toggled: this.camera }); toast(this.camera ? '📷 Camera ready — tap a found clue to photograph it' : 'Camera away', 'info'); if (this.camera) sfx.click(); }
     if (inp.pressed('notes')) this.showNotes();
     if (inp.pressed('accuse')) this.showSuspects();
     if (inp.pressed('leave')) this.leave();
@@ -146,9 +128,10 @@ export class Investigate {
 
   setXray(on) {
     if (on && this.en < 10) { toast('Not enough X-ray power', 'bad'); return; }
+    if (on && !this.xray) { this.xrayAt = performance.now(); if (this.lay) this.lay.xrOk = false; }
     this.xray = on;
     this.g.input.setButton('xray', { toggled: on });
-    $('xray-tint').classList.toggle('on', on);
+    $('xray-tint').classList.remove('on'); // detective vision is painted by the scene itself
     if (on) sfx.beam();
   }
 
@@ -157,14 +140,30 @@ export class Investigate {
     return { x: (x - f.ox) / f.s, y: (y - f.oy) / f.s };
   }
 
+  /** Scene coords → screen (CSS px). */
+  toScreen(x, y) {
+    const f = fitScene(this.g.w, this.g.h, LW, LH);
+    return { x: f.ox + x * f.s, y: f.oy + y * f.s };
+  }
+
   /** Comic burst centred on a prop (scene coords → screen). */
   burst(word, p, colors) {
-    const f = fitScene(this.g.w, this.g.h, LW, LH);
-    comic.pow(word, f.ox + (p.x + p.w / 2) * f.s, f.oy + (p.y + p.h / 3) * f.s, { size: 1, colors });
+    const s = this.toScreen(p.x + p.w / 2, p.y + p.h / 3);
+    comic.pow(word, s.x, s.y, { size: 1, colors });
     sfx.pow();
   }
 
-  hit(p, x, y) { return x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h; }
+  /** Hit test, grown to at least 68 logical units (44 px on a landscape phone) each way. */
+  hit(p, x, y) {
+    const px = Math.max(0, (68 - p.w) / 2), py = Math.max(0, (68 - p.h) / 2);
+    return x >= p.x - px && x <= p.x + p.w + px && y >= p.y - py && y <= p.y + p.h + py;
+  }
+
+  /** The witness's tappable body, from their drawn scale. */
+  witnessBox() { const w = this.witness; return { x: w.x - 19 * w.s, y: w.y - 106 * w.s, w: 38 * w.s, h: 106 * w.s }; }
+
+  /** The floor line of the room in use (the painting's, or the code room's). */
+  get floorY() { return this.scene ? this.scene.floor : FLOOR; }
 
   async tap(sx, sy) {
     if (this.busy) return;
@@ -174,11 +173,17 @@ export class Investigate {
     this.busy = true;
     try {
       if (!tr.taken && this.hit(tr, x, y)) return await this.useTrap();
-      if (x > w.x - 40 && x < w.x + 40 && y > w.y - 230 && y < w.y) return await this.talk();
+      if (this.hit(this.witnessBox(), x, y)) return await this.talk();
       const props = [...this.props].sort((a, b) => (b.y + b.h) - (a.y + a.h));
       const p = props.find((p) => this.hit(p, x, y));
       if (p) await this.search(p);
     } finally { this.busy = false; }
+  }
+
+  /** Punch the view in on a prop while its evidence card is up. */
+  async focusOn(p, fn) {
+    this.focus = { p, t0: performance.now(), out: 0 };
+    try { await fn(); } finally { if (this.focus && this.focus.p === p) this.focus.out = performance.now(); }
   }
 
   async search(p) {
@@ -186,7 +191,8 @@ export class Investigate {
     if (this.camera) {
       if (c && c.found && !c.photo) {
         this.case.photograph(c); sfx.shutter(); flash('#fff');
-        this.burst('SNAP!', p, ['#ffffff', '#1e3cff']);
+        this.snapReq = { p, c, n: this.case.num(c) };
+        this.burst('KA-CHIK!', p, ['#ffffff', '#1e3cff']);
         toast(`📸 Evidence photo #${this.photos} — the Gazette will love this`, 'good');
       } else if (c && c.photo) toast('Already photographed.', 'info');
       else toast('Nothing newsworthy there… yet.', 'info');
@@ -197,11 +203,15 @@ export class Investigate {
         await dialog({ title: p.name, text: `${p.desc}<span class="hint">It's sealed tight. Something inside seems heavier than it should be…</span>` });
         return;
       }
-      c.found = true; sfx.pickup();
-      this.burst(c.method === 'xray' ? 'EUREKA!' : 'AHA!', p);
-      await new Promise((r) => setTimeout(r, 450)); // let the burst land before the clue card
-      const how = c.method === 'xray' ? `Your X-ray vision reveals something hidden inside the ${p.name.toLowerCase()}.` : `You search the ${p.name.toLowerCase()} and find something.`;
-      await dialog({ title: 'CLUE FOUND', speaker: ATTRS[c.key].label, text: `${how}<br><br>${ATTRS[c.key].clue[c.value]}<span class="hint">Tip: switch on the camera and tap here to photograph it.</span>` });
+      this.case.find(c); sfx.pickup();
+      this.pulseAt = performance.now();
+      await this.focusOn(p, async () => {
+        this.burst('!', p, ['#ffe600', '#ff2d2d']);
+        await new Promise((r) => setTimeout(r, 520)); // let the burst land before the clue card
+        const how = c.method === 'xray' ? `Your X-ray vision reveals something hidden inside the ${p.name.toLowerCase()}.` : `You search the ${p.name.toLowerCase()} and find something.`;
+        const from = this.toScreenZ(p.x + p.w / 2, p.y + p.h / 2, fitScene(this.g.w, this.g.h, LW, LH), this.zoomK());
+        await this.case.reveal(c, how, 'Tip: switch on the camera and tap here to photograph it.', from);
+      });
       return;
     }
     await dialog({ title: p.name, text: c ? `${p.desc}<span class="hint">You already found the clue here${c.photo ? ' and photographed it' : ''}.</span>` : p.desc });
@@ -226,8 +236,8 @@ export class Investigate {
     if (!v) return;
     w.talked = true;
     if (v === w.mood.works) {
-      w.told = true; w.clue.found = true; sfx.pickup();
-      await dialog({ title: 'CLUE FOUND', speaker: w.name, text: `"Okay… okay. The person I saw — ${ATTRS[w.clue.key].clue[w.clue.value].replace(/<b>|<\/b>/g, '')}"` });
+      w.told = true; sfx.pickup();
+      await this.case.reveal(w.clue, `${w.name} leans in: "Okay… okay. The person I saw —"`);
     } else {
       sfx.lose();
       await dialog({ speaker: w.name, text: '"Forget it. I didn\'t see anything." They clam up and turn away.<span class="hint">You\'ll have to find that clue some other way. Maybe the others are enough.</span>' });
@@ -249,10 +259,7 @@ export class Investigate {
     if (it.perk === 'energy') { this.en = 100; toast('Power fully recharged', 'good'); }
     if (tr.givesClue) {
       const c = this.clues.find((c) => !c.found && c.method !== 'witness');
-      if (c) {
-        c.found = true;
-        await dialog({ title: 'CLUE FOUND', text: `The note reads: ${ATTRS[c.key].clue[c.value]}` });
-      }
+      if (c) await this.case.reveal(c, 'The note tucked under it reads:');
     }
     if (st.intox >= 100) {
       await dialog({ title: 'Everything spins…', text: `${HERO} stumbles out of the scene before she embarrasses herself. The case goes cold.` });
@@ -263,7 +270,7 @@ export class Investigate {
   showNotes() { return this.case.notes(this.zone.name, 'No clues yet. Tap objects in the scene to search them.'); }
 
   async showSuspects() {
-    const s = await this.case.accuse();
+    const s = await this.case.accuse(this.zone.name);
     if (s) this.finish(s.culprit, false, s);
   }
 
@@ -282,7 +289,7 @@ export class Investigate {
     const html = rows.map(([t, d, dim]) => `<div class="${d ? 'done' : dim ? '' : 'cur'}">${d ? '✓' : '•'} ${t}</div>`).join('');
     const el = $('objectives');
     if (el._h !== html) { el.innerHTML = html; el._h = html; }
-    $('hud-sub').textContent = this.xray ? 'X-RAY ACTIVE' : this.camera ? 'CAMERA MODE — tap a found clue' : 'Tap objects to search';
+    $('hud-sub').textContent = this.xray ? 'DETECTIVE VISION' : this.camera ? 'CAMERA — tap a found clue' : 'Tap objects to search';
     this.g.input.setButton('accuse', { lit: found >= 3 });
   }
 
@@ -308,87 +315,246 @@ export class Investigate {
   abort() { this.done = true; this.setXray(false); this.g.endZone(this.zone, { outcome: 'abort', rep: -3 }); }
 
   // ------------------------------------------------------------------ render
+  /** Offscreen layers (device pixels): props, their ink silhouette, the X-ray edge pass. */
+  layers(w, h) {
+    const L = this.lay;
+    if (L && L.w === w && L.h === h) return L;
+    const mk = () => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+    this.lay = { w, h, props: mk(), ink: mk(), base: mk(), baseKey: '', xrOk: false, edge: null, grade: null, gradeKey: '' };
+    return this.lay;
+  }
+
+  /** Zoom-in amount for the clue-found punch (0..1). */
+  zoomK() {
+    const F = this.focus;
+    if (!F) return 0;
+    const now = performance.now();
+    const k = ease((now - F.t0) / 380);
+    if (!F.out) return k;
+    const o = 1 - ease((now - F.out) / 320);
+    if (o <= 0) { this.focus = null; return 0; }
+    return Math.min(k, o);
+  }
+
+  /** The scene transform (fit + drunk sway + focus punch) on any context at device scale. */
+  view(c, f, dpr, zk, still = false) {
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.translate(f.ox, f.oy); c.scale(f.s, f.s);
+    if (still) return;
+    const st = this.g.state;
+    if (st.intox > 30) { const a = Math.sin(this.t * 1.3) * (st.intox - 30) * 0.12; c.translate(a, Math.cos(this.t) * a * 0.3); }
+    if (zk > 0) {
+      const p = this.focus.p, cx = p.x + p.w / 2, cy = p.y + p.h / 2, z = 1 + 0.3 * zk;
+      c.translate(cx + (LW / 2 - cx) * 0.55 * zk, cy + (LH / 2 - cy) * 0.55 * zk); c.scale(z, z); c.translate(-cx, -cy);
+    }
+  }
+
   render(ctx) {
     const g = this.g, W = g.w, H = g.h;
-    ctx.fillStyle = '#05070d'; ctx.fillRect(0, 0, W, H);
+    const dpr = ctx.getTransform().a || 1;
     const f = fitScene(W, H, LW, LH);
-    const st = g.state;
-    ctx.save();
-    ctx.translate(f.ox, f.oy); ctx.scale(f.s, f.s);
-    if (st.intox > 30) { const a = Math.sin(this.t * 1.3) * (st.intox - 30) * 0.12; ctx.translate(a, Math.cos(this.t) * a * 0.3); }
-    ctx.beginPath(); ctx.rect(0, 0, LW, LH); ctx.clip();
-    this.drawRoom(ctx);
+    const v = { x0: -f.ox / f.s, y0: -f.oy / f.s, x1: (W - f.ox) / f.s, y1: (H - f.oy) / f.s };
+    const zk = this.zoomK();
+    const L = this.layers(Math.round(W * dpr), Math.round(H * dpr));
+    const night = g.state.night, key = this.settingKey, t = this.t;
+    const lite = quality().id === 'saver';
+
+    // The painted room and the inked static props are expensive (gradients, a dilation pass over a
+    // full-screen layer), so they're baked once per case into a "base" image. Animated things
+    // (slot reels, screens, the roulette wheel, the witness, the bait) are inked per frame in small
+    // sprite-sized canvases. The punch-in zoom and tipsy sway just transform the baked image.
+    const rec = this.paint ? sceneImage(this.paint) : null, sc = rec ? this.scene : null;
+    const baseKey = `${L.w}x${L.h}|${key}|${sc ? this.paint : ''}|${night > 0.5}|${this.trap.taken}|${this.witness.talked}`;
     const props = [...this.props].sort((a, b) => (a.y + a.h) - (b.y + b.h));
-    for (const p of props) drawProp(ctx, p, this.t);
-    this.drawTrap(ctx);
     const w = this.witness;
-    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(w.x, w.y, 34, 8, 0, 0, Math.PI * 2); ctx.fill();
-    drawHumanoid(ctx, w.x, w.y, 2.1, -1, w.look, pose('stand', this.t), this.t);
-    if (!w.talked) this.bubble(ctx, w.x, w.y - 240, '…?');
+    if (L.baseKey !== baseKey) {
+      const B = L.base.getContext('2d');
+      B.setTransform(1, 0, 0, 1, 0, 0); B.clearRect(0, 0, L.w, L.h);
+      if (sc) this.paintSceneTo(B, f, dpr, v, rec.img);
+      else this.paintRoomTo(B, f, dpr, 0, v, key, night, t);
+      const P = L.props.getContext('2d');
+      P.setTransform(1, 0, 0, 1, 0, 0); P.clearRect(0, 0, L.w, L.h);
+      this.view(P, f, dpr, 0, true);
+      if (sc) { // the painting has the furniture: only the live cast and the case's story go on top
+        if (sc.story !== false) this.drawFloorDressing(P);
+        this.drawWitness(P); this.drawTrap(P);
+        this.gradeLayer(L, sc);
+      } else {
+        let witnessDrawn = false;
+        for (const p of props) {
+          if (!witnessDrawn && p.y + p.h > w.y) { this.drawWitness(P); witnessDrawn = true; }
+          drawProp(P, p, 0); shadeProp(P, p);
+        }
+        if (!witnessDrawn) this.drawWitness(P);
+        this.drawTrap(P);
+      }
+      this.inkLayer(L, f, dpr, lite);
+      const sh = 9 * f.s * dpr;
+      B.globalAlpha = 0.4; B.drawImage(L.ink, sh, sh * 0.7); // comic drop shadow away from the lamp
+      B.globalAlpha = 1; B.drawImage(L.ink, 0, 0); B.drawImage(L.props, 0, 0);
+      // static light, the witness's bubble, the tape, then the print grade: all baked
+      B.save(); this.view(B, f, dpr, 0, true);
+      if (sc) paintSceneLight(B, sc); else paintLight(B, key, this.setting, night, v, t);
+      if (!w.talked) this.bubble(B, w.x + 14 * w.s, w.y - 119 * w.s, '…?');
+      const id = this.zone.def.id;
+      if (id === 'arson') { // smoke still hanging under the ceiling
+        const hz = B.createLinearGradient(0, v.y0, 0, FLOOR);
+        hz.addColorStop(0, 'rgba(70,64,60,.55)'); hz.addColorStop(1, 'rgba(70,64,60,0)');
+        B.fillStyle = hz; B.fillRect(v.x0, v.y0, v.x1 - v.x0, FLOOR - v.y0);
+      }
+      if (key === 'apartment' || key === 'alley') this.drawTape(B, v); // outdoors/at a home the police tape up
+      if (!sc) paintForeground(B, key, v);
+      B.restore();
+      const c = this.toScreen(LW / 2, LH * 0.55);
+      B.setTransform(1, 0, 0, 1, 0, 0);
+      B.drawImage(makeGrade(L.w, L.h, c.x * dpr, c.y * dpr, Math.hypot(L.w, L.h) * 0.5), 0, 0);
+      L.baseKey = baseKey; L.xrOk = false;
+    }
+    // device-space matrix taking the still view to the current (zoomed/swaying) one
+    ctx.save();
+    this.view(ctx, f, dpr, 0, true); const M0 = ctx.getTransform();
+    this.view(ctx, f, dpr, zk); const M = ctx.getTransform();
+    const K = M.multiply(M0.inverse());
+    ctx.setTransform(K); ctx.drawImage(L.base, 0, 0);
+    ctx.restore();
+    // moving parts (reels, screens, the roulette wheel, the bait's glow) are drawn live on top
+    ctx.save();
+    this.view(ctx, f, dpr, zk);
+    if (sc) paintSceneFx(ctx, sc.fx || [], t);
+    else for (const p of props) if (ANIM.includes(p.type)) drawPropAnim(ctx, p, t);
+    this.drawTrapGlow(ctx);
+    ctx.restore();
+
+    // 3) live bits: dust in the light, evidence markers
+    ctx.save();
+    this.view(ctx, f, dpr, zk);
+    paintDust(ctx, t, lite ? this.dust.slice(0, 18) : this.dust, sc && sc.lamp);
+    this.drawMarkers(ctx);
+    if (sc && sc.fg) { const [x, y, fw, fh] = sc.fg, k = rec.img.naturalWidth / LW; ctx.drawImage(rec.img, x * k, y * k, fw * k, fh * k, x, y, fw, fh); }
+    ctx.restore();
+
+    if (this.snapReq) this.takeSnapshot(ctx, dpr);
+    if (this.xray) this.drawXray(ctx, f, dpr, zk, v, L, props);
+    if (this.camera) this.drawViewfinder(ctx, f, dpr, v);
+    if (zk > 0) this.drawSpeedLines(ctx, f, dpr, zk, W, H);
 
     // hover highlight (mouse)
     const ptr = g.input.pointer;
-    if (ptr.x >= 0 && !document.body.classList.contains('touch')) {
+    if (ptr.x >= 0 && !document.body.classList.contains('touch') && !zk) {
       const { x, y } = this.toLogical(ptr.x, ptr.y);
       const hp = [...props].reverse().find((p) => this.hit(p, x, y));
       if (hp) {
-        ctx.strokeStyle = this.camera ? '#fff' : '#ffd23f'; ctx.lineWidth = 3; ctx.setLineDash([8, 6]);
-        ctx.strokeRect(hp.x - 4, hp.y - 4, hp.w + 8, hp.h + 8); ctx.setLineDash([]);
-        this.label(ctx, hp.x + hp.w / 2, hp.y - 12, hp.name);
+        ctx.save(); this.view(ctx, f, dpr, 0);
+        ctx.strokeStyle = this.camera ? '#fff' : this.xray ? '#7ff0ff' : '#ffd23f'; ctx.lineWidth = 3; ctx.setLineDash([10, 7]); ctx.lineDashOffset = -t * 30;
+        ctx.strokeRect(hp.x - 5, hp.y - 5, hp.w + 10, hp.h + 10); ctx.setLineDash([]);
+        this.label(ctx, hp.x + hp.w / 2, hp.y - 18, hp.name.toUpperCase());
+        ctx.restore();
       }
     }
-    // found-clue markers
-    for (const c of this.clues) {
-      if (!c.found || !c.host) continue;
-      const p = c.host;
-      ctx.fillStyle = c.photo ? '#3ee08a' : '#ffd23f';
-      ctx.beginPath(); ctx.arc(p.x + p.w - 6, p.y + 6, 11, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#111'; ctx.font = '900 13px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(c.photo ? '📷' : '!', p.x + p.w - 6, p.y + 7);
-    }
-
-    if (this.xray) this.drawXray(ctx, props);
-    if (this.camera) {
-      ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 4;
-      const m = 26, l = 60;
-      for (const [x, y, dx, dy] of [[m, m, 1, 1], [LW - m, m, -1, 1], [m, LH - m, 1, -1], [LW - m, LH - m, -1, -1]]) {
-        ctx.beginPath(); ctx.moveTo(x, y + dy * l); ctx.lineTo(x, y); ctx.lineTo(x + dx * l, y); ctx.stroke();
-      }
-      ctx.fillStyle = '#ff3030'; ctx.beginPath(); ctx.arc(LW - 60, 60, 8 + Math.sin(this.t * 6) * 2, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.font = '800 16px system-ui'; ctx.textAlign = 'right'; ctx.fillText('REC', LW - 76, 66);
-    }
-    ctx.restore();
   }
 
-  drawRoom(ctx) {
-    const S = this.setting, night = this.g.state.night;
-    ctx.fillStyle = S.wall; ctx.fillRect(0, 0, LW, FLOOR);
-    if (S.brick) {
-      ctx.fillStyle = 'rgba(0,0,0,.18)';
-      for (let y = 0; y < FLOOR; y += 22) for (let x = (y / 22) % 2 ? -30 : 0; x < LW; x += 60) ctx.fillRect(x, y, 56, 18);
+  /** Ink the full-screen props layer: its silhouette, dilated, becomes the outline. */
+  inkLayer(L, f, dpr, lite) {
+    const I = L.ink.getContext('2d');
+    I.setTransform(1, 0, 0, 1, 0, 0); I.globalCompositeOperation = 'source-over'; I.clearRect(0, 0, L.w, L.h);
+    const r = Math.max(1.5, 2.4 * f.s * dpr), dirs = lite ? 4 : 8;
+    for (let i = 0; i < dirs; i++) { const a = (i / dirs) * Math.PI * 2 + 0.3; I.drawImage(L.props, Math.cos(a) * r, Math.sin(a) * r); }
+    I.globalCompositeOperation = 'source-in'; I.fillStyle = INK; I.fillRect(0, 0, L.w, L.h);
+    I.globalCompositeOperation = 'source-over';
+  }
+
+  /** The painted room: backdrop (edge-extended past the stage), the witness's contact shadow. */
+  paintSceneTo(c, f, dpr, v, img) {
+    c.save();
+    this.view(c, f, dpr, 0);
+    paintBackdrop(c, img, v);
+    const w = this.witness;
+    contactShadow(c, { x: w.x - 16 * w.s, y: w.y - 10, w: 32 * w.s, h: 10 });
+    c.restore();
+  }
+
+  /** Multiply the live layer by the painting's ambient colour (alpha kept), so the drawn-on cast
+   *  and dressing take the room's light instead of sitting on it like stickers. */
+  gradeLayer(L, sc) {
+    if (!L.tmp) { L.tmp = document.createElement('canvas'); L.tmp.width = L.w; L.tmp.height = L.h; }
+    const T = L.tmp.getContext('2d');
+    T.setTransform(1, 0, 0, 1, 0, 0); T.clearRect(0, 0, L.w, L.h); T.drawImage(L.props, 0, 0);
+    const P = L.props.getContext('2d');
+    P.save(); P.setTransform(1, 0, 0, 1, 0, 0);
+    P.globalCompositeOperation = 'multiply'; P.fillStyle = sc.tint; P.fillRect(0, 0, L.w, L.h);
+    P.globalCompositeOperation = 'destination-in'; P.drawImage(L.tmp, 0, 0);
+    P.restore();
+  }
+
+  /** Room, fixture, floor dressing and contact shadows onto a device-pixel canvas. */
+  paintRoomTo(c, f, dpr, zk, v, key, night, t) {
+    c.save();
+    this.view(c, f, dpr, zk);
+    paintRoom(c, key, this.setting, night, v, t);
+    paintFixture(c, key);
+    this.drawFloorDressing(c);
+    for (const p of this.props) contactShadow(c, p);
+    contactShadow(c, { x: this.witness.x - 30, y: this.witness.y - 10, w: 60, h: 10 });
+    c.restore();
+  }
+
+  drawWitness(c) {
+    const w = this.witness;
+    drawHumanoid(c, w.x, w.y, w.s, -1, w.look, pose('stand', this.t), this.t);
+    if (this.scene) shadeProp(c, { x: w.x - 22 * w.s, y: w.y - 96 * w.s, w: 44 * w.s, h: 96 * w.s });
+  }
+
+  /** What happened here, told on the floor: per case type (scorch marks, ransom letters…). */
+  drawFloorDressing(g) {
+    const ch = this.chalk, id = this.zone.def.id;
+    paintStory(g, id, ch.x, ch.y, ch.wallX);
+    if (id === 'missing' || id === 'smuggle' || id === 'spiked') { // a trail of prints leading out
+      g.fillStyle = 'rgba(20,10,8,.3)';
+      for (let i = 0; i < 6; i++) {
+        const x = -40 + i * 52, y = 590 - i * 9 + (i % 2) * 12;
+        g.beginPath(); g.ellipse(x, y, 11, 5, 0.2, 0, Math.PI * 2); g.ellipse(x + 15, y + 1, 5, 4, 0, 0, Math.PI * 2); g.fill();
+      }
     }
-    if (S.planks) { ctx.fillStyle = 'rgba(0,0,0,.15)'; for (let x = 0; x < LW; x += 40) ctx.fillRect(x, 0, 3, FLOOR); }
-    if (S.window) {
-      const [x, y, w, h] = S.window;
-      ctx.fillStyle = night > 0.5 ? '#0b1030' : '#8cc4ec'; ctx.fillRect(x, y, w, h);
-      ctx.fillStyle = night > 0.5 ? '#1c2040' : '#6a8aa8';
-      for (let i = 0; i < 7; i++) ctx.fillRect(x + i * (w / 7), y + h - 30 - ((i * 37) % 70), w / 8, 100);
-      if (night > 0.5) { ctx.fillStyle = '#ffd98a'; for (let i = 0; i < 20; i++) ctx.fillRect(x + ((i * 41) % w), y + h - 20 - ((i * 23) % 70), 3, 4); }
-      ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 8; ctx.strokeRect(x, y, w, h);
-      ctx.beginPath(); ctx.moveTo(x + w / 2, y); ctx.lineTo(x + w / 2, y + h); ctx.stroke();
+  }
+
+  /** Numbered evidence tents at every clue found (green check once photographed). */
+  drawMarkers(g) {
+    for (const c of this.clues) {
+      if (!c.found || !c.host) continue;
+      const p = c.host, n = this.case.num(c);
+      const x = Math.min(LW - 30, Math.max(30, p.x + p.w * 0.5 + (n % 2 ? -1 : 1) * Math.min(40, p.w * 0.3)));
+      // on the floor in front of whatever the prop stands on (a computer's desk), never on furniture
+      let foot = p.y + p.h;
+      for (let k = 0; k < 3; k++) {
+        const q = this.props.find((q) => q !== p && x > q.x && x < q.x + q.w && foot + 12 > q.y && foot < q.y + q.h);
+        if (!q) break; foot = q.y + q.h;
+      }
+      const floorY = Math.min(LH - 12, Math.max(foot + 16, this.floorY + 30));
+      tent(g, x, floorY, n, c.photo);
     }
-    ctx.fillStyle = S.floor; ctx.fillRect(0, FLOOR, LW, LH - FLOOR);
-    ctx.strokeStyle = 'rgba(0,0,0,.2)'; ctx.lineWidth = 2;
-    ctx.beginPath();
-    for (let i = -6; i <= 16; i++) { ctx.moveTo(LW / 2 + (i - 5) * 30, FLOOR); ctx.lineTo(LW / 2 + (i - 5) * 150, LH); }
-    for (let y = FLOOR + 30; y < LH; y += 40 + (y - FLOOR) * 0.3) { ctx.moveTo(0, y); ctx.lineTo(LW, y); }
-    ctx.stroke();
-    if (S.carpet) { ctx.fillStyle = 'rgba(255,210,80,.08)'; for (let x = 0; x < LW; x += 50) for (let y = FLOOR; y < LH; y += 50) ctx.fillRect(x + 20, y + 20, 10, 10); }
-    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, FLOOR - 8, LW, 8);
-    // crime scene tape
-    ctx.fillStyle = '#f2d21a'; ctx.save(); ctx.translate(0, 30); ctx.rotate(-0.06); ctx.fillRect(-20, 0, 300, 20);
-    ctx.fillStyle = '#111'; ctx.font = '900 12px system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText('POLICE LINE — DO NOT CROSS — POLICE LINE', 0, 11); ctx.restore();
+  }
+
+  drawTape(g, v) {
+    // Police tape strung across the near corners of the frame, in front of everything.
+    const strip = (x0, y0, x1, y1, off) => {
+      const a = Math.atan2(y1 - y0, x1 - x0), len = Math.hypot(x1 - x0, y1 - y0);
+      g.save(); g.translate(x0, y0); g.rotate(a);
+      g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(4, 8, len, 26);
+      g.fillStyle = '#f5d312'; g.fillRect(0, 0, len, 26);
+      g.strokeStyle = INK; g.lineWidth = 2.5; g.strokeRect(0, 0, len, 26);
+      g.fillStyle = INK; g.font = `20px ${CAPTION}`; g.textBaseline = 'middle'; g.textAlign = 'left';
+      for (let x = -off; x < len; x += 250) g.fillText('POLICE LINE · DO NOT CROSS ·', x, 14);
+      g.restore();
+    };
+    strip(v.x0 - 10, LH - 150, 150, LH + 10, 40);
+    strip(v.x1 + 10, LH - 120, LW - 190, LH + 20, 110);
+  }
+
+  drawTrapGlow(ctx) {
+    const tr = this.trap;
+    if (tr.taken) return;
+    const a = 0.4 + 0.4 * Math.sin(this.t * 4);
+    ctx.strokeStyle = `rgba(255,140,220,${a})`; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(tr.x + 18, tr.y + 20, 26, 0, Math.PI * 2); ctx.stroke();
   }
 
   drawTrap(ctx) {
@@ -397,7 +563,7 @@ export class Investigate {
     const x = tr.x + 18, y = tr.y + 36;
     const n = tr.item.name;
     if (n.includes('Champagne') || n.includes('Cocktail')) {
-      ctx.fillStyle = n.includes('Cocktail') ? 'rgba(80,255,180,.8)' : 'rgba(255,230,140,.85)';
+      ctx.fillStyle = n.includes('Cocktail') ? 'rgba(80,255,180,.9)' : 'rgba(255,230,140,.95)';
       ctx.beginPath(); ctx.moveTo(x - 10, y - 34); ctx.lineTo(x + 10, y - 34); ctx.lineTo(x, y - 16); ctx.closePath(); ctx.fill();
       ctx.strokeStyle = '#ddd'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y - 16); ctx.lineTo(x, y - 2); ctx.moveTo(x - 7, y - 1); ctx.lineTo(x + 7, y - 1); ctx.stroke();
     } else if (n.includes('Perfume')) {
@@ -409,148 +575,7 @@ export class Investigate {
       ctx.fillStyle = '#ddd'; ctx.beginPath(); ctx.ellipse(x, y - 4, 16, 6, 0, 0, Math.PI * 2); ctx.fill();
       for (let i = 0; i < 4; i++) { ctx.fillStyle = '#f4f'; ctx.beginPath(); ctx.arc(x - 6 + i * 4, y - 7, 2.5, 0, Math.PI * 2); ctx.fill(); }
     }
-    const a = 0.4 + 0.4 * Math.sin(this.t * 4);
-    ctx.strokeStyle = `rgba(255,140,220,${a})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y - 16, 26, 0, Math.PI * 2); ctx.stroke();
-  }
-
-  drawXray(ctx, props) {
-    ctx.fillStyle = 'rgba(0,20,60,.62)'; ctx.fillRect(0, 0, LW, LH);
-    ctx.strokeStyle = 'rgba(120,230,255,.8)'; ctx.lineWidth = 2;
-    for (const p of props) ctx.strokeRect(p.x, p.y, p.w, p.h);
-    for (const c of this.clues) {
-      if (c.method !== 'xray' || !c.host) continue;
-      const p = c.host, x = p.x + p.w / 2, y = p.y + p.h / 2;
-      const r = 20 + Math.sin(this.t * 5) * 4;
-      ctx.fillStyle = c.found ? 'rgba(120,255,160,.5)' : 'rgba(255,240,120,.85)';
-      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#111'; ctx.font = '900 20px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(c.found ? '✓' : '?', x, y + 1);
-    }
-    // witness skeleton, for fun
-    const w = this.witness;
-    ctx.strokeStyle = 'rgba(220,250,255,.6)'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(w.x + 2, w.y - 180, 13, 0, Math.PI * 2); ctx.moveTo(w.x, w.y - 166); ctx.lineTo(w.x, w.y - 96);
-    ctx.moveTo(w.x, w.y - 96); ctx.lineTo(w.x - 12, w.y); ctx.moveTo(w.x, w.y - 96); ctx.lineTo(w.x + 12, w.y);
-    ctx.moveTo(w.x - 20, w.y - 150); ctx.lineTo(w.x + 20, w.y - 150); ctx.stroke();
-    if (!this.trap.taken) {
-      const tr = this.trap;
-      ctx.fillStyle = 'rgba(255,90,200,.55)'; ctx.beginPath(); ctx.arc(tr.x + 18, tr.y + 20, 22, 0, Math.PI * 2); ctx.fill();
-      this.label(ctx, tr.x + 18, tr.y - 10, 'CHEMICAL TRACE');
-    }
-  }
-
-  bubble(ctx, x, y, txt) {
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(x, y, 26, 18, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(x - 6, y + 14); ctx.lineTo(x + 2, y + 28); ctx.lineTo(x + 8, y + 12); ctx.fill();
-    ctx.fillStyle = '#111'; ctx.font = '900 18px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, x, y);
-  }
-
-  label(ctx, x, y, txt) {
-    ctx.font = '800 15px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const w = ctx.measureText(txt).width + 16;
-    ctx.fillStyle = 'rgba(8,12,26,.85)'; ctx.fillRect(x - w / 2, y - 12, w, 24);
-    ctx.fillStyle = '#fff'; ctx.fillText(txt, x, y);
   }
 }
 
-// --------------------------------------------------------------------------
-// Prop drawings (logical coordinates, x/y = top-left).
-// --------------------------------------------------------------------------
-function drawProp(ctx, p, t) {
-  const { x, y, w, h } = p;
-  const box = (xx, yy, ww, hh, c) => { ctx.fillStyle = c; ctx.fillRect(xx, yy, ww, hh); };
-  ctx.fillStyle = 'rgba(0,0,0,.25)';
-  if (y + h > FLOOR) { ctx.beginPath(); ctx.ellipse(x + w / 2, y + h, w * 0.55, 10, 0, 0, Math.PI * 2); ctx.fill(); }
-  switch (p.type) {
-    case 'desk':
-      box(x, y, w, 18, '#6b4424'); box(x + 10, y + 18, 70, h - 18, '#5a381c'); box(x + w - 80, y + 18, 70, h - 18, '#5a381c');
-      box(x + 20, y + 35, 50, 6, '#c9a24a'); box(x + 20, y + 70, 50, 6, '#c9a24a');
-      box(x + w * 0.62, y - 8, 50, 8, '#eee'); break;
-    case 'computer':
-      box(x, y, w, h - 12, '#222'); box(x + 5, y + 5, w - 10, h - 24, `hsl(${(t * 40) % 360},60%,40%)`); box(x + w / 2 - 8, y + h - 12, 16, 12, '#333'); break;
-    case 'cabinet':
-      box(x, y, w, h, '#7d8590');
-      for (let i = 0; i < 4; i++) { box(x + 6, y + 8 + i * (h / 4), w - 12, h / 4 - 12, '#8f98a3'); box(x + w / 2 - 12, y + 20 + i * (h / 4), 24, 5, '#444'); }
-      break;
-    case 'shelf':
-      box(x, y, w, h, '#5a3a22');
-      for (let i = 0; i < 4; i++) {
-        const sy = y + 10 + i * (h / 4);
-        box(x + 6, sy + h / 4 - 14, w - 12, 5, '#3a2414');
-        for (let j = 0; j < 7; j++) box(x + 10 + j * ((w - 20) / 7), sy + 8 + (j % 3) * 4, (w - 20) / 7 - 3, h / 4 - 22 - (j % 3) * 4, ['#a33', '#35a', '#3a5', '#aa3', '#737', '#a63'][(i + j) % 6]);
-      }
-      break;
-    case 'painting':
-      box(x, y, w, h, '#c9a24a'); box(x + 8, y + 8, w - 16, h - 16, '#2a4a3a');
-      ctx.fillStyle = '#e0c090'; ctx.beginPath(); ctx.arc(x + w / 2, y + h / 2, h * 0.22, 0, Math.PI * 2); ctx.fill(); break;
-    case 'coat':
-      box(x + w / 2 - 4, y, 8, h, '#4a3020'); box(x + w / 2 - 25, y + h - 8, 50, 8, '#4a3020');
-      ctx.fillStyle = '#6a2a2a'; ctx.beginPath(); ctx.moveTo(x + w / 2, y + 20); ctx.lineTo(x + w / 2 + 26, y + 120); ctx.lineTo(x + w / 2 - 6, y + 120); ctx.fill(); break;
-    case 'bin':
-      ctx.fillStyle = '#556'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w - 6, y + h); ctx.lineTo(x + 6, y + h); ctx.fill();
-      ctx.fillStyle = '#eee'; ctx.beginPath(); ctx.arc(x + w / 2, y + 2, 9, Math.PI, 0); ctx.fill(); break;
-    case 'plant':
-      box(x + 10, y + h - 36, w - 20, 36, '#8a4a2a');
-      ctx.fillStyle = '#3a8a3a'; for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.ellipse(x + w / 2 + Math.cos(i) * 14, y + 30 + Math.sin(i * 2) * 14, 10, 22, i, 0, Math.PI * 2); ctx.fill(); } break;
-    case 'sofa':
-      box(x, y + 20, w, h - 20, '#6a3a5a'); box(x, y, w, 40, '#7a4a6a'); box(x - 10, y + 20, 26, h - 20, '#5a2a4a'); box(x + w - 16, y + 20, 26, h - 20, '#5a2a4a');
-      box(x + 20, y + 45, w / 2 - 25, 30, '#8a5a7a'); box(x + w / 2 + 5, y + 45, w / 2 - 25, 30, '#8a5a7a'); break;
-    case 'tv':
-      box(x, y, w, h * 0.7, '#111'); box(x + 6, y + 6, w - 12, h * 0.7 - 12, '#3a5a8a');
-      ctx.fillStyle = 'rgba(255,255,255,.2)'; for (let i = 0; i < 6; i++) ctx.fillRect(x + 6, y + 6 + ((t * 30 + i * 12) % (h * 0.7 - 12)), w - 12, 2);
-      box(x + w / 2 - 20, y + h * 0.7, 40, h * 0.3, '#333'); break;
-    case 'fridge':
-      box(x, y, w, h, '#e8e8e4'); box(x, y + h * 0.35, w, 3, '#bbb'); box(x + w - 16, y + 30, 6, 40, '#999'); box(x + w - 16, y + h * 0.45, 6, 60, '#999'); break;
-    case 'lamp':
-      box(x + w / 2 - 3, y + 40, 6, h - 40, '#333'); box(x + w / 2 - 18, y + h - 6, 36, 6, '#333');
-      ctx.fillStyle = '#f0e0b0'; ctx.beginPath(); ctx.moveTo(x - 6, y + 44); ctx.lineTo(x + w + 6, y + 44); ctx.lineTo(x + w - 6, y); ctx.lineTo(x + 6, y); ctx.fill(); break;
-    case 'dumpster':
-      box(x, y + 20, w, h - 20, '#2f6a3a'); box(x - 6, y + 10, w + 12, 16, '#26562f');
-      ctx.fillStyle = '#fff'; ctx.font = '900 20px system-ui'; ctx.textAlign = 'center'; ctx.fillText('WASTE', x + w / 2, y + h / 2 + 18); break;
-    case 'crate':
-      box(x, y, w, h, '#a8804a'); ctx.strokeStyle = '#7a5a2a'; ctx.lineWidth = 6; ctx.strokeRect(x + 3, y + 3, w - 6, h - 6);
-      ctx.beginPath(); ctx.moveTo(x + 3, y + 3); ctx.lineTo(x + w - 3, y + h - 3); ctx.stroke(); break;
-    case 'barrel':
-      box(x, y, w, h, '#3a5a8a'); box(x, y + 12, w, 6, '#2a3a5a'); box(x, y + h - 20, w, 6, '#2a3a5a');
-      ctx.fillStyle = '#f2d21a'; ctx.beginPath(); ctx.arc(x + w / 2, y + h / 2, 12, 0, Math.PI * 2); ctx.fill(); break;
-    case 'pipe':
-      box(x, y, w, h, '#6a6a6a'); for (let i = 0; i < h; i += 90) box(x - 4, y + i, w + 8, 10, '#555'); break;
-    case 'door':
-      box(x, y, w, h, '#4a4f58'); box(x + 10, y + 10, w - 20, h * 0.4, '#555c66'); box(x + w - 24, y + h / 2, 12, 12, '#c9a24a'); break;
-    case 'hay':
-      for (let i = 0; i < 3; i++) { box(x + (i % 2) * 20, y + i * (h / 3), w - 20, h / 3 - 4, '#d8b85a'); ctx.fillStyle = '#b8983a'; for (let j = 0; j < 8; j++) ctx.fillRect(x + (i % 2) * 20 + j * (w / 9), y + i * (h / 3), 3, h / 3 - 4); }
-      break;
-    case 'tractor':
-      box(x + 20, y + 40, w - 80, h - 90, '#3a8a3a'); box(x + w - 110, y, 80, 80, '#3a8a3a'); box(x + w - 100, y + 8, 60, 40, '#9cc8e8');
-      ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(x + 60, y + h - 40, 40, 0, Math.PI * 2); ctx.arc(x + w - 60, y + h - 50, 50, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#c9a24a'; ctx.beginPath(); ctx.arc(x + 60, y + h - 40, 16, 0, Math.PI * 2); ctx.arc(x + w - 60, y + h - 50, 20, 0, Math.PI * 2); ctx.fill(); break;
-    case 'trough':
-      box(x, y, w, h, '#7a5a3a'); box(x + 8, y + 6, w - 16, 14, '#b8a860'); break;
-    case 'pokertable':
-      ctx.fillStyle = '#5a3a1a'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + 30, w / 2, 34, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#1a6a3a'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + 28, w / 2 - 12, 26, 0, 0, Math.PI * 2); ctx.fill();
-      box(x + 40, y + 50, 16, h - 50, '#3a2410'); box(x + w - 56, y + 50, 16, h - 50, '#3a2410');
-      ctx.save(); ctx.translate(x + w / 2, y + 26); ctx.rotate(t * 2); ctx.fillStyle = '#c9a24a'; ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#a22'; for (let i = 0; i < 8; i += 2) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 16, (i * Math.PI) / 4, ((i + 1) * Math.PI) / 4); ctx.fill(); } ctx.restore(); break;
-    case 'slot':
-      box(x, y, w, h, '#8a1a2a'); box(x + 6, y + 6, w - 12, 40, '#ffd84d');
-      ctx.fillStyle = '#222'; ctx.font = '900 14px system-ui'; ctx.textAlign = 'center'; ctx.fillText('JACKPOT', x + w / 2, y + 31);
-      box(x + 12, y + 60, w - 24, 50, '#eee');
-      ctx.font = '900 22px system-ui'; ctx.fillStyle = '#a22'; ctx.fillText(['7', '$', '♦'][Math.floor(t * 8) % 3] + ' 7 ' + ['♦', '7', '$'][Math.floor(t * 6) % 3], x + w / 2, y + 94);
-      box(x + w - 4, y + 60, 10, 60, '#bbb'); break;
-    case 'bar':
-      box(x, y, w, 20, '#3a1a0a'); box(x, y + 20, w, h - 20, '#5a2a14');
-      for (let i = 0; i < 8; i++) box(x + 20 + i * 32, y - 50 - (i % 3) * 10, 12, 50 + (i % 3) * 10, ['#3a8a3a', '#8a3a3a', '#c9a24a', '#3a3a8a'][i % 4]);
-      break;
-    case 'board':
-      box(x, y, w, h, '#b8905a'); for (let i = 0; i < 5; i++) box(x + 10 + (i % 3) * 50, y + 10 + Math.floor(i / 3) * 50, 40, 36, '#f2ead8'); break;
-    case 'machine':
-      box(x, y + 40, w, h - 40, '#5a6a7a'); box(x + 30, y, w - 60, 60, '#4a5a6a'); box(x + w / 2 - 30, y + 60, 60, h * 0.5, '#8a9aaa');
-      box(x + 20, y + h - 60, 40, 20, (Math.sin(t * 5) > 0 ? '#ff4040' : '#401010'));
-      box(x + w - 60, y + 80, 30, 30, '#f2d21a'); break;
-    default:
-      box(x, y, w, h, '#777');
-  }
-}
-
-export { drawProp };
+Object.assign(Investigate.prototype, ScanView, LensFX);
