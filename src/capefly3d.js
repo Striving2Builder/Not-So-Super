@@ -18,7 +18,7 @@ const CAPE = {
   key: 0.18,  // N·L cut between the lit and shaded tone
   outer: ['#e8222c', '#8c0c18'], inner: ['#7a0a16', '#4a0610'], // [lit, shade] (sRGB)
   ink: '#0b0b16', inkW: 2.2, foldFrom: 0.38, // inkW: px like the body's hull; fold strokes start this far down
-  sideFlat: 0.75, // how much of the out-of-plane shape goes when seen exactly side-on
+  sideFlat: 0.55, // how much of the out-of-plane shape goes when seen exactly side-on
 };
 const C = CAPE.folds.length; // columns across the width
 
@@ -36,11 +36,11 @@ function clothMaterial() {
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, U);
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vCapeN; varying vec3 vCapeP;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCapeN = mat3(modelMatrix) * normal; vCapeP = (modelMatrix * vec4(position, 1.0)).xyz;');
+      .replace('#include <common>', '#include <common>\nvarying vec3 vCapeN;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCapeN = mat3(modelMatrix) * normal;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
-varying vec3 vCapeN; varying vec3 vCapeP;
+varying vec3 vCapeN;
 uniform vec3 capeKey, capeTint, outLit, outShade, inLit, inShade;`)
       // two hard tones from the real normal (the folds band themselves); the lining is darker, so
       // where the cape flips over you see its inside
@@ -48,9 +48,6 @@ uniform vec3 capeKey, capeTint, outLit, outShade, inLit, inShade;`)
 { vec3 n = normalize(vCapeN) * (gl_FrontFacing ? 1.0 : -1.0);
   float lit = smoothstep(${(CAPE.key - 0.04).toFixed(2)}, ${(CAPE.key + 0.04).toFixed(2)}, dot(n, capeKey));
   vec3 c = gl_FrontFacing ? mix(outShade, outLit, lit) : mix(inShade, inLit, lit);
-  // a thin cool rim where the sheet turns away from the eye (separates it from the city)
-  float rf = 1.0 - abs(dot(n, normalize(cameraPosition - vCapeP)));
-  c += vec3(0.5, 0.75, 0.85) * 0.25 * smoothstep(0.9, 0.98, rf);
   diffuseColor.rgb = c * capeTint; }`);
   };
   m.customProgramCacheKey = () => 'capefly';
@@ -147,7 +144,7 @@ export class FlightCape {
    */
   update(anchor, back, up, side, v, t, dt, scale, whip) {
     const n = this.n, L = CAPE.len * scale;
-    const sk = Math.min(1, v / 60), f = 4 + v / 18, amp = (0.12 + 0.45 * sk) * whip * L;
+    const sk = Math.min(1, v / 60), f = 4 + v / 18, amp = (0.08 + 0.22 * sk) * whip * L;
     if (!this.placed) { this.placed = true; for (let i = 0; i < n; i++) this.p[i].copy(anchor).addScaledVector(back, i * L); }
     // seen side-on its depth (arch, folds, flap) flattens: a thin band, not a fin standing off her
     const view = this._v.subVectors(this.eye, anchor);
@@ -159,8 +156,8 @@ export class FlightCape {
       // around a straight line down her back: an S-wave that travels to the hem (bigger there),
       // a slower sway sideways, and a droop under gravity when she's slow
       const tgt = this._t.copy(anchor).addScaledVector(back, i * L * (0.3 + 0.7 * sk))
-        .addScaledVector(up, (Math.sin(t * f - i * 1.1) * amp * 0.7 + Math.sin(t * 1.7 - i * 0.7) * L * 0.25) * k * flat)
-        .addScaledVector(side, Math.sin(t * f * 0.55 - i * 0.8) * amp * 0.45 * k);
+        .addScaledVector(up, ((Math.sin(t * f - i * 0.75) + 0.6) * amp + Math.sin(t * 1.7 - i * 0.5) * L * 0.12) * k * flat)
+        .addScaledVector(side, Math.sin(t * f * 0.55 - i * 0.6) * amp * 0.6 * k);
       tgt.y -= L * (1 - sk) * 0.9 * i;
       this.p[i].lerp(tgt, Math.min(1, dt * (8 + v / 6)));
       const d = this._a.subVectors(this.p[i], this.p[i - 1]), len = d.length() || 1; // keep the segment length
@@ -177,7 +174,7 @@ export class FlightCape {
         const u = 1 - (2 * j) / (C - 1), au = Math.abs(u);
         // out of her back: the arch (middle stands off), the folds (deeper toward the hem; the edges
         // curl down), and an out-of-phase flutter on the edges
-        const fl = Math.sin(t * 6 - i * 1.1 + u * 1.5) * w * 0.12 * k * au;
+        const fl = Math.sin(t * 6 - i * 1.1 + u * 1.5) * w * 0.07 * k * au;
         const o = (CAPE.arch * scale * (1 - u * u) + CAPE.folds[j] * CAPE.fold * scale * k * k * breathe - w * (0.08 + 0.16 * k) * au * au + fl) * flat;
         let x = q.x + side.x * w * u + up.x * o, y = q.y + side.y * w * u + up.y * o, z = q.z + side.z * w * u + up.z * o;
         if (tan) { const tip = w * 0.3 * (1 - au * au); x += tan.x * tip; y += tan.y * tip; z += tan.z * tip; }
