@@ -119,7 +119,7 @@ export function building(B, o, blk, S) {
       const podium = shape === 'podium' && bot === 0;
       const TL = podium ? { ...L, style: STYLE.concrete, roofTint: L.roofTint } : L;
       box(B, rx0, rz0, rx1, rz1, bot, t, TL, { roof: true });
-      if (podium && h[4] < 0.6) roofGarden(B, x0, z0, x1, z1, t, h, rx0, rz0, rx1, rz1);
+      if (podium && h[4] < 0.6) B.detail(() => roofGarden(B, x0, z0, x1, z1, t, h, rx0, rz0, rx1, rz1));
       bot = t;
     }
   }
@@ -206,9 +206,10 @@ function roofExtras(B, o, blk, S, D, L, h, face, x0, z0, x1, z1, H, roof) {
     // far LOD: one plain penthouse block (no ink), so distant roofs keep their clutter's mass
     const [rx0, rz0, rx1, rz1, top] = roof, w = rx1 - rx0, d = rz1 - rz0, r = (k) => hash2(o.x | 0, o.y | 0, 200 + k);
     const pw = w * (0.3 + r(3) * 0.15), pd = d * (0.3 + r(4) * 0.12), px = rx0 + w * (0.1 + r(5) * 0.4), pz = rz0 + d * (0.1 + r(6) * 0.4);
-    box(B, px, pz, px + pw, pz + pd, top, top + 3 + r(7) * 4, { ...L, style: STYLE.concrete, tint: L.roofTint.clone().multiplyScalar(1.5) }, { ink: 0 });
+    B.detail(() => box(B, px, pz, px + pw, pz + pd, top, top + 3 + r(7) * 4, { ...L, style: STYLE.concrete, tint: L.roofTint.clone().multiplyScalar(1.5) }, { ink: 0 }));
   }
-  if (roof && !B.lite) {
+  // the roof kit is detail: skipped from high patrol and far off (the draw range, no rebuild)
+  if (roof && !B.lite) B.detail(() => {
     const [rx0, rz0, rx1, rz1, top] = roof, w = rx1 - rx0, d = rz1 - rz0, m = Math.min(w, d);
     const r = (k) => hash2(o.x | 0, o.y | 0, 200 + k);
     if (K.helipad && r(1) < K.helipad && m >= 16 && H > 60) {
@@ -233,10 +234,12 @@ function roofExtras(B, o, blk, S, D, L, h, face, x0, z0, x1, z1, H, roof) {
       }
     }
     if (K.water && r(10) < K.water && m >= 10) waterTower(B, rx1 - 4, rz1 - 4, top);
-    if (K.antenna && r(11) < K.antenna) {
-      mast(B, rx0 + 2, rz0 + 2, top, top + 6 + r(12) * 8);
-      if (r(16) < 0.4 && m >= 14) mast(B, rx1 - 3, rz0 + 3, top, top + 4 + r(17) * 5, 0.35, null); // a second, unlit
-    }
+    if (K.antenna && r(11) < K.antenna && r(16) < 0.4 && m >= 14) mast(B, rx1 - 3, rz0 + 3, top, top + 4 + r(17) * 5, 0.35, null); // a second, unlit
+  });
+  // the lit antennas (their beacons blink across the city at night) and roof boards stay in the body
+  if (roof && !B.lite) {
+    const [rx0, rz0, rx1, rz1, top] = roof, m = Math.min(rx1 - rx0, rz1 - rz0), r = (k) => hash2(o.x | 0, o.y | 0, 200 + k);
+    if (K.antenna && r(11) < K.antenna) mast(B, rx0 + 2, rz0 + 2, top, top + 6 + r(12) * 8);
     if (K.sign && r(13) < K.sign && !o.sign && m >= 12) {
       const words = SIGN_WORDS[blk.d];
       if (words) roofBoard(B, S, pick(words, r(14)), neonOf(D, r(15)), rx0, rz0, rx1, rz1, face, top, Math.min(8, m * 0.3));
