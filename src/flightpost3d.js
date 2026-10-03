@@ -12,7 +12,7 @@ import * as THREE from 'three';
 // FXAA ("console" variant, Lottes): 5 taps to find an edge and its direction, 4 more to blend along it.
 const FRAG = `
 precision highp float;
-uniform sampler2D tDiffuse; uniform vec2 px; uniform float streak; uniform float sharp; uniform vec2 vp; varying vec2 vUv;
+uniform sampler2D tDiffuse; uniform vec2 px; uniform float streak; uniform float sharp; uniform float taps; uniform vec2 vp; varying vec2 vUv;
 #define LUMA vec3(0.299, 0.587, 0.114)
 void main() {
   vec4 cM = texture2D(tDiffuse, vUv);
@@ -36,13 +36,18 @@ void main() {
   // texel spacing. It gives back the edge contrast bilinear magnification smears away, sharpens
   // least where local contrast is already high (no ringing halos round the ink lines) and is
   // clamped to its neighbours' range (never overshoots). Two diagonal taps (each a bilinear blend
-  // of a 2x2 block) stand in for CAS's four: the pass runs at the canvas's full density.
+  // of a 2x2 block) stand in for CAS's four: the pass runs at the canvas's full density. taps = 4
+  // (High) adds the other diagonal: edges running along the first one get sharpened too.
   vec3 c = cM.rgb;
   if (sharp > 0.0) {
     vec3 a = texture2D(tDiffuse, vUv + px * vec2(0.75, -0.75)).rgb, b = texture2D(tDiffuse, vUv - px * vec2(0.75, -0.75)).rgb;
-    vec3 mn = min(c, min(a, b)), mx = max(c, max(a, b));
+    vec3 mn = min(c, min(a, b)), mx = max(c, max(a, b)), avg = 0.5 * (a + b);
+    if (taps > 2.5) {
+      vec3 e = texture2D(tDiffuse, vUv + px * vec2(0.75, 0.75)).rgb, f = texture2D(tDiffuse, vUv - px * vec2(0.75, 0.75)).rgb;
+      mn = min(mn, min(e, f)); mx = max(mx, max(e, f)); avg = 0.25 * (a + b + e + f);
+    }
     vec3 k = sqrt(clamp(min(mn, 1.0 - mx) / max(mx, vec3(1e-4)), 0.0, 1.0)) * mix(0.6, 1.4, sharp);
-    c = clamp(c + (c - 0.5 * (a + b)) * k, mn, mx);
+    c = clamp(c + (c - avg) * k, mn, mx);
   }
   gl_FragColor = vec4(c, 1.0);
 #endif
@@ -64,7 +69,7 @@ const VERT = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(posit
 export class FlightPost {
   constructor() {
     this.rt = null; this.rtB = null; this.mode = null;
-    const mk = (defines) => new THREE.ShaderMaterial({ uniforms: { tDiffuse: { value: null }, px: { value: new THREE.Vector2() }, streak: { value: 0 }, sharp: { value: 0 }, vp: { value: new THREE.Vector2(0.5, 0.5) } }, defines, vertexShader: VERT, fragmentShader: FRAG, depthTest: false, depthWrite: false, toneMapped: false });
+    const mk = (defines) => new THREE.ShaderMaterial({ uniforms: { tDiffuse: { value: null }, px: { value: new THREE.Vector2() }, streak: { value: 0 }, sharp: { value: 0 }, taps: { value: 2 }, vp: { value: new THREE.Vector2(0.5, 0.5) } }, defines, vertexShader: VERT, fragmentShader: FRAG, depthTest: false, depthWrite: false, toneMapped: false });
     // FXAA runs at the SCENE's resolution (cheap: it's the small target), then a sharpening
     // upscale (+ the boost streak) writes the canvas
     this.fxaa = mk({ FXAA: '' });
@@ -80,9 +85,10 @@ export class FlightPost {
    * toward vp (uv of the vanishing point); scale: the scene's resolution relative to the canvas.
    * Returns the scene target's size (the shared screen uniforms must describe it while it renders:
    * the caller sets them through onSize before the scene draws). sharp 0..1: the upscale's
-   * contrast-adaptive sharpening (graphics profile fly3dSharp; off when nothing is upscaled).
+   * contrast-adaptive sharpening (graphics profile fly3dSharp; off when nothing is upscaled); taps:
+   * 2 = one diagonal, 4 = both (graphics profile fly3dSharpTaps).
    */
-  render(renderer, scene, camera, mode, streak = 0, vp = null, scale = 1, onSize = null, sharp = 0) {
+  render(renderer, scene, camera, mode, streak = 0, vp = null, scale = 1, onSize = null, sharp = 0, taps = 2) {
     const size = renderer.getDrawingBufferSize(this._s);
     const w = Math.max(1, Math.round(size.x * scale)), h = Math.max(1, Math.round(size.y * scale)), samples = mode === 'msaa' ? 4 : 0;
     if ((mode === 'none' || !mode) && scale >= 0.999) { onSize?.(size.x, size.y); renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
@@ -99,6 +105,7 @@ export class FlightPost {
     this.mat.uniforms.px.value.set(1 / w, 1 / h); this.fxaa.uniforms.px.value.set(1 / w, 1 / h);
     this.mat.uniforms.streak.value = streak;
     this.mat.uniforms.sharp.value = scale < 0.97 ? sharp : 0;
+    this.mat.uniforms.taps.value = taps;
     if (vp) this.mat.uniforms.vp.value.copy(vp);
     renderer.setRenderTarget(this.rt);
     renderer.render(scene, camera);

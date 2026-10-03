@@ -117,8 +117,12 @@ function atlas() {
 // ---------------------------------------------------------------- the shader
 /** Contact shade (AO) at the foot of walls: k = strength, h = falloff height in metres. */
 const AO = { k: 0.42, h: 4 };
-/** Haze reach: far = max(fog far, camera height x perAlt), capped under the camera's far plane. */
-export const HAZE = { perAlt: 7, max: 4200, near: 0.1 };
+/**
+ * Haze reach: far = max(fog far, camera height x perAlt), capped under the camera's far plane;
+ * it starts at near x far, or nearAlt x the camera's height when that's further (from high patrol
+ * the nearest ground is already ~600 m off: the haze began under her and swallowed the whole city).
+ */
+export const HAZE = { perAlt: 7, max: 4200, near: 0.1, nearAlt: 1.4 };
 /** Key vs ambient: a clear lit / raking / shadow split on every tower, day and dusk too. */
 const KEY = { key: 1.4, amb: 0.86 };
 const _cool = new THREE.Color(0.93, 0.98, 1.1);
@@ -387,7 +391,7 @@ export class CityLook {
       const h = U.uHorizon.value, hl = 0.3 * h.r + 0.59 * h.g + 0.11 * h.b;
       U.uHazeCol.value.copy(h).lerp(_t.setRGB(hl, hl, hl), 0.3).lerp(c, 0.1).multiply(_cool).multiplyScalar(1.12);
       U.uHazeFar.value = Math.min(HAZE.max, Math.max(fog.far, camY * HAZE.perAlt));
-      U.uHazeNear.value = U.uHazeFar.value * HAZE.near;
+      U.uHazeNear.value = Math.max(U.uHazeFar.value * HAZE.near, camY * HAZE.nearAlt);
     }
     U.uNight.value = night;
     U.uLit.value = 0.85 * Math.min(1, Math.max(0, (night - 0.15) * 1.6));

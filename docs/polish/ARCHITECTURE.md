@@ -81,13 +81,16 @@ render hand-off, enter/exit, the boost kick, and the 3D flight button set (`setB
   - `skyline3d.js` — horizon: the water (bay + river round the map), the outer "city carpet" ground
     (street grid in the shader), the haze patch for MeshBasic ground.
   - `street3d.js` — GPU traffic light streams (streets, bridges, highway) + street steam.
-- `sky3d.js` — clock-driven graded dome (horizon band → mid → zenith, sun disc + glow, moon +
-  halo; exactly `horizon` at/below the horizon), sun/moon lights, district-tinted fog, inked
-  two-tone comic cumulus billboards (one draw call). Exposes `horizon` (display colour); flight3d
-  sets `city3.sky = sky` so the city's haze ends on it. Tables: `SKY`, `CLOUD`.
+- `sky3d.js` — dome keyframed by the hour (`SKY`: zenith, mid, warm band above the horizon,
+  horizon; a blue day with a mid-blue horizon, an orange sunset band, violet night), an inked comic
+  sun disc (`SUN`, drawn lower than the key light), moon + stars only once properly night, sun/moon
+  lights, district-tinted fog, and comic cumulus billboards (one draw call) from a signed-distance
+  atlas built at start (8 shapes; three cel tones + silhouette ink + inner puff lines, AA'd at any
+  size); no cloud within 50 m of the lens. Exposes `horizon` (display colour; also the city haze's
+  end colour, so `SKY` is the one place it lives). Tables: `SKY`, `SUN`, `CLOUD`.
 - `flightpost3d.js` — whole-frame AA: the scene renders into a target three treats like the canvas
   (tone mapping + sRGB output), FXAA at the scene's size, then a contrast-adaptive sharpening
-  upscale to the canvas (`quality().fly3dSharp`; + the boost zoom streak, only in a screen-edge ellipse);
+  upscale to the canvas (`quality().fly3dSharp`, both diagonals with `fly3dSharpTaps` 4 on High; + the boost zoom streak, only in a screen-edge ellipse);
   `quality().fly3dAA` = 'fxaa' | 'msaa' | 'none'. flight3d adds dynamic resolution on top of the
   `fly3dDpr` caps (`LOOK3.dynRes`).
 - `herofly3d.js` — the HeroModel posed from the flight state (hover idle / fist-forward with

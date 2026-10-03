@@ -19,6 +19,7 @@ const KEY = 'supergirl-settings';
  * fly3dOut: the 3D flight canvas's pixel-ratio cap (her pass + overlay); the scene renders at fly3dDpr.
  * fly3dAA: whole-frame anti-aliasing for 3D flight: 'msaa' | 'fxaa' | 'none'.
  * fly3dSharp: 0..1 contrast-adaptive sharpening on the 3D flight scene's upscale to the canvas.
+ * fly3dSharpTaps: that sharpening's taps: 2 (one diagonal) or 4 (both diagonals).
  * clubLights: real (moving) point lights in a premade club.
  * scanFilter: night-case detective vision darkens the 3D view with a CSS filter.
  * nightlife (code-built clubs' show): 'full' haze, 4 moving heads, dense specks · 'lite' 2 heads, no
@@ -33,6 +34,7 @@ export const PROFILES = {
     look3d: 'full',
     nightlife: 'full',
     flyDetail: true, flyTileRes: 144, flySpriteMax: 640, fly3dDpr: [1.25, 1.1], fly3dHero: [4, 1], fly3dAA: 'msaa', fly3dOut: 3, fly3dSharp: 0.6,
+    fly3dSharpTaps: 4,
     scanFilter: true,
     brawlSprite: 256, brawlBakeMs: 900,
   },
@@ -43,6 +45,7 @@ export const PROFILES = {
     look3d: 'lite',
     nightlife: 'lite',
     flyDetail: true, flyTileRes: 144, flySpriteMax: 512, fly3dDpr: [1, 0.75], fly3dHero: [2, 1], fly3dAA: 'fxaa', fly3dOut: 1.5, fly3dSharp: 0.6,
+    fly3dSharpTaps: 2,
     scanFilter: true,
     brawlSprite: 256, brawlBakeMs: 900,
   },
@@ -53,6 +56,7 @@ export const PROFILES = {
     look3d: 'min',
     nightlife: 'min',
     flyDetail: false, flyTileRes: 96, flySpriteMax: 256, fly3dDpr: [0.85, 0.75], fly3dHero: [0, 1.5], fly3dAA: 'none', fly3dOut: 1.5, fly3dSharp: 0.5,
+    fly3dSharpTaps: 2,
     scanFilter: false,
     brawlSprite: 180, brawlBakeMs: 250,
   },

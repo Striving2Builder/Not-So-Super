@@ -330,7 +330,7 @@ export class Flight3D {
     // (the streak eases off in the canyons: there the outer band is the nearest wall, which must stay crisp)
     this.post.render(r, this.scene, this.cam.cam, this.aaQ || quality().fly3dAA, this.cam.boostK * (1 - this.cam.patrolK) * (1 - 0.75 * this.cam.canyonK), _uv, this.sceneScale ?? 1,
       (w, hh) => { LOOK.res.value.set(w, hh); LOOK.dpr.value = outDpr * (w / r.getDrawingBufferSize(_s2).x); }, // (ink widths for the scene's own resolution)
-      quality().fly3dSharp ?? 0.5);
+      quality().fly3dSharp ?? 0.5, quality().fly3dSharpTaps || 2);
     lookFrame(r); // back to the canvas for her pass
     if (sharp) this.heroPass.render(r, this.scene, this.cam.cam, this.hero.group.position, FlyHero3D.RADIUS * this.hero.size, W, H, hq); // (radius: her + the cape)
     this.overlay(ctx, night, frac, boosting);
