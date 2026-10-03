@@ -6,27 +6,10 @@ round 7–8 thread). The companion docs are [BRIEF.md](BRIEF.md) (the builder br
 art) and the per-builder handoffs in [handoff/](handoff/).
 
 ## Pick up here (new thread)
-Two builders were started at the end of the previous thread. A new thread can't receive their
-reports or resume them, but they commit WIP and keep a handoff file on their own branch.
-1. **Stability (top priority):** branch `worktree-agent-a6fc3fdc139bef752`, worktree
-   `.claude/worktrees/agent-a6fc3fdc139bef752`, handoff `docs/polish/handoff/stability.md`. Scope: the
-   iPad crashes/freezes/2D fallback (see "Device testing") **and** the round-8 perf regression
-   (−15–25% in 3D flight; bisect sharpen taps / hero outline / SDF clouds / ground textures, get back
-   within ~5% of round 7).
-2. **Supergirl visuals:** branch `worktree-agent-a547587396b773e1c`, worktree
-   `.claude/worktrees/agent-a547587396b773e1c`, handoff `docs/polish/handoff/supergirl.md`. Scope:
-   flight body language (bank, pitch, boost/hover/dive poses), a solid hair mass and readable face,
-   colour blocking and cel/ink on her body, the same quality in 2D/brawler/portraits. Supergirl only.
-
-For each: `git log phase-2..<branch>` and read the handoff on the branch
-(`git show <branch>:docs/polish/handoff/<file>`). If it looks finished, review its shots, merge with
-`--no-ff` into `phase-2`, re-run the harness and push. If it's unfinished, spawn a **fresh** builder in
-a new worktree, tell it to `git reset --hard <that branch>` first and continue from the handoff file.
-Merge stability first; the Supergirl branch likely conflicts in `hero3d.js`, `heropass3d.js`,
-`settings.js`, `main.js` (keep both sides).
-
-Then: tag a `testdrive-2026-10-03` build for the user's iPad (`?perf=1` for numbers), run a fresh
-blind critic, and start flight/city round 9 from the r9fly list in "Round 8".
+- **Stability: merged** (774c006). City GPU memory budget (`KEEP` in city3d.js: 30 detailed blocks / 40 ground tiles, unseen 4 s → freed and rebuilt), 1 WebGL context flying / 2 in a brawl (shared offscreen sprite renderer `offscreen3d.js`), lost-context recovery with a "RESTORING GRAPHICS…" card (`gfx.js`), LOADING card + staged zone loads, iOS caps (Auto → Balanced, flight canvas ≤2×, FXAA), crash-reload drops Auto to Battery saver once. Perf bisect brought 3D flight back to 0.92–1.00 of round 7 (high patrol still 8–12% under: ~25% more triangles from round-8 city content — **needs a user call**: keep the detail or trim it). Tools: `tools/shots/stab.js` (`--tour`, `--lose`), `flyab.js`, `flytoggle.js`, `serve.js`. Handoff: `docs/polish/handoff/stability.md`.
+- **Test build:** `testdrive-2026-10-03` (this commit). Ask the user to test on the iPad with `?perf=1`: `tex` flat (~50), `gl ctx` 1 flying / 2 in a brawl, LOADING card on every dive, RESTORING card if it blanks, toasts on fallback.
+- **Supergirl visuals builder still running** at the time of writing: branch `worktree-agent-a547587396b773e1c`, worktree `.claude/worktrees/agent-a547587396b773e1c`, handoff `docs/polish/handoff/supergirl.md`. Scope: flight body language (bank, pitch, boost/hover/dive poses), solid hair mass + readable face, colour blocking and cel/ink on her body, same quality in 2D/brawler/portraits. Supergirl only. A new thread: `git log phase-2..worktree-agent-a547587396b773e1c`, read its handoff (`git show <branch>:docs/polish/handoff/supergirl.md`); if finished, review shots and merge `--no-ff` (expect small conflicts in `hero3d.js` — HeroSprite now renders via `offscreen3d.js` — plus `heropass3d.js`, `settings.js`, `main.js`; keep both sides); if unfinished, spawn a **fresh** builder that `git reset --hard`s to that branch and continues from the handoff.
+- **Then:** a fresh blind critic, and flight/city round 9 from the r9fly list in "Round 8".
 
 ## How the loop runs
 - **Stateless by design (2026-10-03):** no step should need old chat history. The state lives in files:
@@ -91,7 +74,7 @@ blind critic, and start flight/city round 9 from the r9fly list in "Round 8".
 - `testdrive-2026-10-02`: the first test build (3D flight default, brawler round 3, billboard/asylum beats).
 - `testdrive-2026-10-02b` (15d95a7): adds flight 5/5b, city round 5 and investigation round 3.
 - `testdrive-2026-10-02c` (dc6e56c): adds the crisp hero, city round 6 and flight round 6. The user tested on an iPad (see "Device testing").
-- Next: `testdrive-2026-10-03` after the stability merge (rounds 7–8, hero variants, `?perf=1`).
+- `testdrive-2026-10-03` (774c006): rounds 7–8, hero variants (pause menu "Hero"), iPad stability, `?perf=1`. **Latest; the user should iPad-test it.**
 
 ## Device testing (2026-10-03, iPad, real device)
 - "Plays but crashes and is a bit janky." Diving from flight into a brawler/activity: very long load or freeze. 3D flight: after a few freezes or a black screen it goes back to 2D.
