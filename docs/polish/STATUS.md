@@ -85,20 +85,21 @@ Filter for critics' asks that fight the comic style: outlined, flat-shaded puffs
 
 ## Backlog (rough priority)
 1. Flight/city round 8 (above).
-2. Director: the district caption can lag the district name. A caption clipped at the left edge in
+2. Hero redesign round (after flight/city rounds; user confirmed this order 2026-10-03): the hero is a Mixamo-rigged GLB (`assets/models/supergirl.glb` + `supergirl_anims.glb`, loaded in hero3d.js; clips retarget via `heroRig()`; the flight cape is procedural in capefly3d.js). A new model on a Mixamo rig is a drop-in plus one round of shader retuning. Open user questions: stay Supergirl or go original (DC trademark if released; `the_riddler.glb` enemy too); multiple playable heroes (needs a select screen + per-hero story footage). Suggested first step: an original comic-style hero behind `?hero=alt` for a phone A/B.
+3. Director: the district caption can lag the district name. A caption clipped at the left edge in
    shots is just its slide-in/out animation caught mid-way; that's by design, not a bug.
-3. Brawler round 4:
+4. Brawler round 4:
    - painted blocks by day (lit windows, brightening)
    - a wet reflective street from the red-light paintings
    - cache the fire gradients (a fire fight dropped to ~10 fps)
    - check the per-image ground lines
-4. Investigation round 4:
+5. Investigation round 4:
    - a witness that matches the paintings (shading and rim light at minimum)
    - searched props react on the painting
    - shots of `alley_2` and `apartment`
-5. Asylum: use the `assets/asylum/cell/` stills as the "back in the cell" backdrop. Capture room: wire `assets/capture/room-2000.webp` (tap spots need re-mapping) and its green-screen TV.
-6. Paused areas: premade 3D, self-built 3D, nightlife, night case (perf first).
-7. Apply the `src/` folder reorganisation (ARCHITECTURE.md) when no builders are running.
+6. Asylum: use the `assets/asylum/cell/` stills as the "back in the cell" backdrop. Capture room: wire `assets/capture/room-2000.webp` (tap spots need re-mapping) and its green-screen TV.
+7. Paused areas: premade 3D, self-built 3D, nightlife, night case (perf first).
+8. Apply the `src/` folder reorganisation (ARCHITECTURE.md) when no builders are running.
 
 ## Waiting on the user
 - Video clips in `assets/video/AsylumTV/`, `assets/video/Asylum/` and `assets/video/Billboards/`, then run `node tools/build_video_manifest.js`. Until then the screens show static.
