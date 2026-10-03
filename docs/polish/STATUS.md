@@ -1,10 +1,32 @@
 # Polish pass: status and handoff
 
-Read this first when picking the polish pass up in a new thread. Last updated 2026-10-03: round 8 is
-merged (all three builders) and blind-tested (r9fly: 4.0 vs AAA, 6.5 vs the best HTML5 games).
-**Top priority now: iPad stability** (see "Device testing"). Running: a stability builder
-(`handoff/stability.md`) and a Supergirl visuals builder (`handoff/supergirl.md`). Hero variants Classic/Ponytail are merged (fc7c052; pause menu "Hero", `?hero=`). The companion docs are [BRIEF.md](BRIEF.md) (the builder brief),
-[ARCHITECTURE.md](ARCHITECTURE.md) (module map and target layout) and [ASSETS.md](ASSETS.md) (incoming art).
+Read this first when picking the polish pass up in a new thread. Last updated 2026-10-03 (end of the
+round 7–8 thread). The companion docs are [BRIEF.md](BRIEF.md) (the builder brief),
+[ARCHITECTURE.md](ARCHITECTURE.md) (module map and target layout), [ASSETS.md](ASSETS.md) (incoming
+art) and the per-builder handoffs in [handoff/](handoff/).
+
+## Pick up here (new thread)
+Two builders were started at the end of the previous thread. A new thread can't receive their
+reports or resume them, but they commit WIP and keep a handoff file on their own branch.
+1. **Stability (top priority):** branch `worktree-agent-a6fc3fdc139bef752`, worktree
+   `.claude/worktrees/agent-a6fc3fdc139bef752`, handoff `docs/polish/handoff/stability.md`. Scope: the
+   iPad crashes/freezes/2D fallback (see "Device testing") **and** the round-8 perf regression
+   (−15–25% in 3D flight; bisect sharpen taps / hero outline / SDF clouds / ground textures, get back
+   within ~5% of round 7).
+2. **Supergirl visuals:** branch `worktree-agent-a547587396b773e1c`, worktree
+   `.claude/worktrees/agent-a547587396b773e1c`, handoff `docs/polish/handoff/supergirl.md`. Scope:
+   flight body language (bank, pitch, boost/hover/dive poses), a solid hair mass and readable face,
+   colour blocking and cel/ink on her body, the same quality in 2D/brawler/portraits. Supergirl only.
+
+For each: `git log phase-2..<branch>` and read the handoff on the branch
+(`git show <branch>:docs/polish/handoff/<file>`). If it looks finished, review its shots, merge with
+`--no-ff` into `phase-2`, re-run the harness and push. If it's unfinished, spawn a **fresh** builder in
+a new worktree, tell it to `git reset --hard <that branch>` first and continue from the handoff file.
+Merge stability first; the Supergirl branch likely conflicts in `hero3d.js`, `heropass3d.js`,
+`settings.js`, `main.js` (keep both sides).
+
+Then: tag a `testdrive-2026-10-03` build for the user's iPad (`?perf=1` for numbers), run a fresh
+blind critic, and start flight/city round 9 from the r9fly list in "Round 8".
 
 ## How the loop runs
 - **Stateless by design (2026-10-03):** no step should need old chat history. The state lives in files:
@@ -37,6 +59,10 @@ merged (all three builders) and blind-tested (r9fly: 4.0 vs AAA, 6.5 vs the best
   The answer keys are in `shots/keys/`; never show them to a critic.
 - **Reference pools:** `docs/references/<area>/`; the AAA flight refs are in `flying3d/`.
 - **Known artifact:** a black rectangle under the LIVE panel in headless shots. It is a compositor copy of the feed `<video>`: hiding the video removes it, and the DOM position is correct. It is not a game bug. Still to do: confirm on a real phone.
+- **Shot options:** shoot.js pins dynamic resolution for fly3d shots (`?dynres=off`, so shots show phone sharpness); `--query k=v` appends to every scenario URL (e.g. `--query hero=ponytail`).
+- **Round-vs-round perf A/B:** `git archive <commit> | tar -x -C <scratch>/rX` for each side, then run `node tools/shots/fly3d.js --port <p> --rounds 3` in each copy, alternating, on unique ports. fly3d.js does not pin dynRes.
+- **Real phones:** `?perf=1` shows fps, worst frame, 3D scene scale, draw calls, triangles and texture count (src/perfhud.js). Ask the user for these numbers.
+- **Blender:** Blender 5.2 with the MCP addon (protocol 13) is used by hero builders (`tools/heroskins/`). No image-to-3D generator is enabled (Rodin trial out of funds, no Hunyuan keys, no Premium for Tripo).
 - **Machine load:** fps is noisy while other builders run. Use paired or alternating A/B runs before calling something a regression.
 
 ## Standing user decisions (don't re-litigate)
@@ -64,7 +90,8 @@ merged (all three builders) and blind-tested (r9fly: 4.0 vs AAA, 6.5 vs the best
 ## Builds
 - `testdrive-2026-10-02`: the first test build (3D flight default, brawler round 3, billboard/asylum beats).
 - `testdrive-2026-10-02b` (15d95a7): adds flight 5/5b, city round 5 and investigation round 3.
-- `testdrive-2026-10-02c` (dc6e56c): adds the crisp hero, city round 6 and flight round 6. **This is the latest build;** the user should phone-test it.
+- `testdrive-2026-10-02c` (dc6e56c): adds the crisp hero, city round 6 and flight round 6. The user tested on an iPad (see "Device testing").
+- Next: `testdrive-2026-10-03` after the stability merge (rounds 7–8, hero variants, `?perf=1`).
 
 ## Device testing (2026-10-03, iPad, real device)
 - "Plays but crashes and is a bit janky." Diving from flight into a brawler/activity: very long load or freeze. 3D flight: after a few freezes or a black screen it goes back to 2D.
@@ -83,18 +110,6 @@ merged (all three builders) and blind-tested (r9fly: 4.0 vs AAA, 6.5 vs the best
 - **City** (ce56633): aerial perspective in `buildings3d.js` (desaturate → flatten → haze over ~40–70% of draw distance; ink hazed less); sea only under the bay and river ring (fixed the pale-blue flood from altitude); no ground tiles past the coast (fixed the black slab); district crowns; roof clutter; night car streaks (`street3d.js`); neon odds set the night hierarchy; casino `districtGlow` dome. +6–10% triangles, fps within noise. Open: day haze very white ~1 km out; casino glow at 0.6 not re-shot; far streaks look like dashed red lines.
 - **Post/clouds/speed lines** (merged after ce56633): CAS-style 2-tap sharpening upscale (`fly3dSharp` High/Balanced 0.6, Battery 0.5); boost smear limited to an edge ellipse and eased 75% in canyons; cloud ink fades before fill (hollow-cloud fix) and patrol drops whole clouds instead of ghosting all; wind streaks tapered, ≤9 m, outside the central 60%. ~4–6% fps. Open: only one diagonal is sharpened; Balanced canyons render at 0.5× canvas (`fly3dDpr` 0.75 vs `fly3dOut` 1.5) — raising to ~0.9 is the next sharpness win if perf allows.
 - **Not yet attributed:** the thin orange line across towers in `fly3d_low_1` is downtown's neon trim ring at 30% height (`blocks3d.js` ~l.195, `#ff8a5a`), not the contrail.
-
-## Next round (8): briefs from the r8fly critic, ranked
-Filter for critics' asks that fight the comic style: outlined, flat-shaded puffs and ink lines stay; their execution (aliasing, repetition) is fair game. The caption clipped at the left edge is its slide animation (by design).
-1. **Ground from altitude (city), the top tell:** the board-game look of flat coloured lot tiles with box buildings.
-   - Texture the ground: streets, sidewalks, parking, tree clusters.
-   - Water: an irregular shoreline, a darker deep tone, a sky reflection; remove the white dash pattern on the river (pairs 3, 5) and the pill shape.
-   - Cut the red-white district-border lines by ~80% in 3D (keep them on the minimap). Also the "dashed red lines" of far car streaks and the red speckle noise on the far ground (pair 4).
-2. **Hero framing (hero/camera):** keep her at ~18–25% of screen height in every band (high patrol and the patrol view still show her tiny); a 3/4 rear-side view, never straight down onto her back (pair 6: "an unreadable lump"); never hidden by a roof in front of her (pair 4: depth/occlusion — consider a silhouette or x-ray pass). Thicker outline on dark or busy backgrounds. Fix the white notch in the cape (pair 7).
-3. **Daytime light (sky/post + city):** a blue gradient with a sun disc and warm horizon instead of the uniform pink-lavender wash; directional shadows or at least baked AO/contact shading on buildings; more value contrast near vs far; hide the moon by day. Re-check the day haze (very white ~1 km out) and the high-patrol haze that swallows most of the city.
-4. **Clouds (sky):** no cloud within ~50 m of the camera (pair 1: a big cloud right under her); vary puff shapes and sizes; 2–3 tone shading (lit top, shadowed base); no pixel staircases on the ink (pair 4); a big dark-outlined cloud ring cut off behind the minimap.
-5. **AA and texture filtering (post/city):** window moiré on near towers (pair 8): mipmaps/anisotropy or a distance fade for the window grids; ink width scaled with depth; noisy sketchy building ink (pair 6). Try the Balanced canyon scene-scale raise.
-6. **Effects:** edge speed lines still read as "white paper shards" and stray white bars at the left edge (pairs 6, 8): thinner, additive, starting inside the frame; car streaks as soft additive trails, not opaque red rectangles; smaller headlight glow splats.
 
 ## Backlog (rough priority)
 1. iPad stability (above), then flight/city round 9 from the r9fly list.
@@ -117,4 +132,7 @@ Filter for critics' asks that fight the comic style: outlined, flat-shaded puffs
 ## Waiting on the user
 - Video clips in `assets/video/AsylumTV/`, `assets/video/Asylum/` and `assets/video/Billboards/`, then run `node tools/build_video_manifest.js`. Until then the screens show static.
 - A real-phone check of the LIVE panel (headless black box) and of the hero's sharpness in flight.
+- The iPad model and which build was tested (asked 2026-10-03, unanswered); `?perf=1` numbers from the next test build.
+- Optional hero models from Meshy (the user has access); they drop into the same hero slot as Classic/Ponytail.
+- The narrative story draft, which will define villains/enemies/NPCs (not before).
 - A decision on the office "blackmail" packs. Style note: the photoreal asylum/office stills clash with the comic look, and some show a trademarked "S" shield.
