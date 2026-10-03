@@ -22,6 +22,17 @@ docs/polish/              brief, architecture, round notes
 Until the move happens, keep writing code as if it had: a new module belongs to exactly one of
 these folders, and its imports should make sense from there.
 
+## WebGL budget (iOS Safari): one context for the screen, one for sprite bakes
+- `gfx.js` (core): `IOS`, `hasWebGL()` (releases its probe), `watchContext(renderer)` (lost →
+  the game pauses behind a "RESTORING GRAPHICS…" card; not back in 3.5 s → the owner rebuilds),
+  `loadingPanel(text)` (the zones' LOADING card), the crash-reload flag (→ Battery saver once).
+- `offscreen3d.js` (three): the ONE offscreen renderer for HeroSprite + brawlsprite bakes
+  (`renderToCanvas`), released while the 3D flight runs. Never `new THREE.WebGLRenderer` elsewhere:
+  the screen uses Special3D's shared renderer (rebuilt by `replaceRenderer` if iOS drops it; no
+  context at all → 3D flight drops to 2D via `Overworld.drop3D`, a 3D zone is left).
+- Zones load behind the LOADING card over several frames (brawler `load()`, investigation's one
+  bake frame, Special3D `warmUp()` compileAsync); city3d trims near builds/tiles (`KEEP`).
+
 ## Rules
 1. **One responsibility per module.** Game logic, rendering, and set dressing live in separate
    files (e.g. `brawler.js` = rules/state, `brawlstage.js` = backdrop, `brawlsprite.js` = sprites).

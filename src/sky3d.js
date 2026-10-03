@@ -55,14 +55,19 @@ void main(){
   c = mix(c, top, smoothstep(0.2, 0.8, h));
   c += (band - mid) * 0.35 * toSun * (1.0 - smoothstep(0.02, 0.3, h)) * step(0.0, band.r - mid.r);
   // the sun: a flat comic disc with a darker inked rim and a soft glow; anti-aliased by its own slope
+  // (sun and moon each only while they show: uniform branches, the whole screen pays for this shader)
   float d = dot(p, discDir), fw = fwidth(d) + 1e-6;
-  c += sunCol * (pow(max(d, 0.0), 60.0) * 0.18 + pow(max(d, 0.0), 8.0) * 0.1) * sunK; // (a modest glow: a disc paler than its halo reads as a hollow ring)
-  float disc = clamp((d - ${SUN.disc.toFixed(5)}) / fw + 0.5, 0.0, 1.0), core = clamp((d - ${(SUN.disc + 0.00025).toFixed(5)}) / fw + 0.5, 0.0, 1.0);
-  c = mix(c, mix(sunRim, sunCol, core), disc * sunK);
+  if (sunK > 0.0) {
+    c += sunCol * (pow(max(d, 0.0), 60.0) * 0.18 + pow(max(d, 0.0), 8.0) * 0.1) * sunK; // (a modest glow: a disc paler than its halo reads as a hollow ring)
+    float disc = clamp((d - ${SUN.disc.toFixed(5)}) / fw + 0.5, 0.0, 1.0), core = clamp((d - ${(SUN.disc + 0.00025).toFixed(5)}) / fw + 0.5, 0.0, 1.0);
+    c = mix(c, mix(sunRim, sunCol, core), disc * sunK);
+  }
   // the moon (night only): a pale disc + halo
-  float m = dot(p, sunDir);
-  c += vec3(0.55, 0.62, 0.9) * pow(max(m, 0.0), 60.0) * 0.35 * moonK;
-  c = mix(c, vec3(0.92, 0.94, 1.0), clamp((m - 0.9994) / (fwidth(m) + 1e-6) + 0.5, 0.0, 1.0) * moonK);
+  float m = dot(p, sunDir), fm = fwidth(m) + 1e-6;
+  if (moonK > 0.0) {
+    c += vec3(0.55, 0.62, 0.9) * pow(max(m, 0.0), 60.0) * 0.35 * moonK;
+    c = mix(c, vec3(0.92, 0.94, 1.0), clamp((m - 0.9994) / fm + 0.5, 0.0, 1.0) * moonK);
+  }
   // night: a sparse field of stars, fading out toward the horizon glow
   if (moonK > 0.0 && p.y > 0.05) {
     vec3 q = p * 180.0, cell = floor(q);
