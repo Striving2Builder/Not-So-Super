@@ -86,7 +86,8 @@ render hand-off, enter/exit, the boost kick, and the 3D flight button set (`setB
   two-tone comic cumulus billboards (one draw call). Exposes `horizon` (display colour); flight3d
   sets `city3.sky = sky` so the city's haze ends on it. Tables: `SKY`, `CLOUD`.
 - `flightpost3d.js` — whole-frame AA: the scene renders into a target three treats like the canvas
-  (tone mapping + sRGB output), then one pass to the canvas with FXAA (+ the boost zoom streak);
+  (tone mapping + sRGB output), FXAA at the scene's size, then a contrast-adaptive sharpening
+  upscale to the canvas (`quality().fly3dSharp`; + the boost zoom streak, only in a screen-edge ellipse);
   `quality().fly3dAA` = 'fxaa' | 'msaa' | 'none'. flight3d adds dynamic resolution on top of the
   `fly3dDpr` caps (`LOOK3.dynRes`).
 - `herofly3d.js` — the HeroModel posed from the flight state (hover idle / fist-forward with

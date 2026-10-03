@@ -7,10 +7,23 @@ import * as THREE from 'three';
 
 const FX = {
   trail: { n: 24, life: 0.3, width: [0.34, 0.0], from: 140, head: [1, 0.2, 0.18], tail: [1, 0.8, 0.2], alpha: 1 },   // red off her heels → gold // speed (m/s) it starts
-  wind: { n: 28, radius: [5, 14], ahead: [4, 26], width: 0.09, from: 0.62 },       // from = speed fraction; close round her (they read at the screen edges, never as far hairlines)
+  wind: { n: 28, radius: [5, 14], ahead: [4, 26], width: 0.09, from: 0.62, len: 9, clear: [0.62, 0.95] }, // from = speed fraction; close round her (they read at the screen edges, never as far hairlines); len cap (m); clear: NDC radius they fade in over
   ring: { life: 0.9, grow: [3, 70], boostGrow: [2, 26] },
-  lines: { from: 0.18, deal: 70 },                                                  // speed fraction; re-deal ms
+  lines: { from: 0.18, deal: 70, clear: [0.6, 1.0], len: [0.22, 0.32] },                               // speed fraction; re-deal ms; clear: the screen ellipse they fade in over (× the half size); len: longest streak × screen height (cruise, boost)
 };
+
+// wind streaks: tapered at both ends, soft across, and only out at the screen edges (faded in
+// from an ellipse round the centre, so none rakes across her or the view ahead). Display colour.
+const WIND_VS = `attribute vec2 k; varying vec2 vK; varying vec3 vClip;
+void main(){ vK = k; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); vClip = gl_Position.xyw; }`;
+const WIND_FS = `uniform vec3 color; uniform float opacity; uniform vec2 clear; varying vec2 vK; varying vec3 vClip;
+void main(){
+  vec2 ndc = vClip.xy / max(vClip.z, 1e-3);
+  float a = opacity * smoothstep(0.0, 0.25, vK.x) * (1.0 - smoothstep(0.45, 1.0, vK.x)) * (1.0 - smoothstep(0.3, 1.0, abs(vK.y)));
+  a *= smoothstep(clear.x, clear.y, length(ndc));
+  if (a < 0.01) discard;
+  gl_FragColor = vec4(color, a);
+}`;
 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _v = new THREE.Vector3(), _s = new THREE.Vector3();
 
@@ -38,9 +51,14 @@ export class FlightFX3D {
     const W = FX.wind.n, geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(W * 4 * 3), 3).setUsage(THREE.DynamicDrawUsage));
     const idx = [];
-    for (let i = 0; i < W; i++) { const a = i * 4; idx.push(a, a + 1, a + 2, a, a + 2, a + 3); }
+    const kk = new Float32Array(W * 4 * 2);
+    for (let i = 0; i < W; i++) { const a = i * 4; idx.push(a, a + 1, a + 2, a, a + 2, a + 3); kk.set([0, 1, 0, -1, 1, -1, 1, 1], a * 2); }
     geo.setIndex(idx);
-    this.windMat = new THREE.MeshBasicMaterial({ color: 0xeaf6ff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, fog: false });
+    geo.setAttribute('k', new THREE.BufferAttribute(kk, 2)); // (along: head 0 → tail 1, across −1..1)
+    this.windMat = new THREE.ShaderMaterial({
+      uniforms: { color: { value: new THREE.Color(0xeaf6ff) }, opacity: { value: 0 }, clear: { value: new THREE.Vector2(...FX.wind.clear) } },
+      vertexShader: WIND_VS, fragmentShader: WIND_FS, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    });
     this.wind = new THREE.Mesh(geo, this.windMat);
     this.wind.frustumCulled = false; this.wind.renderOrder = 4;
     this.gusts = Array.from({ length: W }, () => ({ p: new THREE.Vector3(), live: false }));
@@ -102,8 +120,8 @@ export class FlightFX3D {
     this.trail.visible = n > 1;
     // --- wind streaks
     const Wd = FX.wind, wk = Math.max(0, (frac - Wd.from) / (1 - Wd.from)), live = Math.round(Wd.n * Math.min(1, wk * 1.4 + (boosting ? 0.4 : 0)));
-    this.windMat.opacity = Math.min(0.75, 0.25 + wk * 0.6) * (live ? 1 : 0);
-    const wp = this.wind.geometry.attributes.position, len = Math.min(26, 2 + speedM * 0.05);
+    this.windMat.uniforms.opacity.value = Math.min(0.7, 0.25 + wk * 0.55) * (live ? 1 : 0);
+    const wp = this.wind.geometry.attributes.position, len = Math.min(Wd.len, 2 + speedM * 0.04);
     _b.set(-_v.z, 0, _v.x); // her right
     for (let i = 0; i < Wd.n; i++) {
       const s = this.gusts[i];
@@ -121,8 +139,8 @@ export class FlightFX3D {
       _s.subVectors(cam.position, s.p).cross(_v).normalize().multiplyScalar(Wd.width * (1 + s.p.distanceTo(cam.position) * 0.02));
       wp.setXYZ(i * 4, s.p.x + _s.x, s.p.y + _s.y, s.p.z + _s.z);
       wp.setXYZ(i * 4 + 1, s.p.x - _s.x, s.p.y - _s.y, s.p.z - _s.z);
-      wp.setXYZ(i * 4 + 2, _a.x - _s.x * 0.2, _a.y - _s.y * 0.2, _a.z - _s.z * 0.2);
-      wp.setXYZ(i * 4 + 3, _a.x + _s.x * 0.2, _a.y + _s.y * 0.2, _a.z + _s.z * 0.2);
+      wp.setXYZ(i * 4 + 2, _a.x - _s.x * 0.15, _a.y - _s.y * 0.15, _a.z - _s.z * 0.15);
+      wp.setXYZ(i * 4 + 3, _a.x + _s.x * 0.15, _a.y + _s.y * 0.15, _a.z + _s.z * 0.15);
     }
     wp.needsUpdate = true;
     this.wind.visible = live > 0;
@@ -139,8 +157,9 @@ export class FlightFX3D {
   }
 
   /**
-   * Comic action lines on the 2D overlay: tapered white streaks that live only in the outer band
-   * of the screen and fade out toward the middle (never through her or the view ahead). Sparse at
+   * Comic action lines on the 2D overlay: short tapered white streaks that live only in the outer
+   * band of the screen: they fade in from an ellipse round the screen's centre (its middle ~60% is
+   * always clear: never through her or the view ahead), so they read as speed, not as glitches. Sparse at
    * cruise, a full speed panel at boost; plus wall-rush streaks down the side a tower face is
    * passing. vp: the screen point she's heading for; walls: { l, r } 0..1 tower-face proximity.
    * Draw them first on a clear overlay: the centre fade erases what's under it.
@@ -154,31 +173,37 @@ export class FlightFX3D {
       this.dealt = deal;
       this.lines = [];
       const n = Math.floor(boosting ? 26 + f * 14 : 6 + f * 10);
-      for (let i = 0; i < n; i++) this.lines.push({ a: Math.random() * Math.PI * 2, in: Math.random(), w: (boosting ? 5 : 2.5) + Math.random() * (boosting ? 13 : 5) });
+      for (let i = 0; i < n; i++) this.lines.push({ a: Math.random() * Math.PI * 2, in: Math.random(), w: 2 + Math.random() * (boosting ? 5 : 4) });
       for (const [side, k] of [[-1, walls.l], [1, walls.r]]) {
         const m = Math.floor(k * 14);
-        for (let i = 0; i < m; i++) this.lines.push({ a: (side < 0 ? Math.PI : 0) + (Math.random() - 0.5) * 1.1, in: Math.random(), w: 3 + Math.random() * 8, wall: k });
+        for (let i = 0; i < m; i++) this.lines.push({ a: (side < 0 ? Math.PI : 0) + (Math.random() - 0.5) * 1.1, in: Math.random(), w: 2.5 + Math.random() * 6, wall: k });
       }
     }
     // radii from the vanishing point: the streaks run from past the screen edge in to the outer band
     const R = Math.hypot(Math.max(vp.x, W - vp.x), Math.max(vp.y, H - vp.y)), ox = vp.x, oy = vp.y;
-    const inner = boosting ? 0.5 : 0.66;
+    const inner = boosting ? 0.6 : 0.7, L = H * FX.lines.len[boosting ? 1 : 0];
     ctx.save();
-    ctx.fillStyle = night > 0.5 ? `rgba(232,244,255,${boosting ? 0.95 : 0.7})` : `rgba(255,255,255,${boosting ? 0.95 : 0.75})`;
+    ctx.fillStyle = night > 0.5 ? `rgba(232,244,255,${boosting ? 0.8 : 0.65})` : `rgba(255,255,255,${boosting ? 0.85 : 0.7})`;
     ctx.beginPath();
     for (const l of this.lines) {
       const c = Math.cos(l.a), s = Math.sin(l.a), k = l.wall ?? f;
-      const r0 = R * (inner + (1 - inner) * 0.6 * l.in * (1 - 0.5 * k)), w = l.w * (0.5 + 0.5 * k);
+      // where this ray leaves the screen: a streak is at most `len` long, measured in from there
+      const ex = Math.min(c > 1e-3 ? (W - ox) / c : c < -1e-3 ? -ox / c : 1e9, s > 1e-3 ? (H - oy) / s : s < -1e-3 ? -oy / s : 1e9);
+      const r1 = ex + 12, r0 = Math.max(R * (inner + (1 - inner) * 0.6 * l.in * (1 - 0.5 * k)), ex - L * (0.6 + 0.4 * l.in)), w = l.w * (0.5 + 0.5 * k);
+      if (r0 >= r1) continue;
       // a needle: sharp tip inside, widest at the screen edge
       ctx.moveTo(ox + c * r0, oy + s * r0);
-      ctx.lineTo(ox + c * R * 1.1 - s * w, oy + s * R * 1.1 + c * w); ctx.lineTo(ox + c * R * 1.1 + s * w, oy + s * R * 1.1 - c * w); ctx.closePath();
+      ctx.lineTo(ox + c * r1 - s * w, oy + s * r1 + c * w); ctx.lineTo(ox + c * r1 + s * w, oy + s * r1 - c * w); ctx.closePath();
     }
     ctx.fill();
-    // fade toward the middle: erase with a radial ramp (opaque in the centre → nothing at the edge)
+    // fade toward the middle: erase with an elliptical ramp round the screen's centre (fully clear
+    // inside clear[0] × the half size → untouched from clear[1] out)
+    const C = FX.lines.clear;
     ctx.globalCompositeOperation = 'destination-out';
-    const g = ctx.createRadialGradient(ox, oy, R * inner, ox, oy, R * 0.98);
-    g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.translate(W / 2, H / 2); ctx.scale(W / 2, H / 2);
+    const g = ctx.createRadialGradient(0, 0, C[0], 0, 0, C[1]);
+    g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.5, 'rgba(0,0,0,0.6)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(-1.5, -1.5, 3, 3);
     ctx.restore();
   }
 

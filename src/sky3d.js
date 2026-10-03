@@ -54,7 +54,7 @@ void main(){
 // Comic cumulus: billboards (corner offsets applied in view space), alpha-tested, two-tone + ink.
 const BIG = '300.0'; // world size above which a cloud is one of the huge banks
 const CLOUD_VS = `attribute vec2 corner; attribute vec2 size; attribute float variant; varying vec2 vUv; varying float vFade; varying float vDist; varying float vLy;
-uniform vec3 sunDir; uniform vec2 fadeNear; uniform float heroDist; uniform float bankK; uniform vec2 heroNdc;
+uniform vec3 sunDir; uniform vec2 fadeNear; uniform float heroDist; uniform float bankK; uniform vec2 heroNdc; uniform float thin;
 void main(){
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   mv.xy += corner * size;
@@ -67,6 +67,10 @@ void main(){
   // the cloud's own centre, not the corner: a whole cloud fades together
   float d = length((modelViewMatrix * vec4(position, 1.0)).xyz) - max(size.x, size.y) * 0.5;
   vFade = smoothstep(heroDist + fadeNear.x, heroDist + fadeNear.y, d);
+  // the patrol view thins the deck by dissolving whole clouds (a per-cloud dice roll), never by
+  // turning them all see-through: a half-clear cloud over the city reads as a hollow ink outline
+  float roll = fract(sin(dot(position.xz, vec2(0.0123, 0.0471))) * 43758.5453);
+  vFade *= smoothstep(thin, thin + 0.12, roll);
   // the huge banks only exist for the high-patrol shot, seen from above: from below or edge-on
   // their ink outline would scrawl across the whole sky
   // nothing sits on her (the lower-left third at high patrol): fade clouds whose centre lands near
@@ -86,11 +90,20 @@ void main(){
   if (a < 0.01 || vFade < 0.02) discard;
   // ink: a constant ~2 px band just inside the silhouette (the buildings' ink weight), whatever
   // the cloud's size on screen; underside in shadow, lit crowns toward the light
-  float px = (t.a - 0.5) / fw, inkK = max(1.0 - smoothstep(1.2, 2.2, px), t.b * smoothstep(0.0, 1.0, px));
+  // the lit crowns and the ink ring get the same slope-sharpened edge as the silhouette: the fills
+  // stay as crisp as the ink however much a cloud is magnified
+  float fr = fwidth(t.r) * 0.75 + 1e-4, fb = fwidth(t.b) * 0.75 + 1e-4;
+  float litK = smoothstep(0.5 - fr, 0.5 + fr, t.r), ringK = smoothstep(0.5 - fb, 0.5 + fb, t.b);
+  float px = (t.a - 0.5) / fw, inkK = max(1.0 - smoothstep(1.2, 2.2, px), ringK * smoothstep(0.0, 1.0, px));
+  // far off the ink melts into the fill BEFORE the fill melts into the haze, and the cloud thins
+  // out as a whole: the fill is about the horizon's colour, so fogging both alike left a hollow
+  // ink outline hanging in the haze
+  float fogK = smoothstep(fogNear, fogFar, vDist);
+  inkK *= 1.0 - smoothstep(0.05, 0.4, fogK);
   vec3 under = shade * mix(0.68, 1.0, smoothstep(0.1, 0.6, vLy));
-  vec3 c = mix(mix(under, lit, t.r), ink, inkK);
-  c = mix(c, fogCol, smoothstep(fogNear, fogFar, vDist) * 0.85);
-  gl_FragColor = vec4(c, a * alpha * vFade);
+  vec3 c = mix(mix(under, lit, litK), ink, inkK);
+  c = mix(c, fogCol, fogK * 0.85);
+  gl_FragColor = vec4(c, a * alpha * vFade * (1.0 - 0.85 * smoothstep(0.3, 0.9, fogK)));
 }`;
 
 let cloudTex = null;
@@ -179,7 +192,7 @@ export class Sky3D {
     geo.setIndex(idx);
     this.cloudU = {
       map: { value: cloudAtlas() }, lit: { value: new THREE.Color() }, shade: { value: new THREE.Color() }, ink: { value: new THREE.Color() },
-      fogCol: { value: this.horizon }, sunDir: this.uniforms.sunDir, fogNear: { value: 600 }, fogFar: { value: 2400 }, alpha: { value: 1 }, fadeNear: { value: new THREE.Vector2(...CLOUD.fadeNear) }, heroDist: { value: 10 }, bankK: { value: 0 }, heroNdc: { value: new THREE.Vector2() },
+      fogCol: { value: this.horizon }, sunDir: this.uniforms.sunDir, fogNear: { value: 600 }, fogFar: { value: 2400 }, alpha: { value: 1 }, fadeNear: { value: new THREE.Vector2(...CLOUD.fadeNear) }, heroDist: { value: 10 }, bankK: { value: 0 }, heroNdc: { value: new THREE.Vector2() }, thin: { value: 0 },
     };
     this.cloudMat = new THREE.ShaderMaterial({ uniforms: this.cloudU, vertexShader: CLOUD_VS, fragmentShader: CLOUD_FS, transparent: true, depthWrite: false, fog: false });
     this.cloudMat.extensions = { derivatives: true };
@@ -227,7 +240,7 @@ export class Sky3D {
     const tone = (i) => _a.copy(linear(CLOUD.day[i])).lerp(_b.copy(linear(CLOUD.night[i])), night).lerp(_t.copy(linear(CLOUD.dusk[i])), near * (1 - night * 0.35));
     this.cloudU.lit.value.copy(tone(0)); this.cloudU.shade.value.copy(tone(1)); this.cloudU.ink.value.copy(tone(2));
     this.cloudU.fogNear.value = fogFar * 0.5; this.cloudU.fogFar.value = fogFar * 1.6;
-    this.cloudU.alpha.value = 1 - 0.6 * patrol;
+    this.cloudU.thin.value = 0.6 * patrol - 0.12; // (below 0: every cloud stays)
     this.cloudU.heroDist.value = heroDist;
     this.cloudU.bankK.value = bankK;
     if (heroNdc) this.cloudU.heroNdc.value.copy(heroNdc);
