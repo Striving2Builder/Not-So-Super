@@ -17,7 +17,7 @@ export const HAIR = {
   uv: [0.0, 0.58, 0.6, 1.0], cut: [0.24, 0.5], ref: 0.59, // cut: light-band thresholds mid / lit
   // [lit, mid, shade], linear: picked so they land on golden blonde after ACES (3D flight: a bright
   // yellow washes out to beige there) or as they are (the sprites render without tone mapping)
-  aces: [[1.05, 0.62, 0.05], [0.74, 0.35, 0.02], [0.36, 0.12, 0.01]],
+  aces: [[1.2, 0.8, 0.08], [0.8, 0.42, 0.035], [0.5, 0.24, 0.02]], // → ≈ (240,222,130) bright gold, (222,180,64) warm gold, (202,154,46) ochre
   raw: [[0.94, 0.62, 0.08], [0.73, 0.35, 0.034], [0.35, 0.107, 0.013]],
 };
 
@@ -46,7 +46,7 @@ float hairK = 0.0, hairD = 1.0;
   vec2 hu = vMapUv; vec3 t = diffuseColor.rgb;
   float inRect = step(${H[0]}, hu.x) * step(hu.x, ${H[2]}) * step(${H[1]}, hu.y) * step(hu.y, ${H[3]});
   hairK = inRect * step(t.b * 1.25, t.r) * step(t.b, t.g);
-  hairD = clamp(dot(t, vec3(0.299, 0.587, 0.114)) / ${HAIR.ref.toFixed(3)}, 0.6, 1.3); // the painted locks / shine survive the flat tones
+  hairD = clamp(dot(t, vec3(0.299, 0.587, 0.114)) / ${HAIR.ref.toFixed(3)}, 0.86, 1.12); // the painted locks / shine survive the flat tones (gently: a deep modulation turns blonde brown)
   diffuseColor.rgb = mix(diffuseColor.rgb, ${lit}, hairK);
 }
 #endif

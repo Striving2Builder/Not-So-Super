@@ -16,7 +16,7 @@ const CAPE = {
   segs: 7, len: 0.135, w: [0.075, 0.15], arch: 0.04, fold: 0.022, clear: 0.035, // clear: extra stand-off over her hips toward the hem
   folds: [0, 0.8, -1, 0.6, -1, 0.8, 0], // across the width, + side edge → − side edge
   key: 0.18,  // N·L cut between the lit and shaded tone
-  outer: ['#e8222c', '#8c0c18'], inner: ['#a01622', '#6a0e18'], // [lit, shade] (sRGB)
+  outer: ['#ee2630', '#b8141f'], inner: ['#a01622', '#701018'], // [lit, shade] (sRGB; the outer shade stays bright: at dusk / night it went to a maroon block)
   ink: '#0b0b16', inkW: 2.2, foldFrom: 0.38, // inkW: px like the body's hull; fold strokes start this far down
   sideFlat: 0.55, // how much of the out-of-plane shape goes when seen exactly side-on
   lift: 0.7,      // seen from below at speed, the hem rises off her back by up to this × a segment per row (it shows past her)

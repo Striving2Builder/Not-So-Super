@@ -122,7 +122,7 @@ export class FlyHero3D {
     if (this.sun) { // the cape's key light and tint follow the sun/moon (darker, cooler at night)
       CAPE_LIGHT.key.value.subVectors(this.sun.position, this.sun.target.position).normalize();
       const day = Math.min(1, Math.max(0, (this.sun.intensity - 0.7) / 1.6));
-      CAPE_LIGHT.tint.value.setRGB(1, 1, 1).lerp(this.sun.color, 0.35).multiplyScalar(0.7 + 0.3 * day);
+      CAPE_LIGHT.tint.value.setRGB(1, 1, 1).lerp(this.sun.color, 0.25).multiplyScalar(0.85 + 0.15 * day);
     }
   }
 
