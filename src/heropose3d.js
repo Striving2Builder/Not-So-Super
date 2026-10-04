@@ -5,8 +5,11 @@
 //           knee bent: the classic flying pose
 //   BOOST   both fists punched forward together, head tucked, body and legs locked straight
 //   DIVE    head-first, arms swept back along her sides, legs together (a stooping hawk)
-//   SLOW    tilted up into a glide, one arm reaching ahead, the other out for balance, legs dangling
-//   HOVER   upright: toes pointed, one knee lifted, a slow float bob
+//   SLOW    tilted up into a glide, one arm reaching ahead, the other out for balance, knees bent
+//           with the shins trailing back (not dangling straight: that read as standing on air)
+//   HOVER   a relaxed superhero float: leaning a little forward, right knee lifted, the left leg
+//           trailing back with a soft knee, toes pointed down, right fist on her hip, left arm
+//           loose, a slow bob with a little sway in the legs; the cape drifts back off her shoulders
 //   TURNS   roll into the bank on a spring (a little overshoot), head and fist lead into the turn,
 //           legs swing to the outside; CLIMB / DESCEND pitch her with her vertical speed
 import * as THREE from 'three';
@@ -22,6 +25,7 @@ export const FLY_POSE = {
   slip: 0.16,                 // yaw her head into the turn (rad per unit bank)
   slowPitch: 0.55,            // glide: head-up tilt
   hoverLean: 0.2,
+  hoverTilt: 0.14,            // hover: constant forward lean (head ahead of her hips), rad
   climb: 0.85,                // body pitch per rad of climb angle (atan(vz / speed))
   climbMax: 0.6,
   divePitch: 1.15,
@@ -76,7 +80,8 @@ export class FlightPose {
     this.hoverK = ease(this.hoverK, this.hover ? 1 : 0, 4, dt);
     // attitude
     let pitch;
-    if (perch || this.hover) pitch = -h.lean * P.hoverLean;
+    if (perch) pitch = -h.lean * P.hoverLean;
+    else if (this.hover) pitch = -h.lean * P.hoverLean - P.hoverTilt + Math.sin(t * 1.7 + 0.8) * 0.025; // (leans as she bobs)
     else if (diving) pitch = -P.divePitch;
     else pitch = (1 - fk) * P.slowPitch + this.slow * P.slowPitch * 0.8 + this.climb * P.climb * fk - h.lean * 0.25;
     const roll = perch ? 0 : h.bank * P.bank * (1 + (P.boostBank - 1) * this.boost) * (this.hover ? 0.5 : 1);
@@ -164,14 +169,14 @@ export class FlightPose {
       const wob = 0.02 * Math.sin(t * 3 + sg);
       const thigh = this.mix(V[2], [
         [cr + bk + dv, D(0, -1, -0.06 + 0.04 * bk, out).addScaledVector(inward, 0.12 + 0.04 * bk)],
-        [sl, V[1].copy(dn).multiplyScalar(0.75).addScaledVector(f, sg < 0 ? -0.15 : -0.5).addScaledVector(inward, 0.06)],
+        [sl, V[1].copy(dn).multiplyScalar(0.75).addScaledVector(f, sg < 0 ? 0.3 : -0.3).addScaledVector(inward, 0.06)],
       ]);
       if (thigh) m.aim(`${L}UpLeg`, `${L}Leg`, thigh, k * 0.95);
       const bend = cr * (sg > 0 ? 0.65 : 0.1) * (1 - Math.abs(T) * 0.5); // the left knee bends at cruise
       const shin = this.mix(V[2], [
         [cr, D(0, -1, bend, out * 0.8).addScaledVector(inward, 0.06 + wob)],
         [bk + dv, D(3, -1, 0, out * 0.5).addScaledVector(inward, 0.08)],
-        [sl, V[1].copy(dn).multiplyScalar(0.7).addScaledVector(f, sg < 0 ? -0.35 : -0.85)],
+        [sl, V[1].copy(dn).multiplyScalar(sg < 0 ? 0.55 : 0.5).addScaledVector(f, sg < 0 ? -0.85 : -0.95)],
       ]);
       if (shin) {
         m.aim(`${L}Leg`, `${L}Foot`, shin, k * 0.95);
@@ -180,15 +185,29 @@ export class FlightPose {
     }
   }
 
-  /** Upright hover (on the idle clip): toes pointed, the right knee lifted. */
-  hovering(m, k) {
+  /**
+   * Upright hover on the idle clip (which alone reads as standing on air): a superhero float. Body
+   * axes, so her forward lean carries the legs with it: right knee lifted with the shin tucked back,
+   * the left leg trailing with a soft knee, both feet pointed; right fist on her hip, left arm loose
+   * and a little forward. t sways the legs with her bob.
+   */
+  hovering(m, k, t = 0) {
     if (k <= 0.01 || !m.bones.LeftFoot) return;
     this.axes(m);
-    const { f, l } = this, V = this.v, dn = this.dn;
-    m.aim('RightUpLeg', 'RightLeg', V[0].copy(dn).addScaledVector(f, 0.45).addScaledVector(l, -0.05).normalize(), k * 0.8);
-    m.aim('RightLeg', 'RightFoot', V[0].copy(dn).addScaledVector(f, -0.35).normalize(), k * 0.8);
-    m.aim('LeftUpLeg', 'LeftLeg', V[0].copy(dn).addScaledVector(l, 0.06).addScaledVector(f, 0.05).normalize(), k * 0.6);
-    m.aim('LeftLeg', 'LeftFoot', V[0].copy(dn).addScaledVector(f, -0.05).normalize(), k * 0.6);
-    for (const L of ['Left', 'Right']) m.aim(`${L}Foot`, `${L}ToeBase`, V[1].copy(dn).addScaledVector(f, 0.35).normalize(), k * 0.85);
+    const { f, s, l } = this, V = this.v;
+    const D = (i, down, fw, left) => V[i].copy(s).multiplyScalar(-down).addScaledVector(f, fw).addScaledVector(l, left).normalize();
+    const sw = Math.sin(t * 1.7) * 0.06, sw2 = Math.sin(t * 1.7 + 1.2) * 0.05;
+    // legs
+    m.aim('RightUpLeg', 'RightLeg', D(0, 0.8, 0.62 + sw * 0.5, -0.04), k * 0.9);
+    m.aim('RightLeg', 'RightFoot', D(1, 0.78, -0.72 + sw, 0.02), k * 0.9);
+    m.aim('RightFoot', 'RightToeBase', V[2].copy(V[1]).addScaledVector(s, -0.45).normalize(), k * 0.85);
+    m.aim('LeftUpLeg', 'LeftLeg', D(0, 1, -0.16 + sw2 * 0.5, 0.07), k * 0.9);
+    m.aim('LeftLeg', 'LeftFoot', D(1, 0.88, -0.48 + sw2, 0.03), k * 0.9);
+    m.aim('LeftFoot', 'LeftToeBase', V[2].copy(V[1]).addScaledVector(s, -0.4).normalize(), k * 0.85);
+    // arms: right fist on the hip (elbow out), left hanging loose, slightly forward
+    m.aim('RightArm', 'RightForeArm', D(0, 0.75, -0.18, -0.6), k * 0.85);
+    m.aim('RightForeArm', 'RightHand', D(1, 0.45, 0.3, 0.8), k * 0.85);
+    m.aim('LeftArm', 'LeftForeArm', D(0, 0.92, 0.12, 0.32), k * 0.8);
+    m.aim('LeftForeArm', 'LeftHand', D(1, 0.7, 0.5, 0.08), k * 0.8);
   }
 }

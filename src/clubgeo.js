@@ -177,3 +177,59 @@ export function unpackFloor(baked) {
   const floor = baked.floor.map(([x, y, z, i]) => Object.assign(new THREE.Vector3(x, y, z), { indoor: !!i }));
   return { floor, mainY: baked.mainY };
 }
+
+/**
+ * The floor points she can walk to from `start`, moving the way ClubZone.collide() moves her:
+ * grid neighbours (≤1.5 m apart) join when the way between them is clear from step height to head
+ * height and the floor along it never rises more than STEP at once (the grounding ray starts STEP
+ * above her feet). So a stage, bar top or DJ riser higher than a step is cut off unless stairs or a
+ * ramp lead up to it, and gameplay placed on this set is always reachable on foot.
+ */
+export function reachableFloor(collider, floor, start) {
+  const key = (x, z) => `${Math.round(x)},${Math.round(z)}`;
+  const grid = new Map();
+  for (const p of floor) { const k = key(p.x, p.z); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(p); }
+  const ray = new THREE.Raycaster(); ray.firstHitOnly = true;
+  const o = new THREE.Vector3(), dir = new THREE.Vector3();
+  const clear = (a, b, d) => {
+    const y = Math.max(a.y, b.y);
+    dir.set(b.x - a.x, 0, b.z - a.z).normalize();
+    for (const hgt of [STEP + 0.12, 1.3]) {
+      ray.set(o.set(a.x, y + hgt, a.z), dir); ray.far = d;
+      if (ray.intersectObject(collider)[0]) return false;
+    }
+    return true;
+  };
+  // walk a→b in 10 cm steps with the game's grounding rule; she must arrive at b's height
+  const walk = (a, b, d) => {
+    let y = a.y;
+    const n = Math.ceil(d / 0.1);
+    ray.far = STEP + 1.2;
+    for (let i = 1; i <= n; i++) {
+      const t = i / n;
+      ray.set(o.set(a.x + (b.x - a.x) * t, y + STEP, a.z + (b.z - a.z) * t), DOWN);
+      const h = ray.intersectObject(collider)[0];
+      if (!h) return false; // no floor: the game treats it as a wall
+      if (h.face.normal.y > 0.6) y = h.point.y;
+    }
+    return Math.abs(y - b.y) < 0.15;
+  };
+  let s = floor[0], sd = Infinity;
+  for (const p of floor) { const d = p.distanceToSquared(start); if (d < sd) { sd = d; s = p; } }
+  const seen = new Set([s]), queue = [s];
+  while (queue.length) {
+    const a = queue.pop();
+    const ix = Math.round(a.x), iz = Math.round(a.z);
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+      for (const b of grid.get(`${ix + dx},${iz + dz}`) || []) {
+        if (seen.has(b)) continue;
+        const d = Math.hypot(b.x - a.x, b.z - a.z), dy = Math.abs(b.y - a.y);
+        if (d > 1.5 || dy > 1.2 || d < 0.01) continue; // (stacked storeys in one column never join directly)
+        if (!clear(a, b, d)) continue;
+        if (dy > 0.05 && !walk(a, b, d)) continue;
+        seen.add(b); queue.push(b);
+      }
+    }
+  }
+  return floor.filter((p) => seen.has(p));
+}
