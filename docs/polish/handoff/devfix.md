@@ -23,6 +23,10 @@ Branch from phase-2 d45e1c4, phase-2 (dive landing) merged in. Four gameplay/fee
   screen >6 s back in, NaN guard. `brawlfx.js`: "HELP!" arrow + objective row for captives/fires
   left behind.
 - Tool: `tools/shots/brawlrun.js` (keyboard bot, god mode, stall dump + screenshot).
+- Verified (after the phase-2 merge, bot uses punches only, no heat vision on crooks): iPad 1024x768
+  6/6 (robbery, kidnap, heist, mob, fire, rustlers) and phone 844x390 4/4 (gang, kidnap, fire,
+  petty), no page errors (`shots/devfix-ipad/`, `shots/devfix-phone/`). Before: robbery + kidnap
+  stalled on iPad (`shots/devfix-base/`). Harness `shots/devfix/brawler`: no errors.
 
 ## 4. 3D club stages — done
 - Cause: scanned floor keeps every upward surface within 1.6 m of the main floor (stage at +1.0 m in
@@ -38,4 +42,5 @@ Branch from phase-2 d45e1c4, phase-2 (dive landing) merged in. Four gameplay/fee
   3 clubs × raid + night case × 25 seeds.
 
 ## Next
+- brawler.js is now ~900 lines (split candidate: camera/arena or enemy AI into its own module).
 - If the one-off club flood stalls on iPad: bake it into `assets/clubs/*.json` (spawn is deterministic).
