@@ -23,9 +23,10 @@ import { Flight3D, flight3dEnabled, flight3dBlocked } from './flight3d.js';
 import { FlightAudio } from './flightaudio.js';
 import { nightCaseFields } from './nightcase.js';
 import { asylumFields } from './asylum.js';
-import { toast, banner, flash, openModal, closeModal } from './ui.js';
+import { toast, banner, openModal, closeModal } from './ui.js';
 import { hash2 } from './rng.js';
 import { sfx } from './sfx.js';
+import { diveFx } from './divefx.js';
 
 const TILT = 0.2;    // oblique view: perspective centre sits this fraction of the screen below centre
 const PERCH_EVERY = 40; // seconds between super-hearing reveals
@@ -438,13 +439,9 @@ export class Overworld {
       this.camH = h.z + camAbove(h.z);
       this.cam.x = h.x; this.cam.y = h.y - this.tiltOffset();
       this.fx.setRush(f);
-      if (f > 0.88 && !d.impact) {
-        d.impact = true;
-        this.shock = { x: h.x, y: h.y, t: 0 };
-        this.shake = Math.max(this.shake, 14);
-        sfx.hit();
-      }
-      if (d.t >= DIVE_T && !d.fired) { d.fired = true; this.fx.setRush(0); flash(); g.startZone(d.z); }
+      // impact: render() lands it (divefx freezes that frame into the comic THUD panel, then starts the zone)
+      if (f > 0.88) d.impact = true;
+      if (d.fired && d.t > DIVE_T + 1.5) g.startZone(d.z); // (safety net: the beat never handed over)
       return;
     }
     if (this.shock) { this.shock.t += dt; if (this.shock.t > 0.8) this.shock = null; }
@@ -758,7 +755,8 @@ export class Overworld {
 
   // ------------------------------------------------------------------ render
   render(ctx) {
-    if (this.view3d && document.body.classList.contains('fly3d')) { this.view3d.render(ctx); return; }
+    if (this.diving && this.diving.fired) return; // the THUD panel covers the screen until the zone takes over
+    if (this.view3d && document.body.classList.contains('fly3d')) { this.view3d.render(ctx); this.diveFrame(); return; }
     const g = this.g, W = g.w, H = g.h, city = g.city, st = g.state;
     const night = st ? st.night : 0.8;
     const q = quality(), rich = q.flyDetail;
@@ -1011,12 +1009,17 @@ export class Overworld {
     for (const [x, y, r, z, locked] of icons) this.drawIcon(ctx, x, y, r, z, locked, z === this.near);
     ctx.restore();
 
-    if (this.diving) {
-      const e = Math.min(1, this.diving.t / DIVE_T);
-      const grd = ctx.createRadialGradient(cx, scy, Math.min(W, H) * 0.2 * (1 - e * 0.6), cx, scy, Math.max(W, H) * 0.7);
-      grd.addColorStop(0, 'rgba(255,255,255,0)'); grd.addColorStop(1, `rgba(255,255,255,${e * 0.8})`);
-      ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
-    }
+    this.diveFrame();
+  }
+
+  /** After a dive frame is drawn: the plunge's focus lines, or (impact) the frame becomes the THUD panel. */
+  diveFrame() {
+    const d = this.diving;
+    if (!d) return;
+    const hs = this.heroScreen || { x: this.g.w / 2, y: this.g.h / 2 };
+    if (!d.impact) { diveFx.plunge(Math.min(1, d.t / DIVE_T), hs.x, hs.y); return; }
+    d.fired = true; this.fx.setRush(0);
+    diveFx.impact(hs.x, hs.y, () => this.g.startZone(d.z));
   }
 
   drawIcon(ctx, x, y, r, z, locked, near) {
