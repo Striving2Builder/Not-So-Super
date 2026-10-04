@@ -32,15 +32,29 @@ Files: city3d, buildings3d, blocks3d, skyline3d, ground3d, river3d, street3d, la
   promenade loop + diagonal paths, a round plaza.
 - Near glass: a diagonal comic glint per pane by day (magnified curtain walls read as glass).
 
-## In progress / next
-- Perf: frozen-frame round robin (scratchpad bench.js = flyab with a 12 s settle at high + frozen
-  sim) h6 vs r7: skim 0.97, cruise 0.955, high 0.93 (base 0.93 / 1.00 / 0.925). Frozen-frame toggles
-  at high: hero pass ~29% (r7 22%: Supergirl side), outer boroughs 8%, dome 5%. Testing which of
-  my shader adds cost at cruise (halo, facade detail, air gradient: scratchpad vhalo/vdet/vair).
-- Then merge phase-2, final shots (r9city), report.
+- Facades cheapened: frames/sills/brick only while a window is >= ~6 px, averages under ~1.7 px
+  (early out), 2 sin-free hashes, lit hash only at night. Above 340 m the near/lite LOD goes by
+  3D distance (high patrol = lite builds only).
+- Merged phase-2 (Supergirl look pass + dive landing) at 34da1f2.
+
+## Status: done, ready to merge
+Bugs (r9fly): pair 1 black box = roof billboard's near-black tar back (fixed: grey sheet metal,
+signs3d.js one-liner). Pair 8 yellow lines = neon posts / cornice rings lit full by day + their
+sub-pixel cores (dimmed until dark, averaged when thin; venue corner posts still read as thin
+yellow lines at dusk). Pair 8 blue triangles: not reproduced in r9city (shade step + glass leaning
+to the wall paint); root cause not pinned (see report).
+
+## Next ideas
+- Venue neon corner posts: off until uLit > 0.3, or only on the street face.
+- Far ring: per-borough density (the islands read as a uniform row); a faint second ink tier.
+- Inner-corner AO on L-shaped footprints, parapets; flagship pass over the hero cost (her sharp
+  pass is ~23-30% of the frame at high patrol on Balanced in SwiftShader).
 
 ## Shots / perf
-- Base shots: scratchpad `base/shots/base/flying` (8a9918f). Tools in scratchpad: quick.js,
-  repro.js (frozen frame + toggles), citytoggle.js (per-material cost).
-- flyab (balanced, 5 rounds, ×r7 02d2bb0): base 8a9918f skim 1.02 / cruise 0.99 / high 0.93;
-  after LOD + analytic facades: 1.07 / 0.97 / 0.99. High tris 83.5k → 75.2k, calls 68 → 62.
+- Shots: shots/r9city/flying (after, with phase-2 merged); base: scratchpad base/shots/base.
+- Bench (scratchpad bench4.js: flyab + frozen sim at a fixed pose per band, 8 rounds, Balanced),
+  x r7 02d2bb0: base 8a9918f skim 0.94 / cruise 0.99 / high 0.88; r9 (with the new Supergirl)
+  0.90 / 0.97 / 0.91. Earlier run (pre-merge, own hero): 0.98 / 0.93 / 0.87 vs base 0.99/0.96/0.89.
+  Noise between runs is +-5%. Tris high 91.8k -> 78.6k, calls 68 -> 62.
+- Hero pass off (city only, bench3): r7 / base / r9: skim 1 / 1.03 / 1.01, cruise 1 / 0.87 / 0.96,
+  high 1 / 0.95 / 0.93.
