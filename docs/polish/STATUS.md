@@ -109,7 +109,7 @@ art) and the per-builder handoffs in [handoff/](handoff/).
 ## Proposed order after the current builders (director's recommendation, 2026-10-03)
 1. Tag the iPad build; get the user's `?perf=1` numbers and a first-load time on mobile data.
 2. 3D rooms round (clubs, self-built 3D zones, nightlife, night case): perf first (Triangle Club draw-call doubling), plus their own blind critic (never had one).
-3. Motion/feel round: dive transition into zones (comic panel wipe/zoom), fight hit feedback (hit-stop, shake, sound), an audio review, judged by frame-sequence critiques + the user's play notes.
+3. Motion/feel round: dive transition into zones (**started early 2026-10-03 at the user's request**: a comic "THUD" landing — hit-stop, shake, impact flash, inked shockwave, onomatopoeia burst, low boom, panel wipe merged with the LOADING card; handoff `docs/polish/handoff/dive.md`), fight hit feedback (hit-stop, shake, sound), an audio review, judged by frame-sequence critiques + the user's play notes.
 4. Flight visuals round 10 from the next blind critic (no cloud work; clouds can be trimmed for perf).
 
 ## Backlog (rough priority)
