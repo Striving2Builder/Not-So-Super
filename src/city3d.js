@@ -188,7 +188,9 @@ export class City3D {
       if (cx < 0 || cy < 0 || cx >= this.cols || cy >= this.rows) continue;
       const dx = ((cx + 0.5) * CHUNK - px) * M, dz = ((cy + 0.5) * CHUNK - pz) * M, d = Math.hypot(dx, dz) - CHUNK * M * 0.7;
       if (d > cut) continue;
-      const ch = this.chunk(cx, cy), which = d > LOD.farMat ? 'lite' : 'near';
+      // above detailAlt the LOD goes by true (3D) distance: from high patrol every chunk is a lite
+      // build (no near build, ink layer or halftone under her: ~6% fps at high patrol)
+      const ch = this.chunk(cx, cy), which = (camY > LOD.detailAlt ? Math.hypot(Math.max(0, d), camY) : d) > LOD.farMat ? 'lite' : 'near';
       if (ch[which] === undefined) {
         if (budget-- <= 0) { const other = ch[which === 'near' ? 'lite' : 'near']; if (other) other.visible = true; continue; }
         this.build(ch, which);
