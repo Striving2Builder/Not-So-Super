@@ -214,6 +214,15 @@ export const fxDraw = {
       ctx.fillStyle = '#d8122e'; ctx.fillText('GO!', -62, 1);
       ctx.restore(); ctx.textBaseline = 'alphabetic';
     }
+    if (this.backHint) { // mirrored arrow on the left edge: a captive / fire is behind her
+      const b = Math.sin(this.t * 8) * 8, x = 40 - b, y = H * 0.3, s = Math.min(1.2, H / 390);
+      ctx.save(); ctx.translate(x, y); ctx.scale(-s, s);
+      ctx.beginPath(); ctx.moveTo(-110, -20); ctx.lineTo(-30, -20); ctx.lineTo(-30, -40); ctx.lineTo(10, 0); ctx.lineTo(-30, 40); ctx.lineTo(-30, 20); ctx.lineTo(-110, 20); ctx.closePath();
+      ctx.fillStyle = '#3ee08a'; ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = INK; ctx.lineJoin = 'round'; ctx.stroke();
+      ctx.scale(-1, 1); ctx.font = '900 26px Impact, system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = INK; ctx.fillText('HELP!', 62, 1);
+      ctx.restore(); ctx.textBaseline = 'alphabetic';
+    }
     if (this.objectivesDone()) {
       const ex = this.sx(this.len - 120), k = this.k;
       if (ex < W + 40) {

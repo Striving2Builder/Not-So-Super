@@ -35,7 +35,7 @@ const OUT = path.join(ROOT, 'shots', 'supergirl');
     page.on('pageerror', (e) => errs.push(e.message));
     page.on('console', (m) => { if ((m.type() === 'error' || m.type() === 'warning') && !/GPU stall|CONTEXT_LOST/.test(m.text())) errs.push(m.text()); });
     await page.goto(`http://localhost:${PORT}/tools/supergirl/lab.html${QUERY ? '?' + QUERY : ''}`);
-    await page.waitForFunction(() => window.__labDone, null, { timeout: 240000 });
+    await page.waitForFunction(() => window.__labDone, null, { timeout: 240000 }).catch((e) => { throw new Error(`lab never finished: ${errs.join(' | ') || e.message}`); });
     const png = await page.evaluate(() => document.getElementById('sheet').toDataURL('image/png'));
     const f = path.join(OUT, LABEL + '.png');
     fs.writeFileSync(f, Buffer.from(png.split(',')[1], 'base64'));
