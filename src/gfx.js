@@ -77,6 +77,9 @@ function showPanel(text) {
 }
 function hidePanel() { panel?.classList.remove('on'); }
 
+/** Is a zone's LOADING card up? (the dive's impact panel holds until it's down) */
+export function isLoading() { return !!loadingText; }
+
 /** A zone is loading: show the panel (text) or take it down (null). */
 export function loadingPanel(text) {
   loadingText = text;

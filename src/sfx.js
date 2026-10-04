@@ -114,6 +114,13 @@ export const sfx = {
   hurt() { tone(320, 0.22, 'sawtooth', 0.22, -220); },
   whoosh() { noise(0.4, 0.25, 700); },
   dive() { tone(900, 0.9, 'sine', 0.18, -700); noise(0.9, 0.22, 900); },
+  /** Comic landing THUD: a sub boom falling to ~30 Hz, a body knock, a gritty crunch, a crack, then rubble. */
+  thud() {
+    tone(118, 0.9, 'sine', 0.95, -86); tone(64, 0.6, 'sine', 0.5, -30, 0.01);
+    tone(210, 0.2, 'triangle', 0.32, -150);
+    noise(0.5, 0.7, 850); noise(0.07, 0.5, 5200);
+    for (let i = 0; i < 5; i++) noise(0.04 + Math.random() * 0.05, 0.13, 2400, 0.14 + i * 0.075 + Math.random() * 0.04);
+  },
   pickup() { [660, 880, 1175].forEach((f, i) => tone(f, 0.1, 'triangle', 0.2, 0, i * 0.06)); },
   shutter() { noise(0.04, 0.5, 6000); noise(0.05, 0.4, 3000, 0.07); },
   alarm() { tone(760, 0.22, 'square', 0.14, -240); tone(760, 0.22, 'square', 0.14, -240, 0.28); },

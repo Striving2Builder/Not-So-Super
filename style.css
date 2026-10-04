@@ -555,3 +555,56 @@ body.fly3d .tbtn.f3-perch { font-size: 10px; }
 /* (a transform animation keeps running on the compositor while a load blocks the main thread) */
 #gfx-panel i { display: block; height: 100%; width: calc(100% + 32px); background: repeating-linear-gradient(90deg, #111 0 10px, transparent 10px 16px); animation: gfx-dash .6s linear infinite; will-change: transform; }
 @keyframes gfx-dash { from { transform: translateX(-32px); } to { transform: translateX(0); } }
+
+/* === dive === */
+/* The dive's comic landing beat (divefx.js): over the game view and the LOADING cards (z 7), under
+   the HUD, the LIVE feed, the touch controls (lifted to z 8 while it runs) and the captions (z 50).
+   Everything after the impact moves by transform/opacity, so it keeps playing through a zone's load. */
+#dive-fx { position: absolute; inset: 0; z-index: 7; pointer-events: none; overflow: hidden; font-family: "Bangers", Impact, "Arial Black", sans-serif; }
+body.divefx #hud, body.divefx #btns, body.divefx #touch { z-index: 8; }
+/* a zone's title banner waits (held on its first, invisible keyframe) and plays as the panel wipes away */
+body.divefx-hold #banner.show { animation-play-state: paused; }
+#dive-fx canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#dive-fx.hit canvas { filter: contrast(1.12) saturate(1.3); animation: df-push 1.6s linear both, df-shake var(--shake) var(--stop) linear both; }
+@keyframes df-push { from { scale: var(--s0); } to { scale: var(--s1); } }
+@keyframes df-shake {
+  0% { translate: 0 0; } 8% { translate: calc(var(--a) * -1px) calc(var(--a) * .75px); } 18% { translate: calc(var(--a) * .85px) calc(var(--a) * -.6px); }
+  30% { translate: calc(var(--a) * -.55px) calc(var(--a) * -.45px); } 44% { translate: calc(var(--a) * .38px) calc(var(--a) * .32px); }
+  60% { translate: calc(var(--a) * -.2px) calc(var(--a) * .15px); } 78% { translate: calc(var(--a) * .08px) calc(var(--a) * -.06px); } 100% { translate: 0 0; } }
+/* hit-stop flash: white-hot round the impact, a yellow wash out to the frame, gone in ~0.3 s */
+.df-flash { position: absolute; inset: 0; background: radial-gradient(circle at var(--x) var(--y), #fff 0, #fff 22%, rgba(255, 246, 190, .9) 48%, rgba(255, 214, 40, .55) 100%); animation: df-flash .32s linear both; }
+@keyframes df-flash { 0% { opacity: 1; } 22% { opacity: .92; } 30% { opacity: .55; } 100% { opacity: 0; } }
+.df-ring { position: absolute; left: var(--x); top: var(--y); width: 0; height: 0; animation: df-ring .42s var(--stop) cubic-bezier(.12, .75, .3, 1) both; }
+.df-ring.late { animation-delay: calc(var(--stop) + 90ms); animation-duration: .5s; }
+.df-ring svg { position: absolute; left: 0; top: 0; overflow: visible; }
+@keyframes df-ring { 0% { transform: scale(.12); opacity: 1; } 45% { opacity: 1; } 100% { transform: scale(3.2); opacity: 0; } }
+.df-puff { position: absolute; left: var(--x); top: var(--y); animation: df-puff .6s calc(var(--stop) + var(--d)) cubic-bezier(.1, .8, .3, 1) both; }
+.df-puff svg { width: 100%; height: 100%; overflow: visible; transform: scaleX(var(--f)); }
+@keyframes df-puff { 0% { transform: translate(0, 0) scale(.2); opacity: 1; } 55% { opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(1.25); opacity: 0; } }
+/* the onomatopoeia: burst balloon + hand-lettered word, popped in past full size, then a slow swell */
+.df-word { position: absolute; display: grid; place-items: center; transform: rotate(var(--rot)); filter: drop-shadow(5px 6px 0 rgba(0, 0, 0, .55));
+  animation: df-word-in .36s var(--stop) cubic-bezier(.2, 1.7, .45, 1) both, df-word-hold 1.6s calc(var(--stop) + 360ms) ease-out both; }
+.df-word svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.df-word span { position: relative; line-height: 1; letter-spacing: .02em; white-space: nowrap; -webkit-text-stroke: 4px #111; paint-order: stroke fill; text-shadow: .045em .055em 0 var(--sh), .085em .1em 0 #111; }
+.df-word i { display: inline-block; font-style: normal; transform: translateY(var(--y)) rotate(var(--r)); }
+@keyframes df-word-in { 0% { transform: rotate(calc(var(--rot) - 26deg)) scale(0); } 62% { transform: rotate(calc(var(--rot) + 3deg)) scale(1.3); } 82% { transform: rotate(var(--rot)) scale(.95); } 100% { transform: rotate(var(--rot)) scale(1); } }
+@keyframes df-word-hold { from { transform: rotate(var(--rot)) scale(1); } to { transform: rotate(calc(var(--rot) - 2deg)) scale(1.07); } }
+/* the zone's name, as a caption tag; it grows the LOADING dashes if the zone is slow */
+.df-tag { position: absolute; padding: 4px 13px 3px; background: #ffe24a; color: #111; border: 3px solid #111; box-shadow: 4px 4px 0 rgba(0, 0, 0, .55); font-size: clamp(15px, 2.4vw, 22px); letter-spacing: .07em; white-space: nowrap; transform: skew(-6deg); animation: df-tag-in .26s calc(var(--stop) + 220ms) cubic-bezier(.2, 1.5, .5, 1) both; }
+.df-tag s { display: none; overflow: hidden; height: 4px; margin: 4px 0 1px; }
+.df-tag.loading s { display: block; }
+.df-tag i { display: block; height: 100%; width: calc(100% + 32px); background: repeating-linear-gradient(90deg, #111 0 10px, transparent 10px 16px); animation: gfx-dash .6s linear infinite; }
+@keyframes df-tag-in { from { transform: skew(-6deg) translateX(-40px); opacity: 0; } to { transform: skew(-6deg); opacity: 1; } }
+/* out: a comic panel wipe, a diagonal gutter sweeping left to right to the zone behind it */
+#dive-fx.out { animation: df-wipe var(--wipe) cubic-bezier(.55, 0, .45, 1) both; }
+@keyframes df-wipe {
+  from { -webkit-clip-path: polygon(0 0, 100% 0, 100% 100%, -18% 100%); clip-path: polygon(0 0, 100% 0, 100% 100%, -18% 100%); }
+  to { -webkit-clip-path: polygon(118% 0, 118% 0, 100% 100%, 100% 100%); clip-path: polygon(118% 0, 118% 0, 100% 100%, 100% 100%); } }
+#dive-fx.lite.out { animation: df-fade .26s ease-in both; }
+@keyframes df-fade { to { opacity: 0; } }
+/* prefers-reduced-motion: no flash, no shake, no swing; the word just appears */
+#dive-fx.lite .df-flash { display: none; }
+#dive-fx.lite.hit canvas { animation: none; }
+#dive-fx.lite .df-word { animation: df-lite-in .2s both; }
+#dive-fx.lite .df-puff { animation-duration: .4s; }
+@keyframes df-lite-in { from { opacity: 0; } }
