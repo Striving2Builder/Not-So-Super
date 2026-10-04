@@ -262,8 +262,7 @@ void main() {
   let pending = false;
   mesh.userData.repaint = () => {
     const T = plan(city, landmarks, GROUND.px[rich ? 0 : 1] / BLOCK);
-    u.day.value?.dispose(); u.night.value?.dispose();
-    u.day.value = T.day; u.night.value = T.night;
+    u.day.value = T.day; u.night.value = T.night; // (the old ones, if any, died with a lost context: nothing to dispose)
     pending = true;
   };
   mesh.userData.upload = (r) => {

@@ -85,7 +85,7 @@ function installGL() {
       up(b);
       return o.texImage2D.apply(this, arguments);
     };
-    if (o.texStorage2D) P.texStorage2D = function (target, levels, fmt, w, h) { setTex(this, target, w * h * 4 * (levels > 1 ? 1.33 : 1)); return o.texStorage2D.apply(this, arguments); };
+    if (o.texStorage2D) P.texStorage2D = function (target, levels, fmt, w, h) { setTex(this, target, w * h * 4 * (target === 0x8513 ? 6 : 1)); const t = bound(this, target), e = t && gl.tex.get(t); if (e) e.mip = levels > 1 ? 1.33 : 1; return o.texStorage2D.apply(this, arguments); };
     P.texSubImage2D = function () { const s = arguments[arguments.length - 1]; up(s && s.byteLength !== undefined ? s.byteLength : ((s && s.width) || 0) * ((s && s.height) || 0) * 4); return o.texSubImage2D.apply(this, arguments); };
     P.compressedTexImage2D = function (target) { const d = arguments[arguments.length - 1]; setTex(this, target, (d && d.byteLength) || 0); up((d && d.byteLength) || 0); return o.compressedTexImage2D.apply(this, arguments); };
     P.generateMipmap = function (target) { const t = bound(this, target), e = t && gl.tex.get(t); if (e) e.mip = 1.33; return o.generateMipmap.apply(this, arguments); };

@@ -60,6 +60,9 @@ const GL_TRACK = `(() => {
     if (o.texImage3D) P.texImage3D = function (target, level, fmt, w, h, d) { put.call(this, this.__bt && this.__bt[target], target + ':' + level, w * h * d * 4); return o.texImage3D.apply(this, arguments); };
     if (o.texStorage3D) P.texStorage3D = function (target, levels, fmt, w, h, d) { put.call(this, this.__bt && this.__bt[target], 'st', w * h * d * 4 * (levels > 1 ? 1.33 : 1)); return o.texStorage3D.apply(this, arguments); };
     P.deleteTexture = function (x) { S.bytes.delete(x); return o.deleteTexture.apply(this, arguments); };
+    // mip chains: +1/3 of the base level (generateMipmap after the upload)
+    const gm = P.generateMipmap;
+    P.generateMipmap = function (target) { const t = this.__bt && this.__bt[target], m = t && S.bytes.get(t); if (m && !m.has('mip') && !m.has('st')) { let b = 0; for (const v of m.values()) b += v; m.set('mip', b / 3); } return gm.apply(this, arguments); };
     P.bufferData = function (t, d) { put.call(this, this.__bb && this.__bb[t], 'b', typeof d === 'number' ? d : (d && d.byteLength) || 0); return o.bufferData.apply(this, arguments); };
     P.deleteBuffer = function (x) { S.bytes.delete(x); return o.deleteBuffer.apply(this, arguments); };
     P.renderbufferStorage = function (t, f, w, h) { put.call(this, this.__br, 'r', w * h * 4); return o.renderbufferStorage.apply(this, arguments); };
@@ -80,8 +83,13 @@ const GL_TRACK = `(() => {
       live++;
       draw += c.canvas.width * c.canvas.height * 4 * (c.aa ? 4 + 1 : 2); // back (+MSAA) + front buffer, roughly
     }
-    return { made: S.made, live, objects: n, resMB: +(res / 1048576).toFixed(1), drawMB: +(draw / 1048576).toFixed(1) };
+    return { made: S.made, live, objects: n, resMB: +(res / 1048576).toFixed(1), drawMB: +(draw / 1048576).toFixed(1), cv2dMB: S.canvasMB() };
   };
+  // 2D canvases still alive (weakly held: a canvas the game dropped stops counting once collected),
+  // e.g. the ground tiles' and plan's paint canvases; WebGL canvases are counted as drawing buffers
+  const cvs = [], ce = Document.prototype.createElement;
+  Document.prototype.createElement = function (t) { const e = ce.apply(this, arguments); if (/^canvas$/i.test(t)) cvs.push(new WeakRef(e)); return e; };
+  S.canvasMB = () => { let b = 0; for (const r of cvs) { const c = r.deref(); if (c && !S.ctxs.some((x) => x.canvas === c)) b += c.width * c.height * 4; } return +(b / 1048576).toFixed(1); };
   // frame gaps
   const F = window.__frames = [];
   const tick = (t) => { F.push(t); if (F.length > 20000) F.splice(0, 10000); requestAnimationFrame(tick); };
@@ -241,7 +249,7 @@ async function run(browserType, name, devices) {
   await page.evaluate(() => { const g = window.__game; g.overworld.nav.autopilot = false; });
   const TOUR = +arg('--tour', 0);
   if (TOUR) {
-    const t0 = Date.now();
+    const t0 = Date.now(), curve = [];
     for (let i = 0; i < TOUR; i++) {
       await page.evaluate(([i, n]) => {
         const g = window.__game, c = g.city, h = g.overworld.hero, k = Math.ceil(Math.sqrt(n));
@@ -250,9 +258,17 @@ async function run(browserType, name, devices) {
         g.state.clock = i % 2 ? 23 * 60 : 12 * 60;
       }, [i, TOUR]);
       await page.waitForTimeout(1500);
+      if ((i + 1) % Math.max(1, Math.round(TOUR / 4)) === 0) { const r = await page.evaluate(() => window.__glt.report()); curve.push(`${r.resMB}+${r.cv2dMB}`); }
     }
+    console.log(`  tour MB (GPU res + 2D canvases) every quarter: ${curve.join(' → ')}`);
     rows.push({ label: `tour (${TOUR} stops, ${Math.round((Date.now() - t0) / 1000)} s)`, syncMs: 0, readyMs: 0, steadyMs: 0, longest: 0, over100: 0, medFrame: 0, gl: await page.evaluate(() => window.__glt.report()), heapMB: await heap(page, cdp),
-      info: await page.evaluate(() => window.__game.overworld.view3d?.renderer?.info.memory) });
+      info: await page.evaluate(() => {
+        const v = window.__game.overworld.view3d; if (!v) return null;
+        const c = { near: 0, lite: 0, tiles: 0, tilePx: 0 };
+        for (const ch of v.city3.chunks.values()) { if (ch.near) c.near++; if (ch.lite) c.lite++; for (const k of ['gl', 'gd']) if (ch[k]) { c.tiles++; c.tilePx = ch[k].material.map.image.width; } }
+        const u = v.city3.ground.material.uniforms, rt = (t) => t && `${t.width}x${t.height}${t.samples ? 'x' + t.samples : ''}`;
+        return { ...v.renderer.info.memory, ...c, plan: u.day.value.source?.data?.width ?? u.day.value.image.width, post: rt(v.post.rt), postB: rt(v.post.rtB), hero: rt(v.heroPass.rt) };
+      }) });
   }
   if (argv.includes('--turnback')) for (const band of [1, 0]) rows.push(...await turnBack(page, cdp, band));
   for (let round = 0; round < ROUNDS; round++) {
@@ -281,13 +297,13 @@ async function run(browserType, name, devices) {
       const r = await run(pw[b], b, pw.devices);
       out[b] = r;
       console.log(`\n== ${b}  ${JSON.stringify(r.env)}`);
-      console.log('transition'.padEnd(22), 'sync', 'ready', 'steady', 'longest', '>100ms', 'frame', 'ctx(live/made)', 'gpuMB(res+draw)', 'heapMB');
+      console.log('transition'.padEnd(22), 'sync', 'ready', 'steady', 'longest', '>100ms', 'frame', 'ctx(live/made)', 'gpuMB(res+draw)', 'heapMB', 'canvas2D MB');
       for (const x of r.rows) {
         if (x.label.startsWith('lose')) { console.log(x.label.padEnd(22), JSON.stringify(x)); continue; }
         if (x.info) console.log('  three memory:', JSON.stringify(x.info));
         if (x.cityMs !== undefined) console.log(`  worst city update ${x.cityMs} ms, worst 3D frame (CPU) ${x.frameMs} ms, near builds ${x.near}, moved ${x.moved}, top gaps [ms, at ms] ${JSON.stringify(x.top)}, frames ${x.frames}, >2x median ${x.over2med}  ${JSON.stringify(x.tb)}`);
         console.log(x.label.padEnd(22), String(x.syncMs).padStart(4), String(x.readyMs).padStart(5), String(x.steadyMs).padStart(6), String(x.longest).padStart(7), String(x.over100).padStart(6), String(x.medFrame).padStart(5),
-          `${x.gl.live}/${x.gl.made}`.padStart(14), `${x.gl.resMB}+${x.gl.drawMB}`.padStart(15), String(x.heapMB).padStart(6));
+          `${x.gl.live}/${x.gl.made}`.padStart(14), `${x.gl.resMB}+${x.gl.drawMB}`.padStart(15), String(x.heapMB).padStart(6), String(x.gl.cv2dMB).padStart(6));
       }
       if (argv.includes('--dump')) for (const x of r.rows) console.log(x.label, JSON.stringify(x.perCtx), JSON.stringify(x.top));
       console.log('ended in 3D flight:', r.endedIn3D, ' errors:', r.errors.length ? r.errors : 'none');

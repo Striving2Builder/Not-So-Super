@@ -32,13 +32,14 @@ const CHUNK = TILE * BLOCK; // world units per chunk side (one ground tile)
  */
 const LOD = { farMat: 260, farInk: 0, landmarkFog: 0.8, landmarkMax: 0.93, coreR: 4.5, detail: 470, liteDetail: 800, detailAlt: 340, tileAlt: 340 }; // (cruise flies at ~280 m)
 /**
- * Memory: at most `near` near builds / `tiles` ground tiles (of the lighting in use) stay built; past
- * that, those unseen for `idle` ms AND more than `margin` m beyond where they're drawn are freed (the
- * other lighting's tiles go after `idle` alone). Building, painting and uploading run nearest /
- * in-view first within `ms` per frame (at least one job a frame), so flying back over freed blocks
- * never stalls a frame on a burst of rebuilds: the far build (or the ground plan) stands in meanwhile.
+ * Memory: at most `near` near builds / `tiles` ground tiles (of the lighting in use) stay built.
+ * Past that the FARTHEST go first, and only those more than `margin` m beyond where they're drawn
+ * and unseen for `idle` ms (a U-turn or a loop back finds them still there); the other lighting's
+ * tiles go once unseen for `idle`. Building, painting and uploading run nearest / in view first
+ * within `ms` per frame (at least one job a frame), so flying back over freed blocks never stalls a
+ * frame on a burst of rebuilds: the far build (or the ground plan) stands in meanwhile.
  */
-const KEEP = { near: 40, tiles: 40, idle: 10000, margin: 450, every: 1000, ms: 4 }; // (ms: frame counts would trim far too late on a slow device)
+const KEEP = { near: 40, tiles: 40, idle: 6000, margin: 350, every: 500, ms: 4 }; // (ms: frame counts would trim far too late on a slow device)
 
 /** Draw a build's body only, or body + detail (its index runs: Builder.detail). */
 const range = (m, full) => m.geometry.setDrawRange(0, full ? m.geometry.userData.all : m.geometry.userData.body);
@@ -184,19 +185,23 @@ export class City3D {
    * Give back what she flew away from. Every chunk's near build and ground tiles used to stay on
    * the GPU for good: one tour of the city piled up ~170 MB more (tiles ~1 MB each, day and night,
    * plus their 2D canvases), and long sessions took iOS Safari down. Past the KEEP budget, the near
-   * builds and tiles both unseen for a while and well beyond their draw radius are freed (distance
-   * hysteresis: a quick turn or a loop back finds them still there); the other lighting's tiles go
-   * once unseen for a while. They're rebuilt on the way back, a few a frame, with stand-ins.
+   * builds and tiles farthest away (and well beyond their draw radius, unseen for a while) are
+   * freed; the other lighting's tiles go once unseen for a while. They're rebuilt on the way back,
+   * a few a frame, with stand-ins.
    */
   trim(n) {
     const dist = (ch) => Math.hypot(((ch.cx + 0.5) * CHUNK - this.px) * M, ((ch.cy + 0.5) * CHUNK - this.pz) * M) - CHUNK * M * 0.7;
     const prune = (key, max, far, drop) => {
+      let total = 0;
       const list = [];
-      for (const ch of this.chunks.values()) if (ch[key]) list.push(ch);
-      if (list.length <= max) return;
-      list.sort((a, b) => (a[key + 'Seen'] || 0) - (b[key + 'Seen'] || 0));
-      let over = list.length - max;
-      for (const ch of list) { if (over <= 0) break; if (n - (ch[key + 'Seen'] || 0) > KEEP.idle && dist(ch) > far) { drop(ch); over--; } }
+      for (const ch of this.chunks.values()) {
+        if (!ch[key]) continue;
+        total++;
+        if (n - (ch[key + 'Seen'] || 0) > KEEP.idle && (ch.dd = dist(ch)) > far) list.push(ch);
+      }
+      if (total <= max) return;
+      list.sort((a, b) => b.dd - a.dd);
+      for (let i = 0; i < list.length && total > max; i++, total--) drop(list[i]);
     };
     prune('near', KEEP.near, LOD.farMat + KEEP.margin, (ch) => { this.free(ch, 'near'); this.free(ch, 'nearInk'); });
     const active = this.lit ? 'gl' : 'gd', other = this.lit ? 'gd' : 'gl';
@@ -204,9 +209,13 @@ export class City3D {
     prune(other, 0, -Infinity, (ch) => this.free(ch, other));
   }
 
-  /** The screen's context was restored or replaced: the tiles kept no canvas, so they go (repainted as needed). */
+  /**
+   * The screen's context was restored or replaced: the tiles kept no canvas, so they go (repainted
+   * as needed). Not disposed: their GL objects died with the old context (deleting them on it only
+   * logs "object does not belong to this context").
+   */
   gfxReset() {
-    for (const ch of this.chunks.values()) { this.free(ch, 'gl'); this.free(ch, 'gd'); }
+    for (const ch of this.chunks.values()) for (const k of ['gl', 'gd']) if (ch[k]) { this.scene.remove(ch[k]); delete ch[k]; }
     this.ground.userData.repaint?.();
   }
 
