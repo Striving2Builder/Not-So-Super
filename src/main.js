@@ -14,12 +14,14 @@ import { HERO, DISTRICTS, THEMES, DEALS, BOSSES, VENUES, BILLBOARDS } from './da
 import { UI, dialog, toast } from './ui.js';
 import { sfx } from './sfx.js';
 import { $, pick, chance, fmtTime } from './util.js';
-import { loadHero } from './hero3d.js';
+import { loadHero, HERO_SKIN } from './hero3d.js';
 import { loadEnemies } from './enemies.js';
 import { playScreenScene } from './cutscene.js';
 import { comic } from './comic.js';
 import { Commentary } from './commentary.js';
-import { settings, quality, autoTune } from './settings.js';
+import { settings, quality, autoTune, HERO_SKIN_LABELS } from './settings.js';
+import { perfHud } from './perfhud.js';
+import { gfxLost, crashedLastTime } from './gfx.js';
 
 loadHero();
 loadEnemies(); // guard and boss models for the 3D zones (procedural stand-ins until they arrive)
@@ -71,6 +73,13 @@ game.setMode = (name, p) => {
   game.mode.enter(p || {});
 };
 
+// WebGL can't be had at all any more: 3D flight drops to the 2D view; a 3D zone in progress is left.
+game.gfxFailed = () => {
+  game.overworld.drop3D();
+  const m = game.mode;
+  if (m && m !== game.overworld && 'renderer' in m && !m.renderer && m.zone && !m.done) { m.done = true; game.endZone(m.zone, { outcome: 'abort', rep: 0 }); }
+};
+
 // ---------------------------------------------------------------- zone flow
 /** Which game mode plays a zone. */
 function modeFor(z) {
@@ -79,7 +88,15 @@ function modeFor(z) {
 }
 
 game.startZone = (z) => {
-  game.setMode(modeFor(z), { zone: z });
+  try { game.setMode(modeFor(z), { zone: z }); } catch (e) {
+    // (a 3D zone without a WebGL context, out of memory…): back to the sky, not a frozen half-scene
+    console.error(e);
+    toast("Couldn't open that scene. Try again in a moment.", 'bad');
+    try { game.mode.exit?.(); } catch (e2) { /* half-entered */ }
+    game.mode = null;
+    game.setMode('overworld', { returnFrom: z });
+    return;
+  }
   game.commentary.onZoneStart(z);
   if (z.mode === 'brawl' && game.h > game.w) toast('Tip: rotate to landscape for street fights', 'info');
 };
@@ -230,6 +247,7 @@ async function pauseMenu() {
       { label: `Comic commentary: ${comic.enabled ? 'ON' : 'OFF'}`, value: 'c' },
       { label: `Graphics: ${settings.graphicsLabel}`, note: 'Battery saver: 30 fps, lighter clubs', value: 'g' },
       { label: `City feed videos: ${settings.cityFeed ? 'ON' : 'OFF'}`, note: 'Clips in the minimap corner', value: 'f' },
+      { label: `Hero: ${HERO_SKIN_LABELS[settings.hero]}`, note: settings.hero === HERO_SKIN ? 'Supergirl / Classic / Ponytail costume' : 'Reload the page to change costume', value: 'v' },
       { label: 'How to play', value: 'h' },
       ...(inMission ? [{ label: 'Abort mission', note: '−3 reputation', value: 'a', cls: 'bad' }] : []),
       ...(game.modeName === 'overworld' ? [{ label: 'Save & quit to title', value: 'q' }] : []),
@@ -239,6 +257,7 @@ async function pauseMenu() {
   if (v === 'c') { comic.toggle(); return pauseMenu(); }
   if (v === 'g') { settings.cycleGraphics(); return pauseMenu(); }
   if (v === 'f') { if (!settings.toggleCityFeed()) game.overworld.feed.stop(); return pauseMenu(); }
+  if (v === 'v') { settings.cycleHero(); return pauseMenu(); }
   if (v === 'h') { await dialog({ title: 'How to play', text: HOWTO }); return pauseMenu(); }
   if (v === 'a' && game.mode.abort) game.mode.abort();
   if (v === 'q') { st.save(); showTitle(); }
@@ -330,7 +349,7 @@ function frame(now) {
   }
   if (m) {
     try {
-      if (UI.open) { if (m.onPaused) m.onPaused(); }
+      if (UI.open || gfxLost()) { if (m.onPaused) m.onPaused(); } // (graphics restoring: the world waits)
       else {
         m.update(dt);
         if (game.state && !game.title) {
@@ -347,6 +366,7 @@ function frame(now) {
       }
     } catch (e) { console.error(e); }
   }
+  perfHud(realDt, game, settings.graphicsLabel); // ?perf=1 only
   game.input.endFrame();
   requestAnimationFrame(frame);
 }
@@ -354,6 +374,8 @@ function frame(now) {
 if (game.h > game.w) $('rotate-hint').textContent = 'Tip: rotate your phone to landscape for the best experience.';
 showTitle();
 requestAnimationFrame(frame);
+// iOS killed the last visit for memory (it reloads the tab): lighter graphics from here on, once
+if (crashedLastTime() && settings.afterCrash()) setTimeout(() => toast('The browser ran out of memory last time, so graphics are now on Battery saver. You can change this in the pause menu.', 'info'), 1500);
 
 // Periodic autosave.
 setInterval(() => { if (game.state && !game.title) game.state.save(); }, 10000);

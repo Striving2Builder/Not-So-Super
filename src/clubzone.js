@@ -271,6 +271,8 @@ export class ClubZone extends Special3D {
     }).finally(() => this.hideLoading());
   }
 
+  warmUp() {} // (Special3D's: here warmShaders runs once the building has loaded)
+
   /** The building to play in: a premade club by default (the asylum generates its own). */
   loadBuilding(key) { return loadClub(key); }
 

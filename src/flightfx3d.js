@@ -1,28 +1,29 @@
 // Speed juice for the three.js flight slice. In the 3D scene: a coloured contrail ribbon off her
 // heels, wind streaks whipping past her (boost / top speed), and inked sonic-boom rings that stay
-// where she punched through. On the 2D comic overlay: heavy radial action lines (ink + white
-// wedges raking in from the screen edges toward where she's heading), scaled with speed and much
-// denser at boost, plus wall-rush streaks down whichever side a tower face is flashing past.
+// where she punched through. On the 2D comic overlay: radial action lines (thin tapered streaks of
+// light in the outer band of the screen, converging on where she's heading), scaled with speed and
+// much denser at boost, plus wall-rush streaks down whichever side a tower face is flashing past.
 import * as THREE from 'three';
 
 const FX = {
   trail: { n: 24, life: 0.3, width: [0.34, 0.0], from: 140, head: [1, 0.2, 0.18], tail: [1, 0.8, 0.2], alpha: 1 },   // red off her heels → gold // speed (m/s) it starts
-  wind: { n: 28, radius: [5, 14], ahead: [4, 26], width: 0.09, from: 0.62, len: 9, clear: [0.62, 0.95] }, // from = speed fraction; close round her (they read at the screen edges, never as far hairlines); len cap (m); clear: NDC radius they fade in over
+  wind: { n: 28, radius: [5, 14], ahead: [4, 26], width: 0.09, from: 0.62, len: 9, clear: [0.62, 0.95], eye: [7, 15] }, // from = speed fraction; close round her (they read at the screen edges, never as far hairlines); len cap (m); clear: NDC radius they fade in over; eye: m from the lens they fade in over
   ring: { life: 0.9, grow: [3, 70], boostGrow: [2, 26] },
-  lines: { from: 0.18, deal: 70, clear: [0.6, 1.0], len: [0.22, 0.32] },                               // speed fraction; re-deal ms; clear: the screen ellipse they fade in over (× the half size); len: longest streak × screen height (cruise, boost)
+  lines: { from: 0.18, deal: 70, clear: [0.6, 1.0], len: [0.22, 0.32], width: [0.7, 1.6], edge: [10, 44] }, // speed fraction; re-deal ms; clear: the screen ellipse they fade in over (× the half size); len: longest streak × screen height (cruise, boost); width: half-width px at the widest; edge: px each one stops short of the screen edge
 };
 
 // wind streaks: tapered at both ends, soft across, and only out at the screen edges (faded in
 // from an ellipse round the centre, so none rakes across her or the view ahead). Display colour.
-const WIND_VS = `attribute vec2 k; varying vec2 vK; varying vec3 vClip;
-void main(){ vK = k; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); vClip = gl_Position.xyw; }`;
-const WIND_FS = `uniform vec3 color; uniform float opacity; uniform vec2 clear; varying vec2 vK; varying vec3 vClip;
+const WIND_VS = `attribute vec2 k; varying vec2 vK; varying vec3 vClip; varying float vEye;
+void main(){ vK = k; vec4 mv = modelViewMatrix * vec4(position, 1.0); vEye = -mv.z; gl_Position = projectionMatrix * mv; vClip = gl_Position.xyw; }`;
+const WIND_FS = `uniform vec3 color; uniform float opacity; uniform vec2 clear; varying vec2 vK; varying vec3 vClip; varying float vEye;
 void main(){
   vec2 ndc = vClip.xy / max(vClip.z, 1e-3);
   float a = opacity * smoothstep(0.0, 0.25, vK.x) * (1.0 - smoothstep(0.45, 1.0, vK.x)) * (1.0 - smoothstep(0.3, 1.0, abs(vK.y)));
   a *= smoothstep(clear.x, clear.y, length(ndc));
+  a *= smoothstep(${FX.wind.eye[0].toFixed(1)}, ${FX.wind.eye[1].toFixed(1)}, vEye); // never a fat blade right at the lens
   if (a < 0.01) discard;
-  gl_FragColor = vec4(color, a);
+  gl_FragColor = vec4(color * a, 1.0); // additive: a glint of light, never an opaque white sliver
 }`;
 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _v = new THREE.Vector3(), _s = new THREE.Vector3();
@@ -58,6 +59,7 @@ export class FlightFX3D {
     this.windMat = new THREE.ShaderMaterial({
       uniforms: { color: { value: new THREE.Color(0xeaf6ff) }, opacity: { value: 0 }, clear: { value: new THREE.Vector2(...FX.wind.clear) } },
       vertexShader: WIND_VS, fragmentShader: WIND_FS, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor, // (premultiplied add)
     });
     this.wind = new THREE.Mesh(geo, this.windMat);
     this.wind.frustumCulled = false; this.wind.renderOrder = 4;
@@ -157,48 +159,52 @@ export class FlightFX3D {
   }
 
   /**
-   * Comic action lines on the 2D overlay: short tapered white streaks that live only in the outer
-   * band of the screen: they fade in from an ellipse round the screen's centre (its middle ~60% is
-   * always clear: never through her or the view ahead), so they read as speed, not as glitches. Sparse at
-   * cruise, a full speed panel at boost; plus wall-rush streaks down the side a tower face is
-   * passing. vp: the screen point she's heading for; walls: { l, r } 0..1 tower-face proximity.
-   * Draw them first on a clear overlay: the centre fade erases what's under it.
+   * Comic action lines on the 2D overlay: thin streaks of light that live only in the outer band of
+   * the screen, tapered at BOTH ends and starting and ending inside the frame (a streak widest at the
+   * screen edge read as a white bar or a paper shard sticking in). They fade in from an ellipse
+   * round the screen's centre (its middle ~60% is always clear: never through her or the view
+   * ahead), drawn with 'lighter' compositing at a low alpha so crossings glow instead of stacking
+   * into opaque white. Sparse at cruise, a full speed panel at boost; plus wall-rush streaks down the
+   * side a tower face is passing. vp: the screen point she's heading for; walls: { l, r } 0..1
+   * tower-face proximity. Draw them first on a clear overlay: the centre fade erases what's under it.
    */
   drawLines(ctx, W, H, frac, boosting, vp, walls, night) {
     const f = Math.max(0, Math.min(1, (frac - FX.lines.from) / 0.45));
-    const wall = Math.max(walls.l, walls.r);
+    const wall = Math.max(walls.l, walls.r), Lc = FX.lines;
     if (f <= 0.02 && wall < 0.05) return;
-    const deal = Math.floor(performance.now() / FX.lines.deal);
+    const deal = Math.floor(performance.now() / Lc.deal);
     if (deal !== this.dealt) {
       this.dealt = deal;
       this.lines = [];
       const n = Math.floor(boosting ? 26 + f * 14 : 6 + f * 10);
-      for (let i = 0; i < n; i++) this.lines.push({ a: Math.random() * Math.PI * 2, in: Math.random(), w: 2 + Math.random() * (boosting ? 5 : 4) });
+      const line = (a, wall) => ({ a, in: Math.random(), w: Lc.width[0] + Math.random() * (Lc.width[1] - Lc.width[0]), edge: Lc.edge[0] + Math.random() * (Lc.edge[1] - Lc.edge[0]), wall });
+      for (let i = 0; i < n; i++) this.lines.push(line(Math.random() * Math.PI * 2));
       for (const [side, k] of [[-1, walls.l], [1, walls.r]]) {
         const m = Math.floor(k * 14);
-        for (let i = 0; i < m; i++) this.lines.push({ a: (side < 0 ? Math.PI : 0) + (Math.random() - 0.5) * 1.1, in: Math.random(), w: 2.5 + Math.random() * 6, wall: k });
+        for (let i = 0; i < m; i++) this.lines.push(line((side < 0 ? Math.PI : 0) + (Math.random() - 0.5) * 1.1, k));
       }
     }
-    // radii from the vanishing point: the streaks run from past the screen edge in to the outer band
+    // radii from the vanishing point: each streak ends a little inside where its ray leaves the screen
     const R = Math.hypot(Math.max(vp.x, W - vp.x), Math.max(vp.y, H - vp.y)), ox = vp.x, oy = vp.y;
-    const inner = boosting ? 0.6 : 0.7, L = H * FX.lines.len[boosting ? 1 : 0];
+    const inner = boosting ? 0.6 : 0.7, L = H * Lc.len[boosting ? 1 : 0], k0 = Math.min(1, W / 844);
     ctx.save();
-    ctx.fillStyle = night > 0.5 ? `rgba(232,244,255,${boosting ? 0.8 : 0.65})` : `rgba(255,255,255,${boosting ? 0.85 : 0.7})`;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = night > 0.5 ? `rgba(150,200,255,${boosting ? 0.5 : 0.38})` : `rgba(235,245,255,${boosting ? 0.55 : 0.42})`;
     ctx.beginPath();
     for (const l of this.lines) {
       const c = Math.cos(l.a), s = Math.sin(l.a), k = l.wall ?? f;
-      // where this ray leaves the screen: a streak is at most `len` long, measured in from there
       const ex = Math.min(c > 1e-3 ? (W - ox) / c : c < -1e-3 ? -ox / c : 1e9, s > 1e-3 ? (H - oy) / s : s < -1e-3 ? -oy / s : 1e9);
-      const r1 = ex + 12, r0 = Math.max(R * (inner + (1 - inner) * 0.6 * l.in * (1 - 0.5 * k)), ex - L * (0.6 + 0.4 * l.in)), w = l.w * (0.5 + 0.5 * k);
-      if (r0 >= r1) continue;
-      // a needle: sharp tip inside, widest at the screen edge
+      const r1 = ex - l.edge * k0, r0 = Math.max(R * (inner + (1 - inner) * 0.6 * l.in * (1 - 0.5 * k)), r1 - L * (0.6 + 0.4 * l.in)), w = l.w * (0.6 + 0.4 * k) * k0;
+      if (r1 - r0 < 12) continue;
+      // a thin spindle: sharp at both ends, widest two thirds of the way out
+      const rm = r0 + (r1 - r0) * 0.68;
       ctx.moveTo(ox + c * r0, oy + s * r0);
-      ctx.lineTo(ox + c * r1 - s * w, oy + s * r1 + c * w); ctx.lineTo(ox + c * r1 + s * w, oy + s * r1 - c * w); ctx.closePath();
+      ctx.lineTo(ox + c * rm - s * w, oy + s * rm + c * w); ctx.lineTo(ox + c * r1, oy + s * r1); ctx.lineTo(ox + c * rm + s * w, oy + s * rm - c * w); ctx.closePath();
     }
     ctx.fill();
     // fade toward the middle: erase with an elliptical ramp round the screen's centre (fully clear
     // inside clear[0] × the half size → untouched from clear[1] out)
-    const C = FX.lines.clear;
+    const C = Lc.clear;
     ctx.globalCompositeOperation = 'destination-out';
     ctx.translate(W / 2, H / 2); ctx.scale(W / 2, H / 2);
     const g = ctx.createRadialGradient(0, 0, C[0], 0, 0, C[1]);

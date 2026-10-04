@@ -13,12 +13,15 @@ import { LOOK } from './look3d.js';
  * the middle stands off her back; folds: pleat depth at the hem (per column, ± = ridge / valley).
  */
 const CAPE = {
-  segs: 7, len: 0.16, w: [0.085, 0.2], arch: 0.04, fold: 0.022,
+  segs: 7, len: 0.135, w: [0.075, 0.15], arch: 0.04, fold: 0.022, clear: 0.035, // clear: extra stand-off over her hips toward the hem
   folds: [0, 0.8, -1, 0.6, -1, 0.8, 0], // across the width, + side edge → − side edge
   key: 0.18,  // N·L cut between the lit and shaded tone
-  outer: ['#e8222c', '#8c0c18'], inner: ['#a01622', '#6a0e18'], // [lit, shade] (sRGB)
+  outer: ['#ee2630', '#b8141f'], inner: ['#a01622', '#701018'], // [lit, shade] (sRGB; the outer shade stays bright: at dusk / night it went to a maroon block)
   ink: '#0b0b16', inkW: 2.2, foldFrom: 0.38, // inkW: px like the body's hull; fold strokes start this far down
   sideFlat: 0.55, // how much of the out-of-plane shape goes when seen exactly side-on
+  lift: 0.7,      // seen from below at speed, the hem rises off her back by up to this × a segment per row (it shows past her)
+  rise: 0.22,     // at speed the cape streams up off her back (× a segment per row), so her body and legs read under it
+  billow: [0.55, 1.3], // slow flight: a big slow billow, × a segment / its rate (rad/s), instead of hanging straight down
 };
 const C = CAPE.folds.length; // columns across the width
 
@@ -32,7 +35,9 @@ function clothMaterial() {
     outLit: { value: lin(CAPE.outer[0]) }, outShade: { value: lin(CAPE.outer[1]) },
     inLit: { value: lin(CAPE.inner[0]) }, inShade: { value: lin(CAPE.inner[1]) },
   };
-  const m = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+  // (pulled toward the camera: where it lies on her back, near-ties go to the cape, not to the
+  // body's white rim under it, which used to cut a white zigzag through the cloth)
+  const m = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, U);
     sh.vertexShader = sh.vertexShader
@@ -75,7 +80,7 @@ void main() {
   gl_Position = c;
 }`,
     fragmentShader: 'uniform vec3 ink; void main() { gl_FragColor = vec4(ink, 1.0); }',
-    side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
+    side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -6,
   });
 }
 
@@ -150,15 +155,19 @@ export class FlightCape {
     const view = this._v.subVectors(this.eye, anchor);
     const sideOn = this.eye.lengthSq() ? Math.abs(view.normalize().dot(side)) : 0;
     const flat = 1 - CAPE.sideFlat * sideOn * sideOn;
+    // from below (the camera under her back's plane) the cape would hide behind her: speed lifts the hem
+    const below = this.eye.lengthSq() ? Math.min(1, Math.max(0, -view.dot(up) * 3)) : 0, lift = (CAPE.lift * below + CAPE.rise) * sk * L;
+    const slow = 1 - sk, B = CAPE.billow;
     this.p[0].copy(anchor);
     for (let i = 1; i < n; i++) {
       const k = i / (n - 1);
       // around a straight line down her back: an S-wave that travels to the hem (bigger there),
       // a slower sway sideways, and a droop under gravity when she's slow
       const tgt = this._t.copy(anchor).addScaledVector(back, i * L * (0.5 + 0.5 * sk))
-        .addScaledVector(up, ((Math.sin(t * f - i * 0.75) + 0.6) * amp + Math.sin(t * 1.7 - i * 0.5) * L * 0.12) * k * flat)
-        .addScaledVector(side, Math.sin(t * f * 0.55 - i * 0.6) * amp * 0.6 * k);
-      tgt.y -= L * (1 - sk) * 0.6 * i;
+        .addScaledVector(up, ((Math.sin(t * f - i * 0.75) + 0.6) * amp + Math.sin(t * 1.7 - i * 0.5) * L * 0.12) * k * flat + lift * i * k
+          + (Math.sin(t * B[1] - i * 0.45) + 0.5) * B[0] * L * slow * k * i * 0.5)
+        .addScaledVector(side, Math.sin(t * f * 0.55 - i * 0.6) * amp * 0.6 * k + Math.sin(t * B[1] * 0.7 - i * 0.4) * B[0] * L * slow * k * i * 0.3);
+      tgt.y -= L * slow * 0.45 * i;
       this.p[i].lerp(tgt, Math.min(1, dt * (8 + v / 6)));
       const d = this._a.subVectors(this.p[i], this.p[i - 1]), len = d.length() || 1; // keep the segment length
       this.p[i].copy(this.p[i - 1]).addScaledVector(d, L / len);
@@ -175,7 +184,7 @@ export class FlightCape {
         // out of her back: the arch (middle stands off), the folds (deeper toward the hem; the edges
         // curl down), and an out-of-phase flutter on the edges
         const fl = Math.sin(t * 6 - i * 1.1 + u * 1.5) * w * 0.07 * k * au;
-        const o = (CAPE.arch * scale * (1 - u * u) + CAPE.folds[j] * CAPE.fold * scale * k * k * breathe - w * (0.08 + 0.16 * k) * au * au + fl) * flat;
+        const o = (CAPE.arch * scale * (1 - u * u) + CAPE.clear * scale * Math.min(1, k * 2) + CAPE.folds[j] * CAPE.fold * scale * k * k * breathe - w * (0.08 + 0.16 * k) * au * au + fl) * flat;
         let x = q.x + side.x * w * u + up.x * o, y = q.y + side.y * w * u + up.y * o, z = q.z + side.z * w * u + up.z * o;
         if (tan) { const tip = w * 0.3 * (1 - au * au); x += tan.x * tip; y += tan.y * tip; z += tan.z * tip; }
         pos.setXYZ(i * C + j, x, y, z);

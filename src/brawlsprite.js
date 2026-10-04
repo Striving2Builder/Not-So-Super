@@ -1,11 +1,12 @@
 // Street-fight sprites baked from the rigged 3D crooks (assets/models/enemies/, driven by Supergirl's
-// clips through enemies.js retargeting). One small offscreen WebGL renderer poses a model, renders it
+// clips through enemies.js retargeting). The shared offscreen renderer (offscreen3d.js) poses a model, renders it
 // side-on, and the frame is inked (bold comic outline + cel bands) into a cached 2D canvas. Frames are
 // quantized per clip so a whole fight needs a few dozen bakes per model, spread over frames by a
 // per-frame budget; anything not baked yet falls back to the procedural art in art.js.
 import * as THREE from 'three';
 import { Enemy, enemyReady } from './enemies.js';
 import { quality } from './settings.js';
+import { renderToCanvas } from './offscreen3d.js';
 
 export const SPAN = 2.6, LIFT = 0.12; // frame covers 2.6 m of height, feet 0.12 m above the bottom edge
 
@@ -53,12 +54,7 @@ const MAX_FRAMES = 360; // ~8 crook looks' worth of frames; older zones' bakes a
 function setup() {
   const q = quality();
   const H = q.brawlSprite || 256, W = H; // square: lying bodies and kicks need the width
-  const canvas = document.createElement('canvas');
-  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
-  renderer.setPixelRatio(1);
-  renderer.setSize(W, H, false);
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.setClearColor(0x000000, 0);
+  const canvas = document.createElement('canvas'); // (each bake's render lands here: offscreen3d.js)
   const scene = new THREE.Scene();
   // Same studio rig as HeroSprite so crooks and heroine share one light: warm key high front, cool rim.
   scene.add(new THREE.HemisphereLight(0xffffff, 0x4a5060, 2.1));
@@ -68,7 +64,7 @@ function setup() {
   const cam = new THREE.OrthographicCamera(-(SPAN * a) / 2, (SPAN * a) / 2, SPAN - LIFT, -LIFT, 0.1, 50);
   cam.position.set(0, 0, 20); cam.lookAt(0, 0, 0); cam.updateProjectionMatrix();
   const tmp = document.createElement('canvas'); tmp.width = W; tmp.height = H;
-  R = { canvas, renderer, scene, cam, W, H, tmp, tctx: tmp.getContext('2d', { willReadFrequently: true }), inst: {}, cache: new Map(), deadline: R0deadline };
+  R = { canvas, scene, cam, W, H, tmp, tctx: tmp.getContext('2d', { willReadFrequently: true }), inst: {}, cache: new Map(), deadline: R0deadline };
 }
 
 /** Palette-swap a flat-colour atlas: top half shirt stripes, bottom-right skin, the rest trousers. */
@@ -149,6 +145,7 @@ export function frame(type, anim, u) {
     return null;
   }
   f = bake(type, C, i);
+  if (!f) return null;
   R.cache.set(key, f);
   if (R.cache.size > MAX_FRAMES) R.cache.delete(R.cache.keys().next().value); // bounded: oldest bake goes first
   return f;
@@ -169,7 +166,7 @@ export function prewarm(types, anims = ALL_ANIMS) {
       for (let i = 0; i < C.n; i++) {
         if (R.cache.has(t + '|' + anim + '|' + i)) continue;
         if (overBudget()) return false;
-        frame(t, anim, C.loop ? (i + 0.5) / C.n : i / (C.n - 1));
+        if (!frame(t, anim, C.loop ? (i + 0.5) / C.n : i / (C.n - 1))) return false; // (context lost)
       }
     }
   }
@@ -194,8 +191,8 @@ function bake(type, C, i) {
     e.mixer.update(0);
   }
   e.root.updateMatrixWorld(true);
-  R.renderer.render(R.scene, R.cam);
   const W = R.W, H = R.H;
+  if (!renderToCanvas(R.canvas, R.scene, R.cam, W, H)) return null; // (context lost: nothing to keep)
   const toM = (b) => { if (!b) return null; b.getWorldPosition(_v); return [_v.x + sh, _v.y]; };
   const out = document.createElement('canvas'); out.width = W; out.height = H;
   inkInto(out.getContext('2d'), R.canvas, W, H, R.tctx, R.tmp);

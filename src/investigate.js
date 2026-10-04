@@ -14,6 +14,7 @@ import { comic } from './comic.js';
 import { quality } from './settings.js';
 import { LW, LH, FLOOR, INK, CAPTION, ease, paintRoom, paintFixture, paintLight, paintDust, makeDust, makeGrade, paintStory, paintForeground, paintBackdrop, paintSceneLight, paintSceneFx } from './crimescene.js';
 import { SCENES, pickScene, loadScene, sceneImage, dropScene } from './scenespots.js';
+import { loadingPanel } from './gfx.js';
 import { SETTINGS, CONTAINERS, SURFACES, ANIM, drawProp, drawPropAnim, shadeProp, contactShadow, tent } from './sceneprops.js';
 import { ScanView } from './scanview.js';
 import { LensFX } from './lensfx.js';
@@ -39,6 +40,10 @@ export class Investigate {
     if (this.paint) loadScene(this.paint); // the bake picks it up once decoded (baseKey)
     this.buildCase();
     if (this.lay) this.lay.baseKey = ''; // new case, new room
+    // the room is baked in one long frame (painting, ink pass, light, grade): it happens behind a
+    // LOADING card, once the painting has decoded (not first with the code-drawn stand-in, then again)
+    this.loading = 0; this.loadT = performance.now();
+    loadingPanel('LOADING…');
     if (document.fonts && document.fonts.load) document.fonts.load('20px Bangers').catch(() => {});
 
     g.input.setStick(false);
@@ -60,6 +65,7 @@ export class Investigate {
   }
 
   exit() {
+    loadingPanel(null);
     $('objectives').classList.remove('on');
     dropScene(); this.lay = null; // the painting and the full-screen layers go with the scene
   }
@@ -113,6 +119,11 @@ export class Investigate {
   // ------------------------------------------------------------------ input
   update(dt) {
     if (this.done) return;
+    if (this.loading !== null) { // (render bakes the room once the card is up and the painting is in)
+      if (this.loading === 'baked') { this.loading = null; loadingPanel(null); }
+      else this.loading++;
+      return;
+    }
     const g = this.g, inp = g.input;
     this.t += dt;
     if (this.xray) { this.en -= dt * 11; if (this.en <= 0) { this.en = 0; this.setXray(false); toast('X-ray power drained', 'bad'); } }
@@ -166,7 +177,7 @@ export class Investigate {
   get floorY() { return this.scene ? this.scene.floor : FLOOR; }
 
   async tap(sx, sy) {
-    if (this.busy) return;
+    if (this.busy || this.loading !== null) return;
     const { x, y } = this.toLogical(sx, sy);
     const w = this.witness;
     const tr = this.trap;
@@ -351,6 +362,11 @@ export class Investigate {
 
   render(ctx) {
     const g = this.g, W = g.w, H = g.h;
+    if (this.loading !== null && this.loading !== 'baked') {
+      const waiting = this.paint && !sceneImage(this.paint) && performance.now() - this.loadT < 6000;
+      if (this.loading < 2 || waiting) { ctx.fillStyle = '#0b0b16'; ctx.fillRect(0, 0, W, H); return; }
+      this.loading = 'baked'; // (this frame bakes the room)
+    }
     const dpr = ctx.getTransform().a || 1;
     const f = fitScene(W, H, LW, LH);
     const v = { x0: -f.ox / f.s, y0: -f.oy / f.s, x1: (W - f.ox) / f.s, y1: (H - f.oy) / f.s };

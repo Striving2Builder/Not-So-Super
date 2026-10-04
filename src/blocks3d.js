@@ -72,6 +72,9 @@ const TIERS = {
   podium: [[0, 0.2], [0.17, 1]],
 };
 
+/** The current building's first setback height (m; 0 = none), for its cornice trim. */
+let ledge = 0;
+
 /** One city.js box building → tiers + crown + roof kit + neon + signs. Returns nothing. */
 export function building(B, o, blk, S) {
   const D = DISTRICT_3D[blk.d] || DISTRICT_3D.retail;
@@ -98,6 +101,7 @@ export function building(B, o, blk, S) {
   if (shape === 'spire' && H < 80) shape = 'setback';
   if ((shape === 'podium' || shape === 'octa') && (Smin < 26 || H < 50)) shape = 'slab';
   let top = H, rx0 = x0, rz0 = z0, rx1 = x1, rz1 = z1;
+  ledge = 0;
   if (shape === 'octa') {
     // a round glass tower on a square plinth
     const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, pod = Math.min(18, H * 0.15);
@@ -108,6 +112,7 @@ export function building(B, o, blk, S) {
     rx0 = cx - r * 0.6; rx1 = cx + r * 0.6; rz0 = cz - r * 0.6; rz1 = cz + r * 0.6;
   } else {
     let bot = 0;
+    ledge = TIERS[shape].length > 1 ? H * TIERS[shape][0][1] : 0;
     for (const [inset, f] of TIERS[shape]) {
       const i = inset * Smin, t = H * f;
       rx0 = x0 + i; rz0 = z0 + i; rx1 = x1 - i; rz1 = z1 - i;
@@ -242,7 +247,9 @@ function roofExtras(B, o, blk, S, D, L, h, face, x0, z0, x1, z1, H, roof) {
   if (!o.neon && D.trim && hash2(o.x | 0, o.y | 0, 77) < D.trimOdds && H > 20) {
     const roofY = roof ? roof[4] : H, r = roof || [x0, z0, x1, z1];
     neonRing(B, r[0], r[1], r[2], r[3], roofY - 1, pick(D.trim, h[3]), 0.6);
-    if (H > 60 && h[4] < 0.5) neonRing(B, x0, z0, x1, z1, Math.max(4, H * 0.3), pick(D.trim, h[5]), 0.5);
+    // a second ring: a cornice light on the first setback's ledge (a lone ring at 30% of a plain
+    // slab read as a stray orange line across the tower); the vice districts keep their mid band
+    if (H > 60 && h[4] < 0.5 && (ledge || D.neon)) neonRing(B, x0, z0, x1, z1, ledge ? ledge - 0.6 : Math.max(4, H * 0.3), pick(D.trim, h[5]), ledge ? 0.8 : 0.5);
   }
   if (o.neon) {
     const roofY = Math.min(H, roof ? roof[4] : H);

@@ -3,7 +3,9 @@
 // intoxicating temptations and bait items that can get the heroine captured.
 import * as THREE from 'three';
 import { quality } from './settings.js';
+import { watchContext, loadingPanel } from './gfx.js';
 import { HeroModel, heroReady } from './hero3d.js';
+import { dressHero, inkHull } from './herolook3d.js';
 import { Enemy, enemyReady, GUARD_KINDS, bossKind } from './enemies.js';
 import { updateNightlife, disposeNightlife } from './nightlife.js';
 import { VENUES, THEMES, INTOX_ITEMS, BAIT_ITEMS, HERO, FIRST_NAMES, LAST_NAMES } from './data.js';
@@ -24,19 +26,37 @@ export { CAM_DIST, CAM_PITCHES } from './zonekit.js';
 // The code-built venues' floor plan bounds (main hall, back room, office; see rooms3d.js).
 const FOOTPRINT = { min: { x: -15, z: -22 }, max: { x: 25, z: 12 } };
 
+/**
+ * The shared renderer. Antialiasing is fixed at creation: on for 1× screens, except in Battery
+ * saver. If iOS loses its context and never gives it back, a fresh one replaces it everywhere
+ * (three re-uploads every scene on the new context by itself).
+ */
+function makeRenderer(g) {
+  const r = new THREE.WebGLRenderer({ antialias: devicePixelRatio < 2 && !quality().fpsCap, powerPreference: 'high-performance' });
+  r.outputColorSpace = THREE.SRGBColorSpace;
+  $('three-host').appendChild(r.domElement);
+  watchContext(r, { onGiveUp: () => replaceRenderer(g, r) });
+  return r;
+}
+function replaceRenderer(g, old) {
+  let r;
+  try { r = makeRenderer(g); } catch (e) { console.error(e); r = null; }
+  old.domElement.remove();
+  old.dispose();
+  Special3D.sharedRenderer = r;
+  for (const m of [...Object.values(g.modes), g.overworld.view3d]) if (m && Object.hasOwn(m, 'renderer') && m.renderer === old) { m.renderer = r; if (m.post) m.post.rt = m.post.rtB = null; if (m.heroPass) m.heroPass.rt = null; } // (their targets died with the old context: just let them go)
+  if (!r) { g.gfxFailed?.(); return; } // no WebGL left: the game falls back (2D flight, zones abort)
+  for (const m of Object.values(g.modes)) if (m.renderer === r && m.resize) m.resize();
+  if (g.overworld.view3d) g.overworld.view3d.dpr = 0; // (its canvas size is re-applied next frame)
+}
+
 export class Special3D {
   constructor(g) { this.g = g; }
 
   initRenderer() {
-    if (this.renderer) return;
-    // One WebGL renderer shared by every 3D mode (special zones and club raids).
-    if (!Special3D.sharedRenderer) {
-      // antialiasing is fixed at creation: on for 1× screens, except in Battery saver
-      const r = new THREE.WebGLRenderer({ antialias: devicePixelRatio < 2 && !quality().fpsCap, powerPreference: 'high-performance' });
-      r.outputColorSpace = THREE.SRGBColorSpace;
-      $('three-host').appendChild(r.domElement);
-      Special3D.sharedRenderer = r;
-    }
+    // One WebGL renderer shared by every 3D mode (special zones, club raids, 3D flight). Throws
+    // if the browser can't give us a context (the caller falls back).
+    if (!Special3D.sharedRenderer) Special3D.sharedRenderer = makeRenderer(this.g);
     this.renderer = Special3D.sharedRenderer;
     this.resize();
   }
@@ -96,7 +116,8 @@ export class Special3D {
       this.hero = new THREE.Group();
       this.hero.add(this.heroModel.root);
       this.heroClip('land', 1.4); // she arrives with a superhero landing
-      inkCharacter(this.heroModel.root, { rim: 0xfff4d0, skip: [this.heroModel.cape.mesh] });
+      dressHero(this.heroModel.root, { self: 0.12, rim: { value: 0.9 } }, [this.heroModel.cape.mesh]); // her own cel look (herolook3d)
+      inkHull(inkCharacter(this.heroModel.root, { rim: 0xfff4d0, skip: [this.heroModel.cape.mesh] }));
       inkCharacter(this.heroModel.cape.mesh, { rim: 0xfff4d0, outline: false });
     } else this.hero = inkCharacter(this.makeHero());
     this.shadows.track(this.hero, 0.5);
@@ -113,6 +134,21 @@ export class Special3D {
     $('hud-title').textContent = zone.name;
     $('objectives').classList.add('on');
     this.announce();
+    this.warmUp();
+  }
+
+  /**
+   * Compile the zone's shaders before its first frame, behind the LOADING card (in parallel where
+   * the browser can): left to the first frame they compiled one after another and froze it.
+   * ClubZone warms its own after the building loads (with the texture uploads).
+   */
+  warmUp() {
+    const r = this.renderer;
+    if (!r.compileAsync) return;
+    const done = () => { if (this.g.mode === this) { this.warming = false; loadingPanel(null); } };
+    this.warming = true;
+    loadingPanel('LOADING…');
+    r.compileAsync(this.scene, this.cam).then(done, done);
   }
 
   // ---- presentation hooks (night cases override these)
@@ -181,6 +217,7 @@ export class Special3D {
   detachShared() {}
 
   exit() {
+    this.warming = false; loadingPanel(null);
     this.detachShared();
     for (const e of this.cast || []) e.root.remove(e.model); // shares geometry/textures with the loaded templates
     document.body.classList.remove('three');
@@ -575,6 +612,7 @@ export class Special3D {
 
   // ------------------------------------------------------------------ update
   update(dt) {
+    if (this.warming) return;
     if (this.done && this.keepAnimating && this.heroModel) this.heroModel.update(dt);
     if (this.scene) for (const e of this.cast) e.update(dt);
     if (this.done || !this.scene) return;

@@ -106,6 +106,12 @@ export class CityArt {
     return e.c;
   }
 
+  /** Forget tile (tx, ty): its canvas goes back to the pool (the 3D city freed the texture made from it). */
+  drop(tx, ty, lit) {
+    const k = this.key(tx, ty) * 2 + (lit ? 1 : 0), e = this.ground.get(k);
+    if (e) { this.ground.delete(k); this.pool.push(e.c); }
+  }
+
   evict(map, frame, drop = false) {
     // drop the quarter that was used longest ago
     const es = [...map.entries()].sort((a, b) => a[1].f - b[1].f);
@@ -201,7 +207,7 @@ export class CityArt {
       g.stroke();
       g.strokeStyle = '#15161c'; g.lineWidth = 1.6; g.strokeRect(x0, y0, LOT, LOT); // curb, inked
     }
-    g.fillStyle = D.lot; g.fillRect(x0 + 5, y0 + 5, LOT - 10, LOT - 10);
+    g.fillStyle = this.tone ? this.tone(D.lot, 'lot') : D.lot; g.fillRect(x0 + 5, y0 + 5, LOT - 10, LOT - 10);
     for (const f of b.flats) this.flat(g, f);
     // contact shadow where walls meet the ground
     g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 3;
@@ -212,11 +218,13 @@ export class CityArt {
       // tractor tracks: a dirt road edge instead of a curb
       g.strokeStyle = 'rgba(90,70,40,.5)'; g.lineWidth = 3; g.strokeRect(x0 - 3, y0 - 3, LOT + 6, LOT + 6);
     }
+    this.dress?.(g, b); // optional hook (the 3D view): lot dressing shared with its far ground plan
   }
 
   flat(g, f) {
+    const T = this.tone || ((c) => c); // optional hook (the 3D view): mutes the flats' colours
     switch (f.t) {
-      case 'rect': g.fillStyle = f.river && this.riverBank ? this.riverBank : f.c; g.fillRect(f.x, f.y, f.w, f.h); break;
+      case 'rect': g.fillStyle = f.river && this.riverBank ? this.riverBank : T(f.c, 'rect'); g.fillRect(f.x, f.y, f.w, f.h); break;
       case 'path':
         g.fillStyle = f.c; g.fillRect(f.x, f.y, f.w, f.h);
         g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(f.x, f.y, 1.5, f.h); g.fillRect(f.x + f.w - 1.5, f.y, 1.5, f.h);
@@ -236,8 +244,8 @@ export class CityArt {
         }
         break;
       case 'field': {
-        g.fillStyle = f.c1; g.fillRect(f.x, f.y, f.w, f.h);
-        g.fillStyle = f.c2;
+        g.fillStyle = T(f.c1, 'field'); g.fillRect(f.x, f.y, f.w, f.h);
+        g.fillStyle = T(f.c2, 'field2');
         const n = 12;
         for (let i = 0; i < n; i += 2) {
           if (f.vert) g.fillRect(f.x + (f.w * i) / n, f.y, f.w / n, f.h);

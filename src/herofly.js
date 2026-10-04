@@ -3,6 +3,7 @@
 // and rim-lit, with her shadow cast along the sun onto the street or the roof under her, and the
 // comic "WHOOSH!" lettering when she kicks into a boost.
 import { heroReady, HeroSprite } from './hero3d.js';
+import { FlightPose } from './heropose3d.js';
 import { SUN, glow } from './cityart.js';
 import { clamp } from './util.js';
 
@@ -72,7 +73,7 @@ export class InkSprite {
 }
 
 export class FlightHero {
-  constructor() { this.ink = new InkSprite(); this.sprite = null; this.pops = []; this.last = null; this.art = null; }
+  constructor() { this.ink = new InkSprite(); this.sprite = null; this.pops = []; this.last = null; this.art = null; this.pose = new FlightPose(); }
 
   get ready() { return heroReady(); }
 
@@ -132,11 +133,14 @@ export class FlightHero {
       || Math.abs(h.bank - L.bank) > 0.04 || Math.abs(h.hover - L.hover) > 0.04 || L.rich !== o.rich || (L.night > 0.5) !== (o.night > 0.5);
     if (stale) {
       sp.setSize(px, px);
+      // the same body language as the 3D view (heropose3d): boost, glide, hover, turns
+      const P = this.pose, dt = L ? Math.min(0.25, Math.max(0, o.t - L.t)) : 0;
+      P.step(h, dt, o.t, false, !!h.wasBoosting && h.speed > 600, 0);
       if (h.perch) sp.hero.pose('idle', o.t);
+      else if (o.diving) sp.hero.pose('jump', 0.9);
       else {
-        sp.hero.pose(o.diving ? 'jump' : 'fly', o.diving ? 0.9 : o.t);
-        // fist punched forward while she's moving; arms relax as she slows into a hover
-        if (!o.diving) sp.hero.superFly(1 - 0.8 * h.hover);
+        sp.hero.pose(P.hover ? 'idle' : 'fly', o.t);
+        if (P.hover) P.hovering(sp.hero, P.hoverK); else P.flying(sp.hero, P.fly, o.t);
       }
       // Airspeed drives the cape: it streams behind her and lifts off her back.
       const air = 8 + h.speed / 45;
@@ -144,7 +148,7 @@ export class FlightHero {
       // Heading in 3D; bank into turns; pitch up into the upright hover only when she's stopped.
       const img = sp.render({
         view: 'aerial', tilt: LOOK.tilt, span: LOOK.span, yaw: Math.PI / 2 - h.ang,
-        roll: h.perch ? 0 : h.bank * 0.5, pitch: h.perch ? 0 : h.hover * 1.15 - h.lean * 0.25,
+        roll: h.perch ? 0 : this.pose.roll.x * 0.55, pitch: h.perch ? 0 : (1 - this.pose.fly) * 1.15 + this.pose.slow * 0.35 + this.pose.climb * 0.5 - h.lean * 0.25,
       });
       // outline ~1.7 CSS px whatever the sprite resolution
       this.art = this.ink.build(img, Math.atan2(-1, -1), o.rich, o.night, Math.max(1.5, 1.7 * o.dpr * (px / (size * o.dpr))));

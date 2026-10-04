@@ -8,7 +8,9 @@ import * as THREE from 'three';
 import { LOOK } from './look3d.js';
 
 export const HERO_LAYER = 1;
-const PASS = { pad: 1.2, bucket: 64 }; // pad: margin round her bounding sphere
+// pad: her bounding sphere's scale (her radius already holds the cape; the keyline's own width is added in px); taps: the silhouette ink's dilation samples (the body's
+// own ink hull covers gaps at thin limbs); ink: its colour; halo: rgb + alpha of the night halo
+const PASS = { pad: 1.0, bucket: 64, taps: 6, ink: 0x0b0b16, halo: [0.85, 0.9, 1.0, 0.45] };
 
 const _v = new THREE.Vector3(), _res = new THREE.Vector2(), _cc = new THREE.Color();
 
@@ -19,11 +21,31 @@ export class HeroPass {
     this.ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.quadScene = new THREE.Scene();
     // the target holds premultiplied colour (MSAA resolves her edges against a clear of 0,0,0,0)
-    // a raw copy: the target already holds display values (premultiplied by her coverage)
+    // and display values, so the copy is raw. On the way it adds a silhouette ink line round her
+    // whole figure (body + cape as one shape, like a comic keyline): a dilation of her coverage,
+    // wider on dark or busy backgrounds, with an optional pale halo outside it at night.
+    let taps = '', halo = ''; // (unrolled: one line per direction)
+    for (let i = 0; i < PASS.taps; i++) {
+      const a = (i / PASS.taps) * Math.PI * 2, d = `vec2(${Math.cos(a).toFixed(4)}, ${Math.sin(a).toFixed(4)}) * texel`;
+      taps += `  o = max(o, cover(vUv + ${d} * inkW));\n`;
+      halo += `    h = max(h, cover(vUv + ${d} * (inkW + haloW)));\n`;
+    }
     this.mat = new THREE.ShaderMaterial({
-      uniforms: { map: { value: null }, rep: { value: new THREE.Vector2(1, 1) } },
+      uniforms: { map: { value: null }, rep: { value: new THREE.Vector2(1, 1) }, texel: { value: new THREE.Vector2() }, inkW: { value: 0 }, haloW: { value: 0 },
+        ink: { value: new THREE.Color(PASS.ink) }, halo: { value: new THREE.Vector4(...PASS.halo) } },
       vertexShader: 'uniform vec2 rep; varying vec2 vUv; void main() { vUv = uv * rep; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: 'uniform sampler2D map; varying vec2 vUv; void main() { gl_FragColor = texture2D(map, vUv); }',
+      fragmentShader: `uniform sampler2D map; uniform vec2 rep, texel; uniform float inkW, haloW; uniform vec3 ink; uniform vec4 halo; varying vec2 vUv;
+float cover(vec2 uv) { return texture2D(map, clamp(uv, vec2(0.0), rep - texel * 0.5)).a; } // (her rect's rim is empty margin)
+void main() {
+  vec4 c = texture2D(map, vUv);
+  if (inkW <= 0.0 || c.a > 0.98) { gl_FragColor = c; return; } // (inside her: nothing to add)
+  float o = 0.0, h = 0.0;
+${taps}  if (haloW > 0.0) {
+${halo}  }
+  o = smoothstep(0.15, 0.6, o);
+  vec4 l = vec4(ink, 1.0) * o + vec4(halo.rgb, 1.0) * halo.a * smoothstep(0.15, 0.6, h) * (1.0 - o);
+  gl_FragColor = c + l * (1.0 - c.a);
+}`,
       transparent: true, depthTest: false, depthWrite: false, toneMapped: false,
       blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
     });
@@ -54,12 +76,13 @@ export class HeroPass {
    * in metres), over what's already on the canvas. W/H: CSS size of the view; q = [MSAA samples,
    * density × the frame's] (the graphics profile's fly3dHero). At 2× density the quad's bilinear
    * read averages each 2×2 block: supersampled edges without MSAA (which is costly in software GL).
+   * line = [ink, halo] CSS px of the silhouette keyline round her (0 = none).
    */
-  render(renderer, scene, cam, center, radius, W, H, q) {
+  render(renderer, scene, cam, center, radius, W, H, q, line = [0, 0]) {
     _v.copy(center).project(cam);
     if (_v.z > 1 || _v.z < -1) return;
     const dist = cam.position.distanceTo(center);
-    const pr = (radius * PASS.pad) / (dist * Math.tan((cam.fov * Math.PI) / 360)) * (H / 2) / (cam.zoom || 1);
+    const pr = (radius * PASS.pad) / (dist * Math.tan((cam.fov * Math.PI) / 360)) * (H / 2) / (cam.zoom || 1) + line[0] + line[1] + 2; // (every pixel of her rect pays for the keyline: no spare margin)
     const sx = (_v.x * 0.5 + 0.5) * W, sy = (-_v.y * 0.5 + 0.5) * H;
     const x0 = Math.max(0, Math.floor(sx - pr)), y0 = Math.max(0, Math.floor(sy - pr));
     const x1 = Math.min(W, Math.ceil(sx + pr)), y1 = Math.min(H, Math.ceil(sy + pr));
@@ -84,7 +107,10 @@ export class HeroPass {
     renderer.setClearColor(_cc, a0);
     LOOK.res.value.copy(_res); LOOK.dpr.value = dpr0;
     // lay it over the frame: a quad on her rectangle sampling the used corner of the target
-    this.mat.uniforms.rep.value.set(rw / rt.width, rh / rt.height);
+    const u = this.mat.uniforms;
+    u.rep.value.set(rw / rt.width, rh / rt.height);
+    u.texel.value.set(dpr / rt.width, dpr / rt.height); // one CSS px in the target's uv
+    u.inkW.value = line[0]; u.haloW.value = line[1];
     this.quad.scale.set(w / W, h / H, 1);
     this.quad.position.set(((x0 + w / 2) / W) * 2 - 1, 1 - ((y0 + h / 2) / H) * 2, 0);
     const ac = renderer.autoClear;

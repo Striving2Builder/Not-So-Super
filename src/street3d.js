@@ -5,7 +5,8 @@ import * as THREE from 'three';
 import { BLOCK, ROAD } from './city.js';
 import { hash2 } from './rng.js';
 
-const TRAFFIC = { perLane: 110, speed: [9, 17], lane: 0.2, far: 900 }; // cars per lane on a full road; m/s; lane offset × ROAD; metres
+/** perLane: cars on a full road; speed m/s; lane: offset × ROAD; far: reach (m, + perAlt × her height); blend: m where tail/head lights melt into one warm glow; glow: max sprite px. */
+const TRAFFIC = { perLane: 110, speed: [9, 17], lane: 0.2, far: 900, perAlt: 0.8, blend: [180, 650], glow: 8 };
 const STEAM = { districts: ['downtown', 'financial', 'residential', 'entertainment', 'nightclub', 'redlight'], odds: 0.12, puffs: 6, far: 650 };
 const BODY = ['#e8e8e8', '#222', '#c22', '#2a5ac8', '#f2c21a', '#3a8a4a', '#888'];
 
@@ -60,17 +61,23 @@ void main() {
   float d = -mv.z;
   vec4 c0 = projectionMatrix * mv;
   float head = step(0., dot(B - A, cameraPosition.xz - p));
-  vec3 light = mix(vec3(1.0, 0.1, 0.06), vec3(1.0, 0.93, 0.72), head);
+  // far off, tail and head lights melt into one warm glow (red/white alternating along a road read
+  // as dashed border lines from altitude)
+  float far = smoothstep(${TRAFFIC.blend[0]}., ${TRAFFIC.blend[1]}., d);
+  vec3 light = mix(mix(vec3(1.0, 0.12, 0.06), vec3(1.0, 0.9, 0.7), head), vec3(1.0, 0.6, 0.3), far * 0.75);
   float nk = smoothstep(0.15, 0.5, uNight);
-  vC = mix(aBody * 0.8, light * 1.5, nk);
-  vA = (1. - smoothstep(uReach * 0.6, uReach, d)) * (1. - smoothstep(uHazeFar * 0.5, uHazeFar * 0.85, d));
-  float base = clamp(2.6 * projectionMatrix[1][1] * res.y * 0.5 / max(d, 1.), 1.5 + nk * 0.7, 12.);
+  vC = mix(aBody * 0.8, light * 1.2, nk);
+  // the car's true size on screen: below the minimum sprite it fades by coverage instead of
+  // speckling the far ground with whole-pixel dots
+  float px = 2.6 * projectionMatrix[1][1] * res.y * 0.5 / max(d, 1.);
+  float base = clamp(px, 2., ${TRAFFIC.glow}.);
+  vA = (1. - smoothstep(uReach * 0.6, uReach, d)) * (1. - smoothstep(uHazeFar * 0.4, uHazeFar * 0.75, d)) * clamp(px / 2., 0.12, 1.) * mix(1., 0.6, far * nk);
   // night: a long-exposure light streak trailing each car (~1.3 s of travel), so the
   // streets read as rivers of light from the air; by day a plain dot of body colour
   vec4 c1 = projectionMatrix * viewMatrix * vec4(wp - vec3(dir.x, 0., dir.y) * aCar.y * 1.3, 1.);
   vec2 s0 = c0.xy / c0.w * 0.5 * res, s1 = c1.w > 0.5 ? c1.xy / c1.w * 0.5 * res : s0;
   vec2 seg = (s1 - s0) * nk;
-  float sl = min(length(seg), 72.);
+  float sl = min(length(seg), mix(56., 12., far));
   seg = sl > 0.01 ? normalize(seg) * sl : vec2(0.);
   float size = base + sl;
   gl_Position = vec4((s0 + seg * 0.5) / (0.5 * res) * c0.w, c0.z, c0.w);
@@ -81,15 +88,19 @@ void main() {
   gl_PointSize = vA <= 0. ? 0. : size;
 }`,
       fragmentShader: /* glsl */`
+uniform float uNight;
 varying vec3 vC; varying float vA; varying vec4 vSeg; varying float vR;
 void main() {
   vec2 q = gl_PointCoord - 0.5, a = vSeg.xy, ab = vSeg.zw - vSeg.xy;
   float t = clamp(dot(q - a, ab) / max(dot(ab, ab), 1e-6), 0., 1.);
   float r = length(q - a - ab * t) / vR;
-  float al = smoothstep(1., 0.3, r) * vA * (1. - 0.75 * t); // bright at the car, fading back along the trail
-  if (al < 0.02) discard;
-  gl_FragColor = vec4(vC, al);
+  float k = max(0., 1. - r * r);
+  float al = k * k * vA * (1. - t) * (1. - 0.5 * t); // a soft core, bright at the car, dying away along the trail
+  if (al < 0.01) discard;
+  // premultiplied: light adds at night (a glow, never an opaque red bar), body-colour dots by day
+  gl_FragColor = vec4(vC * al, al * (1. - smoothstep(0.15, 0.5, uNight)));
 }`,
+      blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
     }));
     this.cars.frustumCulled = false;
     this.cars.renderOrder = 2;
@@ -138,5 +149,5 @@ void main() {
     scene.add(this.steam);
   }
 
-  update(cam) { this.TU.uReach.value = TRAFFIC.far + Math.max(0, cam.position.y) * 1.6; }
+  update(cam) { this.TU.uReach.value = TRAFFIC.far + Math.max(0, cam.position.y) * TRAFFIC.perAlt; }
 }

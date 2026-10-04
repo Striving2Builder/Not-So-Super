@@ -5,6 +5,7 @@ import { comic } from './comic.js';
 import { DISTRICTS, THEMES, NIGHT_CASES, ASYLUM_CASES, HERO, VENUES } from './data.js';
 import { pick, chance, rand } from './util.js';
 import { sfx } from './sfx.js';
+import { diveFx } from './divefx.js';
 
 const H = HERO.toUpperCase();
 
@@ -178,9 +179,10 @@ export class Commentary {
   }
 
   // ---------------------------------------------------------- zones
+  /** The dive: falling whistle + the comic landing beat (divefx; overworld feeds it the plunge and the impact). */
   onDive(zone) {
-    sfx.spin();
-    comic.spin(zone.mode === 'special' ? zone.venue.toUpperCase() : zone.name.toUpperCase() + '!');
+    sfx.dive();
+    diveFx.start(zone.mode === 'special' ? zone.venue.toUpperCase() : zone.name.toUpperCase());
   }
 
   onZoneStart(zone) {

@@ -115,8 +115,14 @@ function atlas() {
 }
 
 // ---------------------------------------------------------------- the shader
-/** Haze reach: far = max(fog far, camera height x perAlt), capped under the camera's far plane. */
-export const HAZE = { perAlt: 7, max: 4200, near: 0.1 };
+/** Contact shade (AO) at the foot of walls: k = strength, h = falloff height in metres. */
+const AO = { k: 0.42, h: 4 };
+/**
+ * Haze reach: far = max(fog far, camera height x perAlt), capped under the camera's far plane;
+ * it starts at near x far, or nearAlt x the camera's height when that's further (from high patrol
+ * the nearest ground is already ~600 m off: the haze began under her and swallowed the whole city).
+ */
+export const HAZE = { perAlt: 7, max: 4200, near: 0.1, nearAlt: 1.4 };
 /** Key vs ambient: a clear lit / raking / shadow split on every tower, day and dusk too. */
 const KEY = { key: 1.4, amb: 0.86 };
 const _cool = new THREE.Color(0.93, 0.98, 1.1);
@@ -155,10 +161,10 @@ attribute vec3 aAux; attribute vec4 aCol; attribute vec4 aLit;
 uniform vec2 res; uniform float dpr; uniform float uInkW; uniform float uNeonFar; uniform float uNight;
 // per-face values are flat: exact (they seed hashes) and cheaper than interpolating
 varying vec2 vUv; flat varying vec3 vCol; flat varying vec3 vLit; flat varying vec3 vN; varying vec3 vW;
-flat varying float vStyle; flat varying float vKind;
+flat varying float vStyle; flat varying float vKind; varying float vHb;
 void main() {
   vKind = floor(aCol.a * 255. + .5); vStyle = floor(aLit.a * 255. + .5);
-  vUv = uv; vCol = aCol.rgb; vLit = aLit.rgb; vN = aAux;
+  vUv = uv; vCol = aCol.rgb; vLit = aLit.rgb; vN = aAux; vHb = length(aAux) - 1.;
   vec4 wp = modelMatrix * vec4(position, 1.);
   vW = wp.xyz;
   vec4 mv = viewMatrix * wp;
@@ -208,6 +214,7 @@ void main() {
 }`;
 
 const FRAG = /* glsl */`
+const vec2 AO = vec2(${AO.k}, ${AO.h.toFixed(1)}); // strength, falloff height (m)
 uniform sampler2D uAtlas; uniform sampler2D uSigns;
 uniform sampler2D uRows;
 uniform vec3 uKeyDir; uniform vec3 uKeyCol; uniform vec3 uAmbUp; uniform vec3 uAmbDn; uniform vec3 uSky; uniform vec3 uInk;
@@ -216,7 +223,7 @@ uniform float uFogMax;
 ${HAZE_GLSL}
 // per-face values are flat: exact (they seed hashes) and cheaper than interpolating
 varying vec2 vUv; flat varying vec3 vCol; flat varying vec3 vLit; flat varying vec3 vN; varying vec3 vW;
-flat varying float vStyle; flat varying float vKind;
+flat varying float vStyle; flat varying float vKind; varying float vHb;
 float h11(float n) { return fract(sin(n) * 43758.5453); }
 // Up close the atlas is magnified to a blur: rebuild the window cell analytically (crisp,
 // anti-aliased edges at any size) from the same layout the atlas was painted with. Per style:
@@ -226,11 +233,18 @@ vec3 crispCell(vec2 A, float style, float lit) {
   vec4 L = style == 0. ? vec4(7., 7., 0.86, 0.) : style == 1. ? vec4(1., 2., 0.7, 0.) : style == 2. ? vec4(8., 8., 0.8, 0.) : vec4(9., 4., 0.62, 1.);
   vec2 q = fract(A * vec2(${WIN.cols}., ${WIN.rows}.)) * 32.; q.y = 32. - q.y; // atlas px, y down like the canvas
   vec2 iw = 1. / max(fwidth(q), vec2(0.05));
+  // per axis: once a cell is only a few pixels across (grazing walls: one axis magnified, the other
+  // squeezed), that axis's thin features (mullions, frames, piers / slabs, transoms) melt into their
+  // average coverage instead of beating against the pixel grid (the moire on near towers)
+  vec2 kd = smoothstep(5., 10., 32. * iw);
   vec2 e = min(q - L.xy, 32. - L.xy - q) * iw;                    // distance inside the window, px
-  float win = clamp(min(e.x, e.y) + 0.5, 0., 1.);
+  vec2 wa = (32. - 2. * L.xy) / 32.;                              // a window's share of the cell, per axis
+  vec2 w2 = mix(wa, clamp(e + 0.5, 0., 1.), kd);
+  float win = w2.x * w2.y;
   float ty = L.y + (32. - 2. * L.y) * 0.32;
-  float frame = clamp(1.5 - min((abs(q.x - 16.) - 1.) * iw.x, (abs(q.y - ty) - 0.5) * iw.y), 0., 1.) * win;
-  float slab = clamp((q.y - 29.) * iw.y + 0.5, 0., 1.), pier = L.w * clamp(1.5 - min(q.x - 6., 28. - q.x) * iw.x, 0., 1.) * (1. - win);
+  float mul = mix(2. / 32., clamp(1.5 - (abs(q.x - 16.) - 1.) * iw.x, 0., 1.), kd.x), tra = mix(1. / 32., clamp(1.5 - (abs(q.y - ty) - 0.5) * iw.y, 0., 1.), kd.y);
+  float frame = max(mul, tra) * win;
+  float slab = mix(3. / 32., clamp((q.y - 29.) * iw.y + 0.5, 0., 1.), kd.y), pier = L.w * mix(10. / 32., clamp(1.5 - min(q.x - 6., 28. - q.x) * iw.x, 0., 1.), kd.x) * (1. - win);
   float wall = mix(mix(L.z, L.z * 0.72, slab), 1., pier);
   return vec3(mix(wall, 0.45, frame), win * (1. - frame), lit * win * (1. - frame));
 }
@@ -296,6 +310,9 @@ void main() {
       vec3 glass = mix(dayGlass, vec3(0.03, 0.035, 0.055) + uSky * 0.08 * fres, uNight);
       col = mix(wall, glass * (0.6 + 0.4 * litK), m.g);
       col *= mix(0.42, 1., smoothstep(0., 45., vW.y)); // canyon floors are darker
+      // contact shade: the foot of every wall darkens where it meets the ground, a setback's roof
+      // or the roof under a box (cheap AO: the height above the part's own base, per vertex)
+      col *= 1. - AO.x * exp(-vHb / AO.y) * (1. - 0.4 * uNight) * step(abs(N.y), 0.5);
       emi = vLit * m.b * uLit;
       // night rim: a cool sky-lit edge on faces turning away from her (the silhouette reads)
       emi += uSky * 0.45 * uNight * smoothstep(0.55, 0.85, fres) * (1. - m.g * 0.5);
@@ -374,7 +391,7 @@ export class CityLook {
       const h = U.uHorizon.value, hl = 0.3 * h.r + 0.59 * h.g + 0.11 * h.b;
       U.uHazeCol.value.copy(h).lerp(_t.setRGB(hl, hl, hl), 0.3).lerp(c, 0.1).multiply(_cool).multiplyScalar(1.12);
       U.uHazeFar.value = Math.min(HAZE.max, Math.max(fog.far, camY * HAZE.perAlt));
-      U.uHazeNear.value = U.uHazeFar.value * HAZE.near;
+      U.uHazeNear.value = Math.max(U.uHazeFar.value * HAZE.near, camY * HAZE.nearAlt);
     }
     U.uNight.value = night;
     U.uLit.value = 0.85 * Math.min(1, Math.max(0, (night - 0.15) * 1.6));
@@ -390,13 +407,16 @@ const b255 = (v) => Math.max(0, Math.min(255, Math.round(v * 255)));
 export class Builder {
   /** lite: the far-LOD build (no ink, callers skip small detail). */
   constructor(lite = false) {
-    this.lite = lite; this.pos = []; this.aux = []; this.uv = []; this.col = []; this.lit = []; this.idx = []; this.n = 0;
+    this.lite = lite; this.base = 0; this.pos = []; this.aux = []; this.uv = []; this.col = []; this.lit = []; this.idx = []; this.n = 0;
     this.ip = []; this.ia = []; this.iu = []; this.ii = []; this.inN = 0; // the ink layer
   }
 
   /** tint/lit: THREE.Color or hex; style: atlas cell; kind: KIND.* */
   v(p, aux, u, w, tint, kind, lit, style) {
-    this.pos.push(p[0], p[1], p[2]); this.aux.push(aux[0], aux[1], aux[2]); this.uv.push(u, w);
+    // surfaces: the face normal's length carries 1 + the height above the part's own base (contact
+    // shade at the foot of every wall, setback and roof box; the shader normalises it back)
+    const s = kind === 0 ? 1 + Math.max(0, p[1] - this.base) : 1;
+    this.pos.push(p[0], p[1], p[2]); this.aux.push(aux[0] * s, aux[1] * s, aux[2] * s); this.uv.push(u, w);
     this.col.push(b255(tint.r), b255(tint.g), b255(tint.b), kind);
     this.lit.push(b255(lit.r), b255(lit.g), b255(lit.b), style);
     return this.n++;
@@ -469,6 +489,7 @@ const fu = (len) => len / (WIN.w * WIN.cols), fv = (y) => y / (WIN.floor * WIN.r
  * optional roof, ink on every edge. roof: false | true | 'pad' (helipad uv over the whole roof).
  */
 export function box(B, x0, z0, x1, z1, bot, top, L, { roof = true, ink = 1, walls = true } = {}) {
+  B.base = bot;
   if (walls) {
     const fl = 1 / WIN.rows, vo = L.voff - ((((L.voff + fv(top)) % fl) + fl) % fl) + fl * 0.02;
     const v0 = vo + fv(bot), v1 = vo + fv(top);
@@ -503,6 +524,7 @@ export function box(B, x0, z0, x1, z1, bot, top, L, { roof = true, ink = 1, wall
 export function prism(B, cx, cz, r, rTop, bot, top, n, L, { cap = true, ink = 1, rot = 0, roofTint = null } = {}) {
   const P = [];
   for (let i = 0; i <= n; i++) { const a = rot + (i / n) * Math.PI * 2; P.push([Math.cos(a), Math.sin(a)]); }
+  B.base = bot;
   const circ = 2 * Math.PI * r, v0 = L.voff + fv(bot), v1 = L.voff + fv(top), slope = (r - rTop) / Math.max(0.01, top - bot);
   for (let i = 0; i < n; i++) {
     const [ca, sa] = P[i], [cb, sb] = P[i + 1], am = rot + ((i + 0.5) / n) * Math.PI * 2;
@@ -529,6 +551,7 @@ export function prism(B, cx, cz, r, rTop, bot, top, n, L, { cap = true, ink = 1,
  * curtain wall catching the sky).
  */
 export function wedge(B, x0, z0, x1, z1, bot, rise, L, dir = 0, ink = 1) {
+  B.base = bot;
   const C = [[x0, z1], [x1, z1], [x1, z0], [x0, z0]];
   const up = [[0, 1, 1, 0], [0, 0, 1, 1], [1, 0, 0, 1], [1, 1, 0, 0]][dir & 3];
   const P = C.map(([x, z], i) => [x, bot + rise * up[i], z]);
