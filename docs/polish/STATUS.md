@@ -6,12 +6,19 @@ round 7–8 thread). The companion docs are [BRIEF.md](BRIEF.md) (the builder br
 art) and the per-builder handoffs in [handoff/](handoff/).
 
 ## Pick up here (new thread)
+No builders are running (2026-10-04). Everything below is merged into `phase-2` and tagged `testdrive-2026-10-04`.
+1. **Waiting on the user's iPad test** of `testdrive-2026-10-04` with `?perf=1`: fps + worst frame per altitude, `tex`, `gl ctx`, the dive thud (sound never heard by a human), hover/perch, a brawl with a gunman and a skipped captive, club raids/night cases (nothing on stages, load time OK).
+2. **Perf over budget vs round 7:** skim 0.90, cruise 0.97, high 0.91. The city alone is ~on budget; **her sharp pass costs 23–30% of the frame at high patrol** (canvas-density hero pass + MSAA + outline). Next perf step: a cheaper hero pass on Balanced/Battery (lower density, no MSAA or 2×, cheaper outline), keep High. Confirm against the iPad numbers first (Apple GPUs make MSAA cheap). Clouds may be trimmed for perf (user OK'd).
+3. **Then, per the proposed order below:** a fresh blind critic; the 3D rooms round (perf first, own critic); motion/feel (dive done; fight hit feedback, audio review); flight visuals round 10.
+
+Merged in this thread (details in the sections below and the handoffs): stability (774c006), hero variants Classic/Ponytail, Supergirl look pass, city round 9, comic dive landing (`src/divefx.js`), iPad device fixes.
+
+## Merged in the round 7–9 thread (2026-10-03/04)
 - **Stability: merged** (774c006). City GPU memory budget (`KEEP` in city3d.js: 30 detailed blocks / 40 ground tiles, unseen 4 s → freed and rebuilt), 1 WebGL context flying / 2 in a brawl (shared offscreen sprite renderer `offscreen3d.js`), lost-context recovery with a "RESTORING GRAPHICS…" card (`gfx.js`), LOADING card + staged zone loads, iOS caps (Auto → Balanced, flight canvas ≤2×, FXAA), crash-reload drops Auto to Battery saver once. Perf bisect brought 3D flight back to 0.92–1.00 of round 7 (high patrol still 8–12% under: ~25% more triangles from round-8 city content; the user chose to **trim** it). Tools: `tools/shots/stab.js` (`--tour`, `--lose`), `flyab.js`, `flytoggle.js`, `serve.js`. Handoff: `docs/polish/handoff/stability.md`.
-- **Test build:** `testdrive-2026-10-03` (this commit). Ask the user to test on the iPad with `?perf=1`: `tex` flat (~50), `gl ctx` 1 flying / 2 in a brawl, LOADING card on every dive, RESTORING card if it blanks, toasts on fallback.
-- **Supergirl visuals builder still running** at the time of writing: branch `worktree-agent-a547587396b773e1c`, worktree `.claude/worktrees/agent-a547587396b773e1c`, handoff `docs/polish/handoff/supergirl.md`. Scope: flight body language (bank, pitch, boost/hover/dive poses), solid hair mass + readable face, colour blocking and cel/ink on her body, same quality in 2D/brawler/portraits. Supergirl only. A new thread: `git log phase-2..worktree-agent-a547587396b773e1c`, read its handoff (`git show <branch>:docs/polish/handoff/supergirl.md`); if finished, review shots and merge `--no-ff` (expect small conflicts in `hero3d.js` — HeroSprite now renders via `offscreen3d.js` — plus `heropass3d.js`, `settings.js`, `main.js`; keep both sides); if unfinished, spawn a **fresh** builder that `git reset --hard`s to that branch and continues from the handoff.
 - **City round 9: merged** (2026-10-04, handoff `docs/polish/handoff/city-r9.md`): high-patrol trim (detail by draw range within 470/800 m and below 340 m; LOD by 3D distance above 340 m), shader facades (no stripes/moiré; atlas now roofs only, −3.5 MB), haze graded horizon → darker ground air, `FarRing` skyline cylinder (skycard3d.js), 3-band key light + night window wash, black box = billboard back (fixed), neon dim by day, river quay + park paths. **Perf vs round 7 still over budget:** skim 0.90, cruise 0.97, high 0.91 (city alone: 1.01 / 0.96 / 0.93). **Her sharp pass now costs 23–30% of the frame at high patrol** (hero pass at canvas density + MSAA + outline): the biggest remaining perf lever. Open: dark-blue triangles (pair 8) cause unknown, venue neon posts as thin yellow lines at dusk, uniform far-ring row by day, pale day haze ~1 km.
 - **Supergirl look pass: merged** (2026-10-03): flight body language (`src/heropose3d.js`: roll/pitch/yaw springs + cruise/boost/dive/glide/hover/turn bone poses, also drives the 2D flight sprite), solid hair shell + comic face paint + flat colour blocking in `supergirl.glb` (14.3k tris, 2.35 MB; pipeline `tools/supergirl/`), `src/herolook3d.js` cel material (golden flight hair palette), cel sprites in 2D/brawler/portraits, narrower cape. Hero lab: `node tools/supergirl/lab.js --label X --port 8812`. Open: the hair reads as a smooth cap in flight (wants lock shapes/strands at the silhouette), jagged hair hem, subtle boost pose from the chase cam, Classic/Ponytail still on the old hair cards. Handoff `docs/polish/handoff/supergirl.md`.
-- **Then:** a fresh blind critic. Next areas after flight/city: the **3D rooms** (premade 3D clubs, self-built 3D zones, nightlife, night case; perf first). Brawler and investigation stay on hold.
+- **Comic dive landing:** `src/divefx.js` (tunables `DIVE_FX`), capture tool `tools/shots/dive.js` + `sheet.py`, handoff `dive.md`.
+- **Hero variants:** Classic/Ponytail restyles (`tools/heroskins/`), pause menu "Hero", `?hero=`.
 
 ## How the loop runs
 - **Stateless by design (2026-10-03):** no step should need old chat history. The state lives in files:
@@ -79,13 +86,16 @@ art) and the per-builder handoffs in [handoff/](handoff/).
 - `testdrive-2026-10-02`: the first test build (3D flight default, brawler round 3, billboard/asylum beats).
 - `testdrive-2026-10-02b` (15d95a7): adds flight 5/5b, city round 5 and investigation round 3.
 - `testdrive-2026-10-02c` (dc6e56c): adds the crisp hero, city round 6 and flight round 6. The user tested on an iPad (see "Device testing").
-- `testdrive-2026-10-03` (774c006): rounds 7–8, hero variants (pause menu "Hero"), iPad stability, `?perf=1`. **Latest; the user should iPad-test it.**
+- `testdrive-2026-10-03` (774c006): rounds 7–8, hero variants (pause menu "Hero"), iPad stability, `?perf=1`.
+- `testdrive-2026-10-04`: adds the Supergirl look pass, city round 9, the comic dive landing and the iPad device fixes. **Latest; the user should iPad-test it.**
 
 ## Device testing (2026-10-03, iPad, real device)
 - "Plays but crashes and is a bit janky." Diving from flight into a brawler/activity: very long load or freeze. 3D flight: after a few freezes or a black screen it goes back to 2D.
 - Director's read: no `webglcontextlost` handling; 4 WebGL contexts (special3d shared, HeroSprite, brawlsprite, an unreleased `hasWebGL()` probe); the 3D flight scene stays in GPU memory inside zones; High runs the canvas at full Retina density. A stability builder is on it (WebKit iPad repro, context-loss recovery, fewer contexts, iOS caps, staged zone loading).
 
-## Device testing, round 2 (2026-10-03, iPad)
+## Device testing, round 2 (2026-10-03, iPad) — fixed and merged 2026-10-04
+- Fixes (handoff `docs/polish/handoff/devfix.md`): a real superhero hover pose (also on the perch descent and the 2D sprite); brawler camera follows her in a dead band (the "auto-advance" was a camera lead + view clamp, worst on 4:3 iPad), crooks share her fight bounds, gunmen stay on screen, off-screen >6 s safety net, HELP! arrow to skipped captives; clubs place everything only on floor reachable from the entrance (`reachableFloor()` in clubgeo.js; 0.3–1.7 s at club load). Tools: `tools/shots/brawlrun.js` (plays brawls to completion), `tools/shots/clubreach.js`. `brawler.js` is ~900 lines: split it when brawler work resumes.
+- Original notes:
 - Flight idle/hover pose "looks like she is standing on air".
 - Brawler: the auto-advance that pushes the player forward skips hostages and other things — remove it, the player walks the level.
 - Brawler: tends to stall near the end; the player has to quit the mission to get out.
