@@ -189,8 +189,9 @@ float pulse(float x, float a, float b, float w) { return (P1(x + 0.5 * w, a, b) 
  */
 vec4 facade(vec2 c, vec2 w, float style, float seed) {
   w = max(w, vec2(1e-3));
-  float ty = fract(c.y); // 0 at the foot of a floor, 1 at its top
+  bool tiny = max(w.x, w.y) > 0.6; // windows under ~1.7 px: every feature is its average (cheap far pixels)
   if (style == 4.) {
+    if (tiny) return vec4(0.74, 0.08, 0.019, 0.);
     // industrial: corrugated sheet, a strip window every fourth floor
     float corr = pulse(c.x * 8., 0., 0.5, w.x * 8.);
     float sx = pulse(c.x, 2. / 32., 30. / 32., w.x), sy = pulse(c.y * 0.25, 12. / 128., 22. / 128., w.y * 0.25);
@@ -199,7 +200,13 @@ vec4 facade(vec2 c, vec2 w, float style, float seed) {
     return vec4(mix(mix(0.72, 0.92, corr), 0.25, win), win, lit * win, 0.);
   }
   vec4 L = style == 0. ? vec4(7., 7., 0.86, 0.6) : style == 1. ? vec4(1., 2., 0.7, 0.35) : style == 2. ? vec4(8., 8., 0.8, 0.55) : vec4(9., 4., 0.62, 0.55);
-  vec2 m = L.xy / 32.;
+  vec2 m = L.xy / 32., wa = 1. - 2. * m;
+  if (tiny) {
+    float lt = (0.08 + 0.62 / 3.) * (0.6 + 0.8 * L.w) * 0.8, wn = wa.x * wa.y, gl = wn * 0.92;
+    float wl = mix(L.z, L.z * 0.72, 3. / 32.);
+    if (style == 3.) wl = mix(wl, 1., 10. / 32. * (1. - wn));
+    return vec4(wl * (1. - wn) + wn * 0.27, gl, lt * gl, lt * (1. - wn));
+  }
   float wx = pulse(c.x, m.x, 1. - m.x, w.x), wy = pulse(c.y, m.y, 1. - m.y, w.y), win = wx * wy;
   // the floor slab under each window row: its average once a floor is under ~3 px
   float slab = w.y > 0.35 ? 3. / 32. : pulse(c.y, 0., 3. / 32., w.y);
