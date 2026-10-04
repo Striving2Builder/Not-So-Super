@@ -104,9 +104,17 @@ render hand-off, enter/exit, the boost kick, and the 3D flight button set (`setB
   upscale to the canvas (`quality().fly3dSharp`, both diagonals with `fly3dSharpTaps` 4 on High; + the boost zoom streak, only in a screen-edge ellipse);
   `quality().fly3dAA` = 'fxaa' | 'msaa' | 'none'. flight3d adds dynamic resolution on top of the
   `fly3dDpr` caps (`LOOK3.dynRes`).
-- `herofly3d.js` — the HeroModel posed from the flight state (hover idle / fist-forward with
-  trailing legs / bank / cape), her own pushed-saturation suit materials + rim, inked blob shadow,
-  enlarged in the patrol view; back-light rim and 3-tone hair. Tables: `POSE`, `SUIT`, `HAIR`, `LINE`.
+- `herofly3d.js` — the HeroModel in flight: heading, patrol-view enlargement, inked blob shadow,
+  cape anchoring, keyline widths. Tables: `POSE`, `LINE`.
+  - `heropose3d.js` — her flight body language (`FlightPose`): attitude springs (roll into turns
+    with overshoot, pitch from the climb angle, yaw slip, float bob) and blended bone offsets for
+    cruise / boost / dive / slow glide / hover. Table: `FLY_POSE`.
+- `herolook3d.js` (three/: shared by flight, the zones' HeroModel and HeroSprite) — her comic
+  surface: `heroMaterial` (3 cel bands, pushed saturation, self-light, silhouette rim, the hair as a
+  3-tone blonde mass with the painted locks kept; ACES / raw palettes), `dressHero`, `inkHull`
+  (no ink hull on eyeballs / teeth / face interior). Tables: `SUIT`, `HAIR`. Her model is rebuilt by
+  `tools/supergirl/sg_blender.py` + `paint_sg.py` (hair shell, atlas repaint); the hero lab
+  (`tools/supergirl/lab.js`) shoots every pose × camera + her 2D sprites on one sheet.
 - `capefly3d.js` — her flight cape: a tapered, folded sheet on a rippling spine chain, two-tone cel
   from its real normals (darker lining), screen-space ink outline + fold strokes, flattens side-on;
   seen from below speed lifts the hem, slow flight billows. Table: `CAPE`.

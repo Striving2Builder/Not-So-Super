@@ -13,13 +13,14 @@ import { LOOK } from './look3d.js';
  * the middle stands off her back; folds: pleat depth at the hem (per column, ± = ridge / valley).
  */
 const CAPE = {
-  segs: 7, len: 0.16, w: [0.085, 0.2], arch: 0.04, fold: 0.022, clear: 0.035, // clear: extra stand-off over her hips toward the hem
+  segs: 7, len: 0.135, w: [0.075, 0.15], arch: 0.04, fold: 0.022, clear: 0.035, // clear: extra stand-off over her hips toward the hem
   folds: [0, 0.8, -1, 0.6, -1, 0.8, 0], // across the width, + side edge → − side edge
   key: 0.18,  // N·L cut between the lit and shaded tone
-  outer: ['#e8222c', '#8c0c18'], inner: ['#a01622', '#6a0e18'], // [lit, shade] (sRGB)
+  outer: ['#ee2630', '#b8141f'], inner: ['#a01622', '#701018'], // [lit, shade] (sRGB; the outer shade stays bright: at dusk / night it went to a maroon block)
   ink: '#0b0b16', inkW: 2.2, foldFrom: 0.38, // inkW: px like the body's hull; fold strokes start this far down
   sideFlat: 0.55, // how much of the out-of-plane shape goes when seen exactly side-on
   lift: 0.7,      // seen from below at speed, the hem rises off her back by up to this × a segment per row (it shows past her)
+  rise: 0.22,     // at speed the cape streams up off her back (× a segment per row), so her body and legs read under it
   billow: [0.55, 1.3], // slow flight: a big slow billow, × a segment / its rate (rad/s), instead of hanging straight down
 };
 const C = CAPE.folds.length; // columns across the width
@@ -155,7 +156,7 @@ export class FlightCape {
     const sideOn = this.eye.lengthSq() ? Math.abs(view.normalize().dot(side)) : 0;
     const flat = 1 - CAPE.sideFlat * sideOn * sideOn;
     // from below (the camera under her back's plane) the cape would hide behind her: speed lifts the hem
-    const below = this.eye.lengthSq() ? Math.min(1, Math.max(0, -view.dot(up) * 3)) : 0, lift = CAPE.lift * below * sk * L;
+    const below = this.eye.lengthSq() ? Math.min(1, Math.max(0, -view.dot(up) * 3)) : 0, lift = (CAPE.lift * below + CAPE.rise) * sk * L;
     const slow = 1 - sk, B = CAPE.billow;
     this.p[0].copy(anchor);
     for (let i = 1; i < n; i++) {

@@ -8,6 +8,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { Cape, stripModelCape } from './cape.js';
 import { settings, HERO_SKINS } from './settings.js';
+import { dressHero, inkHull } from './herolook3d.js';
+import { inkCharacter, LOOK } from './look3d.js';
 import { renderToCanvas } from './offscreen3d.js';
 
 // Her costume: the pause-menu choice, or ?hero=classic|ponytail (same rig and atlas layout, so the
@@ -48,6 +50,7 @@ export const heroReady = () => asset.ready;
 export const heroRig = () => (asset.ready ? { scene: asset.scene, clips: asset.clips, loops: LOOPS } : null);
 
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _q = new THREE.Quaternion(), _pq = new THREE.Quaternion();
+const _res = new THREE.Vector2();
 
 export class HeroModel {
   constructor() {
@@ -183,6 +186,11 @@ export class HeroSprite {
     rim.position.set(-3, 2, -4);
     this.scene.add(rim);
     this.hero = new HeroModel();
+    // her comic surface (cel bands, rim, blonde hair mass) like the 3D flight view, not the raw PBR
+    // + the inner ink hull (the callers ink her silhouette in 2D; this draws the lines inside it:
+    // an arm across her body, the skirt over a leg), sized for the sprite in render()
+    const look = { self: 0.18, rim: { value: 1.1 }, key: { value: key.position.clone().normalize() }, toneMapped: false };
+    inkHull(inkCharacter(dressHero(this.hero.root, look), { skip: [this.hero.cape.mesh] }));
     this.pivot = new THREE.Group();
     this.pivot.add(this.hero.root);
     this.scene.add(this.pivot);
@@ -228,7 +236,12 @@ export class HeroSprite {
     }
     c.updateProjectionMatrix();
     if (!this.still) this.hero.cape.tick(); // cloth advances with real time between sprite frames
+    // ink widths come from the shared screen uniforms: point them at the sprite (≈1.6 px lines at
+    // any sprite size, a touch under the silhouette ink the callers add)
+    _res.copy(LOOK.res.value); const dpr0 = LOOK.dpr.value;
+    LOOK.res.value.set(this.w, this.h); LOOK.dpr.value = Math.max(0.6, Math.min(1.4, this.h / 300)) * 0.75;
     renderToCanvas(this.canvas, this.scene, c, this.w, this.h);
+    LOOK.res.value.copy(_res); LOOK.dpr.value = dpr0;
     return this.canvas;
   }
 }
