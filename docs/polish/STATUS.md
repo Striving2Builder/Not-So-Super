@@ -84,6 +84,13 @@ art) and the per-builder handoffs in [handoff/](handoff/).
 - "Plays but crashes and is a bit janky." Diving from flight into a brawler/activity: very long load or freeze. 3D flight: after a few freezes or a black screen it goes back to 2D.
 - Director's read: no `webglcontextlost` handling; 4 WebGL contexts (special3d shared, HeroSprite, brawlsprite, an unreleased `hasWebGL()` probe); the 3D flight scene stays in GPU memory inside zones; High runs the canvas at full Retina density. A stability builder is on it (WebKit iPad repro, context-loss recovery, fewer contexts, iOS caps, staged zone loading).
 
+## Device testing, round 2 (2026-10-03, iPad)
+- Flight idle/hover pose "looks like she is standing on air".
+- Brawler: the auto-advance that pushes the player forward skips hostages and other things — remove it, the player walks the level.
+- Brawler: tends to stall near the end; the player has to quit the mission to get out.
+- 3D clubs: items/objectives sometimes spawn on a stage the player can't climb — don't place them there, or add stairs.
+- A device-fix builder is on all four (handoff `docs/polish/handoff/devfix.md` on its `worktree-agent-*` branch). These are gameplay bugs, so they're fixed even though brawler/investigation visual polish is on hold.
+
 ## Round 8 (done, merged; 2026-10-03)
 - **City** (315b5d0): painted comic street-map ground (streets, sidewalks, parking, trees, farm patchwork), river water shader with irregular banks, car glows (the "border lines" and speckle were car streaks), window moiré fade, per-vertex contact shading, cornice trim. Ground textures ~20 MB GPU (was ~11).
 - **Sky** (1559463): keyframed day/sunset/night sky with an inked sun, SDF cel cloud atlas (8 shapes, 3 tones) with placement rules, haze starts at 1.4× camera height, additive tapered speed lines, 4-tap sharpen on High. Shared haze colours live in sky3d's `SKY` table.
