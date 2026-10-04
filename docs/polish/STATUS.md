@@ -57,6 +57,7 @@ art) and the per-builder handoffs in [handoff/](handoff/).
 - **HTML5 is the platform (2026-10-03):** the goal is "as close to AAA as an HTML5 game can be", not AAA. Every brief has a perf budget (≤5% fps per round unless the user agrees), and the director **raises a flag to the user** whenever a change costs fps, GPU memory or download size, or when a critic's ask isn't feasible in a browser. Filter critic asks for HTML5 feasibility before briefing. Real-phone numbers come from `?perf=1` (fps + worst frame, 3D scene scale, calls, triangles, textures).
 - **Area order (2026-10-03):** flying + city and the 3D rooms (premade 3D clubs, self-built 3D zones, nightlife, night case) come first. **Brawler streets and investigation rooms are on hold** until those are better.
 - **High patrol detail (2026-10-03):** trim the round-8 city detail at high patrol to get back within ~5% of round 7 (perf over detail there).
+- **Clouds (2026-10-03):** good enough as they are; don't spend rounds on them. They may be dialled down (fewer, simpler, cheaper) whenever that helps performance. Drop cloud items from critic briefs.
 - **Character focus (2026-10-03):** Supergirl only for now (renders, visuals, animation feel). NPCs, enemies, villains and other characters wait until the user drafts the narrative story, which will define them. The current hero redesign is a Supergirl enhancement round (`handoff/supergirl.md`), not a new character.
 - **Shadows (2026-10-02):** no real cast shadow maps for now (too costly for HTML5); use cheap contact shading/AO. The user would love real sun shadows later if they become affordable.
 - **Comic style stays** in every round (restated 2026-10-02): outlined, flat-shaded clouds and ink lines are kept; only their execution is fixed.
@@ -104,6 +105,12 @@ art) and the per-builder handoffs in [handoff/](handoff/).
 - **City** (ce56633): aerial perspective in `buildings3d.js` (desaturate → flatten → haze over ~40–70% of draw distance; ink hazed less); sea only under the bay and river ring (fixed the pale-blue flood from altitude); no ground tiles past the coast (fixed the black slab); district crowns; roof clutter; night car streaks (`street3d.js`); neon odds set the night hierarchy; casino `districtGlow` dome. +6–10% triangles, fps within noise. Open: day haze very white ~1 km out; casino glow at 0.6 not re-shot; far streaks look like dashed red lines.
 - **Post/clouds/speed lines** (merged after ce56633): CAS-style 2-tap sharpening upscale (`fly3dSharp` High/Balanced 0.6, Battery 0.5); boost smear limited to an edge ellipse and eased 75% in canyons; cloud ink fades before fill (hollow-cloud fix) and patrol drops whole clouds instead of ghosting all; wind streaks tapered, ≤9 m, outside the central 60%. ~4–6% fps. Open: only one diagonal is sharpened; Balanced canyons render at 0.5× canvas (`fly3dDpr` 0.75 vs `fly3dOut` 1.5) — raising to ~0.9 is the next sharpness win if perf allows.
 - **Not yet attributed:** the thin orange line across towers in `fly3d_low_1` is downtown's neon trim ring at 30% height (`blocks3d.js` ~l.195, `#ff8a5a`), not the contrail.
+
+## Proposed order after the current builders (director's recommendation, 2026-10-03)
+1. Tag the iPad build; get the user's `?perf=1` numbers and a first-load time on mobile data.
+2. 3D rooms round (clubs, self-built 3D zones, nightlife, night case): perf first (Triangle Club draw-call doubling), plus their own blind critic (never had one).
+3. Motion/feel round: dive transition into zones (comic panel wipe/zoom), fight hit feedback (hit-stop, shake, sound), an audio review, judged by frame-sequence critiques + the user's play notes.
+4. Flight visuals round 10 from the next blind critic (no cloud work; clouds can be trimmed for perf).
 
 ## Backlog (rough priority)
 1. iPad stability (above), then flight/city round 9 from the r9fly list.
