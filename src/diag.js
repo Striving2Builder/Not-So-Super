@@ -66,7 +66,7 @@ export function setInfo(k, v) { S.info[k] = v; save(); }
 // ---------------------------------------------------------------- GPU estimate (?perf=1 only)
 // Bytes per live GL object, from the upload calls; textures attached to a framebuffer count as
 // render targets. A rough figure (drivers pad and compress), but it moves with what we allocate.
-const gl = { tex: new Map(), rb: new Map(), buf: new Map(), rtTex: new Set(), ctxs: [] };
+const gl = { tex: new Map(), rb: new Map(), buf: new Map(), rtTex: new Set(), ctxs: [], cv: [] };
 function installGL() {
   const wrap = (P) => {
     if (!P || P.__diag) return;
@@ -74,7 +74,7 @@ function installGL() {
     const o = {};
     for (const k of ['bindTexture', 'texImage2D', 'texStorage2D', 'compressedTexImage2D', 'texSubImage2D', 'generateMipmap', 'deleteTexture', 'bindBuffer', 'bufferData', 'deleteBuffer', 'bindRenderbuffer', 'renderbufferStorage', 'renderbufferStorageMultisample', 'deleteRenderbuffer', 'framebufferTexture2D']) o[k] = P[k];
     const bound = (ctx, target) => ctx.__dt && ctx.__dt[target >= 0x8515 && target <= 0x851A ? 0x8513 : target];
-    const setTex = (ctx, target, bytes, add) => { const t = bound(ctx, target); if (!t) return; const e = gl.tex.get(t) || { b: 0, mip: 1 }; e.b = add ? e.b + bytes : bytes; gl.tex.set(t, e); };
+    const setTex = (ctx, target, bytes, add) => { const t = bound(ctx, target); if (!t) return; const e = gl.tex.get(t) || { b: 0, mip: 1, gl: ctx }; e.b = add ? e.b + bytes : bytes; gl.tex.set(t, e); };
     const up = (bytes) => { work.uploads++; work.upBytes += bytes; };
     P.bindTexture = function (t, x) { (this.__dt || (this.__dt = {}))[t] = x; return o.bindTexture.apply(this, arguments); };
     P.texImage2D = function (target, level) {
@@ -91,38 +91,68 @@ function installGL() {
     P.generateMipmap = function (target) { const t = bound(this, target), e = t && gl.tex.get(t); if (e) e.mip = 1.33; return o.generateMipmap.apply(this, arguments); };
     P.deleteTexture = function (x) { gl.tex.delete(x); gl.rtTex.delete(x); return o.deleteTexture.apply(this, arguments); };
     P.bindBuffer = function (t, x) { (this.__db || (this.__db = {}))[t] = x; return o.bindBuffer.apply(this, arguments); };
-    P.bufferData = function (t, d) { const x = this.__db && this.__db[t]; if (x) gl.buf.set(x, typeof d === 'number' ? d : (d && d.byteLength) || 0); return o.bufferData.apply(this, arguments); };
+    P.bufferData = function (t, d) { const x = this.__db && this.__db[t]; if (x) gl.buf.set(x, { b: typeof d === 'number' ? d : (d && d.byteLength) || 0, gl: this }); return o.bufferData.apply(this, arguments); };
     P.deleteBuffer = function (x) { gl.buf.delete(x); return o.deleteBuffer.apply(this, arguments); };
     P.bindRenderbuffer = function (t, x) { this.__dr = x; return o.bindRenderbuffer.apply(this, arguments); };
-    P.renderbufferStorage = function (t, f, w, h) { if (this.__dr) gl.rb.set(this.__dr, w * h * 4); return o.renderbufferStorage.apply(this, arguments); };
-    if (o.renderbufferStorageMultisample) P.renderbufferStorageMultisample = function (t, s, f, w, h) { if (this.__dr) gl.rb.set(this.__dr, w * h * 4 * Math.max(1, s)); return o.renderbufferStorageMultisample.apply(this, arguments); };
+    P.renderbufferStorage = function (t, f, w, h) { if (this.__dr) gl.rb.set(this.__dr, { b: w * h * 4, gl: this }); return o.renderbufferStorage.apply(this, arguments); };
+    if (o.renderbufferStorageMultisample) P.renderbufferStorageMultisample = function (t, s, f, w, h) { if (this.__dr) gl.rb.set(this.__dr, { b: w * h * 4 * Math.max(1, s), gl: this }); return o.renderbufferStorageMultisample.apply(this, arguments); };
     P.deleteRenderbuffer = function (x) { gl.rb.delete(x); return o.deleteRenderbuffer.apply(this, arguments); };
     P.framebufferTexture2D = function (t, a, tt, tex) { if (tex) gl.rtTex.add(tex); return o.framebufferTexture2D.apply(this, arguments); };
   };
   try {
     wrap(window.WebGLRenderingContext && WebGLRenderingContext.prototype);
     wrap(window.WebGL2RenderingContext && WebGL2RenderingContext.prototype);
+    // 2D canvases, weakly held (iOS Safari caps the total canvas memory of a tab: past it, new
+    // canvases come back blank; a canvas the game dropped stops counting once collected)
+    if (typeof WeakRef !== 'undefined') {
+      const ce = Document.prototype.createElement;
+      Document.prototype.createElement = function (t) { const e = ce.apply(this, arguments); if (/^canvas$/i.test(t)) gl.cv.push(new WeakRef(e)); return e; };
+    }
     const gc = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (type) {
       const c = gc.apply(this, arguments);
       if (c && /webgl/.test(type) && !gl.ctxs.some((x) => x.c === c)) gl.ctxs.push({ c, canvas: this });
       return c;
     };
+    // a lost context took its objects with it (they're never deleted one by one): forget them
+    addEventListener('webglcontextlost', (e) => {
+      const x = gl.ctxs.find((k) => k.canvas === e.target);
+      if (!x) return;
+      for (const m of [gl.tex, gl.rb, gl.buf]) for (const [k, v] of m) if (v.gl === x.c) { m.delete(k); gl.rtTex.delete(k); }
+    }, true);
   } catch (e) { /* no WebGL */ }
 }
 if (typeof window !== 'undefined' && perfOn()) installGL();
+
+/** Live 2D canvases (not WebGL ones): { mb, n, top: 'WxH xN' of the biggest groups } (null without ?perf=1). */
+export function canvasEstimate() {
+  if (!perfOn()) return null;
+  const groups = new Map();
+  let b = 0, n = 0;
+  gl.cv = gl.cv.filter((r) => r.deref());
+  for (const r of gl.cv) {
+    const c = r.deref();
+    if (!c || !c.width || gl.ctxs.some((x) => x.canvas === c)) continue;
+    n++; b += c.width * c.height * 4;
+    const k = c.width + 'x' + c.height; groups.set(k, (groups.get(k) || 0) + 1);
+  }
+  const top = [...groups].map(([k, m]) => { const [w, h] = k.split('x'); return [k, m, w * h * 4 * m]; }).sort((x, y) => y[2] - x[2]).slice(0, 4);
+  return { mb: +(b / 1048576).toFixed(1), n, top: top.map(([k, m, z]) => `${k}${m > 1 ? ' x' + m : ''} ${(z / 1048576).toFixed(0)} MB`).join(', ') };
+}
 
 /** GPU memory estimate in MB: { tex, rt, geo, canvas, total } (null without ?perf=1). */
 export function gpuEstimate() {
   if (!perfOn()) return null;
   let tex = 0, rt = 0, geo = 0, canvas = 0;
-  for (const [t, e] of gl.tex) { if (gl.rtTex.has(t)) rt += e.b; else tex += e.b * e.mip; }
-  for (const b of gl.rb.values()) rt += b;
-  for (const b of gl.buf.values()) geo += b;
-  gl.ctxs = gl.ctxs.filter((x) => !x.c.isContextLost());
-  for (const x of gl.ctxs) { const aa = x.c.getContextAttributes?.()?.antialias; canvas += x.canvas.width * x.canvas.height * 4 * (aa ? 6 : 2); } // (back + front; MSAA adds 4 samples)
+  const dead = (m, k, e) => { if (!e.gl.isContextLost()) return false; m.delete(k); gl.rtTex.delete(k); return true; }; // (e.g. the released sprite baker's)
+  for (const [t, e] of gl.tex) { if (dead(gl.tex, t, e)) continue; if (gl.rtTex.has(t)) rt += e.b; else tex += e.b * e.mip; }
+  for (const [k, e] of gl.rb) if (!dead(gl.rb, k, e)) rt += e.b;
+  for (const [k, e] of gl.buf) if (!dead(gl.buf, k, e)) geo += e.b;
+  gl.ctxs = gl.ctxs.filter((x) => x.canvas.isConnected || !x.c.isContextLost()); // (a released offscreen context is gone for good)
+  let live = 0;
+  for (const x of gl.ctxs) { if (x.c.isContextLost()) continue; live++; const aa = x.c.getContextAttributes?.()?.antialias; canvas += x.canvas.width * x.canvas.height * 4 * (aa ? 6 : 2); } // (back + front; MSAA adds 4 samples)
   const MB = (b) => +(b / 1048576).toFixed(1);
-  return { tex: MB(tex), rt: MB(rt), geo: MB(geo), canvas: MB(canvas), total: MB(tex + rt + geo + canvas), ctx: gl.ctxs.length };
+  return { tex: MB(tex), rt: MB(rt), geo: MB(geo), canvas: MB(canvas), total: MB(tex + rt + geo + canvas), ctx: live };
 }
 
 // ---------------------------------------------------------------- per frame
@@ -154,8 +184,9 @@ export function diagFrame(realDt, game, jsMs = 0) {
     }
     if (now() - snapT > SNAP_S) {
       snapT = now();
-      const g = gpuEstimate(), m = typeof performance !== 'undefined' && performance.memory;
-      S.snaps.push([Math.round(snapT), g && g.total, m ? Math.round(m.usedJSHeapSize / 1048576) : null, context(game).mode]);
+      const g = gpuEstimate(), m = typeof performance !== 'undefined' && performance.memory, cv = canvasEstimate();
+      S.snaps.push([Math.round(snapT), g && g.total, cv && cv.mb, m ? Math.round(m.usedJSHeapSize / 1048576) : null, context(game).mode]);
+      S.cv = cv;
       if (S.snaps.length > 40) S.snaps.splice(0, S.snaps.length - 40);
       S.gpu = g; save();
     }
@@ -193,7 +224,8 @@ function sessionText(s, i, game, current) {
     for (const w of s.worst) L.push(`  ${w.ms} ms @${fmtT(w.at)} ${w.mode}${w.band ? ' ' + w.band + ' ' + w.alt + ' m' : ''}${w.scale !== undefined ? ' scale ' + w.scale : ''} · built ${w.built} freed ${w.freed} tiles ${w.tiles} · uploads ${w.uploads} (${w.upMB} MB) · city ${w.cityMs} ms · js ${w.js} ms`);
   }
   if (s.gpu) L.push(`GPU est. ${s.gpu.total} MB = textures ${s.gpu.tex} + render targets ${s.gpu.rt} + geometry ${s.gpu.geo} + canvases ${s.gpu.canvas} (${s.gpu.ctx} context${s.gpu.ctx === 1 ? '' : 's'})`);
-  if (s.snaps && s.snaps.length) L.push('memory over time [t, GPU MB, JS heap MB, mode]: ' + s.snaps.map((x) => `${fmtT(x[0])} ${x[1] ?? '-'}/${x[2] ?? '-'} ${x[3]}`).join(' · '));
+  if (s.cv) L.push(`2D canvases ${s.cv.mb} MB in ${s.cv.n} (biggest: ${s.cv.top})`);
+  if (s.snaps && s.snaps.length) L.push('memory over time [t GPU/2D-canvas/JS-heap MB mode]: ' + s.snaps.map((x) => `${fmtT(x[0])} ${x[1] ?? '-'}/${x[2] ?? '-'}/${x[3] ?? '-'} ${x[4]}`).join(' · '));
   if (current && game) for (const x of sizesNow(game)) L.push(x);
   L.push('events:');
   for (const e of s.ev) L.push(`  ${fmtT(e[0])} ${e[1]}${e[2] ? ' ' + e[2] : ''}${e[3] ? ' (x' + e[3] + ')' : ''}`);
@@ -202,7 +234,7 @@ function sessionText(s, i, game, current) {
 
 /** The whole log as text (this session first, then the earlier ones). */
 export function diagText(game) {
-  if (perfOn()) S.gpu = gpuEstimate();
+  if (perfOn()) { S.gpu = gpuEstimate(); S.cv = canvasEstimate(); }
   const m = typeof performance !== 'undefined' && performance.memory;
   const head = [`SUPERGIRL DIAGNOSTICS ${new Date().toISOString().slice(0, 19)}`, `UA: ${S.ua}`,
     `JS heap: ${m ? Math.round(m.usedJSHeapSize / 1048576) + ' MB used / ' + Math.round(m.jsHeapSizeLimit / 1048576) + ' MB limit' : 'n/a (Safari does not say)'}`,

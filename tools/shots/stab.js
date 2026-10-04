@@ -89,6 +89,8 @@ const GL_TRACK = `(() => {
   // e.g. the ground tiles' and plan's paint canvases; WebGL canvases are counted as drawing buffers
   const cvs = [], ce = Document.prototype.createElement;
   Document.prototype.createElement = function (t) { const e = ce.apply(this, arguments); if (/^canvas$/i.test(t)) cvs.push(new WeakRef(e)); return e; };
+  // live 2D canvases grouped by size: [[w x h, count, MB]], biggest total first (where did it go?)
+  S.canvasTop = (n = 8) => { const g = new Map(); for (const r of cvs) { const c = r.deref(); if (!c || S.ctxs.some((x) => x.canvas === c) || !c.width) continue; const k = c.width + 'x' + c.height; g.set(k, (g.get(k) || 0) + 1); } return [...g].map(([k, m]) => { const [w, h] = k.split('x'); return [k, m, +((w * h * 4 * m) / 1048576).toFixed(1)]; }).sort((a, b) => b[2] - a[2]).slice(0, n); };
   S.canvasMB = () => { let b = 0; for (const r of cvs) { const c = r.deref(); if (c && !S.ctxs.some((x) => x.canvas === c)) b += c.width * c.height * 4; } return +(b / 1048576).toFixed(1); };
   // frame gaps
   const F = window.__frames = [];
@@ -134,7 +136,7 @@ async function transition(page, cdp, label, js, readyJs) {
     for (let i = 0; i + 8 <= gaps.length; i++) if (gaps.slice(i, i + 8).every((g) => g[1] < lim)) { steady = gaps[i][0] - gaps[i][1]; break; }
     const longest = gaps.reduce((m, g) => Math.max(m, g[1]), 0);
     const over = gaps.filter((g) => g[1] > 100).length;
-    return { longest: Math.round(longest), over100: over, readyMs: tReady ? Math.round(tReady - t0) : null, steadyMs: steady !== null ? Math.round(Math.max(steady, tReady || 0) - t0) : null, medFrame: Math.round(med), gl: window.__glt.report(), perCtx: window.__glt.perCtx(), top: window.__glt.top(8) };
+    return { cvTop: window.__glt.canvasTop(), longest: Math.round(longest), over100: over, readyMs: tReady ? Math.round(tReady - t0) : null, steadyMs: steady !== null ? Math.round(Math.max(steady, tReady || 0) - t0) : null, medFrame: Math.round(med), gl: window.__glt.report(), perCtx: window.__glt.perCtx(), top: window.__glt.top(8) };
   }, [t0, tReady]);
   return { label, syncMs: Math.round(sync), ...r, heapMB: await heap(page, cdp) };
 }
@@ -305,7 +307,7 @@ async function run(browserType, name, devices) {
         console.log(x.label.padEnd(22), String(x.syncMs).padStart(4), String(x.readyMs).padStart(5), String(x.steadyMs).padStart(6), String(x.longest).padStart(7), String(x.over100).padStart(6), String(x.medFrame).padStart(5),
           `${x.gl.live}/${x.gl.made}`.padStart(14), `${x.gl.resMB}+${x.gl.drawMB}`.padStart(15), String(x.heapMB).padStart(6), String(x.gl.cv2dMB).padStart(6));
       }
-      if (argv.includes('--dump')) for (const x of r.rows) console.log(x.label, JSON.stringify(x.perCtx), JSON.stringify(x.top));
+      if (argv.includes('--dump')) for (const x of r.rows) console.log(x.label, JSON.stringify(x.perCtx), JSON.stringify(x.top), '2D canvases:', JSON.stringify(x.cvTop));
       console.log('ended in 3D flight:', r.endedIn3D, ' errors:', r.errors.length ? r.errors : 'none');
     }
   } finally { srv.close(); }

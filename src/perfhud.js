@@ -1,9 +1,9 @@
 // `?perf=1`: a small on-screen readout for real-phone tests (the harness runs on SwiftShader, so
 // only a phone says whether HTML5 keeps up). Shows fps (1 s average + worst frame), the 3D flight's
 // dynamic-resolution scale, draw calls, triangles, GPU textures/geometries, the GPU memory estimate,
-// context losses and the graphics profile. Every frame also feeds the session log (diag.js).
+// 2D canvas memory, context losses and the graphics profile. Every frame also feeds the session log (diag.js).
 import { liveContexts } from './gfx.js';
-import { diagFrame, gpuEstimate, perfOn } from './diag.js';
+import { diagFrame, gpuEstimate, canvasEstimate, perfOn } from './diag.js';
 
 let el, frames = 0, acc = 0, worst = 0, lost = 0;
 
@@ -31,7 +31,7 @@ export function perfHud(realDt, game, profile, jsMs = 0) {
     lines.push(`tex ${i.memory.textures}  geo ${i.memory.geometries}  gl ctx ${liveContexts()}`);
   }
   const g = gpuEstimate();
-  if (g) lines.push(`GPU ~${g.total} MB (tex ${g.tex} rt ${g.rt} geo ${g.geo} cv ${g.canvas})${lost ? '  LOST ' + lost : ''}`);
+  if (g) lines.push(`GPU ~${g.total} MB (tex ${g.tex} rt ${g.rt} geo ${g.geo} cv ${g.canvas})  2D ${canvasEstimate().mb} MB${lost ? '  LOST ' + lost : ''}`);
   el.textContent = lines.join('\n');
   frames = 0; acc = 0; worst = 0;
 }

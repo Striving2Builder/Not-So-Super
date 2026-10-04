@@ -36,6 +36,7 @@ export function watchContext(renderer, { critical = true, onGiveUp = null, onRes
   watched.set(canvas, w);
   canvas.addEventListener('webglcontextlost', (e) => {
     e.preventDefault(); // (three does this too: it is what allows a restore)
+    if (watched.get(canvas) !== w) return; // (released on purpose, e.g. the sprite baker while flying: not news)
     w.lost = true; w.since = performance.now();
     console.warn('WebGL context lost' + (critical ? '' : ' (offscreen)'));
     note('ctx-lost', `${critical ? 'screen' : 'offscreen'} ${canvas.width}x${canvas.height}${document.hidden ? ' (tab hidden)' : ''}${loadingText ? ' while loading' : ''}`, true);
@@ -44,6 +45,7 @@ export function watchContext(renderer, { critical = true, onGiveUp = null, onRes
     if (onGiveUp) w.timer = setTimeout(() => { if (w.lost) { note('ctx-giveup', critical ? 'screen' : 'offscreen', true); unwatch(canvas); onGiveUp(); refresh(); } }, GIVE_UP_MS);
   });
   canvas.addEventListener('webglcontextrestored', () => {
+    if (watched.get(canvas) !== w) return;
     w.lost = false;
     clearTimeout(w.timer);
     note('ctx-restored', `${critical ? 'screen' : 'offscreen'} after ${Math.round(performance.now() - w.since)} ms`, true);
