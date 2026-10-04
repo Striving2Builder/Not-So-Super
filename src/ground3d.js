@@ -83,10 +83,34 @@ export function lotDressing(b) {
   return (b.dress = { trees, parks });
 }
 
+/**
+ * A river block's park (the water ribbon covers its middle): mown lawn stripes, a promenade loop
+ * and corner-to-corner paths with inked edges, a round plaza on one corner, then the trees. Read
+ * from altitude as a city park, not a flat green square. World units.
+ */
+function riverPark(g, b) {
+  const { x0, y0 } = b, h = (k) => hash2(b.bx, b.by, 130 + k);
+  g.fillStyle = 'rgba(190,230,140,.07)';
+  for (let x = 4; x < LOT; x += 18) g.fillRect(x0 + x, y0, 9, LOT);
+  const path = (draw) => {
+    g.lineCap = 'round';
+    g.strokeStyle = 'rgba(14,14,22,.6)'; g.lineWidth = 8; g.beginPath(); draw(); g.stroke();
+    g.strokeStyle = '#c4b896'; g.lineWidth = 5; g.beginPath(); draw(); g.stroke();
+  };
+  const i = 12, c = [x0 + i, y0 + i, x0 + LOT - i, y0 + LOT - i];
+  path(() => { g.rect(c[0], c[1], c[2] - c[0], c[3] - c[1]); });
+  path(() => { g.moveTo(c[0], c[1]); g.lineTo(c[2], c[3]); if (h(0) < 0.6) { g.moveTo(c[2], c[1]); g.lineTo(c[0], c[3]); } });
+  const k = (h(1) * 4) | 0, px = k & 1 ? c[2] : c[0], py = k & 2 ? c[3] : c[1];
+  g.fillStyle = 'rgba(14,14,22,.6)'; g.beginPath(); g.arc(px, py, 15, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#d6cdb0'; g.beginPath(); g.arc(px, py, 12.5, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#3a8ab8'; g.beginPath(); g.arc(px, py, 5, 0, Math.PI * 2); g.fill();
+  for (const t of lotDressing(b).trees) canopy(g, t.x, t.y, t.r * 0.8, t.h);
+}
+
 /** The near tiles' hook (CityArt.dress): the parking patches and a soft shade under each 3D tree. */
 export function dressNear(g, b) {
   const D = lotDressing(b);
-  if (b.river) { for (const t of D.trees) canopy(g, t.x, t.y, t.r * 0.8, t.h); return; } // flat: 3D trees would stand in the water
+  if (b.river) { riverPark(g, b); return; } // flat canopies: 3D trees would stand in the water
   for (const p of D.parks) parking(g, ...p);
   g.fillStyle = 'rgba(10,14,8,.35)';
   for (const t of D.trees) { g.beginPath(); g.arc(t.x + 3, t.y + 4, t.r * 0.9, 0, Math.PI * 2); g.fill(); }
@@ -136,7 +160,7 @@ function plan(city, landmarks, PX) {
     // river blocks: green banks with a few trees (the 3D ribbon of water lies on them)
     if (b.river) {
       R(d, b.x0 - ROAD / 2, b.y0 - ROAD / 2, LOT + ROAD, LOT + ROAD, '#4f6a44');
-      for (const t of lotDressing(b).trees) canopy(d, t.x, t.y, t.r * 0.8, t.h);
+      riverPark(d, b);
       continue;
     }
     const { x0, y0 } = b;
@@ -207,7 +231,7 @@ export function cityGround(city, U, landmarks, rich = true) {
   const g = new THREE.PlaneGeometry(x1, z1); // the canvases span exactly the land
   g.rotateX(-Math.PI / 2); g.translate(x1 / 2, -0.25, z1 / 2);
   return new THREE.Mesh(g, new THREE.ShaderMaterial({
-    uniforms: { day: { value: T.day }, night: { value: T.night }, uKeyCol: U.uKeyCol, uAmbUp: U.uAmbUp, uNight: U.uNight, uLit: U.uLit, uHazeCol: U.uHazeCol, uHorizon: U.uHorizon, uHazeNear: U.uHazeNear, uHazeFar: U.uHazeFar },
+    uniforms: { day: { value: T.day }, night: { value: T.night }, uKeyCol: U.uKeyCol, uAmbUp: U.uAmbUp, uNight: U.uNight, uLit: U.uLit, uHazeCol: U.uHazeCol, uHorizon: U.uHorizon, uHazeLow: U.uHazeLow, uHazeNear: U.uHazeNear, uHazeFar: U.uHazeFar },
     vertexShader: 'varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
     fragmentShader: /* glsl */`
 uniform sampler2D day; uniform sampler2D night; uniform vec3 uKeyCol; uniform vec3 uAmbUp; uniform float uNight; uniform float uLit;
@@ -218,13 +242,16 @@ void main() {
   // colour by day and dusk, the tiles' navy street veil by night. Lit by the scene's own (dim) dusk
   // light it fell to a near-black slab past the tiles.
   vec3 c = texture2D(day, vUv).rgb;
+  // far lots drain toward a darker grey before the haze takes them (no candy tiles at the edge)
+  float dist = length(vW - cameraPosition), far = smoothstep(450., 2000., dist);
+  c = mix(c, vec3(dot(c, vec3(0.299, 0.587, 0.114))), far * 0.6) * (1. - 0.25 * far);
   c = mix(c, c * 0.65 + vec3(0.0006, 0.001, 0.006), smoothstep(0.3, 0.6, uNight)) + texture2D(night, vUv).rgb * uLit * 0.3;
 #ifdef TONE_MAPPING
   c = toneMapping(c);
 #endif
   gl_FragColor = linearToOutputTexel(vec4(c, 1.));
   gl_FragColor.rgb = pulp(gl_FragColor.rgb);
-  gl_FragColor.rgb = haze(gl_FragColor.rgb, length(vW - cameraPosition), 0., 1.);
+  gl_FragColor.rgb = haze(gl_FragColor.rgb, dist, 0., 1.);
 }`,
   }));
 }

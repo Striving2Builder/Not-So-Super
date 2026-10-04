@@ -9,7 +9,7 @@ import { HAZE_GLSL } from './buildings3d.js';
 /** Metres. pitch/road: the outer street grid (the city's own block pitch). */
 export const OUTER = { river: 260, reach: 9000, pitch: 120, road: 26 };
 
-const hazeU = (U) => ({ uHazeCol: U.uHazeCol, uHorizon: U.uHorizon, uHazeNear: U.uHazeNear, uHazeFar: U.uHazeFar });
+export const hazeU = (U) => ({ uHazeCol: U.uHazeCol, uHorizon: U.uHorizon, uHazeLow: U.uHazeLow, uHazeNear: U.uHazeNear, uHazeFar: U.uHazeFar });
 
 const WORLD_VS = 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }';
 

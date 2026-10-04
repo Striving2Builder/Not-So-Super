@@ -14,17 +14,26 @@ import { Horizon, haze } from './skyline3d.js';
 import { Outer } from './outer3d.js';
 import { cityGround, tone, dressNear, lotDressing } from './ground3d.js';
 import { buildRiver } from './river3d.js';
-import { SkyCard } from './skycard3d.js';
+import { SkyCard, FarRing } from './skycard3d.js';
 import { Street } from './street3d.js';
 
 export { M, DISTRICT_3D, height3 };
 
 const GREEN3 = ['#2f6b34', '#3a7a3a', '#4a8a3a'];
 const CHUNK = TILE * BLOCK; // world units per chunk side (one ground tile)
-/** farMat: metres past which a chunk switches to its lite build + flat-tone material (no texture, ink, halftone, roof kit). */
-const LOD = { farMat: 260, farInk: 0, landmarkFog: 0.8, landmarkMax: 0.93, coreR: 4.5 };
+/**
+ * farMat: metres past which a chunk switches to its lite build + flat-tone material (no texture, ink,
+ * halftone, roof kit). The builds' detail (roof kit, trees; the lite builds' penthouses) is drawn
+ * only within `detail` / `liteDetail` metres of the lens (3D distance) and below `detailAlt`; ground
+ * tiles only below `tileAlt` (from high patrol the street plan carries the ground alone): high patrol
+ * draws the skyline's mass, skim and cruise keep everything.
+ */
+const LOD = { farMat: 260, farInk: 0, landmarkFog: 0.8, landmarkMax: 0.93, coreR: 4.5, detail: 470, liteDetail: 800, detailAlt: 340, tileAlt: 340 }; // (cruise flies at ~280 m)
 /** Memory: at most this many near builds / ground tiles stay built; past that, those unseen for `idle` ms are freed. */
 const KEEP = { near: 30, tiles: 40, idle: 4000, every: 1000 }; // (ms: frame counts would trim far too late on a slow device)
+
+/** Draw a build's body only, or body + detail (its index runs: Builder.detail). */
+const range = (m, full) => m.geometry.setDrawRange(0, full ? m.geometry.userData.all : m.geometry.userData.body);
 
 export class City3D {
   constructor(city, scene, { tileRes = 144 } = {}) {
@@ -66,6 +75,7 @@ export class City3D {
     this.outer = new Outer(city, scene, this.look, this.horizon);
     this.river = buildRiver(city, scene, this.look, this.horizon.sea.material);
     this.card = new SkyCard(scene, this.look.U);
+    this.ring = new FarRing(scene, this.look.U, this.card.tex, city.coastX * M, this.outer.islands);
     this.glow = districtGlow(city, scene, this.look.U);
     /** Optional hook: flight3d may set `city3.sky = sky` so the haze ends on `Sky3D.horizon`. */
     this.sky = null;
@@ -107,11 +117,11 @@ export class City3D {
         if (o.landmark) continue;
         if (o.kind === 'box') building(B, o, blk, this.signs);
         else if (o.kind === 'round') round(B, o);
-        else if (o.kind === 'tree') { if (!B.lite) tree(B, o.x * M, o.y * M, o.rad * M * 0.8, o.h * M * 0.9, o.col); }
+        else if (o.kind === 'tree') { if (!B.lite) B.detail(() => tree(B, o.x * M, o.y * M, o.rad * M * 0.8, o.h * M * 0.9, o.col)); }
         else if (o.kind === 'crane') crane(B, o);
       }
       // the lot dressing's tree clusters (the far plan paints the same trees as canopies)
-      if (!B.lite && !blk.river) for (const t of lotDressing(blk).trees) tree(B, t.x * M, t.y * M, t.r * M * 0.8, (16 + t.h * 10) * M * 0.9, GREEN3[(t.h * 3) | 0]);
+      if (!B.lite && !blk.river) B.detail(() => { for (const t of lotDressing(blk).trees) tree(B, t.x * M, t.y * M, t.r * M * 0.8, (16 + t.h * 10) * M * 0.9, GREEN3[(t.h * 3) | 0]); });
     }
     const geo = B.geometry(), ink = B.inkGeometry();
     ch[which] = geo ? new THREE.Mesh(geo, B.lite ? this.look.far : this.look.near) : null;
@@ -165,7 +175,7 @@ export class City3D {
    * LOD.farMat), ground tiles within `near`. Builds chunks on first sight (a couple per frame).
    */
   update(cam, { far = 1500, near = 700, night = 0, frame = 0 } = {}) {
-    const px = cam.position.x / M, pz = cam.position.z / M;
+    const px = cam.position.x / M, pz = cam.position.z / M, camY = cam.position.y;
     const R = Math.ceil(Math.max(far, this.look.U.uHazeFar.value) / M / CHUNK) + 1;
     const ccx = Math.floor(px / CHUNK), ccy = Math.floor(pz / CHUNK);
     let budget = this.built ? 2 : 999;
@@ -178,22 +188,26 @@ export class City3D {
       if (cx < 0 || cy < 0 || cx >= this.cols || cy >= this.rows) continue;
       const dx = ((cx + 0.5) * CHUNK - px) * M, dz = ((cy + 0.5) * CHUNK - pz) * M, d = Math.hypot(dx, dz) - CHUNK * M * 0.7;
       if (d > cut) continue;
-      const ch = this.chunk(cx, cy), which = d > LOD.farMat ? 'lite' : 'near';
+      // above detailAlt the LOD goes by true (3D) distance: from high patrol every chunk is a lite
+      // build (no near build, ink layer or halftone under her: ~6% fps at high patrol)
+      const ch = this.chunk(cx, cy), which = (camY > LOD.detailAlt ? Math.hypot(Math.max(0, d), camY) : d) > LOD.farMat ? 'lite' : 'near';
       if (ch[which] === undefined) {
         if (budget-- <= 0) { const other = ch[which === 'near' ? 'lite' : 'near']; if (other) other.visible = true; continue; }
         this.build(ch, which);
       }
-      if (ch[which]) ch[which].visible = true;
+      const full = camY < LOD.detailAlt && Math.hypot(Math.max(0, d), camY) < (which === 'near' ? LOD.detail : LOD.liteDetail);
+      if (ch[which]) { ch[which].visible = true; range(ch[which], full); }
       if (which === 'near') ch.nearSeen = n;
-      if (ch[which + 'Ink']) ch[which + 'Ink'].visible = which === 'near' || d < LOD.farInk;
+      if (ch[which + 'Ink']) { ch[which + 'Ink'].visible = which === 'near' || d < LOD.farInk; range(ch[which + 'Ink'], full); }
       // no baked tiles past the coast: those chunks are open bay, and their unpainted canvases were
       // near-black slabs lying on the sea
-      if (d < near * 1.2 && cx * TILE < this.city.landCols) this.groundTile(ch, night > 0.45, frame);
+      if (d < near * 1.2 && camY < LOD.tileAlt && cx * TILE < this.city.landCols) this.groundTile(ch, night > 0.45, frame);
     }
     this.built = true;
     if (n - (this.trimT || 0) > KEEP.every) { this.trimT = n; this.trim(n); }
     this.outer.update(cam, cut);
     this.card.update(cam, this.look.U.uHazeFar.value);
+    this.ring.update(cam);
     this.street.update(cam);
   }
 }
