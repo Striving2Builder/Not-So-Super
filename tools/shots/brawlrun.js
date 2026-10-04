@@ -113,8 +113,13 @@ async function runBrawl(page, crime, tag) {
     const o = await page.evaluate((po) => window.__bot(po), PUNCH_ONLY);
     const outcome = await page.evaluate(() => window.__outcome);
     if (o.end || outcome) { res = { ok: outcome === 'win', outcome, ended: o.mode }; break; }
-    if (o.done) { await hold(new Set()); await page.waitForTimeout(200); continue; }
-    if (o.wait) { await page.waitForTimeout(100); bestT = Date.now(); continue; }
+    const stuck = Date.now() - t0 > TIMEOUT;
+    if ((o.done || o.wait) && !stuck) {
+      // (a dialog left open pauses the game: close it, like a player would)
+      const dlg = page.locator('#modal-root button, #modal-root .opt').first();
+      if (await dlg.count()) await dlg.click().catch(() => {});
+      await hold(new Set()); await page.waitForTimeout(200); if (o.wait) bestT = Date.now(); continue;
+    }
     last = o;
     if (o.prog > best) { best = o.prog; bestT = Date.now(); }
     const keys = new Set();
@@ -123,11 +128,11 @@ async function runBrawl(page, crime, tag) {
     await hold(keys);
     if (o.act === 'attack') await page.keyboard.press('KeyJ');
     if (o.act === 'special') await page.keyboard.press('KeyK');
-    if (Date.now() - bestT > STALL || Date.now() - t0 > TIMEOUT) {
-      const dump = await page.evaluate(() => window.__botDump());
+    if (Date.now() - bestT > STALL || stuck) {
+      const dump = await page.evaluate(() => { try { return window.__botDump(); } catch (e) { return { modal: document.querySelector('#modal-root')?.innerText.slice(0, 200), err: String(e) }; } });
       const shot = path.join(OUT, `${tag}_STALL.png`);
       await page.screenshot({ path: shot });
-      res = { ok: false, stalled: true, secs: Math.round((Date.now() - t0) / 1000), last: { why: last.why, obj: last.obj, px: last.px, len: last.len }, dump, shot };
+      res = { ok: false, stalled: true, secs: Math.round((Date.now() - t0) / 1000), last: last && { why: last.why, obj: last.obj, px: last.px, len: last.len }, state: o, dump, shot };
       break;
     }
     await page.waitForTimeout(50);

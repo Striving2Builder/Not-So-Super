@@ -183,9 +183,9 @@ export function unpackFloor(baked) {
  * grid neighbours (≤1.5 m apart) join when the way between them is clear from step height to head
  * height and the floor along it never rises more than STEP at once (the grounding ray starts STEP
  * above her feet). So a stage, bar top or DJ riser higher than a step is cut off unless stairs or a
- * ramp lead up to it, and gameplay placed on this set is always reachable on foot.
+ * ramp lead up to it, and gameplay placed on this set is always reachable on foot. R = her radius.
  */
-export function reachableFloor(collider, floor, start) {
+export function reachableFloor(collider, floor, start, R = 0.38) {
   const key = (x, z) => `${Math.round(x)},${Math.round(z)}`;
   const grid = new Map();
   for (const p of floor) { const k = key(p.x, p.z); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(p); }
@@ -200,20 +200,24 @@ export function reachableFloor(collider, floor, start) {
     }
     return true;
   };
-  // walk a→b in 10 cm steps with the game's grounding rule; she must arrive at b's height
-  const walk = (a, b, d) => {
-    let y = a.y;
-    const n = Math.ceil(d / 0.1);
-    ray.far = STEP + 1.2;
-    for (let i = 1; i <= n; i++) {
-      const t = i / n;
-      ray.set(o.set(a.x + (b.x - a.x) * t, y + STEP, a.z + (b.z - a.z) * t), DOWN);
+  // walk a→b the way the game moves her (ClubZone.collide: capsule push, then the grounding ray from
+  // STEP above her feet; no floor = a wall), 8 cm at a time; she must arrive at b
+  const p = new THREE.Vector3(), last = new THREE.Vector3();
+  const walk = (a, b) => {
+    p.copy(a); last.copy(a);
+    for (let i = 0; i < 40; i++) {
+      const rem = Math.hypot(b.x - p.x, b.z - p.z);
+      if (rem < 0.04) break;
+      const st = Math.min(0.08, rem); p.x += ((b.x - p.x) / rem) * st; p.z += ((b.z - p.z) / rem) * st;
+      capsulePush(collider, p, R);
+      ray.set(o.set(p.x, p.y + STEP, p.z), DOWN); ray.far = STEP + 1.2;
       const h = ray.intersectObject(collider)[0];
-      if (!h) return false; // no floor: the game treats it as a wall
-      if (h.face.normal.y > 0.6) y = h.point.y;
+      if (h) { if (h.face.normal.y > 0.6) p.y = h.point.y; last.copy(p); } else p.copy(last);
     }
-    return Math.abs(y - b.y) < 0.15;
+    return Math.hypot(b.x - p.x, b.z - p.z) < 0.3 && Math.abs(p.y - b.y) < 0.2;
   };
+  // flat and roomy (her capsule fits half-way): the two rays are enough; anything else is walked
+  const roomy = (a, b) => capsulePush(collider, p.set((a.x + b.x) / 2, Math.max(a.y, b.y), (a.z + b.z) / 2), R) < 0.03;
   let s = floor[0], sd = Infinity;
   for (const p of floor) { const d = p.distanceToSquared(start); if (d < sd) { sd = d; s = p; } }
   const seen = new Set([s]), queue = [s];
@@ -226,7 +230,7 @@ export function reachableFloor(collider, floor, start) {
         const d = Math.hypot(b.x - a.x, b.z - a.z), dy = Math.abs(b.y - a.y);
         if (d > 1.5 || dy > 1.2 || d < 0.01) continue; // (stacked storeys in one column never join directly)
         if (!clear(a, b, d)) continue;
-        if (dy > 0.05 && !walk(a, b, d)) continue;
+        if ((dy > 0.05 || !roomy(a, b)) && !walk(a, b)) continue;
         seen.add(b); queue.push(b);
       }
     }

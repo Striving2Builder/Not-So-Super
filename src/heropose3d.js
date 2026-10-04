@@ -62,7 +62,8 @@ export class FlightPose {
    */
   step(h, dt, t, diving, boost, patrol) {
     const P = FLY_POSE;
-    const perch = !!h.perch;
+    // perched = standing on the roof; while still dropping onto it she floats down in the hover pose
+    const perch = (this.perched = !!h.perch && h.z - h.perch.z < 6);
     // vertical speed (overworld units/s) from her height, smoothed: climbs and descents pitch her
     if (this.lastZ !== null && dt > 0) this.vz = ease(this.vz, clamp((h.z - this.lastZ) / dt, -900, 900), 5, dt);
     this.lastZ = h.z;

@@ -101,12 +101,13 @@ export class FlyHero3D {
     this.shadow.material.opacity = Math.max(0.3, 0.85 - above * 0.003) * (1 - 0.3 * patrol) + 0.3 * patrol;
     if (!this.ensure()) return;
     const m = this.model;
-    if (h.perch || hover) m.play('idle', { fade: 0.3 });
+    const perched = this.pose.perched;
+    if (perched || hover) m.play('idle', { fade: 0.3 });
     else m.play('fly', { fade: 0.3 });
     m.mixer.update(dt); // (not m.update: the zones' simulated cloth cape is hidden in flight, don't step it)
     for (const f of ['LeftFoot', 'RightFoot']) m.bones[f]?.scale.setScalar(POSE.boot); // (the boots read oversized from behind; after the clip, which keys scale)
-    const fly = h.perch || hover ? 0 : fk;
-    if (fly > 0) this.pose.flying(m, fly, t); else if (!h.perch) this.pose.hovering(m, this.pose.hoverK, t);
+    const fly = perched || hover ? 0 : fk;
+    if (fly > 0) this.pose.flying(m, fly, t); else if (!perched) this.pose.hovering(m, this.pose.hoverK, t);
     // cape: chain from between her shoulders, streaming back along her body
     const q = m.root.getWorldQuaternion(this._q);
     const fwd = this._f.set(0, 0, 1).applyQuaternion(q), up = this._s.set(0, 1, 0).applyQuaternion(q), side = this._o.set(1, 0, 0).applyQuaternion(q);
@@ -114,7 +115,7 @@ export class FlyHero3D {
     const anchor = this._l.add(this._r).multiplyScalar(0.5);
     // flying, "back" runs down her body (head → feet); hovering upright that's straight down
     // (hovering, it drifts back off her shoulders and sways a little, rather than hanging like a curtain)
-    const hk = h.perch ? 0 : 1 - fly;
+    const hk = perched ? 0 : 1 - fly;
     const back = this._d.copy(fwd).negate().multiplyScalar(fly + 0.35 * hk).addScaledVector(up, -(1 - fly)).addScaledVector(side, Math.sin(t * 0.9) * 0.12 * hk).normalize();
     // the side of her the cape lies on: her back faces the sky when flying, faces behind when upright
     const out = fly > 0.5 ? up : fwd.negate();
