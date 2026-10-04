@@ -24,6 +24,24 @@ Branch based on phase-2 8ad5bf2. Scope: the dive transition from flight into any
   virtual 60 Hz clock (rAF/now/setTimeout + every CSS animation stepped), so frames show phone timing
   even though SwiftShader runs ~7 fps. Sheets: `shots/dive/X/<case>.png` (`tools/shots/sheet.py`).
 
-## Status
-- Done: v3 sheets look right for brawl3d, inv3d, brawl2d, cold3d, spec3d (`shots/dive/v3/`).
-- Next: reduced-motion + club2d sheets; shoot.js flying page-error check; tune on iPad.
+## Timeline (60 fps phone; dive pressed at 0)
+- 0–0.97 s plunge (dive pose, focus lines building, push-in) → 0.97 impact: white-hot flash, still
+  frame (80 ms hit-stop) → shake 420 ms, rings, dust, word pops (360 ms, overshoot) → zone starts
+  next frame behind the panel → hold ≥ 620 ms after impact (until the zone's LOADING is down, ≤ 2.6 s)
+  → 320 ms diagonal wipe with an ink gutter → the zone's title banner plays. Zone fully visible ≈ 1.9 s
+  when its load is fast (was: spinner over everything to 1.45 s, zone at 1.1 s + LOADING card).
+
+## Status: done
+- Sheets (git-ignored): `shots/dive/v4hit/brawl3d.png` (impact window, every frame), `v3hit/club3d.png`,
+  `v3/{inv3d,brawl2d,cold3d,spec3d}.png`, `v4/{club2d,inv2d}.png`, `v4reduced/brawl3d.png`.
+  `node tools/shots/shoot.js flying --label dive --port 8841`: no page errors.
+- Cost: nothing in normal flight (one `this.diving` check). During the beat: one full-screen 2D canvas
+  (dpr ≤ 1.5, freed after), ~40 wedges/frame for ~1 s, one full-frame drawImage + ~6k halftone dots once.
+- Fixed on the way: a `fill: both` 2nd animation hid the word's pop-in; the zone banner (z 55) is
+  held paused until the panel is gone (`body.divefx-hold`).
+- Unused now: `comic.spin` + `sfx.spin` (the old spinning-emblem transition) kept for other uses.
+
+## To tune on the iPad
+- `DIVE_FX` in divefx.js: holdMs (620), shake (16 px), push (1.10), wipeMs; word size in impact().
+- Check `scale`/`translate` CSS animations stay smooth through the investigation bake (~0.7 s frame).
+- 2D flight: the crater lands on the incident marker, at her fists (sprite is drawn below it).

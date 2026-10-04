@@ -562,7 +562,7 @@ body.fly3d .tbtn.f3-perch { font-size: 10px; }
    Everything after the impact moves by transform/opacity, so it keeps playing through a zone's load. */
 #dive-fx { position: absolute; inset: 0; z-index: 7; pointer-events: none; overflow: hidden; font-family: "Bangers", Impact, "Arial Black", sans-serif; }
 body.divefx #hud, body.divefx #btns, body.divefx #touch { z-index: 8; }
-/* a zone's title banner waits (held on its first, invisible keyframe) and plays as the panel wipes away */
+/* a zone's title banner waits (held on its first, invisible keyframe) and plays once the panel is gone */
 body.divefx-hold #banner.show { animation-play-state: paused; }
 #dive-fx canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 #dive-fx.hit canvas { filter: contrast(1.12) saturate(1.3); animation: df-push 1.6s linear both, df-shake var(--shake) var(--stop) linear both; }
@@ -583,7 +583,7 @@ body.divefx-hold #banner.show { animation-play-state: paused; }
 @keyframes df-puff { 0% { transform: translate(0, 0) scale(.2); opacity: 1; } 55% { opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(1.25); opacity: 0; } }
 /* the onomatopoeia: burst balloon + hand-lettered word, popped in past full size, then a slow swell */
 .df-word { position: absolute; display: grid; place-items: center; transform: rotate(var(--rot)); filter: drop-shadow(5px 6px 0 rgba(0, 0, 0, .55));
-  animation: df-word-in .36s var(--stop) cubic-bezier(.2, 1.7, .45, 1) both, df-word-hold 1.6s calc(var(--stop) + 360ms) ease-out both; }
+  animation: df-word-in .36s var(--stop) cubic-bezier(.2, 1.7, .45, 1) both, df-word-hold 1.6s calc(var(--stop) + 360ms) ease-out forwards; } /* (forwards: a backwards fill would hide the pop-in) */
 .df-word svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .df-word span { position: relative; line-height: 1; letter-spacing: .02em; white-space: nowrap; -webkit-text-stroke: 4px #111; paint-order: stroke fill; text-shadow: .045em .055em 0 var(--sh), .085em .1em 0 #111; }
 .df-word i { display: inline-block; font-style: normal; transform: translateY(var(--y)) rotate(var(--r)); }
@@ -600,6 +600,10 @@ body.divefx-hold #banner.show { animation-play-state: paused; }
 @keyframes df-wipe {
   from { -webkit-clip-path: polygon(0 0, 100% 0, 100% 100%, -18% 100%); clip-path: polygon(0 0, 100% 0, 100% 100%, -18% 100%); }
   to { -webkit-clip-path: polygon(118% 0, 118% 0, 100% 100%, 100% 100%); clip-path: polygon(118% 0, 118% 0, 100% 100%, 100% 100%); } }
+/* the gutter riding the wipe's edge: white on the zone's side, ink on the panel's */
+.df-gutter { position: absolute; left: 0; top: 50%; z-index: 7; width: 16px; height: var(--gh); margin-top: calc(var(--gh) / -2); background: #111; border-left: 5px solid #fff; pointer-events: none;
+  transform: translateX(var(--g0)) rotate(var(--gr)); animation: df-gutter var(--wipe) cubic-bezier(.55, 0, .45, 1) both; }
+@keyframes df-gutter { from { transform: translateX(var(--g0)) rotate(var(--gr)); } to { transform: translateX(var(--g1)) rotate(var(--gr)); } }
 #dive-fx.lite.out { animation: df-fade .26s ease-in both; }
 @keyframes df-fade { to { opacity: 0; } }
 /* prefers-reduced-motion: no flash, no shake, no swing; the word just appears */

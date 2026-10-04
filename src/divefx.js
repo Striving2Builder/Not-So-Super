@@ -73,8 +73,20 @@ function cleanup() {
   cancelAnimationFrame(s.raf);
   for (const v of views()) { v.style.scale = ''; v.style.transformOrigin = ''; }
   document.body.classList.remove('divefx', 'divefx-hold');
-  s.root.remove();
+  s.root.remove(); s.gutter?.remove();
   s.cv.width = s.cv.height = 0; // (iOS counts canvas memory until the backing store is dropped)
+}
+
+/** The ink gutter along the wipe's diagonal edge (outside the clipped panel, so it isn't cut). */
+function wipeGutter(s) {
+  const { W, H } = s, lean = W * 0.18; // (matches df-wipe: the edge's top runs 18% ahead of its bottom)
+  const g = el('df-gutter', s.root.parentNode);
+  g.style.setProperty('--gh', Math.ceil(Math.hypot(H, lean) + 40) + 'px');
+  g.style.setProperty('--gr', Math.atan2(lean, H).toFixed(4) + 'rad');
+  g.style.setProperty('--g0', (-lean / 2 - 12).toFixed(0) + 'px');
+  g.style.setProperty('--g1', (W + lean / 2).toFixed(0) + 'px');
+  g.style.setProperty('--wipe', DIVE_FX.wipeMs + 'ms');
+  s.gutter = g;
 }
 
 /** Watchdog + the hold: wipe once the zone is ready (or the cap runs out); drop a beat that never landed. */
@@ -90,7 +102,7 @@ function tick() {
     if (t >= DIVE_FX.holdMs && (ready || t >= DIVE_FX.maxHoldMs)) {
       S.out = true;
       S.root.classList.add('out');
-      document.body.classList.remove('divefx-hold'); // (the zone's title banner plays with the wipe)
+      if (!S.reduced) wipeGutter(S);
       setTimeout(cleanup, (S.reduced ? 260 : DIVE_FX.wipeMs) + 40);
     }
   }

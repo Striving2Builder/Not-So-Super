@@ -1,8 +1,9 @@
-// Dive-transition capture: flies to an incident, presses DIVE and records the screen as a frame
-// sequence (CDP screencast: every frame the compositor produces, with its timestamp), then builds a
-// contact sheet per case with tools/shots/sheet.py. Phone viewport (844x390 @2x, touch).
+// Dive-transition capture: puts her over an incident, presses DIVE and records the transition as a
+// frame sequence on a virtual 60 Hz clock (see VTIME), then builds a contact sheet per case with
+// tools/shots/sheet.py. Phone viewport (844x390 @2x, touch).
 //
-//   node tools/shots/dive.js [--port 8841] [--label dive] [--cases brawl3d,club3d,brawl2d,club2d] [--secs 3.2] [--reduced]
+//   node tools/shots/dive.js [--port 8841] [--label dive] [--cases brawl3d,club3d,brawl2d,club2d] [--secs 2.4] [--reduced]
+//     [--every 3] (shoot every Nth 60 Hz frame) [--window 900,1900] (keep only that ms range) [--pick 20] [--cols 5]
 //   cases: <zone><view> — zone: brawl | club | cold (a club still downloading) | inv | spec (a self-built 3D zone) ; view: 3d | 2d
 // Output: shots/<label>/<case>/f###_<ms>.jpg + shots/<label>/<case>.png (sheet) + errors in log.json.
 const path = require('path');
@@ -27,6 +28,7 @@ const LABEL = arg('--label', 'dive');
 const CASES = arg('--cases', 'brawl3d,club3d,brawl2d,club2d').split(',');
 const SECS = +arg('--secs', 2.4);
 const REDUCED = argv.includes('--reduced');
+const WIN = arg('--window', '0,99999').split(',').map(Number); // keep frames in this ms range (e.g. 900,1900: the impact)
 const COLS = +arg('--cols', 5), PICK = +arg('--pick', 20), EVERY = +arg('--every', 3); // EVERY: shoot every Nth 60 Hz frame
 const OUT = path.join(ROOT, 'shots', LABEL);
 
@@ -106,7 +108,7 @@ async function run(browser, name) {
   }
   const mode = await page.evaluate(() => window.__game.modeName);
   // keep up to PICK frames spread evenly in time (all of them if fewer)
-  const fr = frames;
+  const fr = frames.filter((f) => f.ms >= WIN[0] && f.ms <= WIN[1]);
   let keep = fr;
   if (fr.length > PICK) { keep = []; for (let i = 0; i < PICK; i++) keep.push(fr[Math.round((i * (fr.length - 1)) / (PICK - 1))]); }
   keep.forEach((f, i) => fs.writeFileSync(path.join(dir, `f${String(i).padStart(3, '0')}_${f.ms}.jpg`), f.data));
