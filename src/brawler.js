@@ -182,7 +182,7 @@ export class Brawler {
     for (const w of this.waves) {
       if (!w.spawned && !this.lock && p.x > w.x - 120 && this.t > 0.6) {
         w.spawned = true;
-        this.lock = w; w.lockT = 0;
+        this.lock = w;
         // first few pile in now, the rest are reinforcements that arrive as the crowd thins
         w.queue = w.list.map((t, j) => [t, w.looks[j]]);
         const first = Math.min(w.queue.length, 4);
@@ -205,7 +205,6 @@ export class Brawler {
       const alive = this.enemies.filter((e) => e.wave === w && !e.dead).length;
       w.next -= dt;
       if (w.queue.length && alive < 3 && w.next <= 0) { this.spawnEnemy(...w.queue.shift(), w, w.n); w.next = 0.7; }
-      w.lockT += dt;
       if (!w.queue.length && alive === 0) {
         w.cleared = true; this.lock = null; this.goT = 3; sfx.pickup();
         const s = this.screenOf(p.x, p.z, 115);

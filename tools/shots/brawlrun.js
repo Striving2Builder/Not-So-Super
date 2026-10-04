@@ -116,8 +116,8 @@ async function runBrawl(page, crime, tag) {
     const stuck = Date.now() - t0 > TIMEOUT;
     if ((o.done || o.wait) && !stuck) {
       // (a dialog left open pauses the game: close it, like a player would)
-      const dlg = page.locator('#modal-root button, #modal-root .opt').first();
-      if (await dlg.count()) await dlg.click().catch(() => {});
+      const dlg = page.locator('#modal-root button, #modal-root .opt, #modal-root > *').first();
+      if (await dlg.count()) await dlg.click({ force: true }).catch(() => {});
       await hold(new Set()); await page.waitForTimeout(200); if (o.wait) bestT = Date.now(); continue;
     }
     last = o;
@@ -139,12 +139,12 @@ async function runBrawl(page, crime, tag) {
   }
   await hold(new Set());
   res.secs = res.secs || Math.round((Date.now() - t0) / 1000);
-  // a win shows the newspaper (modal) then flies on; close it so the next brawl starts clean
-  for (let i = 0; i < 12; i++) {
-    if (await page.evaluate(() => window.__game.modeName === 'overworld' && !document.querySelector('#modal-root button, #modal-root .opt'))) break;
-    await page.waitForTimeout(300);
-    const btn = page.locator('#modal-root button, #modal-root .opt').first();
-    if (await btn.count()) { await btn.click().catch(() => {}); await page.waitForTimeout(400); }
+  // a win shows the newspaper ("tap to continue", no button) then flies on: tap until we're flying
+  for (let i = 0; i < 30; i++) {
+    if (await page.evaluate(() => window.__game.modeName === 'overworld' && !document.querySelector('#modal-root > *'))) break;
+    const m = page.locator('#modal-root button, #modal-root .opt, #modal-root > *').first();
+    if (await m.count()) await m.click({ force: true }).catch(() => {});
+    await page.waitForTimeout(400);
   }
   return res;
 }
