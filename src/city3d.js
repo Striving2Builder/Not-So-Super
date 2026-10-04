@@ -16,6 +16,8 @@ import { cityGround, tone, dressNear, lotDressing } from './ground3d.js';
 import { buildRiver } from './river3d.js';
 import { SkyCard, FarRing } from './skycard3d.js';
 import { Street } from './street3d.js';
+import { onGfxReset } from './gfx.js';
+import { work } from './diag.js';
 
 export { M, DISTRICT_3D, height3 };
 
@@ -29,8 +31,14 @@ const CHUNK = TILE * BLOCK; // world units per chunk side (one ground tile)
  * draws the skyline's mass, skim and cruise keep everything.
  */
 const LOD = { farMat: 260, farInk: 0, landmarkFog: 0.8, landmarkMax: 0.93, coreR: 4.5, detail: 470, liteDetail: 800, detailAlt: 340, tileAlt: 340 }; // (cruise flies at ~280 m)
-/** Memory: at most this many near builds / ground tiles stay built; past that, those unseen for `idle` ms are freed. */
-const KEEP = { near: 30, tiles: 40, idle: 4000, every: 1000 }; // (ms: frame counts would trim far too late on a slow device)
+/**
+ * Memory: at most `near` near builds / `tiles` ground tiles (of the lighting in use) stay built; past
+ * that, those unseen for `idle` ms AND more than `margin` m beyond where they're drawn are freed (the
+ * other lighting's tiles go after `idle` alone). Building, painting and uploading run nearest /
+ * in-view first within `ms` per frame (at least one job a frame), so flying back over freed blocks
+ * never stalls a frame on a burst of rebuilds: the far build (or the ground plan) stands in meanwhile.
+ */
+const KEEP = { near: 40, tiles: 40, idle: 10000, margin: 450, every: 1000, ms: 4 }; // (ms: frame counts would trim far too late on a slow device)
 
 /** Draw a build's body only, or body + detail (its index runs: Builder.detail). */
 const range = (m, full) => m.geometry.setDrawRange(0, full ? m.geometry.userData.all : m.geometry.userData.body);
@@ -40,7 +48,11 @@ export class City3D {
     this.city = city; this.scene = scene;
     this.signs = new SignAtlas();
     this.look = new CityLook(this.signs.tex);
-    this.art = new CityArt(city, tileRes, 400); // big cache: tile canvases back live textures, never recycle them
+    // ground tiles are painted into one scratch canvas and uploaded at once (the texture keeps no
+    // canvas: ~0.75 MB of canvas memory per tile saved); a lost/replaced context drops them all
+    this.art = new CityArt(city, tileRes, 0);
+    this.scratch = null;
+    this.renderer = null; // (set by the caller each frame: textures upload through it)
     this.art.riverBank = '#4f7046'; // green banks: the 3D river is a smooth ribbon laid over them
     // the near tiles wear the far plan's muted lot tones and lot dressing, so there is no seam where they meet
     this.art.tone = tone; this.art.dress = dressNear;
@@ -71,6 +83,7 @@ export class City3D {
     scene.add(this.lmMesh, new THREE.Mesh(LB.inkGeometry(), this.look.ink));
     this.ground = cityGround(city, this.look.U, this.landmarks, tileRes >= 128); // lean tiles: a lighter plan too
     scene.add(this.ground);
+    this.offReset = onGfxReset(() => this.gfxReset());
     this.horizon = new Horizon(scene, this.look.U, [0, 0, city.coastX * M, city.H * M]);
     this.outer = new Outer(city, scene, this.look, this.horizon);
     this.river = buildRiver(city, scene, this.look, this.horizon.sea.material);
@@ -125,65 +138,100 @@ export class City3D {
     }
     const geo = B.geometry(), ink = B.inkGeometry();
     ch[which] = geo ? new THREE.Mesh(geo, B.lite ? this.look.far : this.look.near) : null;
-    if (ch[which]) this.scene.add(ch[which]);
+    if (ch[which]) { ch[which].visible = false; this.scene.add(ch[which]); } // (update() shows what's wanted)
     // far chunks' ink only within LOD.farInk (one more draw each; the haze takes the rest)
-    if (ink) { ch[which + 'Ink'] = new THREE.Mesh(ink, this.look.ink); this.scene.add(ch[which + 'Ink']); }
+    if (ink) { const m = (ch[which + 'Ink'] = new THREE.Mesh(ink, this.look.ink)); m.visible = false; this.scene.add(m); }
+    work.built++;
   }
 
-  /** Ground tile texture for a chunk (the 2D view's baked art), near chunks only. */
-  groundTile(ch, lit, frame) {
-    const key = lit ? 'gl' : 'gd';
-    if (!ch[key]) {
-      const c = this.art.tile(ch.cx, ch.cy, frame, true, lit);
-      if (!c) return;
-      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
-      const g = new THREE.PlaneGeometry(CHUNK * M, CHUNK * M);
-      g.rotateX(-Math.PI / 2); g.translate((ch.cx + 0.5) * CHUNK * M, 0, (ch.cy + 0.5) * CHUNK * M);
-      const m = new THREE.Mesh(g, haze(new THREE.MeshBasicMaterial({ map: t }), this.look.U));
-      ch[key] = m;
-      this.scene.add(m);
-    }
-    for (const k of ['gl', 'gd']) if (ch[k]) ch[k].visible = k === key;
-    ch[key + 'Seen'] = this.n;
+  /**
+   * Paint + upload a chunk's ground tile (the 2D view's baked art) for the lighting `key` ('gl' lit /
+   * 'gd' day). The canvas is a shared scratch: the texture is uploaded right away and keeps none.
+   */
+  groundTile(ch, key) {
+    const r = this.renderer, size = this.art.res * TILE;
+    let c = this.scratch;
+    if (!r) c = document.createElement('canvas'); // (no renderer yet: this tile keeps its own canvas)
+    else if (!c) c = this.scratch = document.createElement('canvas');
+    if (c.width !== size) c.width = c.height = size;
+    const g = c.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+    g.clearRect(0, 0, size, size);
+    this.art.paintTile(g, ch.cx, ch.cy, key === 'gl');
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    if (r) r.initTexture(t); // (uploaded now, so the scratch can take the next tile)
+    const geo = new THREE.PlaneGeometry(CHUNK * M, CHUNK * M);
+    geo.rotateX(-Math.PI / 2); geo.translate((ch.cx + 0.5) * CHUNK * M, 0, (ch.cy + 0.5) * CHUNK * M);
+    const m = new THREE.Mesh(geo, haze(new THREE.MeshBasicMaterial({ map: t }), this.look.U));
+    m.visible = false;
+    ch[key] = m;
+    this.scene.add(m);
+    work.painted++;
+  }
+
+  /** Free one of a chunk's meshes ('near', 'nearInk', 'gl', 'gd'). */
+  free(ch, k) {
+    const m = ch[k];
+    if (!m) return;
+    this.scene.remove(m);
+    m.geometry.dispose();
+    if (m.material.map) { m.material.map.dispose(); m.material.dispose(); } // (tile materials are per tile; the city's are shared)
+    delete ch[k];
+    work.freed++;
   }
 
   /**
    * Give back what she flew away from. Every chunk's near build and ground tiles used to stay on
    * the GPU for good: one tour of the city piled up ~170 MB more (tiles ~1 MB each, day and night,
    * plus their 2D canvases), and long sessions took iOS Safari down. Past the KEEP budget, the near
-   * builds and tiles unseen for a while are freed; they're rebuilt on the way back (a couple a frame,
-   * the lite build stands in meanwhile).
+   * builds and tiles both unseen for a while and well beyond their draw radius are freed (distance
+   * hysteresis: a quick turn or a loop back finds them still there); the other lighting's tiles go
+   * once unseen for a while. They're rebuilt on the way back, a few a frame, with stand-ins.
    */
   trim(n) {
-    const free = (ch, k) => {
-      const m = ch[k];
-      this.scene.remove(m);
-      m.geometry.dispose();
-      if (m.material.map) { m.material.map.dispose(); m.material.dispose(); } // (tile materials are per tile; the city's are shared)
-      delete ch[k];
+    const dist = (ch) => Math.hypot(((ch.cx + 0.5) * CHUNK - this.px) * M, ((ch.cy + 0.5) * CHUNK - this.pz) * M) - CHUNK * M * 0.7;
+    const prune = (key, max, far, drop) => {
+      const list = [];
+      for (const ch of this.chunks.values()) if (ch[key]) list.push(ch);
+      if (list.length <= max) return;
+      list.sort((a, b) => (a[key + 'Seen'] || 0) - (b[key + 'Seen'] || 0));
+      let over = list.length - max;
+      for (const ch of list) { if (over <= 0) break; if (n - (ch[key + 'Seen'] || 0) > KEEP.idle && dist(ch) > far) { drop(ch); over--; } }
     };
-    const prune = (key, max, drop) => {
-      const list = [...this.chunks.values()].filter((ch) => ch[key]).sort((a, b) => (a[key + 'Seen'] || 0) - (b[key + 'Seen'] || 0));
-      for (let i = 0; i < list.length - max; i++) if (n - (list[i][key + 'Seen'] || 0) > KEEP.idle) drop(list[i]);
-    };
-    prune('near', KEEP.near, (ch) => { free(ch, 'near'); if (ch.nearInk) free(ch, 'nearInk'); });
-    for (const k of ['gl', 'gd']) prune(k, KEEP.tiles / 2, (ch) => { free(ch, k); this.art.drop(ch.cx, ch.cy, k === 'gl'); });
+    prune('near', KEEP.near, LOD.farMat + KEEP.margin, (ch) => { this.free(ch, 'near'); this.free(ch, 'nearInk'); });
+    const active = this.lit ? 'gl' : 'gd', other = this.lit ? 'gd' : 'gl';
+    prune(active, KEEP.tiles, this.tileR + KEEP.margin, (ch) => this.free(ch, active));
+    prune(other, 0, -Infinity, (ch) => this.free(ch, other));
+  }
+
+  /** The screen's context was restored or replaced: the tiles kept no canvas, so they go (repainted as needed). */
+  gfxReset() {
+    for (const ch of this.chunks.values()) { this.free(ch, 'gl'); this.free(ch, 'gd'); }
+    this.ground.userData.repaint?.();
   }
 
   /**
    * Show the chunks around the camera: buildings within `far` metres (flat-tone material past
-   * LOD.farMat), ground tiles within `near`. Builds chunks on first sight (a couple per frame).
+   * LOD.farMat), ground tiles within `near`. Missing builds and tiles are made nearest / in view
+   * first within KEEP.ms a frame; a near build's stand-in is its far build (built first when it has
+   * none), a tile's is the ground plan underneath, so nothing is ever a hole.
    */
-  update(cam, { far = 1500, near = 700, night = 0, frame = 0 } = {}) {
+  update(cam, { far = 1500, near = 700, night = 0, renderer = null } = {}) {
     const px = cam.position.x / M, pz = cam.position.z / M, camY = cam.position.y;
+    this.px = px; this.pz = pz;
+    if (renderer) { this.renderer = renderer; this.ground.userData.upload?.(renderer); }
     const R = Math.ceil(Math.max(far, this.look.U.uHazeFar.value) / M / CHUNK) + 1;
     const ccx = Math.floor(px / CHUNK), ccy = Math.floor(pz / CHUNK);
-    let budget = this.built ? 2 : 999;
     const n = (this.n = performance.now());
     for (const ch of this.chunks.values()) for (const k of ['near', 'lite', 'nearInk', 'liteInk', 'gl', 'gd']) if (ch[k]) ch[k].visible = false;
     // haze first: from altitude it reaches further than the band's fog, and so do the chunks
     this.look.light(this.sun, this.hemi, this.scene.fog, night, (performance.now() - this.t0) / 1000, this.sky?.horizon || this.dome?.material.uniforms.bottom.value, cam.position.y);
     const reach = Math.max(far, this.look.U.uHazeFar.value), cut = reach * 0.92; // the haze is all but solid past this
+    const lit = (this.lit = night > 0.45), key = lit ? 'gl' : 'gd';
+    this.tileR = near * 1.2;
+    cam.getWorldDirection(_fwd);
+    const shown = this._shown || (this._shown = []), jobs = this._jobs || (this._jobs = []);
+    shown.length = 0; jobs.length = 0;
     for (let cy = ccy - R; cy <= ccy + R; cy++) for (let cx = ccx - R; cx <= ccx + R; cx++) {
       if (cx < 0 || cy < 0 || cx >= this.cols || cy >= this.rows) continue;
       const dx = ((cx + 0.5) * CHUNK - px) * M, dz = ((cy + 0.5) * CHUNK - pz) * M, d = Math.hypot(dx, dz) - CHUNK * M * 0.7;
@@ -191,19 +239,41 @@ export class City3D {
       // above detailAlt the LOD goes by true (3D) distance: from high patrol every chunk is a lite
       // build (no near build, ink layer or halftone under her: ~6% fps at high patrol)
       const ch = this.chunk(cx, cy), which = (camY > LOD.detailAlt ? Math.hypot(Math.max(0, d), camY) : d) > LOD.farMat ? 'lite' : 'near';
-      if (ch[which] === undefined) {
-        if (budget-- <= 0) { const other = ch[which === 'near' ? 'lite' : 'near']; if (other) other.visible = true; continue; }
-        this.build(ch, which);
-      }
-      const full = camY < LOD.detailAlt && Math.hypot(Math.max(0, d), camY) < (which === 'near' ? LOD.detail : LOD.liteDetail);
-      if (ch[which]) { ch[which].visible = true; range(ch[which], full); }
-      if (which === 'near') ch.nearSeen = n;
-      if (ch[which + 'Ink']) { ch[which + 'Ink'].visible = which === 'near' || d < LOD.farInk; range(ch[which + 'Ink'], full); }
+      ch.which = which; ch.d = d;
+      ch.full = camY < LOD.detailAlt && Math.hypot(Math.max(0, d), camY) < (which === 'near' ? LOD.detail : LOD.liteDetail);
       // no baked tiles past the coast: those chunks are open bay, and their unpainted canvases were
       // near-black slabs lying on the sea
-      if (d < near * 1.2 && camY < LOD.tileAlt && cx * TILE < this.city.landCols) this.groundTile(ch, night > 0.45, frame);
+      ch.tile = d < this.tileR && camY < LOD.tileAlt && cx * TILE < this.city.landCols;
+      if (which === 'near') ch.nearSeen = n;
+      if (ch.tile) ch[key + 'Seen'] = n;
+      // job priority: distance, halved for what's ahead of the lens (where she's flying comes first)
+      ch.pri = Math.max(0, d) * (dx * _fwd.x + dz * _fwd.z > -CHUNK * M * 0.5 ? 0.5 : 1);
+      shown.push(ch);
+      if (ch[which] === undefined || (ch.tile && !ch[key])) jobs.push(ch);
+    }
+    // the work: all of it on the very first frame (it's behind the title / zone transition), then
+    // within the frame budget, at least one job a frame
+    if (jobs.length) {
+      jobs.sort((a, b) => a.pri - b.pri);
+      const t0 = performance.now(), limit = this.built ? KEEP.ms : 1e9, over = () => performance.now() - t0 > limit;
+      let done = 0;
+      for (const ch of jobs) {
+        if (done && over()) break;
+        // a near build with nothing to stand in for it gets its (cheap) far build first
+        if (ch.which === 'near' && ch.near === undefined && ch.lite === undefined && this.built) { this.build(ch, 'lite'); done++; if (over()) break; }
+        if (ch[ch.which] === undefined) { this.build(ch, ch.which); done++; if (over()) break; }
+        if (ch.tile && !ch[key]) { this.groundTile(ch, key); done++; }
+      }
+      work.ms += performance.now() - t0;
     }
     this.built = true;
+    for (const ch of shown) {
+      // the wanted build, or the other one standing in while it waits
+      const w = ch[ch.which] ? ch.which : ch.which === 'near' ? 'lite' : 'near', m = ch[w], ink = ch[w + 'Ink'];
+      if (m) { m.visible = true; range(m, ch.full); }
+      if (ink) { ink.visible = w === 'near' || ch.d < LOD.farInk; range(ink, ch.full); }
+      if (ch.tile && ch[key]) ch[key].visible = true;
+    }
     if (n - (this.trimT || 0) > KEEP.every) { this.trimT = n; this.trim(n); }
     this.outer.update(cam, cut);
     this.card.update(cam, this.look.U.uHazeFar.value);
@@ -211,3 +281,4 @@ export class City3D {
     this.street.update(cam);
   }
 }
+const _fwd = new THREE.Vector3();

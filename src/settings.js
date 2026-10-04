@@ -93,14 +93,18 @@ const listeners = [];
  * iOS / iPadOS (also when the iPad says it's a Mac, or has a trackpad and so a fine pointer): Safari
  * gives a tab little memory and drops WebGL contexts under pressure, so Auto never picks High there,
  * and High itself keeps the 3D flight canvas at 2× with FXAA instead of a multisampled full frame.
+ * The flight's ground tiles are painted at 112 px a block there (0.6 MB each on the GPU, not 1 MB).
  */
-const HIGH_IOS = { ...PROFILES.high, fly3dOut: 2, fly3dAA: 'fxaa', dpr3d: 1.5 };
+const IOS_TILES = 112;
+const HIGH_IOS = { ...PROFILES.high, fly3dOut: 2, fly3dAA: 'fxaa', dpr3d: 1.5, flyTileRes: IOS_TILES };
+const BALANCED_IOS = { ...PROFILES.balanced, flyTileRes: IOS_TILES };
 
 /** The active graphics profile. */
 export function quality() {
   if (state.graphics === 'high') return IOS ? HIGH_IOS : PROFILES.high;
   if (state.graphics === 'saver' || state.autoSlow) return PROFILES.saver;
-  return isTouch() || IOS ? PROFILES.balanced : PROFILES.high;
+  if (IOS) return BALANCED_IOS;
+  return isTouch() ? PROFILES.balanced : PROFILES.high;
 }
 
 export const settings = {

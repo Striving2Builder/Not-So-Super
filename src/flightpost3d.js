@@ -7,18 +7,23 @@
 // into an offscreen target that three treats exactly like the canvas (tone mapping + sRGB output:
 // nothing in the city's or the hero's shaders changes), then one full-screen pass writes it to the
 // canvas through FXAA (Balanced), or the target itself is multisampled (High).
+// The targets are allocated once at the largest scene size this view uses and the scene is drawn
+// in their corner: dynamic-resolution steps and the canyon / open-sky switch never reallocate them
+// (on iOS Safari that churn of freed + new GPU buffers is what memory pressure is made of).
 import * as THREE from 'three';
 
 // FXAA ("console" variant, Lottes): 5 taps to find an edge and its direction, 4 more to blend along it.
 const FRAG = `
 precision highp float;
-uniform sampler2D tDiffuse; uniform vec2 px; uniform float streak; uniform float sharp; uniform float taps; uniform vec2 vp; varying vec2 vUv;
+uniform sampler2D tDiffuse; uniform vec2 px; uniform float streak; uniform float sharp; uniform float taps; uniform vec2 vp; uniform vec2 rep; varying vec2 vUv;
 #define LUMA vec3(0.299, 0.587, 0.114)
+// screen uv → the used corner of the target, clamped half a texel inside it (clamp-to-edge there)
+vec4 tex(vec2 uv) { return texture2D(tDiffuse, min(uv, 1.0 - 0.5 * px) * rep); }
 void main() {
-  vec4 cM = texture2D(tDiffuse, vUv);
+  vec4 cM = tex(vUv);
 #ifdef FXAA
-  vec3 nw = texture2D(tDiffuse, vUv + vec2(-1.0, -1.0) * px).rgb, ne = texture2D(tDiffuse, vUv + vec2(1.0, -1.0) * px).rgb;
-  vec3 sw = texture2D(tDiffuse, vUv + vec2(-1.0, 1.0) * px).rgb, se = texture2D(tDiffuse, vUv + vec2(1.0, 1.0) * px).rgb;
+  vec3 nw = tex(vUv + vec2(-1.0, -1.0) * px).rgb, ne = tex(vUv + vec2(1.0, -1.0) * px).rgb;
+  vec3 sw = tex(vUv + vec2(-1.0, 1.0) * px).rgb, se = tex(vUv + vec2(1.0, 1.0) * px).rgb;
   float lNW = dot(nw, LUMA), lNE = dot(ne, LUMA), lSW = dot(sw, LUMA), lSE = dot(se, LUMA), lM = dot(cM.rgb, LUMA);
   float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE))), lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
   gl_FragColor = vec4(cM.rgb, 1.0);
@@ -26,8 +31,8 @@ void main() {
   vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));
   float red = max((lNW + lNE + lSW + lSE) * 0.03125, 1.0 / 128.0);
   dir = clamp(dir / (min(abs(dir.x), abs(dir.y)) + red), -8.0, 8.0) * px;
-  vec3 a = 0.5 * (texture2D(tDiffuse, vUv + dir * (1.0 / 3.0 - 0.5)).rgb + texture2D(tDiffuse, vUv + dir * (2.0 / 3.0 - 0.5)).rgb);
-  vec3 b = a * 0.5 + 0.25 * (texture2D(tDiffuse, vUv - dir * 0.5).rgb + texture2D(tDiffuse, vUv + dir * 0.5).rgb);
+  vec3 a = 0.5 * (tex(vUv + dir * (1.0 / 3.0 - 0.5)).rgb + tex(vUv + dir * (2.0 / 3.0 - 0.5)).rgb);
+  vec3 b = a * 0.5 + 0.25 * (tex(vUv - dir * 0.5).rgb + tex(vUv + dir * 0.5).rgb);
   float lB = dot(b, LUMA);
   gl_FragColor = vec4((lB < lMin || lB > lMax) ? a : b, 1.0);
   }
@@ -40,10 +45,10 @@ void main() {
   // (High) adds the other diagonal: edges running along the first one get sharpened too.
   vec3 c = cM.rgb;
   if (sharp > 0.0) {
-    vec3 a = texture2D(tDiffuse, vUv + px * vec2(0.75, -0.75)).rgb, b = texture2D(tDiffuse, vUv - px * vec2(0.75, -0.75)).rgb;
+    vec3 a = tex(vUv + px * vec2(0.75, -0.75)).rgb, b = tex(vUv - px * vec2(0.75, -0.75)).rgb;
     vec3 mn = min(c, min(a, b)), mx = max(c, max(a, b)), avg = 0.5 * (a + b);
     if (taps > 2.5) {
-      vec3 e = texture2D(tDiffuse, vUv + px * vec2(0.75, 0.75)).rgb, f = texture2D(tDiffuse, vUv - px * vec2(0.75, 0.75)).rgb;
+      vec3 e = tex(vUv + px * vec2(0.75, 0.75)).rgb, f = tex(vUv - px * vec2(0.75, 0.75)).rgb;
       mn = min(mn, min(e, f)); mx = max(mx, max(e, f)); avg = 0.25 * (a + b + e + f);
     }
     vec3 k = sqrt(clamp(min(mn, 1.0 - mx) / max(mx, vec3(1e-4)), 0.0, 1.0)) * mix(0.6, 1.4, sharp);
@@ -59,17 +64,17 @@ void main() {
     if (k > 0.01) {
       vec2 step = normalize(d) * 0.0011 * k;
       vec3 acc = gl_FragColor.rgb;
-      for (int i = 1; i <= 9; i++) acc += texture2D(tDiffuse, vUv - step * float(i)).rgb;
+      for (int i = 1; i <= 9; i++) acc += tex(vUv - step * float(i)).rgb;
       gl_FragColor.rgb = acc / 10.0;
     }
   }
 }`;
-const VERT = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
+const VERT = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }'; // (vUv: screen uv; tex() maps it into the target)
 
 export class FlightPost {
   constructor() {
     this.rt = null; this.rtB = null; this.mode = null;
-    const mk = (defines) => new THREE.ShaderMaterial({ uniforms: { tDiffuse: { value: null }, px: { value: new THREE.Vector2() }, streak: { value: 0 }, sharp: { value: 0 }, taps: { value: 2 }, vp: { value: new THREE.Vector2(0.5, 0.5) } }, defines, vertexShader: VERT, fragmentShader: FRAG, depthTest: false, depthWrite: false, toneMapped: false });
+    const mk = (defines) => new THREE.ShaderMaterial({ uniforms: { tDiffuse: { value: null }, px: { value: new THREE.Vector2() }, streak: { value: 0 }, sharp: { value: 0 }, taps: { value: 2 }, vp: { value: new THREE.Vector2(0.5, 0.5) }, rep: { value: new THREE.Vector2(1, 1) } }, defines, vertexShader: VERT, fragmentShader: FRAG, depthTest: false, depthWrite: false, toneMapped: false });
     // FXAA runs at the SCENE's resolution (cheap: it's the small target), then a sharpening
     // upscale (+ the boost streak) writes the canvas
     this.fxaa = mk({ FXAA: '' });
@@ -78,6 +83,9 @@ export class FlightPost {
     this.quad.frustumCulled = false;
     this.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this._s = new THREE.Vector2();
+    /** The largest scene scale the view will ask for (the targets are sized for it); set by the caller. */
+    this.maxScale = 1;
+    this.used = [0, 0];
   }
 
   /**
@@ -92,17 +100,21 @@ export class FlightPost {
     const size = renderer.getDrawingBufferSize(this._s);
     const w = Math.max(1, Math.round(size.x * scale)), h = Math.max(1, Math.round(size.y * scale)), samples = mode === 'msaa' ? 4 : 0;
     if ((mode === 'none' || !mode) && scale >= 0.999) { onSize?.(size.x, size.y); renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
-    if (!this.rt || this.rt.width !== w || this.rt.height !== h || this.rt.samples !== samples) {
+    const top = Math.max(scale, Math.min(1, this.maxScale)), W = Math.max(w, Math.round(size.x * top)), H = Math.max(h, Math.round(size.y * top));
+    if (!this.rt || this.rt.width !== W || this.rt.height !== H || this.rt.samples !== samples) { // (only when the canvas or the profile changes)
       this.rt?.dispose();
-      this.rt = new THREE.WebGLRenderTarget(w, h, { samples, type: THREE.UnsignedByteType });
+      this.rt = new THREE.WebGLRenderTarget(W, H, { samples, type: THREE.UnsignedByteType });
       // treated like the canvas by three: renderer tone mapping + sRGB output for every material
       // (the city's custom shaders included), stored as plain bytes (no second sRGB encode)
       this.rt.isXRRenderTarget = true;
       this.rt.texture.colorSpace = THREE.SRGBColorSpace;
       this.rt.texture.internalFormat = 'RGBA8';
     }
+    for (const t of [this.rt, this.rtB]) if (t) { t.viewport.set(0, 0, w, h); t.scissor.set(0, 0, w, h); t.scissorTest = true; }
+    this.used[0] = w; this.used[1] = h;
     onSize?.(w, h);
     this.mat.uniforms.px.value.set(1 / w, 1 / h); this.fxaa.uniforms.px.value.set(1 / w, 1 / h);
+    this.mat.uniforms.rep.value.set(w / W, h / H); this.fxaa.uniforms.rep.value.set(w / W, h / H);
     this.mat.uniforms.streak.value = streak;
     this.mat.uniforms.sharp.value = scale < 0.97 ? sharp : 0;
     this.mat.uniforms.taps.value = taps;
@@ -111,7 +123,10 @@ export class FlightPost {
     renderer.render(scene, camera);
     let src = this.rt.texture;
     if (mode === 'fxaa') {
-      if (!this.rtB || this.rtB.width !== w || this.rtB.height !== h) { this.rtB?.dispose(); this.rtB = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false }); }
+      if (!this.rtB || this.rtB.width !== W || this.rtB.height !== H) {
+        this.rtB?.dispose(); this.rtB = new THREE.WebGLRenderTarget(W, H, { depthBuffer: false });
+        this.rtB.viewport.set(0, 0, w, h); this.rtB.scissor.set(0, 0, w, h); this.rtB.scissorTest = true;
+      }
       this.fxaa.uniforms.tDiffuse.value = this.rt.texture;
       this.quad.material = this.fxaa;
       renderer.setRenderTarget(this.rtB);

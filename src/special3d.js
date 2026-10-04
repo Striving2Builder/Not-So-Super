@@ -3,7 +3,8 @@
 // intoxicating temptations and bait items that can get the heroine captured.
 import * as THREE from 'three';
 import { quality } from './settings.js';
-import { watchContext, loadingPanel } from './gfx.js';
+import { watchContext, loadingPanel, gfxReset } from './gfx.js';
+import { note } from './diag.js';
 import { HeroModel, heroReady } from './hero3d.js';
 import { dressHero, inkHull } from './herolook3d.js';
 import { Enemy, enemyReady, GUARD_KINDS, bossKind } from './enemies.js';
@@ -45,9 +46,11 @@ function replaceRenderer(g, old) {
   old.dispose();
   Special3D.sharedRenderer = r;
   for (const m of [...Object.values(g.modes), g.overworld.view3d]) if (m && Object.hasOwn(m, 'renderer') && m.renderer === old) { m.renderer = r; if (m.post) m.post.rt = m.post.rtB = null; if (m.heroPass) m.heroPass.rt = null; } // (their targets died with the old context: just let them go)
+  note('renderer-rebuilt', r ? 'new WebGL context' : 'no WebGL left: 2D flight', true);
   if (!r) { g.gfxFailed?.(); return; } // no WebGL left: the game falls back (2D flight, zones abort)
   for (const m of Object.values(g.modes)) if (m.renderer === r && m.resize) m.resize();
   if (g.overworld.view3d) g.overworld.view3d.dpr = 0; // (its canvas size is re-applied next frame)
+  gfxReset();
 }
 
 export class Special3D {

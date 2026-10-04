@@ -10,7 +10,9 @@ import { LOOK } from './look3d.js';
 export const HERO_LAYER = 1;
 // pad: her bounding sphere's scale (her radius already holds the cape; the keyline's own width is added in px); taps: the silhouette ink's dilation samples (the body's
 // own ink hull covers gaps at thin limbs); ink: its colour; halo: rgb + alpha of the night halo
-const PASS = { pad: 1.0, bucket: 64, taps: 6, ink: 0x0b0b16, halo: [0.85, 0.9, 1.0, 0.45] };
+// shrink: frames her rect must need under half the target before it's reallocated smaller (a
+// close-up, e.g. coming back from a zone, grew it to the whole screen: ~45 MB with MSAA on an iPad)
+const PASS = { pad: 1.0, bucket: 64, taps: 6, ink: 0x0b0b16, halo: [0.85, 0.9, 1.0, 0.45], shrink: 300 };
 
 const _v = new THREE.Vector3(), _res = new THREE.Vector2(), _cc = new THREE.Color();
 
@@ -54,13 +56,17 @@ ${halo}  }
     this.quadScene.add(this.quad);
   }
 
-  /** Grow the target in buckets (no per-frame reallocation as she moves on screen). */
+  /** Grow the target in buckets (no per-frame reallocation as she moves on screen); shrink it after a long while oversized. */
   target(w, h, samples) {
     const B = PASS.bucket, W = Math.ceil(w / B) * B, H = Math.ceil(h / B) * B;
-    if (!this.rt || this.rt.width < w || this.rt.height < h || this.rt.samples !== samples) {
-      const keep = this.rt && this.rt.samples === samples;
+    this.small = this.rt && (W + B) * (H + B) < this.rt.width * this.rt.height * 0.5 ? (this.small || 0) + 1 : 0;
+    const shrink = this.small > PASS.shrink;
+    if (!this.rt || this.rt.width < w || this.rt.height < h || this.rt.samples !== samples || shrink) {
+      const keep = this.rt && this.rt.samples === samples && !shrink;
+      this.small = 0;
       this.rt?.dispose();
-      this.rt = new THREE.WebGLRenderTarget(Math.max(W, keep ? this.rt.width : 0), Math.max(H, keep ? this.rt.height : 0), { samples });
+      const m = shrink ? B : 0; // (shrunk with a bucket to spare: no regrow next frame)
+      this.rt = new THREE.WebGLRenderTarget(Math.max(W + m, keep ? this.rt.width : 0), Math.max(H + m, keep ? this.rt.height : 0), { samples });
       // like the canvas (see flightpost3d): she's tone-mapped and sRGB-encoded in her own pass,
       // so the 8-bit target holds display values (no banding in her darks)
       this.rt.isXRRenderTarget = true;

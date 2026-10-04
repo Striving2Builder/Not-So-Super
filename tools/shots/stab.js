@@ -156,6 +156,60 @@ async function loseTest(page, how) {
   return { label: `lose (${how})`, ...r, gl: await page.evaluate(() => window.__glt.report()) };
 }
 
+/**
+ * Fly straight out across the city for `out` s in a band (stick held forward), then pull a U-turn
+ * and fly back over what was just freed: the frame gaps after the turn are the rebuild hitch.
+ */
+async function turnBack(page, cdp, band, out = 10, back = 9) {
+  await page.evaluate((band) => {
+    const g = window.__game, ow = g.overworld, h = ow.hero, c = g.city;
+    if (!window.__axisHooked) { window.__axisHooked = true; const ax = g.input.axis.bind(g.input); g.input.axis = () => window.__axis || ax(); }
+    if (ow.view3d) ow.view3d.steer = (a) => a; // (the stick in world axes: east out, west back)
+    // time the city's update (builds, tile paints) and the whole 3D frame (+ uploads) on the CPU
+    const v = ow.view3d, T = window.__tb = { city: 0, frame: 0 };
+    if (v && !v.__timed) {
+      v.__timed = true;
+      const cu = v.city3.update.bind(v.city3), vr = v.render.bind(v);
+      const c3 = v.city3, bu = c3.build.bind(c3), pt = c3.art.paintTile.bind(c3.art);
+      let nb = 0, np = 0, bt = 0, ptm = 0;
+      c3.build = (...a) => { const t = performance.now(); bu(...a); bt += performance.now() - t; nb++; };
+      c3.art.paintTile = (...a) => { const t = performance.now(); pt(...a); ptm += performance.now() - t; np++; };
+      v.city3.update = (...a) => {
+        nb = np = 0; bt = ptm = 0;
+        const t = performance.now(); cu(...a); const T = window.__tb;
+        T.city = Math.max(T.city, performance.now() - t); T.builds = Math.max(T.builds || 0, nb); T.paints = Math.max(T.paints || 0, np);
+        T.buildMs = Math.max(T.buildMs || 0, bt / (nb || 1)); T.paintMs = Math.max(T.paintMs || 0, ptm / (np || 1)); T.nb = (T.nb || 0) + nb; T.np = (T.np || 0) + np;
+      };
+      v.render = (...a) => { const t = performance.now(); vr(...a); window.__tb.frame = Math.max(window.__tb.frame, performance.now() - t); };
+    }
+    Object.assign(h, { x: c.coastX * 0.08, y: c.H * (band ? 0.45 : 0.6), band, ang: 0, speed: 0 });
+    ow.view3d && (ow.view3d.cam.placed = false);
+    g.state.clock = 12 * 60;
+    window.__axis = { x: 1, y: 0 };
+  }, band);
+  const rows = [];
+  const leg = async (label, js, ms) => {
+    const t0 = await page.evaluate((js) => { eval(js); window.__tb = { city: 0, frame: 0 }; window.__x0 = window.__game.overworld.hero.x; return performance.now(); }, js);
+    await page.waitForTimeout(ms);
+    const r = await page.evaluate((t0) => {
+      const F = window.__frames.filter((t) => t >= t0), gaps = [], at = [];
+      for (let i = 1; i < F.length; i++) { gaps.push(F[i] - F[i - 1]); at.push([Math.round(F[i] - F[i - 1]), Math.round(F[i - 1] - t0)]); }
+      at.sort((a, b) => b[0] - a[0]);
+      const s = [...gaps].sort((a, b) => a - b), med = s[s.length >> 1] || 0;
+      const c3 = window.__game.overworld.view3d?.city3;
+      return { longest: Math.round(s[s.length - 1] || 0), over100: gaps.filter((x) => x > 100).length, over2med: gaps.filter((x) => x > 2 * med + 16).length, medFrame: Math.round(med), frames: gaps.length,
+        gl: window.__glt.report(), top: at.slice(0, 4), moved: Math.round(window.__game.overworld.hero.x - window.__x0), cityMs: Math.round(window.__tb.city), frameMs: Math.round(window.__tb.frame), tb: Object.fromEntries(Object.entries(window.__tb).map(([k, v]) => [k, +v.toFixed(1)])), near: c3 ? [...c3.chunks.values()].filter((ch) => ch.near).length : null };
+    }, t0);
+    rows.push({ label: `${label} (${band ? 'cruise' : 'skim'})`, syncMs: 0, readyMs: 0, steadyMs: 0, ...r, heapMB: await heap(page, cdp) });
+  };
+  // (real-time speed whatever the harness's frame rate: she is carried at cruise speed, 280 m/s)
+  const drive = (dir) => `clearInterval(window.__drive); window.__axis = { x: 0, y: 0 }; let last = performance.now(); window.__drive = setInterval(() => { const h = window.__game.overworld.hero, now = performance.now(); h.ang = ${dir} > 0 ? 0 : Math.PI; h.speed = 0; h.x += ${dir} * 560 * Math.min(0.5, (now - last) / 1000); last = now; }, 20)`;
+  await leg('fly out', drive(1), out * 1000);
+  await leg('turn back', drive(-1), back * 1000);
+  await page.evaluate(() => { clearInterval(window.__drive); window.__axis = null; });
+  return rows;
+}
+
 async function run(browserType, name, devices) {
   const browser = await browserType.launch(name === 'chromium' ? { args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-precise-memory-info'] } : {});
   const dev = devices['iPad Pro 11 landscape'];
@@ -200,6 +254,7 @@ async function run(browserType, name, devices) {
     rows.push({ label: `tour (${TOUR} stops, ${Math.round((Date.now() - t0) / 1000)} s)`, syncMs: 0, readyMs: 0, steadyMs: 0, longest: 0, over100: 0, medFrame: 0, gl: await page.evaluate(() => window.__glt.report()), heapMB: await heap(page, cdp),
       info: await page.evaluate(() => window.__game.overworld.view3d?.renderer?.info.memory) });
   }
+  if (argv.includes('--turnback')) for (const band of [1, 0]) rows.push(...await turnBack(page, cdp, band));
   for (let round = 0; round < ROUNDS; round++) {
     for (const z of ['brawler', 'investigate', 'special']) {
       await page.keyboard.down('KeyW'); await page.waitForTimeout(1500); await page.keyboard.up('KeyW');
@@ -230,6 +285,7 @@ async function run(browserType, name, devices) {
       for (const x of r.rows) {
         if (x.label.startsWith('lose')) { console.log(x.label.padEnd(22), JSON.stringify(x)); continue; }
         if (x.info) console.log('  three memory:', JSON.stringify(x.info));
+        if (x.cityMs !== undefined) console.log(`  worst city update ${x.cityMs} ms, worst 3D frame (CPU) ${x.frameMs} ms, near builds ${x.near}, moved ${x.moved}, top gaps [ms, at ms] ${JSON.stringify(x.top)}, frames ${x.frames}, >2x median ${x.over2med}  ${JSON.stringify(x.tb)}`);
         console.log(x.label.padEnd(22), String(x.syncMs).padStart(4), String(x.readyMs).padStart(5), String(x.steadyMs).padStart(6), String(x.longest).padStart(7), String(x.over100).padStart(6), String(x.medFrame).padStart(5),
           `${x.gl.live}/${x.gl.made}`.padStart(14), `${x.gl.resMB}+${x.gl.drawMB}`.padStart(15), String(x.heapMB).padStart(6));
       }

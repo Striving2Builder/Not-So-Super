@@ -3,6 +3,8 @@
 // crash-reload check. iOS drops WebGL contexts under memory pressure and kills the tab outright when
 // the page uses too much; three.js re-uploads its own resources after a restore, so this module only
 // pauses the game, shows the panel, and asks the owner to rebuild a renderer that never comes back.
+// Every loss / restore / rebuild goes into the session log (diag.js).
+import { note, setInfo } from './diag.js';
 
 /** iPhone / iPad, including iPadOS presenting itself as a Mac (desktop-class Safari, with touch). */
 export const IOS = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent)
@@ -34,16 +36,19 @@ export function watchContext(renderer, { critical = true, onGiveUp = null, onRes
   watched.set(canvas, w);
   canvas.addEventListener('webglcontextlost', (e) => {
     e.preventDefault(); // (three does this too: it is what allows a restore)
-    w.lost = true;
+    w.lost = true; w.since = performance.now();
     console.warn('WebGL context lost' + (critical ? '' : ' (offscreen)'));
+    note('ctx-lost', `${critical ? 'screen' : 'offscreen'} ${canvas.width}x${canvas.height}${document.hidden ? ' (tab hidden)' : ''}${loadingText ? ' while loading' : ''}`, true);
     if (critical) showPanel('RESTORING GRAPHICS…');
     clearTimeout(w.timer);
-    if (onGiveUp) w.timer = setTimeout(() => { if (w.lost) { unwatch(canvas); onGiveUp(); refresh(); } }, GIVE_UP_MS);
+    if (onGiveUp) w.timer = setTimeout(() => { if (w.lost) { note('ctx-giveup', critical ? 'screen' : 'offscreen', true); unwatch(canvas); onGiveUp(); refresh(); } }, GIVE_UP_MS);
   });
   canvas.addEventListener('webglcontextrestored', () => {
     w.lost = false;
     clearTimeout(w.timer);
+    note('ctx-restored', `${critical ? 'screen' : 'offscreen'} after ${Math.round(performance.now() - w.since)} ms`, true);
     onRestored?.();
+    if (critical) gfxReset();
     refresh();
   });
 }
@@ -60,7 +65,15 @@ export function gfxLost() {
 /** WebGL contexts the game holds right now (the ?perf=1 readout). */
 export function liveContexts() { let n = 0; for (const c of watched.keys()) if (!watched.get(c).lost) n++; return n; }
 
-function refresh() { if (!gfxLost() && !loadingText) hidePanel(); }
+// (a loss during a zone load shows RESTORING; once restored the card goes back to the LOADING text)
+function refresh() { if (gfxLost()) return; if (loadingText) showPanel(loadingText); else hidePanel(); }
+
+// ---- GPU state that lives outside three: owners that let go of a texture's source after upload
+// (e.g. the city's ground tiles) rebuild it when the screen's context restarts or is replaced.
+const resets = new Set();
+/** fn() runs after the screen's WebGL context was restored or its renderer replaced. */
+export function onGfxReset(fn) { resets.add(fn); return () => resets.delete(fn); }
+export function gfxReset() { for (const fn of resets) { try { fn(); } catch (e) { console.error(e); } } }
 
 // ---- the comic panel (also the zones' "LOADING…" card). It sits mid-screen, under the HUD, the
 // LIVE feed and the captions (they stay up: they are the story).
@@ -83,7 +96,7 @@ export function isLoading() { return !!loadingText; }
 /** A zone is loading: show the panel (text) or take it down (null). */
 export function loadingPanel(text) {
   loadingText = text;
-  if (text) showPanel(text);
+  if (text && !gfxLost()) showPanel(text);
   else refresh();
 }
 
@@ -99,5 +112,7 @@ export function crashedLastTime() {
     addEventListener('pagehide', () => set('0'));
     document.addEventListener('visibilitychange', () => set(document.hidden ? '0' : '1'));
   } catch (e) { /* no storage */ }
+  setInfo('crashLast', crashed);
+  if (crashed) note('crash-reload', 'the last visit died while playing (iOS memory kill?)', true);
   return crashed;
 }

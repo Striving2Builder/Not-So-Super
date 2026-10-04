@@ -225,13 +225,17 @@ function plan(city, landmarks, PX) {
   return { day: tex(day, 4), night: tex(night, 1) };
 }
 
-/** The land plane of the map, lit like the buildings and hazed like everything else. rich: the sharper plan. */
+/**
+ * The land plane of the map, lit like the buildings and hazed like everything else. rich: the
+ * sharper plan. Its canvases (~19 MB rich) are let go once uploaded (`userData.upload(renderer)`,
+ * called each frame, works once); a lost or replaced WebGL context repaints them (`userData.repaint`).
+ */
 export function cityGround(city, U, landmarks, rich = true) {
-  const T = plan(city, landmarks, GROUND.px[rich ? 0 : 1] / BLOCK), x1 = city.coastX * M, z1 = city.H * M;
+  const x1 = city.coastX * M, z1 = city.H * M;
   const g = new THREE.PlaneGeometry(x1, z1); // the canvases span exactly the land
   g.rotateX(-Math.PI / 2); g.translate(x1 / 2, -0.25, z1 / 2);
-  return new THREE.Mesh(g, new THREE.ShaderMaterial({
-    uniforms: { day: { value: T.day }, night: { value: T.night }, uKeyCol: U.uKeyCol, uAmbUp: U.uAmbUp, uNight: U.uNight, uLit: U.uLit, uHazeCol: U.uHazeCol, uHorizon: U.uHorizon, uHazeLow: U.uHazeLow, uHazeNear: U.uHazeNear, uHazeFar: U.uHazeFar },
+  const mesh = new THREE.Mesh(g, new THREE.ShaderMaterial({
+    uniforms: { day: { value: null }, night: { value: null }, uKeyCol: U.uKeyCol, uAmbUp: U.uAmbUp, uNight: U.uNight, uLit: U.uLit, uHazeCol: U.uHazeCol, uHorizon: U.uHorizon, uHazeLow: U.uHazeLow, uHazeNear: U.uHazeNear, uHazeFar: U.uHazeFar },
     vertexShader: 'varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
     fragmentShader: /* glsl */`
 uniform sampler2D day; uniform sampler2D night; uniform vec3 uKeyCol; uniform vec3 uAmbUp; uniform float uNight; uniform float uLit;
@@ -254,4 +258,19 @@ void main() {
   gl_FragColor.rgb = haze(gl_FragColor.rgb, dist, 0., 1.);
 }`,
   }));
+  const u = mesh.material.uniforms;
+  let pending = false;
+  mesh.userData.repaint = () => {
+    const T = plan(city, landmarks, GROUND.px[rich ? 0 : 1] / BLOCK);
+    u.day.value?.dispose(); u.night.value?.dispose();
+    u.day.value = T.day; u.night.value = T.night;
+    pending = true;
+  };
+  mesh.userData.upload = (r) => {
+    if (!pending) return;
+    pending = false;
+    for (const t of [u.day.value, u.night.value]) { r.initTexture(t); t.image.width = t.image.height = 1; }
+  };
+  mesh.userData.repaint();
+  return mesh;
 }

@@ -21,7 +21,8 @@ import { comic } from './comic.js';
 import { Commentary } from './commentary.js';
 import { settings, quality, autoTune, HERO_SKIN_LABELS } from './settings.js';
 import { perfHud } from './perfhud.js';
-import { gfxLost, crashedLastTime } from './gfx.js';
+import { gfxLost, crashedLastTime, IOS } from './gfx.js';
+import { note, setInfo, perfOn, showDiagnostics, longPressDiagnostics } from './diag.js';
 
 loadHero();
 loadEnemies(); // guard and boss models for the 3D zones (procedural stand-ins until they arrive)
@@ -44,6 +45,9 @@ game.commentary = new Commentary(game);
 window.__game = game; // handy for debugging from the console
 
 function resize() {
+  // (iOS reports a 0-size viewport mid-rotation: a 0x0 canvas draws nothing, so wait for the real size)
+  if (!innerWidth || !innerHeight) { note('resize', `skipped ${innerWidth}x${innerHeight}`); return; }
+  if (game.w && (game.w !== innerWidth || game.h !== innerHeight)) note('resize', `${innerWidth}x${innerHeight}`);
   game.w = innerWidth; game.h = innerHeight;
   const dpr = Math.min(devicePixelRatio || 1, quality().dpr2d);
   canvas.width = Math.round(game.w * dpr);
@@ -55,11 +59,12 @@ function resize() {
   game.modes.asylum.resize();
 }
 addEventListener('resize', resize);
-settings.onChange(() => resize()); // resolution follows the graphics profile
+settings.onChange(() => { setInfo('profile', settings.graphicsLabel); note('graphics', settings.graphicsLabel); resize(); }); // resolution follows the graphics profile
 addEventListener('orientationchange', () => setTimeout(resize, 200));
 resize();
 
 game.setMode = (name, p) => {
+  note('mode', name);
   if (game.mode && game.mode.exit) game.mode.exit();
   game.modeName = name;
   game.mode = game.modes[name];
@@ -238,7 +243,7 @@ async function pauseMenu() {
   if (UI.open || game.title) return;
   const st = game.state;
   const inMission = game.modeName !== 'overworld' && game.modeName !== 'captured';
-  const v = await dialog({
+  const menu = dialog({
     title: 'Paused',
     text: `<div class="list"><div class="item"><b>${st.rep} REP</b> · ${st.rank}<br>Saves ${st.stats.saves} · Cases ${st.stats.cases} · Special zones ${st.stats.specials} · Captures ${st.stats.captures} · Photos ${st.stats.photos}</div></div>`,
     options: [
@@ -249,16 +254,20 @@ async function pauseMenu() {
       { label: `City feed videos: ${settings.cityFeed ? 'ON' : 'OFF'}`, note: 'Clips in the minimap corner', value: 'f' },
       { label: `Hero: ${HERO_SKIN_LABELS[settings.hero]}`, note: settings.hero === HERO_SKIN ? 'Supergirl / Classic / Ponytail costume' : 'Reload the page to change costume', value: 'v' },
       { label: 'How to play', value: 'h' },
+      ...(perfOn() ? [{ label: 'Diagnostics', note: 'Session log to copy for the director', value: 'd' }] : []),
       ...(inMission ? [{ label: 'Abort mission', note: '−3 reputation', value: 'a', cls: 'bad' }] : []),
       ...(game.modeName === 'overworld' ? [{ label: 'Save & quit to title', value: 'q' }] : []),
     ],
   });
+  longPressDiagnostics(document.querySelector('#modal-root .modal-back:last-child h2'), game); // (hidden way in without ?perf=1)
+  const v = await menu;
   if (v === 's') { sfx.toggle(); return pauseMenu(); }
   if (v === 'c') { comic.toggle(); return pauseMenu(); }
   if (v === 'g') { settings.cycleGraphics(); return pauseMenu(); }
   if (v === 'f') { if (!settings.toggleCityFeed()) game.overworld.feed.stop(); return pauseMenu(); }
   if (v === 'v') { settings.cycleHero(); return pauseMenu(); }
   if (v === 'h') { await dialog({ title: 'How to play', text: HOWTO }); return pauseMenu(); }
+  if (v === 'd') { await showDiagnostics(game); return pauseMenu(); }
   if (v === 'a' && game.mode.abort) game.mode.abort();
   if (v === 'q') { st.save(); showTitle(); }
 }
@@ -364,9 +373,9 @@ function frame(now) {
         hudT -= dt;
         if (hudT <= 0) { hudT = 0.1; updateHUD(); }
       }
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); note('error', `${game.modeName}: ${e && e.message}`); }
   }
-  perfHud(realDt, game, settings.graphicsLabel); // ?perf=1 only
+  perfHud(realDt, game, settings.graphicsLabel, performance.now() - now); // (+ the session log, diag.js)
   game.input.endFrame();
   requestAnimationFrame(frame);
 }
@@ -374,8 +383,12 @@ function frame(now) {
 if (game.h > game.w) $('rotate-hint').textContent = 'Tip: rotate your phone to landscape for the best experience.';
 showTitle();
 requestAnimationFrame(frame);
+setInfo('ios', IOS); setInfo('dpr', devicePixelRatio); setInfo('screen', `${innerWidth}x${innerHeight}`); setInfo('profile', settings.graphicsLabel);
 // iOS killed the last visit for memory (it reloads the tab): lighter graphics from here on, once
-if (crashedLastTime() && settings.afterCrash()) setTimeout(() => toast('The browser ran out of memory last time, so graphics are now on Battery saver. You can change this in the pause menu.', 'info'), 1500);
+if (crashedLastTime() && settings.afterCrash()) {
+  setInfo('afterCrash', true);
+  setTimeout(() => toast('The browser ran out of memory last time, so graphics are now on Battery saver. You can change this in the pause menu.', 'info'), 1500);
+}
 
 // Periodic autosave.
 setInterval(() => { if (game.state && !game.title) game.state.save(); }, 10000);

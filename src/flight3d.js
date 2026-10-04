@@ -18,6 +18,7 @@ import { quality } from './settings.js';
 import { lerp } from './util.js';
 import { sfx } from './sfx.js';
 import { hasWebGL } from './gfx.js';
+import { note } from './diag.js';
 import { releaseOffscreen } from './offscreen3d.js';
 
 /**
@@ -284,8 +285,10 @@ export class Flight3D {
     // the canvas keeps a crisp output density (her pass + the overlay), the scene renders at
     // cap × dynamic scale into its own target
     const out = Math.min(devicePixelRatio, this.outQ || quality().fly3dOut || 1);
-    if (out !== this.dpr) { this.dpr = out; this.renderer.setPixelRatio(out); this.renderer.setSize(this.g.w, this.g.h, false); }
+    // (a window resize re-sizes the shared renderer at the zones' ratio: put the flight's back)
+    if (out !== this.dpr || this.renderer.getPixelRatio() !== out) { this.dpr = out; this.renderer.setPixelRatio(out); this.renderer.setSize(this.g.w, this.g.h, false); }
     this.sceneScale = Math.min(1, (Math.min(devicePixelRatio, caps[this.canyon ? 1 : 0]) * k) / out);
+    this.post.maxScale = Math.min(1, Math.min(devicePixelRatio, Math.max(caps[0], caps[1])) / out); // (its targets are sized for this once)
   }
 
   /** How close a tower face is on her left / right (0..1), for the wall-rush lines. */
@@ -319,12 +322,23 @@ export class Flight3D {
     this.hero.update(h, dt, ow.t, !!ow.diving, ground, this.cam.patrolK, boosting);
     const solid = (x, y, z) => { const o = ow.buildingAt(x, y); return !!o && z < this.heightOf(o); };
     this.cam.update(h, dt, frac, { patrol, boosting, diving: !!ow.diving, canyon: this.canyon ? 1 - h.hover : 0 }, solid);
+    // a NaN anywhere in her state or the camera draws nothing at all (a black frame): log it, put
+    // her back where she last was and re-place the camera
+    const cp = this.cam.cam.position;
+    if (Number.isFinite(cp.x + cp.y + cp.z + h.x + h.y + h.z)) this.good = this.good ? this.good.set(h.x, h.y, h.z) : new THREE.Vector3(h.x, h.y, h.z);
+    else {
+      note('nan', `hero ${h.x},${h.y},${h.z} cam ${cp.x},${cp.y},${cp.z}`);
+      if (this.good) { h.x = this.good.x; h.y = this.good.y; h.z = this.good.z; }
+      if (!Number.isFinite(h.speed + h.ang)) { h.speed = 0; h.ang = 0; }
+      this.cam.placed = false; this.cam.yaw = null;
+      this.cam.update(h, dt, frac, { patrol, boosting, diving: !!ow.diving, canyon: 0 }, solid);
+    }
     RIM.value = lerp(RIM_K[0], RIM_K[1], this.cam.canyonK); // a brighter rim against the dark canyon walls
     this.fill.position.copy(this.cam.cam.position); this.fill.target.position.copy(this.hero.group.position);
     const fogFar = LOOK3.fog[band] || 1600;
     _v.copy(this.hero.group.position).project(this.cam.cam); _uv.set(_v.x, _v.y);
     this.sky.update(clock, night, D?.map, this.cam.cam.position, fogFar, this.cam.patrolK, this.cam.cam.position.distanceTo(this.hero.group.position), Math.max(this.cam.highK || 0, this.cam.patrolK), _uv);
-    this.city3.update(this.cam.cam, { far: fogFar, near: Math.min(700, fogFar * 0.5), night, frame: this.frame });
+    this.city3.update(this.cam.cam, { far: fogFar, near: Math.min(700, fogFar * 0.5), night, renderer: this.renderer });
     this.syncBeams(ow.t);
     this.fx3.update(dt, this.hero, h, frac, boosting, this.cam.cam, ow.fx.rings.length);
     // render
