@@ -170,6 +170,7 @@ ${HAZE_GLSL}
 // per-face values are flat: exact (they seed hashes) and cheaper than interpolating
 varying vec2 vUv; flat varying vec3 vCol; flat varying vec3 vLit; flat varying vec3 vN; varying vec3 vW;
 flat varying float vStyle; flat varying float vKind; varying float vHb;
+float gShine = 0.; // facade(): the near glass glint (out-of-band result)
 // (sin-free: cheaper than the usual fract(sin()) where it runs on every lit wall pixel)
 float h12(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
 // A periodic pulse (fract(x) in [a, b]) box-filtered over the pixel's footprint w: exact coverage at
@@ -219,6 +220,9 @@ vec4 facade(vec2 c, vec2 w, float style, float seed) {
     float f2 = max(pulse(c.x, 15. / 32., 17. / 32., w.x), pulse(c.y, tr - 0.5 / 32., tr + 0.5 / 32., w.y)); // mullion, transom
     wall = mix(wall, wl, k); fr = mix(fr, f2, k);
     rec = pulse(c.y, 1. - m.y - 2. / 32., 1. - m.y, w.y) * wx * k;                                         // recess under the lintel
+    // big panes up close: a comic glint, one diagonal stroke across each pane (by day), so a
+    // magnified curtain wall reads as glass, not a blown-up grid
+    if (uNight < 0.6) gShine = pulse(c.x * 0.7 + c.y * 0.45, 0.62, 0.7, (w.x * 0.7 + w.y * 0.45)) * (1. - fr) * k * (1. - uNight / 0.6);
   }
 #endif
   // lit: each floor has its own activity (dark, a few windows, busy), each window its own chance
@@ -294,7 +298,7 @@ void main() {
       // (in the shade the glass dims and leans to the wall's own paint: a shaded face is the same
       // tower in shadow, not a dark blue panel)
       glass = mix(glass * mix(0.5, 1., litK), wall * 0.55, (1. - litK) * 0.35 * (1. - uNight));
-      col = mix(wall, glass, m.g);
+      col = mix(wall, glass + (uSky * 0.6 + 0.25) * gShine * (0.4 + 0.6 * litK), m.g);
       col *= mix(0.42, 1., smoothstep(0., 45., vW.y)); // canyon floors are darker
       // contact shade: the foot of every wall darkens where it meets the ground, a setback's roof
       // or the roof under a box (cheap AO: the height above the part's own base, per vertex)

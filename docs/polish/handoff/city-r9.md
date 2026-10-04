@@ -30,9 +30,14 @@ Files: city3d, buildings3d, blocks3d, skyline3d, ground3d, river3d, street3d, la
   and cornice rings at dusk). Roof board backs mid-grey sheet metal (pair 1's black box).
 - River: quay band outside the water (ribbon + basin), river-block parks with lawn stripes,
   promenade loop + diagonal paths, a round plaza.
+- Near glass: a diagonal comic glint per pane by day (magnified curtain walls read as glass).
 
 ## In progress / next
-- Bench (frozen-frame round robin, scratchpad bench.js) vs r7/base; fix whatever costs.
+- Perf: frozen-frame round robin (scratchpad bench.js = flyab with a 12 s settle at high + frozen
+  sim) h6 vs r7: skim 0.97, cruise 0.955, high 0.93 (base 0.93 / 1.00 / 0.925). Frozen-frame toggles
+  at high: hero pass ~29% (r7 22%: Supergirl side), outer boroughs 8%, dome 5%. Testing which of
+  my shader adds cost at cruise (halo, facade detail, air gradient: scratchpad vhalo/vdet/vair).
+- Then merge phase-2, final shots (r9city), report.
 
 ## Shots / perf
 - Base shots: scratchpad `base/shots/base/flying` (8a9918f). Tools in scratchpad: quick.js,
