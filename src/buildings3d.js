@@ -185,7 +185,7 @@ float pulse(float x, float a, float b, float w) { return (P1(x + 0.5 * w, a, b) 
  * floor slabs, mullion + transom, lintel recess and sill (near only). Lit windows: per floor (dark,
  * fully lit late-office floors, or runs) and per window, from a hash; once a window is under ~2 px
  * they fade to the style's mean (a solid lit tint, no sparkle). Returns (wall shade, glass, lit),
- * like the old atlas masks, + the lit windows' halo on the wall (night glow).
+ * like the old atlas masks, + the lit windows' wash on the wall (night glow).
  */
 vec4 facade(vec2 c, vec2 w, float style, float seed) {
   w = max(w, vec2(1e-3));
@@ -201,13 +201,14 @@ vec4 facade(vec2 c, vec2 w, float style, float seed) {
   vec4 L = style == 0. ? vec4(7., 7., 0.86, 0.6) : style == 1. ? vec4(1., 2., 0.7, 0.35) : style == 2. ? vec4(8., 8., 0.8, 0.55) : vec4(9., 4., 0.62, 0.55);
   vec2 m = L.xy / 32.;
   float wx = pulse(c.x, m.x, 1. - m.x, w.x), wy = pulse(c.y, m.y, 1. - m.y, w.y), win = wx * wy;
-  float slab = pulse(c.y, 0., 3. / 32., w.y);
+  // the floor slab under each window row: its average once a floor is under ~3 px
+  float slab = w.y > 0.35 ? 3. / 32. : pulse(c.y, 0., 3. / 32., w.y);
   float wall = mix(L.z, L.z * 0.72, slab);
   if (style == 3.) wall = mix(wall, 1., pulse(c.x + 4. / 32., 0., 10. / 32., w.x) * (1. - win)); // deco piers
   float fr = 0.08, rec = 0.; // (the frames' average share, once a window is a few pixels)
 #ifndef FAR
-  // the small features only while a window is ~4 px or more (past that they'd be their averages)
-  float k = 1. - smoothstep(0.2, 0.3, max(w.x, w.y));
+  // the small features only while a window is ~6 px or more (past that they'd be their averages)
+  float k = 1. - smoothstep(0.12, 0.2, max(w.x, w.y));
   if (k > 0.) {
     float wl = wall;
     if (style == 2.) {
@@ -230,17 +231,13 @@ vec4 facade(vec2 c, vec2 w, float style, float seed) {
   float lit = (0.08 + 0.62 / 3.) * (0.6 + 0.8 * L.w) * 0.8, fade = smoothstep(0.25, 0.6, max(w.x, w.y)); // (the mean)
   if (uLit > 0. && fade < 1.) { // (only lit windows care: skipped by day)
     vec2 id = floor(c);
-    float hf = h12(vec2(id.y, seed)), p = (0.08 + 0.62 * hf * hf) * (0.6 + 0.8 * L.w);
-    lit = mix(step(h12(id.yx + seed * 3.17), p) * (0.6 + 0.4 * h12(id + seed * 7.31)), lit, fade);
+    float hf = h12(vec2(id.y, seed)), p = (0.08 + 0.62 * hf * hf) * (0.6 + 0.8 * L.w), r = h12(id.yx + seed * 3.17);
+    lit = mix(step(r, p) * (0.6 + 0.4 * fract(r * 37.1)), lit, fade);
   }
-  float glass = max(0., win * (1. - fr) - rec * 0.45), halo = 0.;
-#ifndef FAR
-  // night glow: a lit window spills onto the wall round it (a soft halo inside its own cell); far
-  // off it only brightens the lit tint (below)
-  if (uLit > 0. && k > 0.) halo = mix(0.25, max(0., pulse(c.x, m.x * 0.3, 1. - m.x * 0.3, w.x) * pulse(c.y, m.y * 0.35, 1. - m.y * 0.35, w.y) - win), k);
-  else halo = 0.25; // (its average share)
-#endif
-  return vec4(wall * (1. - win) + win * mix(0.25, 0.45, fr), glass, lit * glass, lit * halo);
+  float glass = max(0., win * (1. - fr) - rec * 0.45);
+  // night glow: a lit window washes its own cell's wall with a little of its light (cheap: no
+  // extra shape, the cell is the window's); far off it simply brightens the lit tint
+  return vec4(wall * (1. - win) + win * mix(0.25, 0.45, fr), glass, lit * glass, lit * (1. - win));
 }
 void main() {
   float dist = length(vW - cameraPosition);
@@ -303,11 +300,7 @@ void main() {
       // contact shade: the foot of every wall darkens where it meets the ground, a setback's roof
       // or the roof under a box (cheap AO: the height above the part's own base, per vertex)
       col *= 1. - AO.x * exp(-vHb / AO.y) * (1. - 0.4 * uNight) * step(abs(N.y), 0.5);
-#ifdef FAR
-      emi = vLit * m.b * 1.35 * uLit;
-#else
-      emi = vLit * (m.b * 1.1 + m.a * 0.4) * uLit;
-#endif
+      emi = vLit * (m.b * 1.15 + m.a * 0.12) * uLit;
       // night rim: a cool sky-lit edge on faces turning away from her (the silhouette reads)
       emi += uSky * 0.45 * uNight * smoothstep(0.55, 0.85, fres) * (1. - m.g * 0.5);
     }
