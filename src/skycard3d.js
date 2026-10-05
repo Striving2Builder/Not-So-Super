@@ -3,6 +3,8 @@
 // base sits on the horizon and only the tops break it (a cardboard wall rising above the horizon
 // read as a fishbowl); its base melts into the horizon colour, its body is a shade of the haze.
 import * as THREE from 'three';
+import { HAZE_GLSL } from './buildings3d.js';
+import { hazeU } from './skyline3d.js';
 
 const CARD = { segs: 64, repeat: 4, below: 0.012, above: 0.026, r: [2600, 4300], minEye: 100 }; // below/above: of the radius
 
@@ -51,7 +53,8 @@ export class SkyCard {
     geo.translate(0, 0.5, 0);
     const uv = geo.attributes.uv;
     for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * CARD.repeat);
-    this.U = { map: { value: silhouettes() }, uHazeCol: U.uHazeCol, uHorizon: U.uHorizon, uInk: U.uInk };
+    this.tex = silhouettes();
+    this.U = { map: { value: this.tex }, uHazeCol: U.uHazeCol, uHorizon: U.uHorizon, uInk: U.uInk };
     this.mesh = new THREE.Mesh(geo, new THREE.ShaderMaterial({
       uniforms: this.U, side: THREE.BackSide, depthWrite: false, transparent: true, // blended, no discard: early depth rejection stays on
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
@@ -84,5 +87,84 @@ void main() {
     const R = Math.min(CARD.r[1], Math.max(CARD.r[0], hazeFar * 1.02));
     this.mesh.position.set(cam.position.x, cam.position.y - R * CARD.below, cam.position.z);
     this.mesh.scale.set(R, R * (CARD.below + CARD.above), R);
+  }
+}
+
+/**
+ * The far ring: a cylinder from the ground up to eye level, RING.r out, riding with the camera. It
+ * stands in for all the ground past it (the camera's far plane ends at 4.5 km): each ray's air
+ * (the ground haze grading up into the horizon colour, the same airAt() as the city's haze) and four
+ * layers of borough silhouettes standing on the ground at virtual distances past the ring, on land
+ * only (the bay stays open water, the islands get theirs), inked, with lit window clusters at
+ * night. From high patrol it fills the band between the last real block and the horizon that was
+ * one flat pale plate. One draw, one texture fetch per layer, early-z behind the city.
+ * layers: [distance × r, tallest (m), how far the silhouette darkens off the air, texture repeat].
+ */
+const RING = { r: 4300, segs: 48, minEye: 80, layers: [[1.12, 110, 0.42, 7], [1.45, 150, 0.36, 5], [1.95, 200, 0.29, 4], [2.8, 260, 0.22, 3]], win: [14, 9], dip: [0.03, 0.07] }; // win: lit cluster cell (m); dip: ray slopes the layers fade out over
+
+function ringLayer([k, hm, dk, rep], i) {
+  return `  {
+    // layer ${i}: the ray's height where it passes ${k} x the ring's radius out
+    float D = ${(k * RING.r).toFixed(1)}, y = cameraPosition.y + slope * D;
+    if (y > 0. && y < ${hm.toFixed(1)} && land(cameraPosition.xz + ray.xz / hl * D)) {
+      vec3 m = textureLod(map, vec2(az * ${rep}. + ${(i * 0.37).toFixed(2)}, y / ${hm.toFixed(1)}), 0.).rgb;
+      if (${i % 2 ? 'm.r' : 'm.g'} > 0.5) {
+        vec3 s = mix(c, uHazeLow * 0.6, ${dk.toFixed(2)} * mix(0.7, 1., uNight)); // (softer by day: rows of teeth otherwise)
+        s = mix(s, uInk, m.b * ${(dk * 0.5).toFixed(2)});
+        // lit window clusters at night: a few warm specks per tower, dimmer on the far layer
+        vec2 cell = floor(vec2(az * 6.2832 * D / ${RING.win[0]}., y / ${RING.win[1]}.));
+        s += vec3(1., 0.72, 0.42) * step(h12(cell + ${i}.), 0.11) * uLit * uLit * ${(0.5 - i * 0.08).toFixed(2)};
+        // grounded: the base melts into the ground haze, and a layer seen well below the horizon
+        // (from high patrol) fades out: darker than the hazed city in front of it, it read as
+        // a strip of skyline floating in the fog
+        c = mix(c, s, smoothstep(0., ${(hm * 0.35).toFixed(1)}, y) * (1. - smoothstep(${RING.dip[0]}, ${RING.dip[1]}, -slope)));
+      }
+    }
+  }`;
+}
+
+export class FarRing {
+  /** tex: the skyline card's silhouette mask (R back, G front, B ink); coast: the bay's west shore x (m); islands: [[cx, cz, rx, rz]]. */
+  constructor(scene, U, tex, coast, islands) {
+    const geo = new THREE.CylinderGeometry(1, 1, 1, RING.segs, 1, true);
+    geo.translate(0, 0.5, 0);
+    const I = islands.slice(0, 2).map(([x, z, rx, rz]) => new THREE.Vector4(x, z, rx, rz));
+    while (I.length < 2) I.push(new THREE.Vector4(0, 0, 1e-3, 1e-3));
+    this.mesh = new THREE.Mesh(geo, new THREE.ShaderMaterial({
+      uniforms: { map: { value: tex }, uInk: U.uInk, uNight: U.uNight, uLit: U.uLit, uCoast: { value: coast }, uIsle: { value: I }, ...hazeU(U) },
+      side: THREE.BackSide,
+      vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+      fragmentShader: /* glsl */`
+uniform sampler2D map; uniform vec3 uInk; uniform float uNight; uniform float uLit; uniform float uCoast; uniform vec4 uIsle[2];
+${HAZE_GLSL}
+varying vec3 vW;
+float h12(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+bool land(vec2 p) {
+  if (p.x < uCoast) return true;
+  for (int i = 0; i < 2; i++) { vec2 q = (p - uIsle[i].xy) / uIsle[i].zw; if (dot(q, q) < 0.8) return true; }
+  return false;
+}
+void main() {
+  vec3 ray = vW - cameraPosition;
+  gRay = normalize(ray);
+  float hl = max(length(ray.xz), 1.), slope = ray.y / hl;
+  vec3 c = airAt(1., clamp(-ray.y / length(ray), 0., 1.));
+  float az = atan(ray.z, ray.x) / 6.2832 + 0.5;
+  if (-slope < ${RING.dip[1]}) { // (steeper rays: every layer has faded out)
+${RING.layers.map(ringLayer).reverse().join('\n')}
+  }
+  gl_FragColor = vec4(c, 1.);
+}`,
+    }));
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 1; // after the city: early depth rejection leaves only the pixels it shows
+    scene.add(this.mesh);
+  }
+
+  update(cam) {
+    const y = cam.position.y;
+    this.mesh.visible = y > RING.minEye;
+    this.mesh.position.set(cam.position.x, 0, cam.position.z);
+    this.mesh.scale.set(RING.r, y, RING.r);
   }
 }

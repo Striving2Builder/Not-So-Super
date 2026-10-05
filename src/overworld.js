@@ -32,6 +32,8 @@ const TILT = 0.2;    // oblique view: perspective centre sits this fraction of t
 const PERCH_EVERY = 40; // seconds between super-hearing reveals
 const ALT = BANDS[CRUISE_BAND].z; // cruising altitude (single source: flight.js)
 const DIVE_T = 1.1;
+/** The 3D dive's path: f (0..1 of DIVE_T) by which she's over the spot / down to it; units above its street or roof. */
+const DIVE = { xyBy: 0.72, downBy: 0.82, above: 8 };
 const NEAR_R = 130;
 const PRELOAD_R = 1600; // start downloading a club's building when she's this close to its zone
 const TARGET = { street: 5, case: 2, special: 2 };
@@ -397,6 +399,8 @@ export class Overworld {
       });
     } else if (night) {
       Object.assign(z, nightCaseFields());
+      // the detective clubs play their own cases (Super Squirt for now; blackmail and others to come)
+      if (this.g.newClubs) Object.assign(z, { theme: 'drugs', clubCase: 'squirt', name: `Super Squirt at ${/^The /.test(z.venue) ? z.venue : 'the ' + z.venue}`, risk: 'Night · Super Squirt', blurb: 'Someone is pushing a new drug, Super Squirt, through the club. Find out who, and where it comes from.' });
     } else if (kind === 'case') {
       Object.assign(z, {
         mode: 'investigate', def, name: def.name, reward: def.reward, lockKey: 'Investigations', ttl: rand(160, 230),
@@ -418,10 +422,27 @@ export class Overworld {
 
   removeZone(z) { this.zones = this.zones.filter((q) => q !== z); }
 
+  /** Case leads (a solved club case's distribution points) stay on the map until they're won. */
+  ensureLeads() {
+    const st = this.g.state;
+    if (!st || !st.leads || !st.leads.length || this.attract) return;
+    for (const L of st.leads) if (!this.zones.some((z) => z.leadId === L.id)) this.spawnLead(L);
+  }
+
+  spawnLead(L) {
+    const z = this.spawn(L.kind, true, L.venue || undefined);
+    if (!z) return;
+    // the first time it's placed, its spot is saved so it's in the same place after a reload
+    if (L.x != null) { z.x = L.x; z.y = L.y; z.district = L.district; } else { L.x = z.x; L.y = z.y; L.district = z.district; this.g.state.save(); }
+    Object.assign(z, { name: L.name, reward: L.reward, ttl: Infinity, color: '#39ff6a', glyph: '$', risk: 'Case lead', blurb: L.blurb, leadId: L.id, lockKey: 'Case leads' });
+    if (L.theme) z.theme = L.theme;
+  }
+
   // ------------------------------------------------------------------ update
   update(dt) {
     this.t += dt;
     const g = this.g, h = this.hero, st = g.state, inp = g.input, city = g.city;
+    if ((this.leadT = (this.leadT || 0) - dt) <= 0) { this.leadT = 1; this.ensureLeads(); }
     city.updateTraffic(dt);
     this.updateParticles(dt);
 
@@ -433,8 +454,18 @@ export class Overworld {
       const f = Math.min(1, d.t / DIVE_T), e = easeInOut(f);
       const a = inp.axis();
       d.ox = clamp((d.ox || 0) + a.x * 160 * dt, -80, 80); d.oy = clamp((d.oy || 0) + a.y * 160 * dt, -80, 80);
-      h.x = lerp(d.sx, d.z.x + d.ox * (1 - f * 0.3), e); h.y = lerp(d.sy, d.z.y + d.oy * (1 - f * 0.3), e);
-      h.z = lerp(d.z0, 30, f * f);
+      if (this.view3d) {
+        // 3D: over the spot by ~800 ms and down to just above its street or roof by ~900 ms, so
+        // the ground rushes up and fills the frame before the THUD (never through a tower on the way)
+        if (d.gz === undefined) { const b = this.buildingAt(d.z.x, d.z.y); d.gz = b ? this.hOf(b) : 0; }
+        const ex = easeInOut(Math.min(1, f / DIVE.xyBy)), ez = easeInOut(Math.min(1, f / DIVE.downBy));
+        h.x = lerp(d.sx, d.z.x + d.ox * (1 - f * 0.3), ex); h.y = lerp(d.sy, d.z.y + d.oy * (1 - f * 0.3), ex);
+        const under = this.buildingAt(h.x, h.y);
+        h.z = Math.max(lerp(d.z0, d.gz + DIVE.above, ez), under ? this.hOf(under) + DIVE.above : 0);
+      } else {
+        h.x = lerp(d.sx, d.z.x + d.ox * (1 - f * 0.3), e); h.y = lerp(d.sy, d.z.y + d.oy * (1 - f * 0.3), e);
+        h.z = lerp(d.z0, 30, f * f);
+      }
       this.zoom = lerp(d.zoom0, 1.6, e);
       this.camH = h.z + camAbove(h.z);
       this.cam.x = h.x; this.cam.y = h.y - this.tiltOffset();
@@ -619,7 +650,7 @@ export class Overworld {
       const d = club ? dist(z.x, z.y, h.x, h.y) : Infinity;
       if (d < best) { best = d; this.preloadKey = club; }
     }
-    if (this.preloadKey) preloadClub(this.preloadKey);
+    if (this.preloadKey && !this.g.newClubs) preloadClub(this.preloadKey);
   }
 
   tryDive() {
@@ -632,7 +663,7 @@ export class Overworld {
     if (this.nav.target && this.nav.target.ref === z) this.nav.clear(); // reached it
     this.hero.perch = null;
     this.g.commentary.onDive(z); // spinning-emblem transition + sting
-    if (VENUES[z.venue]?.club) loadClub(VENUES[z.venue].club); // start loading the building during the dive
+    if (VENUES[z.venue]?.club && !this.g.newClubs) loadClub(VENUES[z.venue].club); // start loading the building during the dive
   }
 
   updatePrompt() {
@@ -646,7 +677,7 @@ export class Overworld {
     const key = document.body.classList.contains('touch') ? 'DIVE' : 'SPACE';
     const html = lock
       ? `🔒 <b>${z.name}</b> — locked by your deal for ${fmtTime(lock)}`
-      : `<b>${key}</b> to dive: <b>${z.name}</b> · ${DISTRICTS[z.district].name}<span class="risk" style="background:${rc}33;color:${rc}">${z.risk}</span><br><small>${z.blurb || ''} Reward +${z.reward} · ${fmtTime(z.ttl - z.t)} left</small>`;
+      : `<b>${key}</b> to dive: <b>${z.name}</b> · ${DISTRICTS[z.district].name}<span class="risk" style="background:${rc}33;color:${rc}">${z.risk}</span><br><small>${z.blurb || ''} Reward +${z.reward} · ${z.leadId ? 'Case lead' : `${fmtTime(z.ttl - z.t)} left`}</small>`;
     if (el._html !== html) { el.innerHTML = html; el._html = html; }
     el.classList.add('on');
   }
@@ -1019,7 +1050,10 @@ export class Overworld {
     const hs = this.heroScreen || { x: this.g.w / 2, y: this.g.h / 2 };
     if (!d.impact) { diveFx.plunge(Math.min(1, d.t / DIVE_T), hs.x, hs.y); return; }
     d.fired = true; this.fx.setRush(0);
-    diveFx.impact(hs.x, hs.y, () => this.g.startZone(d.z));
+    // the shockwave, dust and cracks go on the ground under her, not round her in the air
+    let gy = null;
+    if (this.view3d && d.gz !== undefined) { const p = this.view3d.projector().proj(this.hero.x, this.hero.y, d.gz); if (p[2]) gy = p[1]; }
+    diveFx.impact(hs.x, hs.y, () => this.g.startZone(d.z), gy);
   }
 
   drawIcon(ctx, x, y, r, z, locked, near) {

@@ -102,12 +102,14 @@ export function signQuad(B, S, word, colour, x0, z0, x1, z1, f, y, h, { along = 
   if (back) {
     const k = 0.25, bn = [-n[0], -n[1], -n[2]], d = [-n[0] * k, 0, -n[2] * k];
     const Q = P.map((p) => [p[0] + d[0], p[1], p[2] + d[2]]);
-    B.quad(Q[1], Q[0], Q[3], Q[2], bn, [[0.5, 0.5], [0.5, 0.5], [0.5, 0.5], [0.5, 0.5]], BACK, BACK, 6);
+    B.quad(Q[1], Q[0], Q[3], Q[2], bn, [[0.5, 0.5], [0.5, 0.5], [0.5, 0.5], [0.5, 0.5]], BACK, BACK, 5);
   }
   for (let i = 0; i < 4; i++) B.ink(P[i], P[(i + 1) % 4], 0.8);
   return h;
 }
-const BACK = new THREE.Color('#2a2630');
+// a mid-grey sheet-metal back, lit like any wall (a near-black tar back read as a big black box
+// standing on the roof at night, right behind her in the rooftop-skim shots)
+const BACK = new THREE.Color('#9a96a0');
 
 /** An upright blade sign sticking out from a corner of face `f`, readable from both sides. */
 export function bladeSign(B, S, word, colour, x0, z0, x1, z1, f, y, h) {

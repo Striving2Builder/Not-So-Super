@@ -143,7 +143,7 @@ export class Investigate {
     this.xray = on;
     this.g.input.setButton('xray', { toggled: on });
     $('xray-tint').classList.remove('on'); // detective vision is painted by the scene itself
-    if (on) sfx.beam();
+    if (on) sfx.xray();
   }
 
   toLogical(x, y) {

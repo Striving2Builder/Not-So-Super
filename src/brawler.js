@@ -20,6 +20,12 @@ import { fxDraw } from './brawlfx.js';
 // Zone loading: per-frame bake budget (ms), the longest the card may stay up, and how long to wait
 // for crook models that are still downloading before fighting the procedural stand-ins.
 const LOAD = { stepMs: 40, maxMs: 6000, modelWaitMs: 2500 };
+// Camera and fight arenas. The player walks the street herself (no camera push): the camera holds
+// still while she moves inside a window left of centre (so the static set stays one cached layer)
+// and scrolls only when she leaves it. A fight pins an arena (world units, half-width at least one
+// phone screen) around the crew; she and the crooks share its bounds, so nobody can hide past the
+// edge of reach (a gunman parked off screen used to stall the fight: robbery/kidnap/heist/mob).
+const CAM = { winL: 0.5, winR: 0.05, ease: 6, edge: 30, arenaHalf: 270 };
 
 export class Brawler {
   constructor(g) { this.g = g; }
@@ -170,7 +176,7 @@ export class Brawler {
     if (this.slow > 0) { this.slow -= dt; dt *= 0.35; }
     this.t += dt;
     this.shake = Math.max(0, this.shake - dt * 30);
-    const p = this.p, vh = this.viewHalf;
+    const p = this.p;
 
     // camera & wave locks
     for (const w of this.waves) {
@@ -205,9 +211,7 @@ export class Brawler {
         this.g.commentary.heroQuip(s.x, s.y);
       }
     }
-    const camTarget = this.lock ? clamp(this.lock.x + 80, vh, this.len - vh) : clamp(p.x + 110, vh, this.len - vh);
-    this.cam += (camTarget - this.cam) * Math.min(1, dt * 4);
-    if (!this.camInit) { this.cam = camTarget; this.camInit = true; }
+    this.updateCam(dt);
     this.goT = Math.max(0, (this.goT || 0) - dt);
 
     this.updatePlayer(dt);
@@ -225,6 +229,33 @@ export class Brawler {
     if (this.objectivesDone() && p.x > this.len - 180) return this.finish(true);
   }
 
+  /** World x range she (and, in a fight, the crooks) can stand in: the fight's arena or the street. */
+  bounds() {
+    if (!this.lock) return [40, this.len - 40];
+    const h = Math.max(this.viewHalf, CAM.arenaHalf), c = clamp(this.lock.x + 80, h, this.len - h);
+    return [c - h + CAM.edge, c + h - CAM.edge];
+  }
+
+  /**
+   * Window camera: holds still while she's inside [cam − winL·vh, cam − winR·vh] (a little left of
+   * centre, so the street ahead shows), eases after her when she leaves it, and never lets her reach
+   * the screen edge. In a fight it stays inside the arena.
+   */
+  updateCam(dt) {
+    const p = this.p, vh = this.viewHalf;
+    let lo = vh, hi = this.len - vh;
+    if (this.lock) { const [a, b] = this.bounds(); lo = Math.max(lo, a - CAM.edge + vh); hi = Math.min(hi, b + CAM.edge - vh); if (lo > hi) lo = hi = (lo + hi) / 2; }
+    let tgt = this.cam;
+    if (p.x > this.cam - CAM.winR * vh) tgt = p.x + CAM.winR * vh;
+    else if (p.x < this.cam - CAM.winL * vh) tgt = p.x + CAM.winL * vh;
+    tgt = clamp(tgt, lo, hi);
+    if (!this.camInit) { this.cam = tgt; this.camInit = true; }
+    const d = tgt - this.cam;
+    this.cam = Math.abs(d) < 0.3 ? tgt : this.cam + d * Math.min(1, dt * CAM.ease);
+    // she always stays on screen (the arena clamp above keeps this consistent in a fight)
+    this.cam = clamp(this.cam, p.x - vh + CAM.edge - 6, p.x + vh - CAM.edge + 6);
+  }
+
   tickFx(dt) {
     for (const f of this.fx) {
       f.t += dt; f.x += (f.vx || 0) * dt; f.y += (f.vy || 0) * dt;
@@ -235,7 +266,7 @@ export class Brawler {
   }
 
   updatePlayer(dt) {
-    const p = this.p, inp = this.g.input, vh = this.viewHalf;
+    const p = this.p, inp = this.g.input;
     p.st_t += dt;
     p.inv = Math.max(0, p.inv - dt);
     const grounded = p.y <= 0;
@@ -263,8 +294,8 @@ export class Brawler {
         p.st = nst;
       }
     }
-    // keep inside the camera view (and the level)
-    p.x = clamp(p.x, this.cam - vh + 30, Math.min(this.cam + vh - 30, this.len - 40));
+    // the street's ends, or the fight's arena (the camera follows her; it never pushes her)
+    { const [a, b] = this.bounds(); p.x = clamp(p.x, a, b); }
 
     // jump
     if (inp.pressed('jump') && grounded && !busy) { p.vy = 560; p.y = 0.01; sfx.whoosh(); this.dust(p.x, p.z, 3); }
@@ -299,7 +330,7 @@ export class Brawler {
           this.g.commentary.frost(s.x, s.y);
         }
         else toast('Not enough power', 'bad');
-      } else if (p.en >= 30) { this.aimSpecial(760); p.st = 'beam'; p.st_t = 0; p.en -= 30; p.hitSet.clear(); sfx.beam(); this.superMove('heat'); }
+      } else if (p.en >= 30) { this.aimSpecial(760); p.st = 'beam'; p.st_t = 0; p.en -= 30; p.hitSet.clear(); sfx.heat(); this.superMove('heat'); }
       else toast('Not enough power', 'bad');
     }
     if ((p.st === 'beam' || p.st === 'breath') && p.aimZ != null) p.z += (p.aimZ - p.z) * Math.min(1, dt * 14); // aim assist onto the lane of the pack
@@ -339,7 +370,8 @@ export class Brawler {
       }
       for (const e of this.enemies) {
         const dx = (e.x - p.x) * p.facing;
-        if (!e.dead && dx > 0 && dx < 280 && Math.abs(e.z - p.z) < 0.2 && e.st !== 'frozen') { e.st = 'frozen'; e.st_t = 0; }
+        // (not a crook that's down: freezing a KO'd one mid-fall cancelled his death, and he stood back up at hp ≤ 0 holding the wave open)
+        if (!e.dead && e.st !== 'down' && e.hp > 0 && dx > 0 && dx < 280 && Math.abs(e.z - p.z) < 0.2 && e.st !== 'frozen') { e.st = 'frozen'; e.st_t = 0; }
       }
       if (chance(0.9)) this.fx.push({ kind: 'frost', x: p.x + p.facing * 40, y: 82, z: p.z, vx: p.facing * rand(380, 540), vy: rand(-40, 30), t: 0, max: 0.55, r: rand(0.7, 1.3) });
       if (p.st_t > 0.9) p.st = 'idle';
@@ -504,7 +536,8 @@ export class Brawler {
 
   spawnEnemy(type, lk, wave, i) {
     const vh = this.viewHalf, side = i % 2 === 0 ? 1 : -1;
-    const cx = clamp(wave.x + 80, vh, this.len - vh);
+    // they arrive around what's on screen now (the camera follows her inside the arena)
+    const cx = this.cam, [a0, a1] = this.bounds();
     const def = { ...EN[type] };
     if (LOOKS[lk] && LOOKS[lk].name) def.name = LOOKS[lk].name;
     if (def.boss) def.name = (this.zone.boss || 'BOSS').toUpperCase();
@@ -513,16 +546,16 @@ export class Brawler {
     const e = {
       type, lk, hatCol: LOOKS[lk] && LOOKS[lk].hatCols ? pick(LOOKS[lk].hatCols) : null, def, look, wave, x: cx + side * (vh + 60 + (i % 4) * 40), z: tz, y: 0, vy: 0, vx: 0,
       hp: def.hp, max: def.hp, facing: -side, st: 'enter', st_t: 0, cd: rand(0.6, 1.5), dead: false,
-      phase: rand(0, 1), flash: 0, barT: 0, slot: wave.n % 3, zOff: ((wave.n % 4) - 1.5) * 0.18, entry: 'run', tx: cx + side * rand(120, vh - 60), tz,
+      phase: rand(0, 1), flash: 0, barT: 0, slot: wave.n % 3, zOff: ((wave.n % 4) - 1.5) * 0.18, entry: 'run', tx: clamp(cx + side * rand(120, Math.max(130, vh - 60)), a0, a1), tz, offT: 0,
     };
     wave.n++;
     // entrances: run in from the edge, drop from a fire escape, or step out of a doorway
     const roll = (i + wave.n) % 3;
     if (type !== 'boss' && roll === 1 && this.D.style !== 'farm') {
-      e.entry = 'drop'; e.x = cx + side * rand(60, vh - 80); e.y = 360; e.vy = 0;
+      e.entry = 'drop'; e.x = clamp(cx + side * rand(60, Math.max(70, vh - 80)), a0, a1); e.y = 360; e.vy = 0;
     } else if (type !== 'boss' && roll === 2) {
-      const d = this.stage.doorNear(cx + side * rand(0, vh - 80), vh * 0.8);
-      if (d != null) { e.entry = 'door'; e.x = d; e.z = 0.0; e.alpha = 0; }
+      const d = this.stage.doorNear(cx + side * rand(0, Math.max(10, vh - 80)), vh * 0.8);
+      if (d != null && d > a0 && d < a1) { e.entry = 'door'; e.x = d; e.z = 0.0; e.alpha = 0; }
     }
     this.enemies.push(e);
     if (type === 'boss') { $('boss-wrap').style.display = 'block'; $('boss-name').textContent = this.zone.boss; }
@@ -556,6 +589,7 @@ export class Brawler {
         }
       }
       if (!e.landed && Math.abs(e.vx) > 150) for (const b of this.breakables) if (!b.broken && Math.abs(b.x - e.x) < 30 && Math.abs(b.z - e.z) < 0.1) this.smash(b, Math.sign(e.vx));
+      this.keepReachable(e, 0);
       if (e.landed) {
         e.lieT += dt;
         if (e.lieT > (e.hp <= 0 ? 0.55 : 0.45)) {
@@ -576,7 +610,9 @@ export class Brawler {
       e.facing = Math.sign(dx) || 1;
       const engaged = this.enemies.filter((o) => !o.dead && (o.st === 'wind' || o.st === 'strike')).length;
       if (e.def.ranged) {
-        const want = 360;
+        // keep a shooting distance that stays on screen (a 4:3 iPad shows ~330 units of street);
+        // one that's been off screen a while closes in until the camera has him again
+        const want = e.offT > 2.5 ? 140 : Math.min(360, this.viewHalf * 1.1);
         const tx = p.x - Math.sign(dx || 1) * want;
         e.x += clamp(tx - e.x, -1, 1) * e.def.spd * dt * (Math.abs(tx - e.x) > 20 ? 1 : 0);
         e.z += clamp(p.z - e.z, -1, 1) * 0.45 * dt;
@@ -615,10 +651,23 @@ export class Brawler {
       if (!e.hit && Math.abs(p.x - e.x) < 60 && Math.abs(e.z - p.z) < DZ * 1.2 && p.y < 40) { e.hit = true; this.hurtPlayer(20, e.facing, true); }
       if (e.st_t > 1.2) { e.st = 'approach'; e.cd = 1.2; e.hit = false; }
     }
-    const vh = this.viewHalf;
-    if (this.lock) e.x = clamp(e.x, this.cam - vh - 80, this.cam + vh + 80);
+    this.keepReachable(e, dt);
     e.moving = Math.hypot(e.x - x0, (e.z - z0) * 300) > 30 * dt;
     if (e.moving) e.phase += dt * (e.def.spd > 140 ? e.def.spd / 125 : e.def.spd / 80);
+  }
+
+  /**
+   * Safety net against fights that can't end: once in, a crook of the current fight stays inside the
+   * arena she can walk (bodies knocked flying too), and one that has been off screen for 6 s
+   * (cornered behind the edge, stuck in a door…) walks back into view.
+   */
+  keepReachable(e, dt) {
+    if (!Number.isFinite(e.x) || !Number.isFinite(e.z)) { e.x = this.p.x + 120; e.z = 0.5; }
+    const [a, b] = this.lock && e.wave === this.lock ? this.bounds() : [20, this.len - 20];
+    e.x = clamp(e.x, a, b);
+    const vh = this.viewHalf, off = Math.abs(e.x - this.cam) > vh - 10;
+    e.offT = off ? (e.offT || 0) + dt : Math.max(0, (e.offT || 0) - dt * 2);
+    if (e.offT > 6 && e.st !== 'down') { e.x += clamp(this.cam - e.x, -1, 1) * Math.min(Math.abs(this.cam - e.x) - vh + 40, 200 * dt); }
   }
 
   /** Walk/drop/door entrances: they can't attack until they've arrived. */
@@ -733,7 +782,10 @@ export class Brawler {
     if (this.captives.length) rows.push([`Free the captives (${cc}/${this.captives.length})`, cc === this.captives.length]);
     if (this.fires.length) rows.push([`Put out the fires (${fc}/${this.fires.length})`, fc === this.fires.length]);
     const done = this.objectivesDone();
-    rows.push(['Head down the street →', false, !done]);
+    // someone still tied up (or a fire still burning) behind her, off screen: point back to them
+    const vh = this.viewHalf, left = (x) => x < this.cam - vh;
+    this.backHint = !this.lock && (this.captives.some((c) => !c.done && left(c.x)) || this.fires.some((f) => f.hp > 0 && left(f.x + f.w / 2)));
+    rows.push([this.backHint ? '← Someone still needs you back there' : 'Head down the street →', false, !done && !this.backHint]);
     const html = rows.map(([t, d, dim]) => `<div class="${d ? 'done' : dim ? '' : 'cur'}">${d ? '✓' : '•'} ${t}</div>`).join('');
     const el = $('objectives');
     if (el._h !== html) { el.innerHTML = html; el._h = html; }

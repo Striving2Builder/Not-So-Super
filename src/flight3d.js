@@ -59,6 +59,7 @@ const LOOK3 = {
   heroEllipse: [1.5, 1.25, 2.4], // her exclusion ellipse: × her screen radius (x, y); her radius in m (× her size) // on-screen incident icons: cap, merge radius (px), fade (m)
   iconPx: 26,
   patrolBelow: 150,             // speed under which high patrol cranes up to the overhead view
+  shadow: { lean: 1.8, steps: 14, refine: 4, wall: 3 }, // her drop shadow's light: metres ahead per metre down (a low light from behind her, so the shadow lands ahead of her in the chase view; straight down overhead); ray-march samples + bisection; a hit this far (units) below a roof edge is a wall: no shadow
   wallProbe: [10, 22],          // m to each side: a tower face this close rushes past (action lines)
   auto: { ahead: 260, step: 26, halfWidth: 24, turn: 0.22, tries: 6 }, // autopilot look-ahead (world units)
   dynRes: { slow: 1 / 50, fast: 1 / 58, min: 0.65, rate: 0.25, step: 0.05 }, // frame time (s) to drop below / climb above; scale floor
@@ -300,6 +301,27 @@ export class Flight3D {
     return out;
   }
 
+  /**
+   * Where her drop shadow lands (the altitude cue): a ray from her along a low light from behind her
+   * (LOOK3.shadow.lean; straight down in the patrol view), marched over the city's roofs and streets.
+   * Straight down it would sit far below the chase camera's frame; leaning, it lands ahead of her and
+   * slides in under her as she drops onto a roof. → { x, y, z } world units, or null (it hit a wall).
+   */
+  shadowSpot(h) {
+    const S = LOOK3.shadow, ow = this.ow, lean = S.lean * (1 - this.cam.patrolK) * (ow.diving ? 0 : 1);
+    const cx = Math.cos(h.ang) * lean, cy = Math.sin(h.ang) * lean;
+    const gnd = (d) => { const o = ow.buildingAt(h.x + cx * d, h.y + cy * d); return o ? this.heightOf(o) : 0; };
+    const out = this._spot || (this._spot = { x: 0, y: 0, z: 0 });
+    let a = 0, b = -1;
+    for (let i = 1; i <= S.steps; i++) { const d = (h.z * i) / S.steps; if (h.z - d <= gnd(d)) { b = d; break; } a = d; }
+    if (b < 0) b = h.z;
+    for (let i = 0; i < S.refine; i++) { const m = (a + b) / 2; if (h.z - m <= gnd(m)) b = m; else a = m; }
+    const g = gnd(b);
+    if (g - (h.z - b) > S.wall) return null; // the ray went into a tower's side
+    out.x = h.x + cx * b; out.y = h.y + cy * b; out.z = g;
+    return out;
+  }
+
   render(ctx) {
     const ow = this.ow, g = this.g, h = ow.hero, st = g.state, W = g.w, H = g.h;
     const dt = Math.min(0.05, (performance.now() - (this.lastT || performance.now())) / 1000);
@@ -314,9 +336,7 @@ export class Flight3D {
     // street canyons: skimming (and moving) among towers taller than her
     this.canyon = band === 0 && !h.perch && !ow.diving;
     this.applyDpr(dt);
-    // ground (or roof) under her, for the contact shadow
-    const b = ow.buildingAt(h.x, h.y), ground = b && this.heightOf(b) < h.z ? this.heightOf(b) : 0;
-    this.hero.update(h, dt, ow.t, !!ow.diving, ground, this.cam.patrolK, boosting);
+    this.hero.update(h, dt, ow.t, !!ow.diving, this.shadowSpot(h), this.cam.patrolK, boosting);
     const solid = (x, y, z) => { const o = ow.buildingAt(x, y); return !!o && z < this.heightOf(o); };
     this.cam.update(h, dt, frac, { patrol, boosting, diving: !!ow.diving, canyon: this.canyon ? 1 - h.hover : 0 }, solid);
     RIM.value = lerp(RIM_K[0], RIM_K[1], this.cam.canyonK); // a brighter rim against the dark canyon walls
@@ -348,7 +368,7 @@ export class Flight3D {
       quality().fly3dSharp ?? 0.5, quality().fly3dSharpTaps || 2);
     lookFrame(r); // back to the canvas for her pass
     if (sharp) this.heroPass.render(r, this.scene, this.cam.cam, this.hero.group.position, FlyHero3D.RADIUS * this.hero.size, W, H, hq, // (radius: her + the cape)
-      this.hero.keyline(night, Math.max(this.cam.canyonK, this.cam.patrolK)));
+      this.hero.keyline(night, Math.max(this.cam.canyonK, this.cam.patrolK)), this.noBox ? null : this.hero.screenRect(this.cam.cam, W, H, this._box || (this._box = [0, 0, 0, 0])));
     this.overlay(ctx, night, frac, boosting);
   }
 
@@ -371,7 +391,7 @@ export class Flight3D {
     ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H);
     for (const r of this.hudRects()) ctx.roundRect(r.left - 4, r.top - 4, r.width + 8, r.height + 8, 16);
     ctx.clip('evenodd');
-    this.fx3.drawLines(ctx, W, H, Math.max(frac * k, ow.fx.rush || 0), boosting && k, vp[2] ? { x: vp[0], y: vp[1] } : { x: W / 2, y: H / 2 }, walls, night);
+    this.fx3.drawLines(ctx, W, H, Math.max(frac * k, ow.fx.rush || 0), boosting && k, vp[2] ? { x: vp[0], y: vp[1] } : { x: W / 2, y: H / 2 }, walls, night, this.cam.boostK * k, this.heroEl);
     ctx.restore();
     this.icons(ctx, P, W, H);
     ow.heroArt.drawPops(ctx, hs[0], hs[1], Math.min(W, H) / 390);

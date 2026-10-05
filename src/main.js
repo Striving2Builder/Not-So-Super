@@ -9,10 +9,12 @@ import { Captured } from './captured.js';
 import { ClubZone } from './clubzone.js';
 import { NightCase } from './nightcase.js';
 import { AsylumZone } from './asylum.js';
+import { Nightclub } from './nightclub/nightclub.js';
 import { showNewspaper } from './newspaper.js';
 import { HERO, DISTRICTS, THEMES, DEALS, BOSSES, VENUES, BILLBOARDS } from './data.js';
 import { UI, dialog, toast } from './ui.js';
 import { sfx } from './sfx.js';
+import { ambience } from './ambience.js';
 import { $, pick, chance, fmtTime } from './util.js';
 import { loadHero, HERO_SKIN } from './hero3d.js';
 import { loadEnemies } from './enemies.js';
@@ -22,6 +24,7 @@ import { Commentary } from './commentary.js';
 import { settings, quality, autoTune, HERO_SKIN_LABELS } from './settings.js';
 import { perfHud } from './perfhud.js';
 import { gfxLost, crashedLastTime } from './gfx.js';
+import { BUILD } from './version.js';
 
 loadHero();
 loadEnemies(); // guard and boss models for the 3D zones (procedural stand-ins until they arrive)
@@ -38,6 +41,7 @@ game.modes = {
   club: new ClubZone(game),
   nightcase: new NightCase(game),
   asylum: new AsylumZone(game),
+  nightclub: new Nightclub(game),
 };
 game.overworld = game.modes.overworld;
 game.commentary = new Commentary(game);
@@ -71,6 +75,7 @@ game.setMode = (name, p) => {
   $('prompt').classList.remove('on');
   $('marker').classList.remove('on');
   game.mode.enter(p || {});
+  ambience.setMode(name);
 };
 
 // WebGL can't be had at all any more: 3D flight drops to the 2D view; a 3D zone in progress is left.
@@ -81,8 +86,14 @@ game.gfxFailed = () => {
 };
 
 // ---------------------------------------------------------------- zone flow
+// the detective nightclubs are the default since 2026-10-05; ?club=v1 brings back the premade 3D clubs
+const NEW_CLUBS = !/[?&]club=v1(&|$)/.test(location.search);
+game.newClubs = NEW_CLUBS; // the overworld skips loading the premade club buildings
+
 /** Which game mode plays a zone. */
 function modeFor(z) {
+  // the detective nightclub redesign (docs/design/nightclub.md)
+  if (NEW_CLUBS && (z.mode === 'special' || z.mode === 'nightcase') && (VENUES[z.venue]?.club || VENUES[z.venue]?.kind === 'club')) return 'nightclub';
   if (z.mode === 'special' && VENUES[z.venue]?.club) return 'club';  // raid inside a premade club
   return { brawl: 'brawler', investigate: 'investigate', special: 'special', nightcase: 'nightcase', asylum: 'asylum' }[z.mode];
 }
@@ -111,6 +122,7 @@ game.endZone = async (zone, res) => {
     return;
   }
   if (res.outcome === 'win') {
+    if (zone.leadId) { st.leads = st.leads.filter((l) => l.id !== zone.leadId); st.leadsDone.push(zone.leadId); } // a case lead, closed
     st.addRep(res.rep, 'Saved the day');
     if (zone.mode === 'brawl') st.stats.saves++;
     if (zone.mode === 'investigate' || zone.mode === 'nightcase' || zone.mode === 'asylum') st.stats.cases++;
@@ -240,7 +252,7 @@ async function pauseMenu() {
   const inMission = game.modeName !== 'overworld' && game.modeName !== 'captured';
   const v = await dialog({
     title: 'Paused',
-    text: `<div class="list"><div class="item"><b>${st.rep} REP</b> · ${st.rank}<br>Saves ${st.stats.saves} · Cases ${st.stats.cases} · Special zones ${st.stats.specials} · Captures ${st.stats.captures} · Photos ${st.stats.photos}</div></div>`,
+    text: `<div class="list"><div class="item"><b>${st.rep} REP</b> · ${st.rank}<br>Saves ${st.stats.saves} · Cases ${st.stats.cases} · Special zones ${st.stats.specials} · Captures ${st.stats.captures} · Photos ${st.stats.photos}</div></div><div class="hint">Build ${BUILD}</div>`,
     options: [
       { label: 'Resume', value: 'r' },
       { label: `Sound: ${sfx.enabled ? 'ON' : 'OFF'}`, value: 's' },
@@ -347,6 +359,7 @@ function frame(now) {
   if (game.modeName === 'overworld' && !UI.open && autoTune.sample(realDt)) {
     toast('Switched graphics to Battery saver for smoother play (change it in the pause menu)', 'info');
   }
+  ambience.update(dt, !m || UI.open || gfxLost());
   if (m) {
     try {
       if (UI.open || gfxLost()) { if (m.onPaused) m.onPaused(); } // (graphics restoring: the world waits)

@@ -7,7 +7,8 @@ in `index.html`. Keep it that way: small, focused modules with obvious homes.
 ```
 src/
   main.js                 boot, game loop, mode switching (stays at the root)
-  core/                   shared, mode-agnostic: ui, input, settings, util, rng, state, data, sfx, media
+  core/                   shared, mode-agnostic: ui, input, settings, util, rng, state, data, sfx,
+                          ambience, media
   story/                  comic overlay + narration: comic, commentary, newspaper, cutscene, captured
   flight/                 the overworld: overworld, city, cityart, sky, atmosphere, airspace,
                           airevents, paparazzi, flight, flightaudio, nav, cityfeed
@@ -32,6 +33,16 @@ these folders, and its imports should make sense from there.
   context at all → 3D flight drops to 2D via `Overworld.drop3D`, a 3D zone is left).
 - Zones load behind the LOADING card over several frames (brawler `load()`, investigation's one
   bake frame, Special3D `warmUp()` compileAsync); city3d trims near builds/tiles (`KEEP`).
+
+## Audio
+- `sfx.js` (core): one AudioContext + master bus. `sfx.<name>()` plays a recorded voice from
+  `assets/audio/game/` once it's decoded (all are decoded on the first gesture), else its synth
+  voice. Mix levels: `VOICE` in sfx.js. `loadSample`/`playSample`/`dropSample` for other modules.
+- `ambience.js` (core): one looped bed per mode (`BEDS`), switched by `game.setMode`, gated per
+  frame by pause + the sound toggle; a bed's buffers are dropped when its mode is left.
+- `flightaudio.js` (flight): wind (recorded cruise/fast loops crossfaded by airspeed) + siren.
+- Files: raw library in `assets/audio/<category>/`; `tools/audio/prep_audio.py` makes the game
+  files (one-shots MP3, loops gapless WAV). Smoke test: `node tools/shots/audio.js`.
 
 ## Rules
 1. **One responsibility per module.** Game logic, rendering, and set dressing live in separate

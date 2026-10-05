@@ -21,6 +21,10 @@ export class GameState {
     this.drain = 0;
     this.lastWarn = -99;
     this.time = 0;
+    this.leads = [];        // open case leads on the map (a solved club case's distribution points)
+    this.leadsDone = [];    // lead ids already won
+    this.cases = {};        // case id → { solved }
+    this.photosLost = 0;    // polaroids of her left behind in clubs (blackmail later)
   }
 
   get rank() {
@@ -83,7 +87,7 @@ export class GameState {
 
   save() {
     try {
-      localStorage.setItem(KEY, JSON.stringify({ seed: this.seed, rep: this.rep, stats: this.stats, clock: this.clock, lockouts: this.lockouts }));
+      localStorage.setItem(KEY, JSON.stringify({ seed: this.seed, rep: this.rep, stats: this.stats, clock: this.clock, lockouts: this.lockouts, leads: this.leads, leadsDone: this.leadsDone, cases: this.cases, photosLost: this.photosLost }));
     } catch (e) { /* storage unavailable (private mode etc.) */ }
   }
 
@@ -96,6 +100,7 @@ export class GameState {
       s.stats = { ...s.stats, ...d.stats };
       s.clock = d.clock ?? s.clock;
       s.lockouts = d.lockouts || {};
+      s.leads = d.leads || []; s.leadsDone = d.leadsDone || []; s.cases = d.cases || {}; s.photosLost = d.photosLost || 0;
       return s;
     } catch (e) { return null; }
   }

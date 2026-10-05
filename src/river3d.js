@@ -11,8 +11,8 @@ import { M, STYLE, Builder, box, lamp, look, HAZE_GLSL } from './buildings3d.js'
 import { hash2 } from './rng.js';
 
 const DECK = { y: 2.2, rail: 1.1, lampEvery: 18 }; // metres
-/** width: × the lot width; smooth: Chaikin passes; bank: per-bank wander [amplitude, wavelength m] ×3; rim: basin harmonics [k, amplitude]. */
-const RIBBON = { width: 0.8, smooth: 4, bank: [[0.16, 61], [0.08, 23], [0.035, 8.5]], rim: [[2, 0.09], [3, 0.08], [5, 0.05], [7, 0.035], [11, 0.02]] };
+/** width: × the lot width; quay: the stone edge outside the water (× the half width); smooth: Chaikin passes; bank: per-bank wander [amplitude, wavelength m] ×3; rim: basin harmonics [k, amplitude]. */
+const RIBBON = { width: 0.8, quay: 0.12, smooth: 4, bank: [[0.16, 61], [0.08, 23], [0.035, 8.5]], rim: [[2, 0.09], [3, 0.08], [5, 0.05], [7, 0.035], [11, 0.02]] };
 
 /** Chaikin corner cutting: the block-centre polyline becomes a gentle meander. */
 function chaikin(P, n) {
@@ -35,14 +35,14 @@ const RIM_GLSL = RIBBON.rim.map(([k, a], i) => `${a.toFixed(3)} * sin(${k}. * t 
 const rim = (t) => 0.95 + RIBBON.rim.reduce((a, [k, amp], i) => a + amp * Math.sin(k * t + i * 1.9 + 0.4), 0);
 
 /** The river's own water: deep channel → shallows, sky tint, glint, foam lip, ink shore. */
-function riverMaterial(seaMat, basin, x1) {
+function riverMaterial(seaMat, basin, x1, basinQ) {
   const U = seaMat.uniforms;
   return new THREE.ShaderMaterial({
-    uniforms: { ...U, uBasin: { value: new THREE.Vector4(...basin) } },
+    uniforms: { ...U, uBasin: { value: new THREE.Vector4(...basin) }, uBasinQ: { value: basinQ } },
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
     vertexShader: 'attribute float aEdge; varying float vE; varying vec3 vW; void main(){ vE = aEdge; vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
     fragmentShader: /* glsl */`
-uniform vec3 uKeyDir; uniform vec3 uKeyCol; uniform vec3 uSky; uniform float uNight; uniform float uTime; uniform vec4 uBasin;
+uniform vec3 uKeyDir; uniform vec3 uKeyCol; uniform vec3 uSky; uniform float uNight; uniform float uTime; uniform vec4 uBasin; uniform float uBasinQ;
 ${HAZE_GLSL}
 varying vec3 vW; varying float vE;
 void main() {
@@ -54,11 +54,12 @@ void main() {
   if (uBasin.z > 0.) {
     vec2 q = (vW.xz - uBasin.xy) / uBasin.zw;
     float t = atan(q.y, q.x);
-    e = min(e, length(q) / (0.95 + ${RIM_GLSL}));
+    float eb = length(q) / (0.95 + ${RIM_GLSL});
+    e = min(e, eb < 1. ? eb : 1. + (eb - 1.) * ${RIBBON.quay.toFixed(3)} / uBasinQ); // (its quay as wide as the ribbon's)
   }
   float dist = length(vW - cameraPosition);
   vec3 V = normalize(cameraPosition - vW);
-  float fres = pow(1. - max(V.y, 0.), 3.);
+  float fres = 1. - max(V.y, 0.); fres = fres * fres * fres; // (no pow)
   // linear values: the haze lifts water a lot from altitude, so the channel starts near-black navy
   vec3 deep = mix(vec3(0.004, 0.02, 0.055), vec3(0.002, 0.008, 0.025), uNight);
   vec3 shallow = mix(vec3(0.02, 0.085, 0.11), vec3(0.008, 0.025, 0.045), uNight);
@@ -72,11 +73,17 @@ void main() {
   c += uKeyCol * smoothstep(0.985, 0.996, dot(R, uKeyDir)) * 1.2;
   c = mix(c, mix(vec3(0.72, 0.84, 0.86), vec3(0.28, 0.34, 0.48), uNight), smoothstep(0.89, 0.93, e) * 0.3); // foam lip
   c = mix(c, vec3(0.06, 0.05, 0.09), smoothstep(0.93, 0.985, e));                                         // ink shoreline
+  // the quay: a pale stone edge past the shoreline, its land side inked too (the banks read as a
+  // made embankment, not a lawn running into the water)
+  vec3 quay = mix(vec3(0.3, 0.28, 0.25), vec3(0.05, 0.05, 0.07), uNight * 0.75);
+  quay = mix(quay, vec3(0.06, 0.05, 0.09), smoothstep(1. + ${(RIBBON.quay * 0.75).toFixed(3)}, 1. + ${(RIBBON.quay * 0.95).toFixed(3)}, e));
+  c = mix(c, quay, step(1., e));
 #ifdef TONE_MAPPING
   c = toneMapping(c);
 #endif
   gl_FragColor = linearToOutputTexel(vec4(c, 1.));
   gl_FragColor.rgb = pulp(gl_FragColor.rgb);
+  gRay = (vW - cameraPosition) / max(dist, 1e-3);
   gl_FragColor.rgb = haze(gl_FragColor.rgb, dist, 0., 1.);
 }`,
   });
@@ -98,24 +105,25 @@ export function buildRiver(city, scene, look3, seaMat) {
     const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
     if (i) s += Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]);
     const wl = hw * bank(s, ph), wr = hw * bank(s, ph + 2.3); // each bank wanders on its own
-    pos.push(P[i][0] - dz * wl, Y, P[i][1] + dx * wl, P[i][0] + dz * wr, Y, P[i][1] - dx * wr);
-    edge.push(-1, 1);
+    const q = 1 + RIBBON.quay; // (the quay: a stone band outside the water's edge, e > 1)
+    pos.push(P[i][0] - dz * wl * q, Y, P[i][1] + dx * wl * q, P[i][0] + dz * wr * q, Y, P[i][1] - dx * wr * q);
+    edge.push(-q, q);
     if (i) { const n = i * 2; idx.push(n - 2, n - 1, n + 1, n - 2, n + 1, n); }
   }
   // ---- the basin over its blocks and their river partners, a wandering rim
-  let basin = [0, 0, 0, 0];
+  let basin = [0, 0, 0, 0], basinQ = 1;
   if (city.riverOval) {
     // the city's oval of whole river blocks, shrunk so the water never reaches a building's lot
     const E = city.riverOval, cx = (E.cx * BLOCK + ROAD / 2) * M, cz = (E.cy * BLOCK + ROAD / 2) * M;
     const rx = (E.rx - 0.6) * BLOCK * M, rz = (E.ry - 0.45) * BLOCK * M, base = pos.length / 3, n = 96;
-    basin = [cx, cz, rx, rz];
+    basin = [cx, cz, rx, rz]; basinQ = (RIBBON.quay * hw) / Math.min(rx, rz); // the quay in metres, as the ribbon's
     // a hair under the ribbon: where they overlap the ribbon wins (its shore distance already
     // knows the basin), so the basin's rim never draws a shoreline across the channel
     const yb = Y - 0.2;
-    pos.push(cx, yb, cz); edge.push(0);
+    pos.push(cx, yb, cz); edge.push(9); // (its shore is the rim's own distance in the shader, not this)
     for (let i = 0; i < n; i++) {
-      const t = (i / n) * Math.PI * 2, w = rim(t);
-      pos.push(cx + Math.cos(t) * rx * w, yb, cz + Math.sin(t) * rz * w); edge.push(1);
+      const t = (i / n) * Math.PI * 2, w = rim(t) * (1 + basinQ);
+      pos.push(cx + Math.cos(t) * rx * w, yb, cz + Math.sin(t) * rz * w); edge.push(9);
       idx.push(base, base + 1 + ((i + 1) % n), base + 1 + i);
     }
   }
@@ -123,7 +131,7 @@ export function buildRiver(city, scene, look3, seaMat) {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('aEdge', new THREE.Float32BufferAttribute(edge, 1));
   g.setIndex(idx);
-  const water = new THREE.Mesh(g, riverMaterial(seaMat, basin, city.coastX * M));
+  const water = new THREE.Mesh(g, riverMaterial(seaMat, basin, city.coastX * M, basinQ));
   // ---- bridges: on about half the north-south streets crossing a river block run
   const B = new Builder(), D = look('#8a8478', '#ffd890', STYLE.concrete, '#4a4a50', STYLE.tar);
   for (const b of city.blocks) {

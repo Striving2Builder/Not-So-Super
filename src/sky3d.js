@@ -29,7 +29,8 @@ const SKY = [
   [20.6, '#04071a', '#141038', '#35275e', '#35275e'], // night
 ];
 /** Sun/moon: disc radius (cos of the angle), the disc's highest drawn elevation (sin), day/dusk fills + rim. */
-const SUN = { disc: 0.9988, maxUp: 0.42, day: ['#fffbe6', '#ffb340'], dusk: ['#ffdc5e', '#d8461e'], moonFrom: [0.82, 0.95], setBy: [0.55, 0.72] }; // moonFrom / setBy: the game's night value
+// (the dusk fill is a pale cream: a yellow disc on the yellow sunset glow read as a hollow orange ring)
+const SUN = { disc: 0.9988, maxUp: 0.42, day: ['#fffbe6', '#ffb340'], dusk: ['#fff4d6', '#d8461e'], moonFrom: [0.82, 0.95], setBy: [0.55, 0.72] }; // moonFrom / setBy: the game's night value
 /** Cloud decks (metres) and their three cel tones + ink, per time of day (display colours). */
 const CLOUD = {
   count: 64, layers: [360, 520], size: [44, 250], aspect: [0.44, 0.62], variants: 8,
@@ -60,7 +61,7 @@ void main(){
   if (sunK > 0.0) {
     c += sunCol * (pow(max(d, 0.0), 60.0) * 0.18 + pow(max(d, 0.0), 8.0) * 0.1) * sunK; // (a modest glow: a disc paler than its halo reads as a hollow ring)
     float disc = clamp((d - ${SUN.disc.toFixed(5)}) / fw + 0.5, 0.0, 1.0), core = clamp((d - ${(SUN.disc + 0.00025).toFixed(5)}) / fw + 0.5, 0.0, 1.0);
-    c = mix(c, mix(sunRim, sunCol, core), disc * sunK);
+    c = mix(c, mix(sunRim, sunCol, core) * (1.0 + 0.12 * smoothstep(0.9993, 1.0, d)), disc * sunK); // (a touch hotter in the middle: a filled disc)
   }
   // the moon (night only): a pale disc + halo
   float m = dot(p, sunDir), fm = fwidth(m) + 1e-6;
@@ -328,7 +329,11 @@ export class Sky3D {
     // sun by day, moon by night: an arc across the southern sky (behind a north-flying camera)
     const a = ((hr - 6) / 12) * Math.PI;
     const arc = _e.set(-Math.cos(a), Math.max(0.02, Math.sin(a) * 0.9), 0.6).normalize();
-    const dir = night > 0.5 ? _d.set(0.5, 0.42, 0.6).normalize() : _d.copy(arc);
+    // the key stays the low sun while its disc is still on the horizon (it went over to the high blue
+    // moon at night 0.5, while the sun still hung in frame: the faces toward the drawn sun read cold
+    // and the shaded ones warm), then hands over to the moon once the disc has set
+    const sk = 1 - Math.min(1, Math.max(0, (night - SUN.setBy[0]) / (SUN.setBy[1] - SUN.setBy[0]))), moon = sk <= 0;
+    const dir = moon ? _d.set(0.5, 0.42, 0.6).normalize() : _d.copy(arc);
     this.uniforms.sunDir.value.copy(dir);
     // the drawn sun sits a little lower than the light that shades the city (a comic sun you can
     // actually get in frame; the noon light stays high for the roofs), and it lingers on the
@@ -337,12 +342,14 @@ export class Sky3D {
     dd.y = up + 0.012;
     const S = dusk > 0.3 ? SUN.dusk : SUN.day;
     this.uniforms.sunCol.value.copy(linear(S[0])); this.uniforms.sunRim.value.copy(linear(S[1]));
-    this.uniforms.sunK.value = 1 - Math.min(1, Math.max(0, (night - SUN.setBy[0]) / (SUN.setBy[1] - SUN.setBy[0])));
+    this.uniforms.sunK.value = sk;
     this.uniforms.moonK.value = Math.min(1, Math.max(0, (night - SUN.moonFrom[0]) / (SUN.moonFrom[1] - SUN.moonFrom[0])));
     this.dome.position.copy(eye);
     this.sun.position.copy(eye).addScaledVector(dir, 500);
     this.sun.target.position.copy(eye);
-    this.sun.color.set(night > 0.5 ? '#8fa6ff' : dusk > 0.3 ? '#ffc08a' : '#fff4e0');
+    this.sun.color.set(moon ? '#8fa6ff' : dusk > 0.3 ? '#ffc08a' : '#fff4e0');
+    // (the setting sun's key dims with its disc, the moon's grows in: no pop at the hand-over)
+    if (night > 0.5) this.sun.color.multiplyScalar(moon ? Math.min(1, 0.3 + (night - SUN.setBy[1]) * 6) : 0.3 + 0.7 * sk);
     this.sun.intensity = 0.7 + 1.6 * day;
     this.hemi.color.set(night > 0.5 ? '#5a5ca8' : '#ffffff');
     this.hemi.groundColor.set(night > 0.5 ? '#2a1e3a' : '#505a68');

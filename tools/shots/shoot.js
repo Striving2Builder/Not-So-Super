@@ -204,6 +204,8 @@ async function shootFly3d(page, dir, name, plan) {
   if (plan === 'boost') await page.keyboard.down('ShiftLeft');
   await page.keyboard.down('KeyW');
   await page.waitForTimeout(2500);
+  // (software GL runs the sim slower than real time: hold on until the boost has really engaged)
+  if (plan === 'boost') await page.waitForFunction(() => (window.__game.overworld.view3d?.cam.boostK || 0) > 0.9, null, { timeout: 15000 }).catch(() => console.log('boost never engaged'));
   await page.screenshot({ path: path.join(dir, `${name}_1.png`) });
   const m = await metrics(page);
   await page.keyboard.down('KeyD');
@@ -334,7 +336,7 @@ async function shootNightClues(page, dir, name) {
       fs.mkdirSync(dir, { recursive: true });
       report[area] = {};
       for (const [name, sc] of Object.entries(AREAS[area])) {
-        if (ONLY && ONLY !== name) continue;
+        if (ONLY && !ONLY.split(',').includes(name)) continue; // (a comma list: --only a,b)
         const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
         const page = await ctx.newPage();
         const errors = [];

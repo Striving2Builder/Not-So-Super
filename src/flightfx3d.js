@@ -9,7 +9,7 @@ const FX = {
   trail: { n: 24, life: 0.3, width: [0.34, 0.0], from: 140, head: [1, 0.2, 0.18], tail: [1, 0.8, 0.2], alpha: 1 },   // red off her heels → gold // speed (m/s) it starts
   wind: { n: 28, radius: [5, 14], ahead: [4, 26], width: 0.09, from: 0.62, len: 9, clear: [0.62, 0.95], eye: [7, 15] }, // from = speed fraction; close round her (they read at the screen edges, never as far hairlines); len cap (m); clear: NDC radius they fade in over; eye: m from the lens they fade in over
   ring: { life: 0.9, grow: [3, 70], boostGrow: [2, 26] },
-  lines: { from: 0.18, deal: 70, clear: [0.6, 1.0], len: [0.22, 0.32], width: [0.7, 1.6], edge: [10, 44] }, // speed fraction; re-deal ms; clear: the screen ellipse they fade in over (× the half size); len: longest streak × screen height (cruise, boost); width: half-width px at the widest; edge: px each one stops short of the screen edge
+  lines: { from: 0.18, deal: 70, clear: [0.6, 1.0], len: [0.22, 0.32], width: [0.7, 1.6], edge: [10, 44], ink: { n: 40, len: 0.5, width: [2.2, 4.8], inner: 0.42, rgba: [14, 10, 28, 0.92], night: 0.6 } }, // speed fraction; re-deal ms; clear: the screen ellipse they fade in over (× the half size); len: longest streak × screen height (cruise, boost); width: half-width px at the widest; edge: px each one stops short of the screen edge
 };
 
 // wind streaks: tapered at both ends, soft across, and only out at the screen edges (faded in
@@ -163,15 +163,16 @@ export class FlightFX3D {
    * the screen, tapered at BOTH ends and starting and ending inside the frame (a streak widest at the
    * screen edge read as a white bar or a paper shard sticking in). They fade in from an ellipse
    * round the screen's centre (its middle ~60% is always clear: never through her or the view
-   * ahead), drawn with 'lighter' compositing at a low alpha so crossings glow instead of stacking
+   * ahead); while boosting (boostK 0..1, eased) a comic panel's black ink speed lines join them, longer
+   * and reaching further in, so boost reads at a glance against any sky, drawn with 'lighter' compositing at a low alpha so crossings glow instead of stacking
    * into opaque white. Sparse at cruise, a full speed panel at boost; plus wall-rush streaks down the
    * side a tower face is passing. vp: the screen point she's heading for; walls: { l, r } 0..1
-   * tower-face proximity. Draw them first on a clear overlay: the centre fade erases what's under it.
+   * tower-face proximity; hero: her screen ellipse { x, y, rx, ry } (the ink lines keep out of it). Draw them first on a clear overlay: the centre fade erases what's under it.
    */
-  drawLines(ctx, W, H, frac, boosting, vp, walls, night) {
+  drawLines(ctx, W, H, frac, boosting, vp, walls, night, boostK = 0, hero = null) {
     const f = Math.max(0, Math.min(1, (frac - FX.lines.from) / 0.45));
-    const wall = Math.max(walls.l, walls.r), Lc = FX.lines;
-    if (f <= 0.02 && wall < 0.05) return;
+    const wall = Math.max(walls.l, walls.r), Lc = FX.lines, I = Lc.ink;
+    if (f <= 0.02 && wall < 0.05 && boostK < 0.03) return;
     const deal = Math.floor(performance.now() / Lc.deal);
     if (deal !== this.dealt) {
       this.dealt = deal;
@@ -179,6 +180,8 @@ export class FlightFX3D {
       const n = Math.floor(boosting ? 26 + f * 14 : 6 + f * 10);
       const line = (a, wall) => ({ a, in: Math.random(), w: Lc.width[0] + Math.random() * (Lc.width[1] - Lc.width[0]), edge: Lc.edge[0] + Math.random() * (Lc.edge[1] - Lc.edge[0]), wall });
       for (let i = 0; i < n; i++) this.lines.push(line(Math.random() * Math.PI * 2));
+      this.ink = [];
+      for (let i = 0; i < I.n; i++) this.ink.push({ a: Math.random() * Math.PI * 2, in: Math.random(), w: I.width[0] + Math.random() * (I.width[1] - I.width[0]), edge: Lc.edge[0] + Math.random() * (Lc.edge[1] - Lc.edge[0]) });
       for (const [side, k] of [[-1, walls.l], [1, walls.r]]) {
         const m = Math.floor(k * 14);
         for (let i = 0; i < m; i++) this.lines.push(line((side < 0 ? Math.PI : 0) + (Math.random() - 0.5) * 1.1, k));
@@ -210,6 +213,30 @@ export class FlightFX3D {
     const g = ctx.createRadialGradient(0, 0, C[0], 0, 0, C[1]);
     g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.5, 'rgba(0,0,0,0.6)'); g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = g; ctx.fillRect(-1.5, -1.5, 3, 3);
+    ctx.restore();
+    ctx.save();
+    if (boostK > 0.03 && this.ink) { // the ink panel, after the centre fade: it starts out past her and keeps its full weight
+      const L2 = H * I.len * (0.6 + 0.4 * boostK);
+      ctx.beginPath();
+      for (const l of this.ink) {
+        const c = Math.cos(l.a), s = Math.sin(l.a);
+        const ex = Math.min(c > 1e-3 ? (W - ox) / c : c < -1e-3 ? -ox / c : 1e9, s > 1e-3 ? (H - oy) / s : s < -1e-3 ? -oy / s : 1e9);
+        const r1 = ex - l.edge * k0 * 0.5, w = l.w * k0 * (0.5 + 0.5 * boostK);
+        let r0 = Math.max(ex * (I.inner + 0.2 * l.in), r1 - L2 * (0.6 + 0.4 * l.in));
+        if (hero) { // never across her: start where the ray leaves her ellipse
+          const px = (ox - hero.x) / hero.rx, py = (oy - hero.y) / hero.ry, dx = c / hero.rx, dy = s / hero.ry;
+          const A = dx * dx + dy * dy, B = px * dx + py * dy, D = B * B - A * (px * px + py * py - 1);
+          if (D > 0) r0 = Math.max(r0, (-B + Math.sqrt(D)) / A);
+        }
+        if (r1 - r0 < 12) continue;
+        const rm = r0 + (r1 - r0) * 0.7;
+        ctx.moveTo(ox + c * r0, oy + s * r0);
+        ctx.lineTo(ox + c * rm - s * w, oy + s * rm + c * w); ctx.lineTo(ox + c * r1, oy + s * r1); ctx.lineTo(ox + c * rm + s * w, oy + s * rm - c * w); ctx.closePath();
+      }
+      const [r, g, b, a] = I.rgba;
+      ctx.fillStyle = `rgba(${r},${g},${b},${(a * boostK * (night > 0.5 ? I.night : 1)).toFixed(3)})`;
+      ctx.fill();
+    }
     ctx.restore();
   }
 

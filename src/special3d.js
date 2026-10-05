@@ -741,7 +741,7 @@ export class Special3D {
       this.wallMat.needsUpdate = true;
     }
     for (const m of this.hidden) m.visible = on;
-    if (on) sfx.beam();
+    if (on) sfx.xray();
   }
 
   // ------------------------------------------------------------------ HUD + render

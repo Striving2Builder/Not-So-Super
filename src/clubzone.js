@@ -14,7 +14,7 @@ import { dialog, toast, banner } from './ui.js';
 import { npcLook, portrait } from './art.js';
 import { sfx } from './sfx.js';
 import { quality } from './settings.js';
-import { STEP, DOWN, capsulePush, buildCollider, scanFloor, unpackFloor, mergeStatic } from './clubgeo.js';
+import { STEP, DOWN, capsulePush, buildCollider, scanFloor, unpackFloor, mergeStatic, reachableFloor } from './clubgeo.js';
 import { ClubMood } from './clubmood.js';
 import { captureEmitters, dropMeshes, texAverage } from './clubdress.js';
 
@@ -382,10 +382,10 @@ export class ClubZone extends Special3D {
 
   /** Spawn at the entrance end, exit ring, and a spot-picker that keeps things apart. */
   planLayout() {
-    const c = this.club, floor = c.floor;
-    this.near = (p, r) => floor.filter((q) => q.distanceToSquared(p) < r * r).length;
+    const c = this.club, all = c.floor;
+    this.near = (p, r) => all.filter((q) => q.distanceToSquared(p) < r * r).length;
     const cz = (c.box.min.z + c.box.max.z) / 2, cx = (c.box.min.x + c.box.max.x) / 2;
-    const open = floor.filter((p) => this.onMain(p) && this.near(p, 2.5) >= 14);
+    const open = all.filter((p) => this.onMain(p) && this.near(p, 2.5) >= 14);
     open.sort((a, b) => Math.abs(b.z - cz) - Math.abs(a.z - cz));
     // Spawn toward the entrance end, facing into the club, on the first spot where the normal
     // camera angle behind her is clear AND the camera hangs over the club's own floor (the very
@@ -397,10 +397,17 @@ export class ClubZone extends Special3D {
       const off = this.cameraOffset(CAM_PITCHES[0]);
       if (this.cameraReach(p, off) < CAM_DIST * 0.75) return false;
       const gx = p.x + off.x, gz = p.z + off.z;
-      return floor.some((q) => Math.abs(q.y - p.y) < 0.5 && (q.x - gx) ** 2 + (q.z - gz) ** 2 < 1.5 * 1.5);
+      return all.some((q) => Math.abs(q.y - p.y) < 0.5 && (q.x - gx) ** 2 + (q.z - gz) ** 2 < 1.5 * 1.5);
     };
-    this.spawn = (open.slice(0, 120).find(camClear) || open[0] || floor[0]).clone();
+    this.spawn = (open.slice(0, 120).find(camClear) || open[0] || all[0]).clone();
     this.spawnHeading = facing(this.spawn);
+    // Everything below is placed only where she can walk from the entrance: the scanned floor also
+    // holds stage tops, risers and bar tops a step too high to climb (items used to land there).
+    // Same spawn every visit (the pick above is deterministic), so the flood fill is done once per club.
+    if (!c.reach || !c.reach.from.equals(this.spawn)) c.reach = { from: this.spawn.clone(), floor: reachableFloor(c.collider, all, this.spawn) };
+    const floor = c.reach.floor.length >= 20 ? c.reach.floor : all;
+    this.walkFloor = floor;
+    this.near = (p, r) => floor.filter((q) => q.distanceToSquared(p) < r * r).length;
     this.far = (p) => p.distanceTo(this.spawn);
     this.maxD = Math.max(...floor.map(this.far));
     const used = [this.spawn];
@@ -447,7 +454,7 @@ export class ClubZone extends Special3D {
    * keep the farthest-back route found (with shorter legs) rather than dropping guards.
    */
   placeGuards(n) {
-    const floor = this.club.floor;
+    const floor = this.walkFloor;
     const seg = new THREE.Line3(), q = new THREE.Vector3();
     const routeGap = (a, b) => { seg.set(a, b); return seg.closestPointToPoint(this.spawn, true, q).distanceTo(this.spawn); };
     const SAFE = 13;
@@ -536,7 +543,8 @@ export class ClubZone extends Special3D {
       this.colliders.push({ minX: p.x - 0.7, maxX: p.x + 0.7, minZ: p.z - 0.7, maxZ: p.z + 0.7, mesh: cage });
       const cap = { person, cage, freed: false, x: p.x, z: p.z };
       this.captives.push(cap);
-      this.addInter(new THREE.Vector3(p.x, 0, p.z + 1.1), this.theme.mind ? 'Snap them out of the trance' : 'Break open the cage', () => !cap.freed, () => this.freeClubCaptive(cap), 'captive');
+      // (interact from any side: the cage's own collider keeps her ~1 m from its centre)
+      this.addInter(new THREE.Vector3(p.x, 0, p.z), this.theme.mind ? 'Snap them out of the trance' : 'Break open the cage', () => !cap.freed, () => this.freeClubCaptive(cap), 'captive');
     }
   }
 
@@ -546,17 +554,21 @@ export class ClubZone extends Special3D {
     this.faceSpawn(b);
   }
 
-  /** Table tops / bar counters: upward-facing surfaces 0.55–1.25 m above the local floor. */
+  /**
+   * Table tops / bar counters: upward-facing surfaces 0.55–1.25 m above a floor spot she can walk
+   * to within arm's reach (1.3 m; she interacts within 2 m). The middle of a stage or riser is too
+   * far from any floor she can stand on, so nothing lands there.
+   */
   surfaceSpots() {
     const c = this.club, ray = new THREE.Raycaster(); ray.firstHitOnly = true; ray.far = 3;
-    const out = [];
+    const out = [], R = 1.3;
     for (let i = 0; i < 1500 && out.length < 24; i++) {
       const x = rand(c.box.min.x, c.box.max.x), z = rand(c.box.min.z, c.box.max.z);
       ray.set(new THREE.Vector3(x, c.mainY + 2.2, z), DOWN);
       const h = ray.intersectObject(c.collider)[0];
       if (!h || h.face.normal.y < 0.9) continue;
-      const lift = h.point.y - c.mainY;
-      if (lift < 0.55 || lift > 1.25) continue;
+      const stand = this.walkFloor.some((q) => (q.x - x) ** 2 + (q.z - z) ** 2 < R * R && h.point.y - q.y >= 0.55 && h.point.y - q.y <= 1.25);
+      if (!stand) continue;
       if (out.some((o) => o.distanceTo(h.point) < 4)) continue;
       if (h.point.distanceTo(this.spawn) < 5) continue;
       out.push(h.point.clone());
