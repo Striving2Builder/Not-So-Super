@@ -1,6 +1,6 @@
-// Supergirl's cape in the three.js flight view: a short tapered sheet (narrow at the collar,
-// fanning out into a few deep folds toward a pointed hem, ending about her knees) streaming off a
-// spine chain that ripples with speed. It is shaded from its real normals in two hard cel tones
+// Supergirl's cape in the three.js flight view: a tapered sheet hung from her full shoulder line,
+// fanning out into a few deep folds toward a pointed hem at her calves, streaming off a spine chain
+// that ripples with speed, cupped across its width and billowing sideways (never quite edge-on). It is shaded from its real normals in two hard cel tones
 // (outer red / a darker lining on the inside), and inked with a constant-width screen-space line
 // round its outline plus two tapering fold strokes, like the body's ink hull. Seen side-on, its
 // out-of-plane shape (arch, folds, wave) flattens so it reads as a thin streaming band, not a fin.
@@ -13,14 +13,17 @@ import { LOOK } from './look3d.js';
  * the middle stands off her back; folds: pleat depth at the hem (per column, ± = ridge / valley).
  */
 const CAPE = {
-  segs: 7, len: 0.135, w: [0.075, 0.15], arch: 0.04, fold: 0.022, clear: 0.035, // clear: extra stand-off over her hips toward the hem
+  segs: 7, len: 0.18, w: [0.15, 0.21], arch: 0.06, fold: 0.026, clear: 0.035, // clear: extra stand-off over her hips toward the hem (w[0]: her shoulder joints)
   folds: [0, 0.8, -1, 0.6, -1, 0.8, 0], // across the width, + side edge → − side edge
   key: 0.18,  // N·L cut between the lit and shaded tone
-  outer: ['#ee2630', '#b8141f'], inner: ['#a01622', '#701018'], // [lit, shade] (sRGB; the outer shade stays bright: at dusk / night it went to a maroon block)
+  outer: ['#ee2630', '#b8141f'], inner: ['#c41c2a', '#9a1222'], // [lit, shade] (sRGB; the outer shade stays bright: at dusk / night it went to a maroon block)
+  floor: ['#a01622', '#8a1020'], // outer / inner: never darker than these after the night tint (a red cape, not a black flap)
   ink: '#0b0b16', inkW: 2.2, foldFrom: 0.38, // inkW: px like the body's hull; fold strokes start this far down
-  sideFlat: 0.55, // how much of the out-of-plane shape goes when seen exactly side-on
-  lift: 0.7,      // seen from below at speed, the hem rises off her back by up to this × a segment per row (it shows past her)
-  rise: 0.22,     // at speed the cape streams up off her back (× a segment per row), so her body and legs read under it
+  sideFlat: 0.25, // how much of the out-of-plane shape goes when seen exactly side-on (keep the cup: never a plank)
+  lift: 0.35,     // seen from below at speed, the hem rises off her back by up to this × a segment per row (it shows past her)
+  rise: 0.16,     // at speed the cape streams up off her back (× a segment per row), so her body and legs read under it
+  sway: [0.2, 0.7], // sideways billow at speed: × a segment per row / its rate (rad/s)
+  boost: [0.45, 0.7, 0.1], // boost: wave amplitude cut, flutter rate up, length up (stretched taut and long)
   billow: [0.55, 1.3], // slow flight: a big slow billow, × a segment / its rate (rad/s), instead of hanging straight down
 };
 const C = CAPE.folds.length; // columns across the width
@@ -34,6 +37,7 @@ function clothMaterial() {
     capeKey: CAPE_LIGHT.key, capeTint: CAPE_LIGHT.tint,
     outLit: { value: lin(CAPE.outer[0]) }, outShade: { value: lin(CAPE.outer[1]) },
     inLit: { value: lin(CAPE.inner[0]) }, inShade: { value: lin(CAPE.inner[1]) },
+    outFloor: { value: lin(CAPE.floor[0]) }, inFloor: { value: lin(CAPE.floor[1]) },
   };
   // (pulled toward the camera: where it lies on her back, near-ties go to the cape, not to the
   // body's white rim under it, which used to cut a white zigzag through the cloth)
@@ -46,14 +50,14 @@ function clothMaterial() {
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
 varying vec3 vCapeN;
-uniform vec3 capeKey, capeTint, outLit, outShade, inLit, inShade;`)
+uniform vec3 capeKey, capeTint, outLit, outShade, inLit, inShade, outFloor, inFloor;`)
       // two hard tones from the real normal (the folds band themselves); the lining is darker, so
       // where the cape flips over you see its inside
       .replace('#include <color_fragment>', `#include <color_fragment>
 { vec3 n = normalize(vCapeN) * (gl_FrontFacing ? 1.0 : -1.0);
   float lit = smoothstep(${(CAPE.key - 0.04).toFixed(2)}, ${(CAPE.key + 0.04).toFixed(2)}, dot(n, capeKey));
   vec3 c = gl_FrontFacing ? mix(outShade, outLit, lit) : mix(inShade, inLit, lit);
-  diffuseColor.rgb = c * capeTint; }`);
+  diffuseColor.rgb = max(c * capeTint, gl_FrontFacing ? outFloor : inFloor); }`);
   };
   m.customProgramCacheKey = () => 'capefly';
   return m;
@@ -145,11 +149,11 @@ export class FlightCape {
 
   /**
    * anchor: world point on her upper back; back/up/side: her body axes (unit); v: airspeed m/s;
-   * scale: model → scene metres (× the patrol-view enlargement); whip: boost flutter.
+   * scale: model → scene metres (× the patrol-view enlargement); bk: boost 0..1 (taut, long, fast flutter).
    */
-  update(anchor, back, up, side, v, t, dt, scale, whip) {
-    const n = this.n, L = CAPE.len * scale;
-    const sk = Math.min(1, v / 60), f = 4 + v / 18, amp = (0.08 + 0.22 * sk) * whip * L;
+  update(anchor, back, up, side, v, t, dt, scale, bk = 0) {
+    const n = this.n, Bo = CAPE.boost, L = CAPE.len * scale * (1 + Bo[2] * bk);
+    const sk = Math.min(1, v / 60), f = (4 + v / 18) * (1 + Bo[1] * bk), amp = (0.12 + 0.3 * sk) * (1 - Bo[0] * bk) * L;
     if (!this.placed) { this.placed = true; for (let i = 0; i < n; i++) this.p[i].copy(anchor).addScaledVector(back, i * L); }
     // seen side-on its depth (arch, folds, flap) flattens: a thin band, not a fin standing off her
     const view = this._v.subVectors(this.eye, anchor);
@@ -166,7 +170,8 @@ export class FlightCape {
       const tgt = this._t.copy(anchor).addScaledVector(back, i * L * (0.5 + 0.5 * sk))
         .addScaledVector(up, ((Math.sin(t * f - i * 0.75) + 0.6) * amp + Math.sin(t * 1.7 - i * 0.5) * L * 0.12) * k * flat + lift * i * k
           + (Math.sin(t * B[1] - i * 0.45) + 0.5) * B[0] * L * slow * k * i * 0.5)
-        .addScaledVector(side, Math.sin(t * f * 0.55 - i * 0.6) * amp * 0.6 * k + Math.sin(t * B[1] * 0.7 - i * 0.4) * B[0] * L * slow * k * i * 0.3);
+        .addScaledVector(side, Math.sin(t * f * 0.55 - i * 0.6) * amp * 0.6 * k + Math.sin(t * B[1] * 0.7 - i * 0.4) * B[0] * L * slow * k * i * 0.3
+          + Math.sin(t * CAPE.sway[1] - i * 0.35) * CAPE.sway[0] * L * sk * (1 - 0.6 * bk) * k * i);
       tgt.y -= L * slow * 0.45 * i;
       this.p[i].lerp(tgt, Math.min(1, dt * (8 + v / 6)));
       const d = this._a.subVectors(this.p[i], this.p[i - 1]), len = d.length() || 1; // keep the segment length
@@ -175,15 +180,17 @@ export class FlightCape {
     const pos = this.cloth.geometry.attributes.position;
     for (let i = 0; i < n; i++) {
       const k = i / (n - 1), q = this.p[i];
-      const w = (CAPE.w[0] + (CAPE.w[1] - CAPE.w[0]) * Math.pow(k, 0.75)) * scale;
+      const w0 = (CAPE.w[0] + (CAPE.w[1] - CAPE.w[0]) * Math.pow(k, 0.75)) * scale;
       // along the spine at the hem: a shallow point (the middle trails the corners)
       const tan = i === n - 1 ? this._b.subVectors(q, this.p[i - 1]).normalize() : null;
       const breathe = 1 + 0.25 * Math.sin(t * f * 0.8 - i * 1.3);
+      const spread = 1 + 0.12 * k * Math.sin(t * 1.1 - i * 0.5); // (the hem breathes wider and narrower)
+      const w = w0 * spread;
       for (let j = 0; j < C; j++) {
         const u = 1 - (2 * j) / (C - 1), au = Math.abs(u);
         // out of her back: the arch (middle stands off), the folds (deeper toward the hem; the edges
         // curl down), and an out-of-phase flutter on the edges
-        const fl = Math.sin(t * 6 - i * 1.1 + u * 1.5) * w * 0.07 * k * au;
+        const fl = Math.sin(t * (6 + 6 * bk) - i * 1.1 + u * 1.5) * w * (0.07 + 0.05 * bk) * k * au;
         const o = (CAPE.arch * scale * (1 - u * u) + CAPE.clear * scale * Math.min(1, k * 2) + CAPE.folds[j] * CAPE.fold * scale * k * k * breathe - w * (0.08 + 0.16 * k) * au * au + fl) * flat;
         let x = q.x + side.x * w * u + up.x * o, y = q.y + side.y * w * u + up.y * o, z = q.z + side.z * w * u + up.z * o;
         if (tan) { const tip = w * 0.3 * (1 - au * au); x += tan.x * tip; y += tan.y * tip; z += tan.z * tip; }
