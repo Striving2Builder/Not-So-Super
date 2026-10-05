@@ -12,7 +12,7 @@ export function beforeScene(ctx, w, h, intox, t) {
   const u = Math.max(0, (intox - TIERS.light) / (100 - TIERS.light));
   ctx.save();
   if (u <= 0) return;
-  const rot = Math.sin(t * 0.45) * 0.035 * u, z = 1 + 0.03 * u + Math.sin(t * 0.9) * 0.012 * u;
+  const rot = Math.sin(t * 0.45) * 0.035 * u * (intox >= TIERS.heavy ? 1.6 : 1), z = 1 + 0.03 * u + Math.sin(t * 0.9) * 0.012 * u;
   ctx.translate(w / 2, h / 2); ctx.rotate(rot); ctx.scale(z, z); ctx.translate(-w / 2, -h / 2);
 }
 
@@ -29,6 +29,7 @@ export function afterScene(ctx, canvas, w, h, intox, t) {
     const off = (8 + 14 * u) * Math.sin(t * 1.3);
     ctx.globalAlpha = 0.1 + 0.3 * u; ctx.globalCompositeOperation = 'lighter';
     ctx.drawImage(ghost, off, -off * 0.4, w, h);
+    if (intox >= TIERS.heavy) { ctx.globalAlpha = 0.3 * u; ctx.drawImage(ghost, -off * 1.4, off * 0.6, w, h); }
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   }
   ctx.fillStyle = `rgba(255,40,190,${0.26 * u * u * (0.75 + 0.25 * Math.sin(t * 2.1))})`;

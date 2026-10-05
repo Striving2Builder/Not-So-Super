@@ -267,8 +267,10 @@ export class ClubStage {
     // near = huge, pure ink, faster, feet below the frame
     this.far = []; this.mid = []; this.near = [];
     for (let i = 0, n = Math.round(W * dens * 1.3); i < n; i++) this.far.push(spec ? { x: rng.range(0, W), y: this.back + rng.range(5, 40), t: rng.int(0, CROWD_TYPES - 1), o: rng.next(), f: rng.chance(0.5), s: rng.range(0.4, 0.48) } : { x: rng.range(0, W), y: FLOOR - rng.range(20, 70), t: rng.int(0, CROWD_TYPES - 1), o: rng.next(), f: rng.chance(0.5), s: rng.range(0.5, 0.62) });
-    for (let i = 0, n = Math.round(W * dens); i < n; i++) {
-      const px = rng.range(120, W - 120);
+    const nMid = Math.round(W * dens * (this.R.light === 'beams' || this.R.light === 'strobe' ? 1.6 : 1));
+    const clumps = Array.from({ length: Math.max(1, Math.ceil(nMid / 5)) }, () => rng.range(200, W - 200));
+    for (let i = 0; i < nMid; i++) {
+      const px = Math.min(W - 120, Math.max(120, rng.pick(clumps) + rng.range(-150, 150)));
       if (!clear(px)) continue;
       if (spec) { const y = rng.range(this.back + 70, this.lane - 40); this.mid.push({ x: px, y, t: rng.int(0, CROWD_TYPES - 1), o: rng.next(), f: rng.chance(0.5), s: 0.55 + 0.45 * (y - this.back) / (this.lane - this.back) }); }
       else this.mid.push({ x: px, y: FLOOR + rng.range(0, 40), t: rng.int(0, CROWD_TYPES - 1), o: rng.next(), f: rng.chance(0.5), s: rng.range(0.9, 1.05) });
@@ -353,6 +355,11 @@ export class ClubStage {
       if (x < -120 || x > w + 120) continue;
       drawDancer(ctx, this.atlas, d.t, t, d.o, x, d.y * k, 300 * d.s * k, d.f);
     }
+    ctx.globalCompositeOperation = 'lighter';
+    const fogLow = ctx.createLinearGradient(0, (this.lane - 150) * k, 0, (this.lane + 70) * k);
+    fogLow.addColorStop(0, rgba(this.L.haze, 0)); fogLow.addColorStop(0.6, rgba(this.L.haze, 0.16)); fogLow.addColorStop(1, rgba(this.L.haze, 0.04));
+    ctx.fillStyle = fogLow; ctx.fillRect(0, (this.lane - 150) * k, w, 220 * k);
+    ctx.globalCompositeOperation = 'source-over';
     ctx.restore();
   }
 
@@ -375,17 +382,16 @@ export class ClubStage {
       ctx.stroke();
       ctx.fillStyle = '#05040a'; for (const cy of [0.12, 0.62]) ctx.fillRect(-pw / 2 - 6 * k, h * cy, pw + 12 * k, 26 * k);
       ctx.fillStyle = rgba(this.L.haze, 0.5); for (const cy of [0.12, 0.62]) ctx.fillRect(-pw / 2 - 6 * k, h * cy, pw + 12 * k, 3 * k);
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.fillStyle = rgba(this.L.accent, 0.55 + 0.15 * Math.sin(t * 3)); ctx.fillRect(pw * 0.22, h * 0.14, 6 * k, h * 0.46);
-      ctx.fillStyle = rgba(this.L.accent, 0.12); ctx.fillRect(pw * 0.22 - 10 * k, h * 0.14, 26 * k, h * 0.46);
-      ctx.globalCompositeOperation = 'source-over';
       ctx.strokeStyle = '#05040a'; ctx.lineWidth = Math.max(2, 5 * k); ctx.strokeRect(-pw / 2, -10, pw, h + 20);
       ctx.restore();
     }
     for (const d of this.near) {
       const x = this.sx(view, d.x, 1.35);
       if (x < -300 || x > w + 300) continue;
+      const over = view.heroX != null && Math.abs(x - this.sx(view, view.heroX)) < 300 * d.s * k * 0.4;
+      if (over) ctx.globalAlpha = 0.3;
       drawDancer(ctx, this.atlas, d.t, t, d.o, x, d.y * k, 300 * d.s * k, d.f);
+      ctx.globalAlpha = 1;
     }
     ctx.restore();
     // drifting haze

@@ -163,6 +163,16 @@ the director gives prompts and specs per batch. See [nightclub-assets.md](nightc
   plate (`assets/nightclub/plates/`); the seams hide behind foreground steel columns; doors sit on
   the painted arches; the crowd stands in depth on the plate's floor. Main floor, bar, lounge, dark
   room, corridor and the DJ set piece use the user's art; the other rooms are still placeholders.
+- Gauntlet (2026-10-04, 3 cycles: shoot → fresh Sonnet critic vs the user's two reference frames
+  → fix; reports in the git-ignored `shots/gauntlet/c1..c3/critic.md`). Scores 7/8 → 6/7 → 6/7
+  (mood / detective readability; a new critic each cycle, so noisy). Fixed: hero graded by the room
+  + backlight rim + contact shadow + floor reflection; labelled markers (SEARCH/LOOK/ENTER/LOCKED,
+  item names); DJs on the booth still; no stage beams in staff rooms; gradual intox curve with
+  double vision when heavy; narrow rooms cover the screen; venue name throughout; slimmer hatched
+  seam columns (shorter seams); glow band + floor fog behind/over the crowd; denser clumped crowd
+  in dance rooms; passers-by fade in front of her; keys spaced apart.
+  Open from the critics: the crowd's poses repeat (more baked rows), placeholder rooms (batch 2),
+  the close-up's pill bag reads as beads (regenerate), lounge-level haze in every room.
 - Next: the user's batch 1 → plates/loop/dancers via `ART`, flagship door positions matched to the
   art, then the iPad look test (fps, memory) before more rooms or the case generator.
 

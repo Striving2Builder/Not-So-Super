@@ -221,7 +221,7 @@ export class Nightclub {
     }
     // the room's backlight wraps her edges, then her body graded by the room's light
     ctx.globalAlpha = 0.85;
-    ctx.drawImage(rim, x - wpx / 2 - 2.5 * k, top - 2 * k, wpx, hpx); ctx.drawImage(rim, x - wpx / 2 + 2.5 * k, top - 2 * k, wpx, hpx);
+    ctx.globalAlpha = 0.75; ctx.drawImage(rim, x - wpx / 2 - 1.5 * k, top - 3.5 * k, wpx, hpx);
     ctx.globalAlpha = 1;
     ctx.drawImage(lit, x - wpx / 2, top, wpx, hpx);
   }
@@ -257,14 +257,14 @@ export class Nightclub {
       if (this.taken.has(`${r.id}:${s.x}`)) continue;
       tag(this.stage.sx(view, s.x), (this.stage.lane - 384) * k + bob, { closeup: 'SEARCH ▼', drink: 'DRINK ▼', djview: 'LOOK ▼' }[s.type] || 'LOOK ▼', '#ffd84d');
     }
-    if (n.door) tag(this.stage.sx(view, n.door.x), (this.stage.lane - 494) * k + bob, n.door.lock && !this.items.has(n.door.lock) ? '🔒' : '▼', '#fff');
+    if (n.door) tag(this.stage.sx(view, n.door.x), (this.stage.lane - 494) * k + bob, n.door.lock && !this.items.has(n.door.lock) ? 'LOCKED' : 'ENTER ▼', '#fff');
   }
 
   render(ctx) {
     const g = this.g, w = g.w, h = g.h, st = g.state;
     if (!this.stage) return;
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
-    let view = { k: this.k, x0: this.cam - this.viewW / 2, w, h, oy: this.oy };
+    let view = { k: this.k, x0: this.cam - this.viewW / 2, w, h, oy: this.oy, heroX: this.view === 'walk' ? this.p.x : null };
     if (this.view === 'set') {
       // the DJ booth set piece (stand-in for the pre-rendered loop): zoomed in on the decks
       const z = 1.5, k = this.k * z, vw = w / k;
