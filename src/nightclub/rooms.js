@@ -36,11 +36,11 @@ export const ART = {
   // behind foreground pillars); lane/back = her walk line and the back wall's foot, as a fraction of
   // the height; arches = painted doorways the layout puts its doors on
   plates: {
-    main: { src: 'main.jpg', w: 4836, lane: 0.9, back: 0.66, seams: [1664, 3172], arches: [564, 910, 1220, 2072, 2418, 2727, 3579, 3925, 4235] },
-    corridor: { src: 'corridor.jpg', w: 3328, lane: 0.9, back: 0.66, seams: [1664], arches: [655, 910, 1165, 2163, 2418, 2673] },
-    dark: { src: 'dark.jpg', w: 3328, lane: 0.9, back: 0.64, seams: [1664], arches: [] },
-    bar: { src: 'bar.jpg', w: 3328, lane: 0.9, back: 0.68, seams: [1664], arches: [] },
-    lounge: { src: 'lounge.jpg', w: 3328, lane: 0.9, back: 0.66, seams: [1664], arches: [] },
+    main: { src: 'main.jpg', w: 5092, lane: 0.9, back: 0.66, seams: [1728, 3364], arches: [564, 910, 1220, 2200, 2546, 2855, 3835, 4181, 4491] },
+    corridor: { src: 'corridor.jpg', w: 3456, lane: 0.9, back: 0.66, seams: [1728], arches: [655, 910, 1165, 2291, 2546, 2801] },
+    dark: { src: 'dark.jpg', w: 3456, lane: 0.9, back: 0.64, seams: [1728], arches: [] },
+    bar: { src: 'bar.jpg', w: 3456, lane: 0.9, back: 0.68, seams: [1728], arches: [] },
+    lounge: { src: 'lounge.jpg', w: 3456, lane: 0.9, back: 0.66, seams: [1728], arches: [] },
   },
   setPiece: { main: 'set_main.jpg' },
   setLoop: { main: 'set_main.mp4' }, // the DJ view's video (its own crowd + beams); the still is its poster

@@ -112,7 +112,7 @@ function placeKeys(rng, rooms) {
     let x = 0;
     for (let tries = 0; tries < 20; tries++) {
       x = rng.range(MARGIN, r.w - MARGIN);
-      if (r.doors.every((d) => Math.abs(d.x - x) > KEY_GAP)) break;
+      if (r.doors.every((d) => Math.abs(d.x - x) > KEY_GAP) && keys.every((q) => q.room !== r.id || Math.abs(q.x - x) > 360)) break; // labels never overlap
     }
     keys.push({ item, room: r.id, x: Math.round(x) });
     held.add(item);

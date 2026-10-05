@@ -259,7 +259,7 @@ export class ClubStage {
     this.back = spec ? spec.back * H : FLOOR - 40;  // the back wall's foot (the far crowd stands here)
     this.art = null;
     if (spec) { const img = new Image(); img.onload = () => { this.art = composeArt(img, room, byId, spec); }; img.src = PLATE.dir + spec.src; }
-    this.rim = lighten(this.L.haze, this.spec ? 0.2 : 0.55);
+    this.rim = lighten(this.L.haze, this.spec ? 0.42 : 0.55);
     this.atlas = crowdAtlas(this.rim);
     const W = room.w, dens = this.R.crowd / 1000;
     const clear = (px) => room.doors.every((d) => Math.abs(d.x - px) > 150);
@@ -274,7 +274,7 @@ export class ClubStage {
       else this.mid.push({ x: px, y: FLOOR + rng.range(0, 40), t: rng.int(0, CROWD_TYPES - 1), o: rng.next(), f: rng.chance(0.5), s: rng.range(0.9, 1.05) });
     }
     this.mid.sort((a, b) => a.y - b.y);
-    for (let i = 0, n = Math.round(W * dens * 0.22); i < n; i++) this.near.push({ x: rng.range(0, W * 1.3), y: H + rng.range(60, 160), t: rng.int(0, CROWD_TYPES - 1), o: rng.next(), f: rng.chance(0.5), s: rng.range(1.7, 2.0) });
+    for (let i = 0, n = W <= 2048 || this.R.crowd <= 2 ? 0 : Math.round(W * dens * 0.22); i < n; i++) this.near.push({ x: rng.range(0, W * 1.3), y: H + rng.range(60, 160), t: rng.int(0, CROWD_TYPES - 1), o: rng.next(), f: rng.chance(0.5), s: rng.range(1.7, 2.0) });
     // the live rig: moving heads along the truss, laser emitters in beam rooms
     const cols = [this.L.accent, lighten(this.L.haze, 0.5), '#ffffff'];
     this.sprites = cols.map(beamSprite);
@@ -292,10 +292,11 @@ export class ClubStage {
   drawBack(ctx, view, t, heroX = null) {
     const { k, w, h } = view, beat = (t * BPM) / 60;
     if (this.atlas.version !== dancersVersion()) this.atlas = crowdAtlas(this.rim); // the baked sheet arrived
+    ctx.save(); ctx.translate(0, -(view.oy || 0));
     // plate
     const vw = w / k;
     const src = this.art || this.plate, sc = src.width / this.room.w;
-    ctx.drawImage(src, Math.max(0, view.x0 * sc), 0, Math.min(src.width, vw * sc), src.height, Math.max(0, -view.x0) * k, 0, Math.min(vw, this.room.w) * k, h);
+    ctx.drawImage(src, Math.max(0, view.x0 * sc), 0, Math.min(src.width, vw * sc), src.height, Math.max(0, -view.x0) * k, 0, Math.min(vw, this.room.w) * k, H * k);
     // far crowd, fogged into the haze
     ctx.globalAlpha = 0.75;
     for (const d of this.far) {
@@ -331,6 +332,11 @@ export class ClubStage {
       ctx.stroke();
     }
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    ctx.globalCompositeOperation = 'lighter';
+    const band = ctx.createLinearGradient(0, (this.lane - 330) * k, 0, this.lane * k);
+    band.addColorStop(0, rgba(this.L.haze, 0)); band.addColorStop(0.6, rgba(this.L.haze, this.spec ? 0.2 : 0.12)); band.addColorStop(1, rgba(this.L.haze, 0));
+    ctx.fillStyle = band; ctx.fillRect(0, (this.lane - 330) * k, w, 330 * k);
+    ctx.globalCompositeOperation = 'source-over';
     // the DJs behind the decks (main floor), cut off at the booth's front
     if (this.room.kind === 'main' && !this.spec) {
       const bx = this.room.w - 760;
@@ -347,13 +353,15 @@ export class ClubStage {
       if (x < -120 || x > w + 120) continue;
       drawDancer(ctx, this.atlas, d.t, t, d.o, x, d.y * k, 300 * d.s * k, d.f);
     }
+    ctx.restore();
   }
 
   drawFront(ctx, view, t, dt) {
     const { k, w, h } = view, beat = (t * BPM) / 60;
     // ink pillars in the foreground hide the joins between stitched bays
+    ctx.save(); ctx.translate(0, -(view.oy || 0));
     if (this.spec) for (const q of this.spec.seams) {
-      const x = this.sx(view, q), pw = 300 * k;
+      const x = this.sx(view, q), pw = 210 * k, h = H * k;
       if (x < -pw || x > w + pw) continue;
       if (!this.colGrad || this.colGrad.pw !== pw) {
         const g = ctx.createLinearGradient(-pw / 2, 0, pw / 2, 0);
@@ -362,6 +370,9 @@ export class ClubStage {
       }
       ctx.save(); ctx.translate(x, 0);
       ctx.fillStyle = this.colGrad.g; ctx.fillRect(-pw / 2, 0, pw, h);
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = Math.max(1, 1.5 * k); ctx.beginPath();
+      for (let i = 0; i < 6; i++) { const hx = -pw / 2 + pw * (0.5 + i * 0.08); ctx.moveTo(hx, 0); ctx.lineTo(hx, h); }
+      ctx.stroke();
       ctx.fillStyle = '#05040a'; for (const cy of [0.12, 0.62]) ctx.fillRect(-pw / 2 - 6 * k, h * cy, pw + 12 * k, 26 * k);
       ctx.fillStyle = rgba(this.L.haze, 0.5); for (const cy of [0.12, 0.62]) ctx.fillRect(-pw / 2 - 6 * k, h * cy, pw + 12 * k, 3 * k);
       ctx.globalCompositeOperation = 'lighter';
@@ -376,6 +387,7 @@ export class ClubStage {
       if (x < -300 || x > w + 300) continue;
       drawDancer(ctx, this.atlas, d.t, t, d.o, x, d.y * k, 300 * d.s * k, d.f);
     }
+    ctx.restore();
     // drifting haze
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha = this.rig.haze;

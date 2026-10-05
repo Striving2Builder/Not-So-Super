@@ -28,7 +28,7 @@ export class Nightclub {
     this.zone = zone; this.done = false; this.t = 0;
     loadDancers();
     const seed = +(new URLSearchParams(location.search).get('clubseed') || 0);
-    this.club = buildClub(seed ? { seed, size: 'medium', name: zone.venue } : { flagship: true });
+    this.club = buildClub(seed ? { seed, size: 'medium', name: zone.venue } : { flagship: true, name: zone.venue });
     this.byId = Object.fromEntries(this.club.rooms.map((r) => [r.id, r]));
     this.items = new Set();
     this.taken = new Set();     // keys picked up / spots used, by "room:x"
@@ -53,12 +53,14 @@ export class Nightclub {
     this.room = room;
     this.stage = new ClubStage(room, this.byId, this.club.seed);
     const d = room.doors.find((e) => e.to === from) || room.doors[0];
-    this.p.x = d.x; this.p.facing = d.x < room.w / 2 ? 1 : -1;
-    this.cam = d.x;
+    this.p.facing = d.x < room.w / 2 ? 1 : -1;
+    this.p.x = !from && room.kind === 'entrance' ? room.w * 0.45 : clamp(d.x + this.p.facing * 220, 150, room.w - 150);
+    this.cam = this.p.x;
     $('hud-title').textContent = `${this.club.name} · ${ROOMS[room.kind].name}`;
   }
 
-  get k() { return this.g.h / PLATE.h; }
+  get k() { return Math.max(this.g.h / PLATE.h, this.room ? this.g.w / this.room.w : 0); }
+  get oy() { const k = this.k; return clamp(this.stage.lane * k - this.g.h * 0.9, 0, PLATE.h * k - this.g.h); }
   get viewW() { return this.g.w / this.k; }
 
   /** What's in reach: a door, a key on the floor, or a spot (drink, the DJ view). */
@@ -232,7 +234,7 @@ export class Nightclub {
     const lit = this.litCache?.lit || mk(), rim = this.litCache?.rim || mk();
     const a = lit.getContext('2d'), b = rim.getContext('2d');
     a.globalCompositeOperation = 'source-over'; a.clearRect(0, 0, lit.width, lit.height); a.drawImage(img, 0, 0);
-    a.globalCompositeOperation = 'source-atop'; a.fillStyle = L.haze; a.globalAlpha = 0.26; a.fillRect(0, 0, lit.width, lit.height); a.globalAlpha = 1;
+    a.globalCompositeOperation = 'source-atop'; a.fillStyle = L.haze; a.globalAlpha = 0.36; a.fillRect(0, 0, lit.width, lit.height); a.globalAlpha = 1;
     b.globalCompositeOperation = 'source-over'; b.clearRect(0, 0, rim.width, rim.height); b.drawImage(img, 0, 0);
     b.globalCompositeOperation = 'source-in'; b.fillStyle = L.accent; b.fillRect(0, 0, rim.width, rim.height);
     this.litKey = key; this.litCache = { lit, rim };
@@ -262,7 +264,7 @@ export class Nightclub {
     const g = this.g, w = g.w, h = g.h, st = g.state;
     if (!this.stage) return;
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
-    let view = { k: this.k, x0: this.cam - this.viewW / 2, w, h };
+    let view = { k: this.k, x0: this.cam - this.viewW / 2, w, h, oy: this.oy };
     if (this.view === 'set') {
       // the DJ booth set piece (stand-in for the pre-rendered loop): zoomed in on the decks
       const z = 1.5, k = this.k * z, vw = w / k;
@@ -274,8 +276,10 @@ export class Nightclub {
     const set = this.view === 'set' && (vid || this.setImage());
     if (set) this.stage.drawSetPiece(ctx, set, w, h, this.t, !vid);
     else this.stage.drawBack(ctx, view, this.t, this.view === 'walk' ? this.p.x : null);
-    if (this.view === 'walk') { this.drawMarkers(ctx, view); this.drawHero(ctx, view); }
+    const world = (fn) => { ctx.save(); ctx.translate(0, -(view.oy || 0)); fn(); ctx.restore(); };
+    if (this.view === 'walk') world(() => this.drawHero(ctx, view));
     this.stage.drawFront(ctx, view, this.t, this.dt || 1 / 60);
+    if (this.view === 'walk') world(() => this.drawMarkers(ctx, view)); // labels over the columns
     afterScene(ctx, g.canvas, w, h, st ? st.intox : 0, this.t);
     const dark = this.blackout ? clamp(this.blackout.t < 2.4 ? this.blackout.t / 1.2 : 1 - (this.blackout.t - 2.4) / 1.2, 0, 1) : this.fade.a;
     if (dark > 0) { ctx.fillStyle = `rgba(0,0,0,${dark})`; ctx.fillRect(0, 0, w, h); }

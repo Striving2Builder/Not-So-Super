@@ -16,7 +16,7 @@ from PIL import Image, ImageOps
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 SRC = os.path.join(ROOT, 'assets', 'nightclub', 'incoming', 'batch1')
 OUT = os.path.join(ROOT, 'assets', 'nightclub', 'plates')
-H, SEAM, PLATE_H = 720, 220, 1024
+H, SEAM, PLATE_H = 720, 130, 1024
 
 # room -> bays (file stem, '~' = mirrored) and the arch centres in each source image (0..1 across)
 ARCH_WALK = [0.31, 0.5, 0.67]
