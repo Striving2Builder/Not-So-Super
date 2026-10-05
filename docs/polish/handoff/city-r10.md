@@ -1,6 +1,6 @@
 # City round 10 handoff (cloud session 1, branch `cloud/city-r10`)
 
-Brief: STATUS.md "Round 10 review" → City items C1–C13. Gauntlet loop, 4 cycles: fix → re-shoot →
+Brief: STATUS.md "Round 10 review" → City items C1–C13. Gauntlet loop, 4 cycles (+ cycles 5–6: roofs, dusk C6): fix → re-shoot →
 fresh sonnet critic (new fly3d frames + C-list only) → commit + push. Base for A/B: `git archive
 b615a78 src` (= phase-2 1e65910 + the stub). All procedural: nothing needed Blender.
 
@@ -31,7 +31,25 @@ b615a78 src` (= phase-2 1e65910 + the stub). All procedural: nothing needed Blen
   needle/deco/ziggurat/spike tops and hung between the twin towers), octagonal towers get octagonal
   tubes (`neonOct` in buildings3d; square rings' corners stood off the casino and deco crowns).
   This was the cruise_2 "yellow ring overshooting the tower" the critics kept flagging (C2).
+- **Cycle 5 (roofs + dusk C6):** *Dusk key bug* (sky3d): from night 0.5 the key light was the high blue
+  moon while the sun disc still sat on the horizon (default start 19:04 = night 0.54), so the faces
+  toward the drawn sun were lit cold and the tan faces away from it read warm: "the wrong way round".
+  The key now stays the low sun until its disc has set (`sunK` 0, night 0.72), dimming with the disc;
+  the moon grows in after. Buildings FRAG: with the sun low (`dk`, from the key's height) walls get a
+  warmer, stronger key and a deeper, cooler shade (towers into the sun = dark cool silhouettes with
+  gold sun-side faces). *Roofs*: muted after lighting (60% to a warm grey of their own value: the blue
+  sky / moon made every roof a cobalt slab), a per-building roof value ±20% baked into the tint
+  (blocks3d, no ALU), FAR: a pale parapet lip inside the in-shader ink, and procedural roof clutter (4 m
+  cells of dark vents / pale bulkheads, box-filtered, from high patrol only); city3d: the lite builds'
+  penthouse detail now also draws above `detailAlt` (high patrol: real roof masses under her, +~800 tris).
 - Tools: `shoot.js --only a,b` (list); **`tools/shots/flybench.js`** (frozen-pose A/B, see Perf).
+
+## Perf cycle 5 (flybench, frozen pose, 21:00)
+- vs the cycle-4 head (3b87137), 5–6 rounds: skim 1.00, cruise ~0.97–0.98 (before the clutter was gated
+  to >330 m), high 0.983. A head-vs-base run this session read 0.918 / 0.90 / 0.92 but its head2 copy
+  spread ±3% and base ran fast that hour: compare against the cycle-4 head numbers below (skim 0.953 →
+  ~0.95, cruise ~0.96, high ~1.0 of base). Offsetting trims made in the cycle: per-roof value moved to
+  the vertex tint (blocks3d), FAR roof clutter only above 330 m. Same calls; tris +~770 at high only.
 
 ## Perf (flybench.js, Balanced, SwiftShader, 21:00, 6 rounds, head vs base, head run twice)
 - Full frame: **skim 0.953, cruise 0.978, high 1.02** (within ≤5%; skim near the edge). City alone
@@ -45,7 +63,13 @@ b615a78 src` (= phase-2 1e65910 + the stub). All procedural: nothing needed Blen
   runs had per-page altitude noise; cycle 4 numbers are the trustworthy ones).
 - Baseline fly3d.js (3D/2D): skim 0.70, cruise 0.71, high 0.70.
 
-## Critic scores (fresh sonnet, vs best HTML5): 6 / 6 / 6 / 6 (cycles 1–4)
+## Critic scores (fresh sonnet, vs best HTML5): 6 / 6 / 6 / 6 / 6 (cycles 1–5)
+Cycle 5: C1 C3 FIXED; C6 improved ("cruise_2/boost_1/high_2 sun-facing faces warm orange, shade deeper
+navy; towers into the sun read as warm silhouettes"); low_* canyons still evenly lit. Roofs from patrol
+"still mostly read as flat dark slabs". Ranked: patrol ground lot grid + candy mid-ground blocks; boost_2
+dark noisy far city; high_1 flat water + far ghost strips; Tetris lit windows (boost_1, night_2); low_1
+pinstripes / x marks / no base darkening; vice_2 overbright neon bands; bare far roofs.
+
 Cycle 4: **C1 FIXED**, C3 FIXED; C2 C4 C5 C6 C7 C8 C9 C13 improved; C10 C11 C12 not. Its ranked list:
 roofs read as flat cobalt/navy slabs from patrol height (+ two dark "pillow" caps in patrolview_2);
 lit-window runs / "x" marks; at dusk the camera-facing faces read cool and the shade warm; ghost

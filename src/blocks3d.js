@@ -100,6 +100,7 @@ export function building(B, o, blk, S) {
   if (!vice) L.tint.lerp(_g.setRGB(1, 1, 1).multiplyScalar(lum(L.tint)), 0.4);
   L.roofTint.lerp(L.tint, 0.45).multiplyScalar(0.85);
   L.roofTint.lerp(_g.setRGB(1, 0.94, 0.86).multiplyScalar(lum(L.roofTint)), vice ? 0.3 : 0.55);
+  L.roofTint.multiplyScalar(0.8 + 0.4 * hash2(x, y, 99)); // each roof its own value (far roofs read as one slab)
   const face = streetFace(o, blk);
   tiers = [[x0, z0, x1, z1, 0, H]];
   if (o.container || o.truck) { L.style = STYLE.industrial; box(B, x0, z0, x1, z1, 0, H, L, { ink: 0.6 }); return; }
