@@ -14,6 +14,7 @@ import { showNewspaper } from './newspaper.js';
 import { HERO, DISTRICTS, THEMES, DEALS, BOSSES, VENUES, BILLBOARDS } from './data.js';
 import { UI, dialog, toast } from './ui.js';
 import { sfx } from './sfx.js';
+import { ambience } from './ambience.js';
 import { $, pick, chance, fmtTime } from './util.js';
 import { loadHero, HERO_SKIN } from './hero3d.js';
 import { loadEnemies } from './enemies.js';
@@ -73,6 +74,7 @@ game.setMode = (name, p) => {
   $('prompt').classList.remove('on');
   $('marker').classList.remove('on');
   game.mode.enter(p || {});
+  ambience.setMode(name);
 };
 
 // WebGL can't be had at all any more: 3D flight drops to the 2D view; a 3D zone in progress is left.
@@ -353,6 +355,7 @@ function frame(now) {
   if (game.modeName === 'overworld' && !UI.open && autoTune.sample(realDt)) {
     toast('Switched graphics to Battery saver for smoother play (change it in the pause menu)', 'info');
   }
+  ambience.update(dt, !m || UI.open || gfxLost());
   if (m) {
     try {
       if (UI.open || gfxLost()) { if (m.onPaused) m.onPaused(); } // (graphics restoring: the world waits)

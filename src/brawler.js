@@ -330,7 +330,7 @@ export class Brawler {
           this.g.commentary.frost(s.x, s.y);
         }
         else toast('Not enough power', 'bad');
-      } else if (p.en >= 30) { this.aimSpecial(760); p.st = 'beam'; p.st_t = 0; p.en -= 30; p.hitSet.clear(); sfx.beam(); this.superMove('heat'); }
+      } else if (p.en >= 30) { this.aimSpecial(760); p.st = 'beam'; p.st_t = 0; p.en -= 30; p.hitSet.clear(); sfx.heat(); this.superMove('heat'); }
       else toast('Not enough power', 'bad');
     }
     if ((p.st === 'beam' || p.st === 'breath') && p.aimZ != null) p.z += (p.aimZ - p.z) * Math.min(1, dt * 14); // aim assist onto the lane of the pack
