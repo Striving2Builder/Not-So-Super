@@ -17,10 +17,22 @@ Base for A/B: `git archive b615a78 src` (= phase-2 1e65910 + stub) in the scratc
 - **C4 far ring**: layers fade on steep rays (`RING.dip`) and their bases melt into the ground haze.
 - **C5**: prism faces leaning back > ~33° use the roof material (pyramids, spire/dome tops).
 - **C7 water** (skyline3d sea): navy → sky Fresnel, drifting ink ripple dashes (box-filtered), a glint
-  streak stretched toward the lens, hazed ×0.8 (was ×1.35: the river ring read as a lilac band).
+  streak stretched toward the lens, hazed like land (was ×1.35: the river ring read as a lilac band).
 - **C10 lights**: `litWin()` = whole lit floors + 2-wide stacks + sparse scatter, 3 colour temps;
   transom dropped (each pane was a "+").
 - tools: `shoot.js --only a,b` takes a list.
+
+## Done (cycle 3)
+- Perf: haze sun term and dusk rim behind uniform branches (off at night); 2×2 groups glow at the
+  mean (no hash), level-0 lights softened (few-px lit panes became "x" glyphs after FXAA + sharpen).
+- C10 lights = a few whole lit floors + sparse single windows (stacks made Tetris pieces). C9 halftone
+  off fine window grids (45° dots beat into a diagonal net). C11 roof parapet band (coping line +
+  shadow, quad position), non-vice walls 40% to grey. Water reflection capped (river ring = lilac
+  ribbon far off). **C13** `lotDetail()` (ground3d, hooked into CityArt + the far plan, same canvas
+  sizes): plaza paving, lawn, construction pit, car park, plain ±tone.
+- Critic cycle 3: 6/10 (C3 fixed; C1 C2 C4 C5 C6 C7 C9 C13 improved; C8 C10 C11 C12 not).
+- Perf cycle 3 (frozen, 6 rounds, head / cycle-1 / base): head 0.927 / 0.918 / 0.917 of base;
+  cycle 1 in the same run 0.94 / 0.96 / 0.94. **Still over budget**: groups() is the cost.
 
 ## Done (cycle 2)
 - **C8** haze takes the dome's warm toSun glow toward the sun (`uSunAir`/`uSunDirH`, `gRay` set per

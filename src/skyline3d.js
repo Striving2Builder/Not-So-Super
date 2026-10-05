@@ -44,7 +44,7 @@ void main() {
   // city lights by night, one hard sun/moon glint streak stretched toward the lens; hazed less
   // than the land, so the coast holds its edge (it melted into the haze as a pale lilac plate)
   vec3 deep = mix(vec3(0.015, 0.07, 0.22), vec3(0.008, 0.03, 0.1), uNight);
-  vec3 c = mix(deep, uSky * 0.95, 0.06 + 0.7 * fres);
+  vec3 c = mix(deep, uSky * 0.8, 0.06 + 0.5 * fres); // (capped: far off the river ring mirrored the bright sky as a lilac ribbon)
   float dist = length(vW - cameraPosition);
   float w = sin(vW.x * 0.07 + uTime * 0.5 + sin(vW.z * 0.03) * 2.) * sin(vW.z * 0.09 - uTime * 0.35 + vW.x * 0.02);
   // crest strokes only close by: further off they alias into a white dash pattern

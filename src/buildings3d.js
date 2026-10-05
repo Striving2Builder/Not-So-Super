@@ -83,10 +83,12 @@ vec3 gRay = vec3(0.);
 // sun the far air takes the dome's own warm glow (uSunAir: the same term the sky adds just above
 // the horizon, so haze and sky still meet without an edge); away from it it stays cool
 vec3 airAt(float f, float dn) {
-  vec3 a = mix(uHazeCol, uHorizon, smoothstep(0.35, 1., f));
-  float lw = dot(gRay.xz, gRay.xz) > 1e-6 ? pow(max(dot(normalize(gRay.xz), uSunDirH), 0.), 3.) : 0.;
-  a += uSunAir * lw * smoothstep(0.2, 1., f);
-  return mix(a, uHazeLow + uSunAir * lw * 0.35 * f, smoothstep(${HAZE.lowDn[0]}, ${HAZE.lowDn[1]}, dn));
+  vec3 a = mix(uHazeCol, uHorizon, smoothstep(0.35, 1., f)), lo = uHazeLow;
+  if (uSunAir.r > 0.002) { // (a uniform branch: skipped at night)
+    float lw = max(dot(gRay.xz, uSunDirH), 0.); lw *= lw * lw; // (gRay.xz ~ unit where it matters: far, level rays)
+    a += uSunAir * lw * smoothstep(0.2, 1., f); lo += uSunAir * lw * 0.35 * f;
+  }
+  return mix(a, lo, smoothstep(${HAZE.lowDn[0]}, ${HAZE.lowDn[1]}, dn));
 }
 // pulp grade: saturation and value contrast up (comic primaries), applied before the haze
 vec3 pulp(vec3 c) {
@@ -208,17 +210,17 @@ float pulse(float x, float a, float b, float w) { return (P1(x + 0.5 * w, a, b) 
  * they fade to the style's mean (a solid lit tint, no sparkle). Returns (wall shade, glass, lit),
  * like the old atlas masks, + the lit windows' wash on the wall (night glow).
  */
-// A window's light (id: its cell; busy 0..1): lit the way offices are, never random 2D noise
-// (that formed letters and Tetris shapes): whole lit floors with the odd dark window, lit
-// vertical stacks (a riser of late offices two windows wide), and a sparse scatter. Sets gTemp:
-// most windows the district's light, some cool office white, a few TV blue.
+// A window's light (id: its cell; busy 0..1): lit the way offices are, never dense 2D noise
+// (that formed letters and Tetris shapes): a few whole lit floors with the odd dark window and a
+// sparse scatter of single windows. Sets gTemp: most windows the district's light, some cool
+// office white, a few TV blue.
 vec3 gTemp = vec3(1.);
+float gFoot = 0.; // facade(): the window cells' pixel footprint (halftone stays off fine window grids)
 float litWin(vec2 id, float seed, float busy) {
-  float b = 0.6 + 0.8 * busy, r = h12(id + seed * 3.17), hf = h12(vec2(id.y, seed)), hs = h12(vec2(floor(id.x * 0.5), seed + 7.1));
-  float fl = step(hf, 0.16 * b) * step(0.12, r);                 // lit floors
-  float st = step(hs, 0.1 * b) * step(0.3, fract(r * 7.3));      // stacks
-  float on = max(max(fl, st), step(r, 0.05 * b));                // + scatter
-  float t = fract(hf * 7.31 + hs * 3.7);                         // (per floor and stack)
+  float b = 0.6 + 0.8 * busy, r = h12(id + seed * 3.17), hf = h12(vec2(id.y, seed));
+  float fl = step(hf, 0.12 * b) * step(0.15, r);                 // lit floors (the odd dark window)
+  float on = max(fl, step(r, 0.1 * b));                          // + a sparse scatter of single windows
+  float t = fract(hf * 7.31 + r * 3.7);
   gTemp = t < 0.22 ? vec3(0.78, 0.92, 1.2) : t < 0.3 ? vec3(0.5, 0.72, 1.45) : vec3(1.);
   return on * (0.7 + 0.3 * fract(r * 37.1));
 }
@@ -231,9 +233,10 @@ vec2 grp(vec2 c, vec2 w, vec2 m, float lv, float seed, float busy, float lt) {
   float p = exp2(lv);
   vec2 q = c / p, wq = w / p;
   float g = pulse(q.x, m.x, 1. - m.x, wq.x) * pulse(q.y, m.y, 1. - m.y, wq.y);
-  // lights: level 0 = the near windows' own, 2 x 2 groups one cheap hash each (lit at the mean's rate)
+  // lights: level 0 = the near windows' own, softened (a lit window of a few pixels, sharpened on the
+  // upscale, became an "x" glyph); 2 x 2 groups glow at the mean (lit groups read as pale blotches)
   float lit = lt;
-  if (uLit > 0.) lit = lv < 0.5 ? litWin(floor(q), seed, busy) : step(h12(floor(q) + seed * 1.37), lt * 1.25) * 0.8;
+  if (uLit > 0. && lv < 0.5) lit = mix(litWin(floor(q), seed, busy), lt, 0.5);
   return vec2(g, lit);
 }
 vec4 groups(vec2 c, vec2 w, vec4 L, float style, float seed) {
@@ -241,6 +244,7 @@ vec4 groups(vec2 c, vec2 w, vec4 L, float style, float seed) {
   float wn = wa.x * wa.y, lt = (0.08 + 0.62 / 3.) * (0.6 + 0.8 * L.w) * 0.8;
   float wl = mix(L.z, L.z * 0.72, 3. / 32.);
   if (style == 3.) wl = mix(wl, 1., 10. / 32. * (1. - wn));
+  gFoot = 1.;
   // (2 x 2 groups fade to the mean sooner: past ~1.6 px a group's pattern isn't worth its cost)
   float f = log2(max(w.x, w.y) * 3.3), l0 = floor(f), k = l0 > 0.5 ? smoothstep(0.25, 0.75, f - l0) : smoothstep(0.65, 1., f - l0);
   if (f >= 1.75) return vec4(wl * (1. - wn) + wn * 0.27, wn * 0.92, lt * wn * 0.92, lt * (1. - wn)); // (the mean)
@@ -248,7 +252,7 @@ vec4 groups(vec2 c, vec2 w, vec4 L, float style, float seed) {
   if (k > 0.) gl = mix(gl, l0 > 0.5 ? vec2(wn, lt) : grp(c, w, m, 1., seed, L.w, lt), k); // (level 2 = the mean)
   gTemp = vec3(1.); // (colour temperatures near only: far off the cool ones read as pale blotches)
   float g = gl.x, lit = gl.y;
-  return vec4(wl * (1. - g) + g * 0.27, g * 0.92, lit * g * 0.92, lit * (1. - g));
+  return vec4(wl * (1. - g) + g * 0.27, g * 0.92, lit * g * 0.92, 0.);
 }
 vec4 facade(vec2 c, vec2 w, float style, float seed) {
   w = max(w, vec2(1e-3));
@@ -290,7 +294,8 @@ vec4 facade(vec2 c, vec2 w, float style, float seed) {
     if (uNight < 0.6) gShine = pulse(c.x * 0.7 + c.y * 0.45, 0.62, 0.7, (w.x * 0.7 + w.y * 0.45)) * (1. - fr) * k * (1. - uNight / 0.6);
   }
 #endif
-  float lit = uLit > 0. ? litWin(floor(c), seed, L.w) : 0.; // (only lit windows care: skipped by day)
+  gFoot = max(w.x, w.y);
+  float lit = uLit > 0. ? mix(litWin(floor(c), seed, L.w), (0.08 + 0.62 / 3.) * (0.6 + 0.8 * L.w) * 0.8, 0.5 * smoothstep(0.15, 0.3, gFoot)) : 0.; // (only lit windows care: skipped by day; few-pixel ones soften)
   float glass = max(0., win * (1. - fr * (1. - lit)) - rec * 0.45 * (1. - lit)); // (a lit window: a plain lit pane, no glyph)
   // night glow: a lit window washes its own cell's wall with a little of its light (cheap: no
   // extra shape, the cell is the window's); far off it simply brightens the lit tint
@@ -363,12 +368,21 @@ void main() {
       emi = vLit * (m.b * 1.15 * gTemp + m.a * 0.12) * uLit * mix(0.55, 1., smoothstep(0., 30., vW.y)); // (the street floors' light sinks into the canyon too)
       // dusk rim: with the sun low, a face in shade gets a thin warm line on its sun-side edge
       // (the edge a backlit tower's lit face turns away at); its quad position gives the edge
-      vec3 T = vec3(N.z, 0., -N.x); // along the quad (cross(up, N))
-      float ex = (dot(T, uKeyDir) > 0. ? 1. - vQ.x : vQ.x) / max(fwidth(vQ.x), 1e-5);
-      float rim = (1. - smoothstep(1.2 * dpr, 2.4 * dpr, ex)) * (1. - litK) * smoothstep(0.4, 0.08, uKeyDir.y) * (1. - uNight) * step(abs(N.y), 0.5);
-      col += uKeyCol * vec3(1., 0.8, 0.55) * rim * 0.7;
+      if (uKeyDir.y < 0.4 && uNight < 0.95) { // (a uniform branch: low sun only)
+        vec3 T = vec3(N.z, 0., -N.x); // along the quad (cross(up, N))
+        float ex = (dot(T, uKeyDir) > 0. ? 1. - vQ.x : vQ.x) / max(fwidth(vQ.x), 1e-5);
+        float rim = (1. - smoothstep(1.2 * dpr, 2.4 * dpr, ex)) * (1. - litK) * smoothstep(0.4, 0.08, uKeyDir.y) * (1. - uNight) * step(abs(N.y), 0.5);
+        col += uKeyCol * vec3(1., 0.8, 0.55) * rim * 0.7;
+      }
       // night rim: a cool sky-lit edge on faces turning away from her (the silhouette reads)
       emi += uSky * 0.45 * uNight * smoothstep(0.55, 0.85, fres) * (1. - m.g * 0.5);
+    }
+    if (roof && vStyle != 7.) {
+      // a parapet: a pale coping line along the roof's edge, then its shadow band on the roof
+      // (screen-space widths from the quad position: big roofs were one blank slab)
+      vec2 rq = min(vQ, 1. - vQ) / max(fwidth(vQ), vec2(1e-5));
+      float re = min(rq.x, rq.y) / dpr;
+      col *= 1. + 0.3 * (1. - smoothstep(1.5, 2.5, re)) - 0.22 * smoothstep(1.5, 2.5, re) * (1. - smoothstep(5., 8., re));
     }
 #ifdef FAR
     // ink without line geometry: every quad's own edges (roof outlines, corners, setback lips),
@@ -380,7 +394,7 @@ void main() {
     // halftone dots in the shade, close up only: fixed dot size (shrinking dots turn to salt),
     // the strength fades out instead
     // (the raking band gets a lighter screen than the full shadow)
-    float sh = (1. - 0.6 * litK - 0.4 * fullK * litK) * (1. - m.g * 0.7) * (1. - smoothstep(220., 420., dist));
+    float sh = (1. - 0.6 * litK - 0.4 * fullK * litK) * (1. - m.g * 0.7) * (1. - smoothstep(220., 420., dist)) * (roof ? 1. : 1. - smoothstep(0.08, 0.16, gFoot));
     if (sh > 0.01) {
       vec2 p = mat2(0.7071, -0.7071, 0.7071, 0.7071) * gl_FragCoord.xy / (6. * dpr);
       col *= 1. - 0.45 * sh * (1. - smoothstep(0.32, 0.44, length(fract(p) - 0.5) * 1.414));

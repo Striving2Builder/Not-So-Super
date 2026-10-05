@@ -12,7 +12,7 @@ import { SignAtlas } from './signs3d.js';
 import { chooseLandmarks, buildLandmarks, districtGlow } from './landmarks3d.js';
 import { Horizon, haze } from './skyline3d.js';
 import { Outer } from './outer3d.js';
-import { cityGround, tone, dressNear, lotDressing } from './ground3d.js';
+import { cityGround, tone, dressNear, lotDressing, lotDetail } from './ground3d.js';
 import { buildRiver } from './river3d.js';
 import { SkyCard, FarRing } from './skycard3d.js';
 import { Street } from './street3d.js';
@@ -43,7 +43,7 @@ export class City3D {
     this.art = new CityArt(city, tileRes, 400); // big cache: tile canvases back live textures, never recycle them
     this.art.riverBank = '#4f7046'; // green banks: the 3D river is a smooth ribbon laid over them
     // the near tiles wear the far plan's muted lot tones and lot dressing, so there is no seam where they meet
-    this.art.tone = tone; this.art.dress = dressNear;
+    this.art.tone = tone; this.art.dress = dressNear; this.art.lotDetail = lotDetail;
     this.chunks = new Map();
     this.cols = Math.ceil(city.cols / TILE); this.rows = Math.ceil(city.rows / TILE);
     // the skyline peaks over downtown + financial: buildings there get taller toward the core

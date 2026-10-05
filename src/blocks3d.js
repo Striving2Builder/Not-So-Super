@@ -91,10 +91,10 @@ export function building(B, o, blk, S) {
   let style = STYLE[pickW(D.styles, h[1])];
   if (o.glass && D.styles.glass) style = h[1] < 0.7 ? STYLE.glass : style;
   const L = look(o.gold ? '#e6c66a' : wall, pick(D.lit, h[2]), style, o.roofCol || pick(D.roofs, h[3]), h[4] < 0.55 ? STYLE.gravel : STYLE.tar, Math.floor(h[5] * 8) / 8, Math.floor(h[6] * 16) / 16);
-  // muted palettes (candy blocks read as toys from altitude): walls a quarter of the way to their
+  // muted palettes (candy blocks read as toys from altitude): walls 40% of the way to their
   // grey outside the vice districts (they keep their neon colour); roofs the district's roof
   // colour pulled toward its own wall colour, then half way to a warm grey (no candy caps)
-  if (!D.neon) L.tint.lerp(_g.setRGB(1, 1, 1).multiplyScalar(lum(L.tint)), 0.25);
+  if (!D.neon) L.tint.lerp(_g.setRGB(1, 1, 1).multiplyScalar(lum(L.tint)), 0.4);
   L.roofTint.lerp(L.tint, 0.45).multiplyScalar(0.85);
   L.roofTint.lerp(_g.setRGB(1, 0.94, 0.86).multiplyScalar(lum(L.roofTint)), D.neon ? 0.3 : 0.5);
   const face = streetFace(o, blk);

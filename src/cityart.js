@@ -208,6 +208,7 @@ export class CityArt {
       g.strokeStyle = '#15161c'; g.lineWidth = 1.6; g.strokeRect(x0, y0, LOT, LOT); // curb, inked
     }
     g.fillStyle = this.tone ? this.tone(D.lot, 'lot') : D.lot; g.fillRect(x0 + 5, y0 + 5, LOT - 10, LOT - 10);
+    this.lotDetail?.(g, b, x0 + 5, y0 + 5, LOT - 10); // optional hook (the 3D view): the lot's own ground, as on its far plan
     for (const f of b.flats) this.flat(g, f);
     // contact shadow where walls meet the ground
     g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 3;

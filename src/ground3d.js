@@ -107,6 +107,36 @@ function riverPark(g, b) {
   for (const t of lotDressing(b).trees) canopy(g, t.x, t.y, t.r * 0.8, t.h);
 }
 
+const PLAZA = new Set(['downtown', 'financial', 'casino', 'entertainment', 'retail']);
+/**
+ * A lot's own ground, by hash (one paved tone everywhere read as a board-game grid from high
+ * patrol): plaza paving with seams, a lawn with mown stripes, a construction pit, a big car park,
+ * or the plain paved tone a shade lighter or darker. Painted over the lot's fill (x, y, s: its
+ * square) before the flats and footprints, by the far plan and the near tiles alike, so they agree.
+ */
+export function lotDetail(g, b, x, y, s) {
+  if (b.river || NO_FILL.has(b.d) || b.d === 'farm') return;
+  const h = hash2(b.bx, b.by, 140), D = DISTRICTS[b.d], base = tone(D.lot, 'lot');
+  if (h < 0.16 && PLAZA.has(b.d)) {
+    g.fillStyle = '#a9a291'; g.fillRect(x, y, s, s);
+    g.fillStyle = 'rgba(40,36,30,.16)';
+    for (let k = 10; k < s; k += 10) { g.fillRect(x + k, y, 1, s); g.fillRect(x, y + k, s, 1); }
+  } else if (h < 0.3 && b.d !== 'casino') {
+    g.fillStyle = '#4c6c3e'; g.fillRect(x, y, s, s);
+    g.fillStyle = 'rgba(190,230,140,.08)';
+    for (let k = 4; k < s; k += 16) g.fillRect(x + k, y, 8, s);
+  } else if (h < 0.36 && b.d !== 'suburb') {
+    g.fillStyle = '#7c6648'; g.fillRect(x, y, s, s);
+    g.strokeStyle = 'rgba(40,28,16,.4)'; g.lineWidth = 3;
+    g.beginPath(); for (let k = 12; k < s; k += 18) { g.moveTo(x + k, y + 4); g.lineTo(x + k - 8, y + s - 4); } g.stroke();
+    g.strokeStyle = 'rgba(230,190,40,.55)'; g.lineWidth = 2; g.strokeRect(x + 3, y + 3, s - 6, s - 6);
+  } else if (h < 0.46 && b.d !== 'suburb') {
+    parking(g, x + 2, y + 2, s - 4, s - 4, b.bx * 17 + b.by * 5);
+  } else {
+    g.fillStyle = mix(base, h < 0.73 ? '#3e3b36' : '#9a958a', 0.18); g.fillRect(x, y, s, s);
+  }
+}
+
 /** The near tiles' hook (CityArt.dress): the parking patches and a soft shade under each 3D tree. */
 export function dressNear(g, b) {
   const D = lotDressing(b);
@@ -170,6 +200,7 @@ function plan(city, landmarks, PX) {
       d.strokeStyle = GROUND.kerb; d.lineWidth = 3; d.strokeRect(x0 - 6, y0 - 6, LOT + 12, LOT + 12);
     }
     R(d, x0, y0, LOT, LOT, tone(farm ? '#6a7a44' : D.lot, 'lot'));
+    lotDetail(d, b, x0, y0, LOT);
     for (const f of b.flats) {
       if (f.t === 'rect' || f.t === 'path') R(d, f.x, f.y, f.w, f.h, f.t === 'path' ? f.c : tone(f.c));
       else if (f.t === 'field') field(d, f, b);
