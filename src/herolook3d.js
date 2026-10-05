@@ -13,7 +13,13 @@ export const SUIT = { sat: 1.45, self: 0.32, rim: [0.62, 0.95, 1.0], rimK: [1.3,
  * keep a gentler saturation push, and their shade band takes its hue from the skin itself, a little
  * rosier (× shade), so the warm camera fill can't turn her thighs and hands orange-tan.
  */
-const SKIN = { sat: 1.1, shade: [0.97, 0.88, 0.9], grey: 0.35, floor: 0.66, g: [0.5, 0.93], b: [0.36, 0.86] }; // g, b: G/R and B/R ranges; grey: desaturation in the shade (ACES turns a dark peach orange); floor: shade brightness floor (× lit)
+const SKIN = { sat: 1.1, shade: [1.0, 0.86, 0.9], grey: 0.3, floor: 0.8, g: [0.5, 0.93], b: [0.36, 0.86] }; // g, b: G/R and B/R ranges; grey: desaturation in the shade (ACES turns a dark peach orange); floor: shade brightness floor (× lit)
+/**
+ * Her skirt (its atlas rect; glTF uv, v down, the hem at v0): one flat red (the painted hatch read as
+ * dirt at gameplay size), a deeper crimson shade, the underside always in it and a dark hem band, so
+ * it reads as its own shape over the red boots instead of one red mass with her legs.
+ */
+const SKIRT = { uv: [0.283, 0.262, 0.79, 0.424], red: [0.69, 0.01, 0.016], shade: [0.42, 0.0, 0.03], hem: [0.284, 0.55] }; // red/shade: linear; hem: [v up to, darkness]
 /**
  * The scene's light on her (3D flight only; the sprites keep white): `tint` multiplies everything she
  * shows (time of day: full by day, warm at dusk, dim and blue at night, so she isn't a daylight sticker
@@ -51,11 +57,11 @@ export function heroMaterial(src, { self = SUIT.self, rim = null, key = null, to
     sh.uniforms.suitRim = rim || { value: 0 }; sh.uniforms.suitKey = keyU;
     sh.uniforms.heroTint = light ? light.tint : { value: new THREE.Color(1, 1, 1) };
     sh.uniforms.heroRimC = light ? light.rim : { value: new THREE.Color(...SUIT.rim) };
-    const H = HAIR.uv.map((v) => v.toFixed(3));
+    const H = HAIR.uv.map((v) => v.toFixed(3)), S = SKIRT.uv.map((v) => v.toFixed(3));
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform float suitRim; uniform vec3 suitKey, heroTint, heroRimC;')
       .replace('#include <map_fragment>', `#include <map_fragment>
-float hairK = 0.0, hairD = 1.0, skinK = 0.0;
+float hairK = 0.0, hairD = 1.0, skinK = 0.0, skirtK = 0.0, hemK = 0.0;
 #ifdef USE_MAP
 { // her hair (orange-blonde texels in their atlas rect): one blonde, lit by the cel bands
   vec2 hu = vMapUv; vec3 t = diffuseColor.rgb;
@@ -63,6 +69,9 @@ float hairK = 0.0, hairD = 1.0, skinK = 0.0;
   hairK = inRect * step(t.b * 1.25, t.r) * step(t.b, t.g);
   hairD = clamp(dot(t, vec3(0.299, 0.587, 0.114)) / ${HAIR.ref.toFixed(3)}, 0.86, 1.12); // the painted locks / shine survive the flat tones (gently: a deep modulation turns blonde brown)
   diffuseColor.rgb = mix(diffuseColor.rgb, ${lit}, hairK);
+  skirtK = step(${S[0]}, hu.x) * step(hu.x, ${S[2]}) * step(${S[1]}, hu.y) * step(hu.y, ${S[3]}) * step(t.g * 2.0, t.r + 0.02); // (red or its dark hatch; not the gold)
+  hemK = skirtK * (1.0 - smoothstep(${(SKIRT.hem[0] - 0.01).toFixed(3)}, ${SKIRT.hem[0].toFixed(3)}, hu.y));
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SKIRT.red.join(', ')}), skirtK);
   vec2 sr = t.gb / max(t.r, 1e-3); // skin: warm and mid-saturated (the suit red has no green, the gold no blue)
   skinK = (1.0 - hairK) * step(0.25, t.r) * smoothstep(${SKIN.g[0].toFixed(2)}, ${(SKIN.g[0] + 0.06).toFixed(2)}, sr.x) * (1.0 - smoothstep(${(SKIN.g[1] - 0.04).toFixed(2)}, ${SKIN.g[1].toFixed(2)}, sr.x))
     * smoothstep(${SKIN.b[0].toFixed(2)}, ${(SKIN.b[0] + 0.06).toFixed(2)}, sr.y) * (1.0 - smoothstep(${(SKIN.b[1] - 0.04).toFixed(2)}, ${SKIN.b[1].toFixed(2)}, sr.y)) * step(sr.y, sr.x);
@@ -93,6 +102,11 @@ ${rim ? `{ float rf = 1.0 - abs(dot(normal, normalize(vViewPosition)));
   float lit = smoothstep(0.6, 1.0, L);
   vec3 sh = mix(a, vec3(al), ${SKIN.grey.toFixed(2)}) * vec3(${SKIN.shade.join(', ')});
   outgoingLight = mix(outgoingLight, mix(sh * max(L, ${SKIN.floor.toFixed(2)}), a * L, lit), skinK); }
+{ // skirt: two hard tones from the key light, lit red / deep crimson (its underside always the crimson), a darker hem band
+  vec3 nw = (vec4(normal, 0.0) * viewMatrix).xyz;
+  float lit = smoothstep(0.08, 0.22, dot(nw, suitKey)) * (1.0 - smoothstep(0.0, -0.3, nw.y));
+  vec3 sk = mix(vec3(${SKIRT.shade.join(', ')}), outgoingLight, lit) * (1.0 - ${SKIRT.hem[1].toFixed(2)} * hemK);
+  outgoingLight = mix(outgoingLight, sk, skirtK); }
 outgoingLight = outgoingLight * heroTint + rimAdd; // (the scene's time of day on all of her; the rim on top)
 #include <opaque_fragment>`);
   };

@@ -20,11 +20,13 @@ const CAPE = {
   floor: ['#a01622', '#8a1020'], // outer / inner: never darker than these after the night tint (a red cape, not a black flap)
   ink: '#0b0b16', inkW: 2.2, foldFrom: 0.38, // inkW: px like the body's hull; fold strokes start this far down
   sideFlat: 0.25, // how much of the out-of-plane shape goes when seen exactly side-on (keep the cup: never a plank)
-  lift: 0.35,     // seen from below at speed, the hem rises off her back by up to this × a segment per row (it shows past her)
-  rise: 0.16,     // at speed the cape streams up off her back (× a segment per row), so her body and legs read under it
+  lift: 0.2,      // seen from below at speed, the hem rises off her back by up to this × a segment per row (it shows past her)
+  rise: 0.07,     // at speed the cape streams up off her back (× a segment per row), so her body and legs read under it
   sway: [0.2, 0.7], // sideways billow at speed: × a segment per row / its rate (rad/s)
-  boost: [0.45, 0.7, 0.1], // boost: wave amplitude cut, flutter rate up, length up (stretched taut and long)
-  billow: [0.55, 1.3], // slow flight: a big slow billow, × a segment / its rate (rad/s), instead of hanging straight down
+  boost: [0.6, 0.8, 0.25, 0.18], // boost: wave amplitude cut, flutter rate up, length up, width cut (stretched taut, long and narrow)
+  billow: [0.32, 1.1], // slow flight / hover: a slow billow off her back, × a segment / its rate (rad/s) (bigger bunched it into folds)
+  hoverW: 0.4,   // hover / slow: the hem fans this much wider and the edges curl less (a full cape hanging off her shoulders)
+  dive: [0.3, 0.85], // dive (her feet up): length up, sideways sway / lift cut (it streams straight up along her body with the hair)
 };
 const C = CAPE.folds.length; // columns across the width
 
@@ -152,26 +154,33 @@ export class FlightCape {
    * scale: model → scene metres (× the patrol-view enlargement); bk: boost 0..1 (taut, long, fast flutter).
    */
   update(anchor, back, up, side, v, t, dt, scale, bk = 0) {
-    const n = this.n, Bo = CAPE.boost, L = CAPE.len * scale * (1 + Bo[2] * bk);
+    // dive: her body head-down (feet up), the cape streams straight back along it, longer
+    const dv = Math.min(1, Math.max(0, (back.y - 0.45) / 0.35));
+    const n = this.n, Bo = CAPE.boost, L = CAPE.len * scale * (1 + Bo[2] * bk + CAPE.dive[0] * dv);
     const sk = Math.min(1, v / 60), f = (4 + v / 18) * (1 + Bo[1] * bk), amp = (0.12 + 0.3 * sk) * (1 - Bo[0] * bk) * L;
-    if (!this.placed) { this.placed = true; for (let i = 0; i < n; i++) this.p[i].copy(anchor).addScaledVector(back, i * L); }
+    if (!this.placed) { this.placed = true; this.last = anchor.clone(); for (let i = 0; i < n; i++) this.p[i].copy(anchor).addScaledVector(back, i * L); }
+    // carried with her: the lag below is the cloth's, not her travel (at 300 m/s a frame's travel
+    // dragged the chain along her velocity, so a dive with any forward speed threw it out sideways)
+    const mv = this._a.subVectors(anchor, this.last);
+    for (let i = 1; i < n; i++) this.p[i].add(mv);
+    this.last.copy(anchor);
     // seen side-on its depth (arch, folds, flap) flattens: a thin band, not a fin standing off her
     const view = this._v.subVectors(this.eye, anchor);
     const sideOn = this.eye.lengthSq() ? Math.abs(view.normalize().dot(side)) : 0;
     const flat = 1 - CAPE.sideFlat * sideOn * sideOn;
     // from below (the camera under her back's plane) the cape would hide behind her: speed lifts the hem
-    const below = this.eye.lengthSq() ? Math.min(1, Math.max(0, -view.dot(up) * 3)) : 0, lift = (CAPE.lift * below + CAPE.rise) * sk * L;
-    const slow = 1 - sk, B = CAPE.billow;
+    const below = this.eye.lengthSq() ? Math.min(1, Math.max(0, -view.dot(up) * 3)) : 0, lift = (CAPE.lift * below + CAPE.rise) * sk * L * (1 - 0.7 * bk); // (boost: taut, flat behind her)
+    const slow = 1 - sk, B = CAPE.billow, calm = 1 - CAPE.dive[1] * dv;
     this.p[0].copy(anchor);
     for (let i = 1; i < n; i++) {
       const k = i / (n - 1);
       // around a straight line down her back: an S-wave that travels to the hem (bigger there),
       // a slower sway sideways, and a droop under gravity when she's slow
-      const tgt = this._t.copy(anchor).addScaledVector(back, i * L * (0.5 + 0.5 * sk))
-        .addScaledVector(up, ((Math.sin(t * f - i * 0.75) + 0.6) * amp + Math.sin(t * 1.7 - i * 0.5) * L * 0.12) * k * flat + lift * i * k
-          + (Math.sin(t * B[1] - i * 0.45) + 0.5) * B[0] * L * slow * k * i * 0.5)
-        .addScaledVector(side, Math.sin(t * f * 0.55 - i * 0.6) * amp * 0.6 * k + Math.sin(t * B[1] * 0.7 - i * 0.4) * B[0] * L * slow * k * i * 0.3
-          + Math.sin(t * CAPE.sway[1] - i * 0.35) * CAPE.sway[0] * L * sk * (1 - 0.6 * bk) * k * i);
+      const tgt = this._t.copy(anchor).addScaledVector(back, i * L * (0.8 + 0.2 * sk))
+        .addScaledVector(up, ((Math.sin(t * f - i * 0.75) + 0.6) * amp + Math.sin(t * 1.7 - i * 0.5) * L * 0.12) * k * flat + lift * i * k * calm
+          + (0.6 + 0.4 * Math.sin(t * B[1] - i * 0.3)) * B[0] * L * slow * k * i * 0.5)
+        .addScaledVector(side, (Math.sin(t * f * 0.55 - i * 0.6) * amp * 0.6 * k + Math.sin(t * B[1] * 0.7 - i * 0.3) * B[0] * L * slow * k * i * 0.25
+          + Math.sin(t * CAPE.sway[1] - i * 0.35) * CAPE.sway[0] * L * sk * (1 - 0.6 * bk) * k * i) * calm);
       tgt.y -= L * slow * 0.45 * i;
       this.p[i].lerp(tgt, Math.min(1, dt * (5 + v / 10))); // (a little lag down the chain: the wave reads as cloth, not a hinged board)
       const d = this._a.subVectors(this.p[i], this.p[i - 1]), len = d.length() || 1; // keep the segment length
@@ -180,7 +189,7 @@ export class FlightCape {
     const pos = this.cloth.geometry.attributes.position;
     for (let i = 0; i < n; i++) {
       const k = i / (n - 1), q = this.p[i];
-      const w0 = (CAPE.w[0] + (CAPE.w[1] - CAPE.w[0]) * Math.pow(k, 0.75)) * scale;
+      const w0 = (CAPE.w[0] + (CAPE.w[1] * (1 + CAPE.hoverW * slow) - CAPE.w[0]) * Math.pow(k, 0.75)) * scale * (1 - Bo[3] * bk * k);
       // along the spine at the hem: a shallow point (the middle trails the corners)
       const tan = i === n - 1 ? this._b.subVectors(q, this.p[i - 1]).normalize() : null;
       const breathe = 1 + 0.25 * Math.sin(t * f * 0.8 - i * 1.3);
@@ -191,7 +200,7 @@ export class FlightCape {
         // out of her back: the arch (middle stands off), the folds (deeper toward the hem; the edges
         // curl down), and an out-of-phase flutter on the edges
         const fl = Math.sin(t * (6 + 6 * bk) - i * 1.1 + u * 1.5) * w * (0.07 + 0.05 * bk) * k * au;
-        const o = (CAPE.arch * scale * (1 - u * u) + CAPE.clear * scale * Math.min(1, k * 2) + CAPE.folds[j] * CAPE.fold * scale * k * k * breathe - w * (0.12 + 0.26 * k) * au * au + fl) * flat;
+        const o = (CAPE.arch * scale * (1 - u * u) + CAPE.clear * scale * Math.min(1, k * 2) + CAPE.folds[j] * CAPE.fold * scale * k * k * breathe - w * (0.12 + 0.26 * k) * au * au * (1 - 0.5 * slow) + fl) * flat;
         let x = q.x + side.x * w * u + up.x * o, y = q.y + side.y * w * u + up.y * o, z = q.z + side.z * w * u + up.z * o;
         if (tan) { const tip = w * 0.3 * (1 - au * au); x += tan.x * tip; y += tan.y * tip; z += tan.z * tip; }
         pos.setXYZ(i * C + j, x, y, z);

@@ -34,6 +34,7 @@ export const FLY_POSE = {
   chin: [1.6, 0.55, 0.5, 1.2], // head lift toward her back (tan of the crown's angle): cruise / boost / dive / slow
   arch: [0.5, -0.04, 0, 0.55],  // chest lift: cruise / boost / dive / slow
   cruiseUp: 0.14,             // cruise: shoulders a touch above the hips (a line of action, not a plank)
+  boostDip: 0.14,             // boost: nose down a touch (a missile driving forward; more of her back to the chase camera)
   turnArm: 0.85,              // how much a full bank hands the lead to the outside arm (mirrors the turns)
   bob: [0.05, 0.015],         // float bob (m): hover / flying
 };
@@ -88,7 +89,7 @@ export class FlightPose {
     if (perch) pitch = -h.lean * P.hoverLean;
     else if (this.hover) pitch = -h.lean * P.hoverLean - P.hoverTilt + Math.sin(t * 1.7 + 0.8) * 0.025; // (leans as she bobs)
     else if (diving) pitch = -P.divePitch;
-    else pitch = (1 - fk) * P.slowPitch + this.slow * P.slowPitch * 0.8 + this.climb * P.climb * fk - h.lean * 0.25 + P.cruiseUp * fk * (1 - this.boost);
+    else pitch = (1 - fk) * P.slowPitch + this.slow * P.slowPitch * 0.8 + this.climb * P.climb * fk - h.lean * 0.25 + P.cruiseUp * fk * (1 - this.boost) - P.boostDip * fk * this.boost;
     const roll = perch ? 0 : h.bank * P.bank * (1 + (P.boostBank - 1) * this.boost) * (this.hover ? 0.5 : 1);
     if (!this.init) { this.init = true; this.pitch.x = pitch; this.roll.x = roll; }
     if (dt > 0) { spring(this.pitch, pitch, dt, P.pitchSpring); spring(this.roll, roll, dt, P.rollSpring); }
@@ -155,7 +156,7 @@ export class FlightPose {
       const cross = into * 0.3 + (outside ? -sg * 0.18 * aT : 0); // the leading fist reaches across into the turn
       const up = this.mix(V[2], [
         [cr * ld, D(6, 1, 0.16, -sg * 0.04 + cross)],     // cruise lead: forward, a little high
-        [cr * tr, D(7, -0.85, 0.05, sg * 0.62)],          // cruise trail: swept back and out (a wing)
+        [cr * tr, D(7, -0.75, 0.08, sg * 0.85)],          // cruise trail: swept back and well out (a wing: a wide X, boost is a narrow line)
         [bk * ld, D(8, 1, 0.03, cross * 0.4)],            // boost lead: dead ahead
         [bk * tr, D(9, -1, 0.06, sg * 0.14)],             // boost trail: pinned along her side
       ]);
@@ -167,7 +168,7 @@ export class FlightPose {
       if (u) m.aim(`${side}Arm`, `${side}ForeArm`, u, k);
       const fore = this.mix(V[2], [
         [cr * ld, D(6, 1, 0.3, -sg * 0.1 + cross)],       // (a soft elbow: the fist rides a little high)
-        [cr * tr, D(7, -1, -0.25, sg * 0.2)],
+        [cr * tr, D(7, -1, -0.2, sg * 0.35)],
         [bk * ld, D(8, 1, 0.02, 0)],                      // locked straight
         [bk * tr, D(9, -1, -0.05, sg * 0.02)],
         [dv, D(10, 1, 0.02, -sg * 0.06)],                  // fists meet ahead of her head
@@ -190,7 +191,7 @@ export class FlightPose {
       ]);
       if (thigh) m.aim(`${L}UpLeg`, `${L}Leg`, thigh, k * 0.95);
       // the left knee bends at cruise; in a bank the inside knee does (mirrored turns)
-      const bend = cr * ((sg > 0 ? 0.9 : 0.22) * (1 - aT) + (T * sg < 0 ? 0.75 : 0.12) * aT);
+      const bend = cr * ((sg > 0 ? 1.1 : 0.22) * (1 - aT) + (T * sg < 0 ? 0.75 : 0.12) * aT);
       const shin = this.mix(V[2], [
         [cr, D(0, -1, bend, out * 0.8).addScaledVector(inward, 0.06 + wob)],
         [bk + dv, D(3, -1, 0, out * 0.5).addScaledVector(inward, 0.08 + 0.06 * bk)], // (locked together)
