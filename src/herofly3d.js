@@ -46,10 +46,10 @@ export class FlyHero3D {
     this.model = null;
     this.size = 1; // patrol-view enlargement (eased)
     this.pose = new FlightPose();
-    // inked blob: a dark core with a crisp ink ring and a pale rim outside it, so it reads on lit roofs and dark streets alike
+    // inked blob: a dark core with an ink ring at its edge (a pale rim read as a glossy disc)
     const c = document.createElement('canvas'); c.width = c.height = 128;
     const g = c.getContext('2d'), grd = g.createRadialGradient(64, 64, 4, 64, 64, 60);
-    grd.addColorStop(0, 'rgba(0,0,0,.9)'); grd.addColorStop(0.68, 'rgba(0,0,0,.7)'); grd.addColorStop(0.76, 'rgba(0,0,0,.95)'); grd.addColorStop(0.8, 'rgba(0,0,0,.95)'); grd.addColorStop(0.84, 'rgba(255,240,205,.55)'); grd.addColorStop(0.9, 'rgba(255,240,205,.4)'); grd.addColorStop(1, 'rgba(255,240,205,0)');
+    grd.addColorStop(0, 'rgba(0,0,0,.85)'); grd.addColorStop(0.72, 'rgba(0,0,0,.65)'); grd.addColorStop(0.84, 'rgba(0,0,0,.9)'); grd.addColorStop(0.88, 'rgba(0,0,0,.9)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
     const geo = new THREE.PlaneGeometry(1, 1); geo.rotateX(-Math.PI / 2);
     this.shadow = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));

@@ -17,9 +17,10 @@ import { comic } from './comic.js';
 export const DIVE_FX = {
   push: 1.1, push2d: 1.05,   // CSS zoom of the game view at the end of the plunge (2D already zooms)
   lines: 36, linesLite: 14,  // plunge focus lines
+  linesFrom: 0.36,           // ...coming in from ~400 ms of the 1.1 s plunge
   stopMs: 80,                // hit-stop: the impact frame holds dead still before the shake
   shake: 16,                 // px, decays over shakeMs
-  shakeMs: 420,
+  shakeMs: 680,              // (long enough to carry through the hold: the panel never sits dead still)
   holdMs: 620,               // impact → earliest wipe (the word lands and reads)
   maxHoldMs: 2600,           // the longest the panel waits for a slow zone (then the LOADING card shows)
   loadingAfterMs: 950,       // still loading by then: the zone tag grows the loading dashes
@@ -72,7 +73,7 @@ function cleanup() {
   S = null;
   cancelAnimationFrame(s.raf);
   for (const v of views()) { v.style.scale = ''; v.style.transformOrigin = ''; }
-  document.body.classList.remove('divefx', 'divefx-hold');
+  document.body.classList.remove('divefx', 'divefx-hold', 'divefx-landed', 'divefx-out');
   s.root.remove(); s.gutter?.remove();
   s.cv.width = s.cv.height = 0; // (iOS counts canvas memory until the backing store is dropped)
 }
@@ -102,6 +103,7 @@ function tick() {
     if (t >= DIVE_FX.holdMs && (ready || t >= DIVE_FX.maxHoldMs)) {
       S.out = true;
       S.root.classList.add('out');
+      document.body.classList.add('divefx-out');
       if (!S.reduced) wipeGutter(S);
       setTimeout(cleanup, (S.reduced ? 260 : DIVE_FX.wipeMs) + 40);
     }
@@ -135,7 +137,7 @@ export const diveFx = {
     if (!S || S.impactT) return;
     S.lastPlunge = performance.now();
     const { ctx: c, W, H, dpr } = S;
-    const k = smooth(0.02, 1, f);
+    const k = smooth(0.02, 1, f), lk = smooth(DIVE_FX.linesFrom, 0.75, f); // (the lines come in once the plunge is under way)
     // push-in toward her (the zone's own canvases are reset at the impact)
     S.scale = S.reduced ? 1 : 1 + ((document.body.classList.contains('fly3d') ? DIVE_FX.push : DIVE_FX.push2d) - 1) * k * k;
     for (const v of views()) { v.style.transformOrigin = `${x.toFixed(0)}px ${y.toFixed(0)}px`; v.style.scale = S.scale.toFixed(4); }
@@ -147,8 +149,9 @@ export const diveFx = {
     vg.addColorStop(0, 'rgba(12,10,24,0)'); vg.addColorStop(1, `rgba(12,10,24,${(0.55 * k).toFixed(3)})`);
     c.fillStyle = vg; c.fillRect(0, 0, W, H);
     // manga focus lines: tapered wedges from beyond the frame toward her, a third re-rolled per frame
-    const n = S.reduced ? DIVE_FX.linesLite : DIVE_FX.lines;
+    const n = Math.round((S.reduced ? DIVE_FX.linesLite : DIVE_FX.lines) * lk);
     S.frame++;
+    S.lines.length = Math.min(S.lines.length, n);
     for (let i = 0; i < n; i++) {
       if (!S.lines[i] || (i + S.frame) % 3 === 0) S.lines[i] = { a: rand(0, Math.PI * 2), r: rand(0, 0.16), w: rand(3, 12), white: Math.random() < 0.3 };
     }
@@ -162,22 +165,24 @@ export const diveFx = {
         c.lineTo(x + ca * r0, y + sa * r0);
         c.lineTo(x + ca * R + sa * w, y + sa * R - ca * w);
       }
-      c.fillStyle = white ? `rgba(255,255,255,${(0.2 + 0.55 * k).toFixed(3)})` : `rgba(10,10,18,${(0.25 + 0.65 * k).toFixed(3)})`;
+      c.fillStyle = white ? `rgba(255,255,255,${((0.2 + 0.55 * k) * lk).toFixed(3)})` : `rgba(10,10,18,${((0.25 + 0.65 * k) * lk).toFixed(3)})`;
       c.fill();
-      if (!white) { c.strokeStyle = `rgba(255,255,255,${(0.35 * k).toFixed(3)})`; c.lineWidth = 1; c.stroke(); } // (ink lines still read at night)
+      if (!white) { c.strokeStyle = `rgba(255,255,255,${(0.35 * k * lk).toFixed(3)})`; c.lineWidth = 1; c.stroke(); } // (ink lines still read at night)
     }
   },
 
   /**
    * She hits the ground. Call right after the frame is drawn (the game canvases are copied into the
-   * impact panel); land() starts the zone on the next frame, once the panel is on screen.
+   * impact panel); land() starts the zone on the next frame, once the panel is on screen. gy: the
+   * ground's screen y under her (the crater, shockwave and dust sit there), when the view knows it.
    */
-  impact(x, y, land) {
+  impact(x, y, land, gy = null) {
     if (!S) this.start();
     if (!S) { land(); return; }
     const s = S, { W, H, dpr, root, cv } = s, c = s.ctx;
     s.impactT = performance.now();
     x = clamp(x, W * 0.15, W * 0.85); y = clamp(y, H * 0.25, H * 0.85);
+    const ground = gy === null ? y + H * 0.03 : clamp(gy, y + H * 0.03, H * 0.9);
     // 1) the impact panel: this exact frame, copied off the game canvases (same frame: still readable)
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.clearRect(0, 0, cv.width, cv.height);
@@ -187,13 +192,13 @@ export const diveFx = {
       try { c.drawImage(src, 0, 0, cv.width, cv.height); } catch (e) { /* tainted/lost: skip */ }
     }
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawImpact(c, W, H, x, y + H * 0.03, s.reduced);
+    drawImpact(c, W, H, x, ground, s.reduced, groundTint(c, cv, dpr, x, ground));
     cv.style.transformOrigin = `${x.toFixed(0)}px ${y.toFixed(0)}px`;
     cv.style.setProperty('--s0', s.scale.toFixed(4));
     cv.style.setProperty('--s1', (s.scale * (s.reduced ? 1 : 1.04)).toFixed(4));
     cv.style.setProperty('--a', s.reduced ? 2 : DIVE_FX.shake);
     for (const v of views()) { v.style.scale = ''; v.style.transformOrigin = ''; } // (hidden under the panel now)
-    root.style.setProperty('--x', x.toFixed(0) + 'px'); root.style.setProperty('--y', (y + H * 0.03).toFixed(0) + 'px');
+    root.style.setProperty('--x', x.toFixed(0) + 'px'); root.style.setProperty('--y', ground.toFixed(0) + 'px');
     root.style.setProperty('--stop', DIVE_FX.stopMs + 'ms'); root.style.setProperty('--shake', DIVE_FX.shakeMs + 'ms');
     root.style.setProperty('--wipe', DIVE_FX.wipeMs + 'ms');
     root.classList.add('hit');
@@ -235,6 +240,7 @@ export const diveFx = {
     // 4) the zone starts on the next frame (this panel has been painted by then; its motion is CSS
     // from here on, so it keeps playing while the zone's first frames block the main thread)
     requestAnimationFrame(() => {
+      if (S === s) document.body.classList.add('divefx-landed'); // (the zone's HUD waits under the panel and comes in with the wipe)
       try { land(); } finally { if (S === s) s.landed = true; }
     });
   },
@@ -243,8 +249,28 @@ export const diveFx = {
   cancel: cleanup,
 };
 
-/** The comic treatment burnt onto the frozen impact frame: halftone, crater, cracks, impact lines. */
-function drawImpact(c, W, H, x, y, lite) {
+/** The ground's colour beside (x, y) on the copied frame (CSS px; two patches either side of her) → [r, g, b], or null. */
+function groundTint(c, cv, dpr, x, y) {
+  try {
+    const r = Math.round(20 * dpr);
+    let R = 0, G = 0, B = 0, n = 0;
+    for (const dx of [-80, 80]) {
+      const cx = clamp(Math.round((x + dx) * dpr), r, cv.width - r), cy = clamp(Math.round(y * dpr), r, cv.height - r);
+      const px = c.getImageData(cx - r, cy - r, r * 2, r * 2).data;
+      for (let i = 0; i < px.length; i += 16) { R += px[i]; G += px[i + 1]; B += px[i + 2]; n++; }
+    }
+    return n ? [R / n, G / n, B / n] : null;
+  } catch (e) { return null; }
+}
+
+/**
+ * The comic treatment burnt onto the frozen impact frame: halftone, crater, cracks, impact lines.
+ * tint: the ground's colour; the cracks are a dark shade of it with a lit lip, so they read as
+ * broken pavement round her rather than black legs.
+ */
+function drawImpact(c, W, H, x, y, lite, tint = null) {
+  const shade = (k, a) => tint ? `rgba(${tint.map((v) => Math.round(v * k)).join(',')},${a})` : k < 1 ? `rgba(17,17,17,${a})` : `rgba(255,246,210,${a})`;
+  const lip = (a) => tint ? `rgba(${tint.map((v) => Math.round(v + (255 - v) * 0.45)).join(',')},${a})` : `rgba(255,246,210,${a})`;
   const R = Math.hypot(Math.max(x, W - x), Math.max(y, H - y));
   // halftone dots growing toward the frame edges (one path, one fill)
   const sp = DIVE_FX.halftone;
@@ -279,8 +305,8 @@ function drawImpact(c, W, H, x, y, lite) {
       const l = len / segs, nx = px + Math.cos(ang) * l, ny = py + Math.sin(ang) * l * 0.42;
       const w = 5.5 * (1 - sgm / segs) + 0.8;
       c.lineCap = 'round';
-      c.strokeStyle = 'rgba(255,246,210,.55)'; c.lineWidth = w + 2.5; c.beginPath(); c.moveTo(px, py + 1.5); c.lineTo(nx, ny + 1.5); c.stroke();
-      c.strokeStyle = '#111'; c.lineWidth = w; c.beginPath(); c.moveTo(px, py); c.lineTo(nx, ny); c.stroke();
+      c.strokeStyle = lip(0.6); c.lineWidth = w + 2.5; c.beginPath(); c.moveTo(px, py + 1.5); c.lineTo(nx, ny + 1.5); c.stroke();
+      c.strokeStyle = shade(0.28, 0.95); c.lineWidth = w; c.beginPath(); c.moveTo(px, py); c.lineTo(nx, ny); c.stroke();
       if (sgm === 2 && Math.random() < 0.6) { // a side branch
         const ba = ang + rand(0.5, 0.9) * (Math.random() < 0.5 ? -1 : 1), bl = l * 1.4;
         c.lineWidth = w * 0.6; c.beginPath(); c.moveTo(nx, ny); c.lineTo(nx + Math.cos(ba) * bl, ny + Math.sin(ba) * bl * 0.42); c.stroke();

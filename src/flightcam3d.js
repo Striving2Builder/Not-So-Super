@@ -18,6 +18,7 @@ const CAM = {
   // side: to her right, so the camera sits ~25-35° off her tail (a 3/4 rear-side view: her profile,
   // the cape and the punching arm read; straight behind she's a lump of boots and hair)
   chase: { dist: [4.4, 3.2], height: [0.7, 1.15], side: [1.7, 2.1], fov: [58, 66], at: [0.52, 0.58] }, // at = her spot on screen (x, y from top-left)
+  dive: { closer: 0.35, up: 2.6, rate: 2.5 }, // the dive (a transition, not the chase framing): the camera pulls in (her ~1.5× on screen at the impact) and rises (m) to look down past her at the street rushing up; ease rate
   boost: { dist: 0.7, height: 0.15, fov: 13, dollyK: 0.6, kickFov: 8, shake: [0.035, 0.14], lag: 2.6 }, // shake m: sustained / on the punch; lag = spring rate         // sustained while boosting + a kick on the press
   canyon: { height: 1.3, dist: 3.1, at: [0.5, 0.58], fovUp: 4, snap: 0.62, side: 0.75 }, // skim band: lower, along the street (snap ≈ 35°); side: × the chase side
   // high patrol, flying: level with her, centred in the safe zone against the sky,
@@ -67,6 +68,7 @@ export class FlightCam3D {
     if (!o.patrol && this.patrolK < 0.01) this.patrolK = 0;
     this.boostK = ease(this.boostK, o.boosting ? 1 : 0, o.boosting ? 8 : 1.5); // (in fast: the lens and the ink lines snap open in ~150 ms)
     this.canyonK = ease(this.canyonK, o.canyon || 0, 2);
+    this.diveK = ease(this.diveK || 0, o.diving ? 1 : 0, o.diving ? CAM.dive.rate : 6);
     this.highK = ease(this.highK || 0, clamp((h.z - CAM.high.from) / (CAM.high.to - CAM.high.from), 0, 1) * (o.diving ? 0 : 1), 3);
     this.kick = Math.max(0, this.kick - dt * 1.6);
     // Swing behind her heading (only while she's going somewhere). In the street canyons the
@@ -92,7 +94,7 @@ export class FlightCam3D {
     const A = CAM.high, hk = this.highK * Math.min(1, frac * 3); // (stopped up high: the patrol view takes over)
     const chaseDist = lerp(lerp(lerp(C.dist[0], C.dist[1], frac), CAM.canyon.dist, this.canyonK * Math.min(1, frac * 4)), A.dist, hk) + B.dist * this.boostK;
     const chaseUp = lerp(lerp(lerp(C.height[0], C.height[1], frac), CAM.canyon.height, this.canyonK), A.height, hk) + B.height * this.boostK;
-    const dist = lerp(chaseDist, P.dist, K), up = lerp(chaseUp, P.height, K);
+    const dist = lerp(chaseDist * (1 - CAM.dive.closer * this.diveK), P.dist, K), up = lerp(chaseUp + CAM.dive.up * this.diveK, P.height, K);
     const side = lerp(lerp(lerp(C.side[0], C.side[1], frac) * lerp(1, CAM.canyon.side, this.canyonK), A.side, hk), P.side, K);
     // Sphere-cast from her to each candidate spot (her usual shoulder, the other one, then both
     // pulled in, then both a little lifted) and take the clearest: a candidate loses for a blocked
