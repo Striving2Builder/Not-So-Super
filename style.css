@@ -616,3 +616,6 @@ body.divefx-hold #banner.show { animation-play-state: paused; }
 #dive-fx.lite .df-word { animation: df-lite-in .2s both; }
 #dive-fx.lite .df-puff { animation-duration: .4s; }
 @keyframes df-lite-in { from { opacity: 0; } }
+
+/* === feed sound === */
+#feed .feed-snd { margin-left: auto; color: #fff; opacity: .85; font-size: 10px; letter-spacing: .03em; }

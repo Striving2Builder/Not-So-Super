@@ -24,6 +24,7 @@ import { Commentary } from './commentary.js';
 import { settings, quality, autoTune, HERO_SKIN_LABELS } from './settings.js';
 import { perfHud } from './perfhud.js';
 import { gfxLost, crashedLastTime } from './gfx.js';
+import { BUILD } from './version.js';
 
 loadHero();
 loadEnemies(); // guard and boss models for the 3D zones (procedural stand-ins until they arrive)
@@ -85,11 +86,13 @@ game.gfxFailed = () => {
 };
 
 // ---------------------------------------------------------------- zone flow
-const NEW_CLUBS = /[?&]club=v2(&|$)/.test(location.search);
+// the detective nightclubs are the default since 2026-10-05; ?club=v1 brings back the premade 3D clubs
+const NEW_CLUBS = !/[?&]club=v1(&|$)/.test(location.search);
+game.newClubs = NEW_CLUBS; // the overworld skips loading the premade club buildings
 
 /** Which game mode plays a zone. */
 function modeFor(z) {
-  // the detective nightclub redesign (docs/design/nightclub.md): opt-in with ?club=v2 until it reaches parity
+  // the detective nightclub redesign (docs/design/nightclub.md)
   if (NEW_CLUBS && z.mode === 'special' && (VENUES[z.venue]?.club || VENUES[z.venue]?.kind === 'club')) return 'nightclub';
   if (z.mode === 'special' && VENUES[z.venue]?.club) return 'club';  // raid inside a premade club
   return { brawl: 'brawler', investigate: 'investigate', special: 'special', nightcase: 'nightcase', asylum: 'asylum' }[z.mode];
@@ -248,7 +251,7 @@ async function pauseMenu() {
   const inMission = game.modeName !== 'overworld' && game.modeName !== 'captured';
   const v = await dialog({
     title: 'Paused',
-    text: `<div class="list"><div class="item"><b>${st.rep} REP</b> · ${st.rank}<br>Saves ${st.stats.saves} · Cases ${st.stats.cases} · Special zones ${st.stats.specials} · Captures ${st.stats.captures} · Photos ${st.stats.photos}</div></div>`,
+    text: `<div class="list"><div class="item"><b>${st.rep} REP</b> · ${st.rank}<br>Saves ${st.stats.saves} · Cases ${st.stats.cases} · Special zones ${st.stats.specials} · Captures ${st.stats.captures} · Photos ${st.stats.photos}</div></div><div class="hint">Build ${BUILD}</div>`,
     options: [
       { label: 'Resume', value: 'r' },
       { label: `Sound: ${sfx.enabled ? 'ON' : 'OFF'}`, value: 's' },

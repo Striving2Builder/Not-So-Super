@@ -37,7 +37,7 @@ export async function playCutscene({ folder, caption = '', maxSecs = 12, holdSec
     };
     const key = (e) => { e.preventDefault(); e.stopPropagation(); end(); };
     addEventListener('keydown', key, true);
-    el.addEventListener('click', end);
+    el.addEventListener('click', () => { if (video.muted && video.src && !video.paused) { video.muted = false; return; } end(); });
     if (url && !isImage(url)) {
       el.classList.remove('still');
       video.src = url;

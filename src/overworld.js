@@ -631,7 +631,7 @@ export class Overworld {
       const d = club ? dist(z.x, z.y, h.x, h.y) : Infinity;
       if (d < best) { best = d; this.preloadKey = club; }
     }
-    if (this.preloadKey) preloadClub(this.preloadKey);
+    if (this.preloadKey && !this.g.newClubs) preloadClub(this.preloadKey);
   }
 
   tryDive() {
@@ -644,7 +644,7 @@ export class Overworld {
     if (this.nav.target && this.nav.target.ref === z) this.nav.clear(); // reached it
     this.hero.perch = null;
     this.g.commentary.onDive(z); // spinning-emblem transition + sting
-    if (VENUES[z.venue]?.club) loadClub(VENUES[z.venue].club); // start loading the building during the dive
+    if (VENUES[z.venue]?.club && !this.g.newClubs) loadClub(VENUES[z.venue].club); // start loading the building during the dive
   }
 
   updatePrompt() {

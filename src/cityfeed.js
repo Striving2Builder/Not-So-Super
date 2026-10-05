@@ -25,7 +25,19 @@ export class CityFeed {
     this.t = 0;
     this.load();
     if (!this.panel) return;
-    this.panel.addEventListener('click', (e) => { e.stopPropagation(); this.stop(); });
+    // tap the clip: sound on/off (a tap is the gesture iOS needs to unmute); the ✕ closes it
+    this.snd = document.createElement('span'); this.snd.className = 'feed-snd';
+    this.panel.querySelector('.feed-cap')?.appendChild(this.snd);
+    try { this.soundOn = localStorage.getItem('feedSound') === '1'; } catch (e) { this.soundOn = false; }
+    this.showSound();
+    this.panel.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (e.target.closest('.feed-x') || !this.playing || !this.playing.video) { this.stop(); return; }
+      this.soundOn = this.video.muted; // muted → turn it on, and the other way round
+      this.video.muted = !this.soundOn;
+      try { localStorage.setItem('feedSound', this.soundOn ? '1' : '0'); } catch (err) { /* private mode */ }
+      this.showSound();
+    });
     this.video.addEventListener('ended', () => this.stop());
     this.video.addEventListener('error', () => this.drop());
     this.img.addEventListener('error', () => this.drop());
@@ -79,13 +91,16 @@ export class CityFeed {
     if (isImage) { this.img.src = url; this.video.removeAttribute('src'); }
     else {
       this.img.removeAttribute('src');
-      this.video.muted = true; // autoplay in the page (iOS) needs muted + playsinline
+      // with sound if the player turned it on (iOS may refuse outside a tap: then muted, badge says so)
+      this.video.muted = !this.soundOn;
       this.video.src = url;
-      this.video.play().catch(() => {});
+      this.video.play().catch(() => { this.video.muted = true; this.video.play().catch(() => {}); }).finally(() => this.showSound());
     }
     this.box.classList.add('feed-on');
     return true;
   }
+
+  showSound() { if (this.snd) this.snd.textContent = this.video && !this.video.muted ? '🔊' : '🔇 TAP FOR SOUND'; }
 
   stop() {
     if (!this.playing) return;
