@@ -370,7 +370,8 @@ export class Brawler {
       }
       for (const e of this.enemies) {
         const dx = (e.x - p.x) * p.facing;
-        if (!e.dead && dx > 0 && dx < 280 && Math.abs(e.z - p.z) < 0.2 && e.st !== 'frozen') { e.st = 'frozen'; e.st_t = 0; }
+        // (not a crook that's down: freezing a KO'd one mid-fall cancelled his death, and he stood back up at hp ≤ 0 holding the wave open)
+        if (!e.dead && e.st !== 'down' && e.hp > 0 && dx > 0 && dx < 280 && Math.abs(e.z - p.z) < 0.2 && e.st !== 'frozen') { e.st = 'frozen'; e.st_t = 0; }
       }
       if (chance(0.9)) this.fx.push({ kind: 'frost', x: p.x + p.facing * 40, y: 82, z: p.z, vx: p.facing * rand(380, 540), vy: rand(-40, 30), t: 0, max: 0.55, r: rand(0.7, 1.3) });
       if (p.st_t > 0.9) p.st = 'idle';

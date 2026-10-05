@@ -88,6 +88,17 @@ window.__botDump = () => {
     fires: m.fires.map((f) => ({ x: Math.round(f.x), hp: Math.round(f.hp) })) };
 };`;
 
+// Close whatever dialog is up, like a player: its button / option if it has one (a .first() over one
+// selector list picks in document order, i.e. the dialog's own wrapper, which ignores clicks: a
+// "Mission failed" dialog then stayed up, pausing the game, and the next brawl hung on LOADING),
+// else tap the dialog itself (the newspaper: "tap to continue").
+async function tapModal(page) {
+  for (const sel of ['#modal-root .opt:not([disabled])', '#modal-root button:not([disabled])', '#modal-root > *']) {
+    const m = page.locator(sel).first();
+    if (await m.count()) { await m.click({ force: true }).catch(() => {}); return; }
+  }
+}
+
 async function runBrawl(page, crime, tag) {
   await page.evaluate((crime) => {
     const g = window.__game; g.setMode('overworld');
@@ -116,8 +127,7 @@ async function runBrawl(page, crime, tag) {
     const stuck = Date.now() - t0 > TIMEOUT;
     if ((o.done || o.wait) && !stuck) {
       // (a dialog left open pauses the game: close it, like a player would)
-      const dlg = page.locator('#modal-root button, #modal-root .opt, #modal-root > *').first();
-      if (await dlg.count()) await dlg.click({ force: true }).catch(() => {});
+      await tapModal(page);
       await hold(new Set()); await page.waitForTimeout(200); if (o.wait) bestT = Date.now(); continue;
     }
     last = o;
@@ -142,8 +152,7 @@ async function runBrawl(page, crime, tag) {
   // a win shows the newspaper ("tap to continue", no button) then flies on: tap until we're flying
   for (let i = 0; i < 30; i++) {
     if (await page.evaluate(() => window.__game.modeName === 'overworld' && !document.querySelector('#modal-root > *'))) break;
-    const m = page.locator('#modal-root button, #modal-root .opt, #modal-root > *').first();
-    if (await m.count()) await m.click({ force: true }).catch(() => {});
+    await tapModal(page);
     await page.waitForTimeout(400);
   }
   return res;
