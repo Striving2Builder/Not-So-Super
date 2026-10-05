@@ -4,6 +4,7 @@
 // that fails it. Pure logic (no DOM): tools/nightclub/layoutcheck.mjs runs it in node.
 import { RNG } from '../rng.js';
 import { ROOMS, ATTACH, FLAGSHIP, CLUB_SIZE, ART, roomWidth } from './rooms.js';
+import { CLOSEUPS } from './scenes.js';
 
 const MARGIN = 260;    // doors and items keep clear of the plate edges (the camera stops there)
 const DOOR_GAP = 600;  // min spacing between doors on one wall
@@ -128,6 +129,11 @@ function placeSpots(rng, rooms) {
     const free = (x) => r.doors.every((d) => Math.abs(d.x - x) > KEY_GAP) && seams.every((q) => Math.abs(q - x) > 260);
     if (r.kind === 'bar') { let x = r.w * 0.3; if (!free(x)) x = r.w * 0.7; r.spots.push({ type: 'closeup', x: Math.round(x) }); }
     if (r.kind === 'main') r.spots.push({ type: 'djview', x: r.w - MARGIN - 120 });
+    if (CLOSEUPS[r.kind] && r.kind !== 'bar') {
+      let x = r.kind === 'main' ? r.w - 900 : r.w * 0.55;
+      for (const f of [0.55, 0.42, 0.68, 0.3, 0.8]) { if (free(x) && r.spots.every((s) => Math.abs(s.x - x) > 300)) break; x = r.w * f; }
+      r.spots.push({ type: 'closeup', x: Math.round(x) });
+    }
   }
 }
 

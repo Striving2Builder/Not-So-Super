@@ -41,6 +41,14 @@ export const ART = {
     dark: { src: 'dark.jpg', w: 3456, lane: 0.9, back: 0.64, seams: [1728], arches: [] },
     bar: { src: 'bar.jpg', w: 3456, lane: 0.9, back: 0.68, seams: [1728], arches: [] },
     lounge: { src: 'lounge.jpg', w: 3456, lane: 0.9, back: 0.66, seams: [1728], arches: [] },
+    // batch 2
+    entrance: { src: 'entrance.jpg', w: 3456, lane: 0.9, back: 0.66, seams: [1728], arches: [655, 1038, 2309, 2619, 2910] },
+    balcony: { src: 'balcony.jpg', w: 5092, lane: 0.93, back: 0.62, seams: [1728, 3364], arches: [546, 892, 1274, 2291, 2619, 2983, 3999, 4327] },
+    vip: { src: 'vip.jpg', w: 3456, lane: 0.9, back: 0.68, seams: [1728], arches: [218] },
+    restroom: { src: 'restroom.jpg', w: 3456, lane: 0.9, back: 0.64, seams: [1728], arches: [] },
+    office: { src: 'office.jpg', w: 3456, lane: 0.9, back: 0.66, seams: [1728], arches: [1420, 2346] },
+    storage: { src: 'storage.jpg', w: 3456, lane: 0.9, back: 0.66, seams: [1728], arches: [655, 1493, 2163, 2582] },
+    alley: { src: 'alley.jpg', w: 3456, lane: 0.9, back: 0.62, seams: [1728], arches: [692, 1147, 2400, 2764, 3092] },
   },
   setPiece: { main: 'set_main.jpg' },
   setLoop: { main: 'set_main.mp4' }, // the DJ view's video (its own crowd + beams); the still is its poster

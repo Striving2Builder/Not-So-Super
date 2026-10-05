@@ -14,7 +14,7 @@ import sys
 from PIL import Image, ImageOps
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-SRC = os.path.join(ROOT, 'assets', 'nightclub', 'incoming', 'batch1')
+SRC = os.path.join(ROOT, 'assets', 'nightclub', 'incoming')  # stems without a batch folder are batch1
 OUT = os.path.join(ROOT, 'assets', 'nightclub', 'plates')
 H, SEAM, PLATE_H = 720, 130, 1024
 
@@ -26,12 +26,21 @@ ROOMS = {
     'dark': [('mainfloor_walk_14', []), ('mainfloor_walk_14~', [])],
     'bar': [('mainfloor_walk_02', []), ('mainfloor_walk_02~', [])],
     'lounge': [('mainfloor_djview_05', []), ('mainfloor_djview_03', [])],
+    # batch 2 (2026-10-04): arch centres estimated from the renders
+    'entrance': [('batch2/entrance_01', [0.36, 0.57]), ('batch2/entrance_03', [0.37, 0.54, 0.7])],
+    'balcony': [('batch2/balcony_01', [0.3, 0.49, 0.7]), ('batch2/balcony_02', [0.36, 0.54, 0.74]), ('batch2/balcony_03', [0.4, 0.58])],
+    'vip': [('batch2/vip_01~', [0.88]), ('batch2/vip_03', [])],
+    'restroom': [('batch2/restroom_01', []), ('batch2/restroom_03', [])],
+    'office': [('batch2/office_01', [0.78]), ('batch2/office_03', [0.39])],
+    'storage': [('batch2/storage_01', [0.36, 0.82]), ('batch2/storage_02', [0.29, 0.52])],
+    'alley': [('batch2/alley_01', [0.38, 0.63]), ('batch2/alley_03', [0.42, 0.62, 0.8])],
 }
 
 
 def load(stem):
     flip = stem.endswith('~')
-    im = Image.open(os.path.join(SRC, stem.rstrip('~') + '.jpg')).convert('RGB')
+    name = stem.rstrip('~')
+    im = Image.open(os.path.join(SRC, name if '/' in name else 'batch1/' + name) + '.jpg').convert('RGB')
     im = im.resize((round(im.width * H / im.height), H), Image.LANCZOS)
     return ImageOps.mirror(im) if flip else im, flip
 

@@ -130,5 +130,9 @@ across the room at its back wall, back wall's foot about 2/3 down, open floor in
   jacket with something bulging in the pocket, a guest list clipboard with names crossed out, a bowl of
   mints, a VIP wristband.*
 
+**Batch 2 result (2026-10-04):** all 31 used or kept. Walk plates: entrance 01+03, balcony 01+02+03,
+vip 01 (mirrored)+03, restroom 01+03, office 01+03, storage 01+02, alley 01+03. Close-ups: coat check
+01, DJ 02, VIP 02, restroom 02, office 01 (the other variations are spares for a second club).
+
 **Later**: batch 3 = the blackout (wake-up rooms, memory-fragment comic panels); batch 4 = a second
 club's set (a palette swap of the same rooms is fine).
