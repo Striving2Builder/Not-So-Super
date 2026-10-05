@@ -58,7 +58,7 @@ const OUT = path.join(ROOT, 'shots', LABEL, 'nightclub');
     const rooms = await page.evaluate(() => window.__game.mode.club.rooms.map((r) => r.id));
     for (const id of rooms) {
       // stand her a third of the way in, facing the room, the camera settled
-      await page.evaluate((id) => { const m = window.__game.mode; m.go(id, null); m.p.x = m.room.w * 0.35; m.cam = m.p.x; m.fade = { a: 0, dir: 0 }; }, id);
+      await page.evaluate((id) => { const m = window.__game.mode; m.go(id, null); m.p.x = m.room.w * 0.28; m.cam = m.p.x; m.fade = { a: 0, dir: 0 }; }, id);
       await page.waitForTimeout(700);
       await page.screenshot({ path: path.join(OUT, `room_${id}.png`) });
       metrics[id] = await fps();

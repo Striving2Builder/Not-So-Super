@@ -159,6 +159,10 @@ the director gives prompts and specs per batch. See [nightclub-assets.md](nightc
 - Tools: `node tools/nightclub/layoutcheck.mjs` (1,500 generated clubs, all accessible);
   `node tools/shots/nightclub.js --label X [--seed N]` (every room + set piece + 3 intox levels,
   fps, page errors).
+- Art (batch 1): `tools/nightclub/stitch.py` joins 2–3 of the user's 16:9 renders per room into a
+  plate (`assets/nightclub/plates/`); the seams hide behind foreground steel columns; doors sit on
+  the painted arches; the crowd stands in depth on the plate's floor. Main floor, bar, lounge, dark
+  room, corridor and the DJ set piece use the user's art; the other rooms are still placeholders.
 - Next: the user's batch 1 → plates/loop/dancers via `ART`, flagship door positions matched to the
   art, then the iPad look test (fps, memory) before more rooms or the case generator.
 

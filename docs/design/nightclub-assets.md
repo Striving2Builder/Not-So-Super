@@ -14,19 +14,14 @@ Always add: **no text, no logos, no brand names, no real people, no superhero sy
 watermark.** If a tool takes a negative prompt, put those there plus: photorealistic faces, blurry,
 low detail.
 
-## Plate rules (every walk-view room plate)
-So the rooms snap together and Supergirl stands on the floor in every one:
-- **Side view at eye level**, like a 2D side-scroller stage: the camera looks straight at the back
-  wall; no strong perspective.
-- **Wide panorama**: 3:1 for medium rooms (3072×1024), 4:1 for big rooms (4096×1024), 2:1 for small
-  rooms (2048×1024).
-- **Floor line at 80% of the height** (y ≈ 820 of 1024); horizon around 45%. Keep the floor flat and
-  clear along that line.
-- **Empty of people** (the game adds the crowd), except a far, faint silhouette crowd baked deep in
-  the haze if the tool insists.
-- Doorways or arches near the left and right edges; an optional one in the middle.
-- Same light direction in every plate: the main light source behind the scene (backlight), haze
-  glowing toward the back wall.
+## Plate rules (every walk-view room)
+No panoramas needed (generators can't make them): a room is **2–3 normal 16:9 images ("bays") of
+the same room**, joined by `tools/nightclub/stitch.py` behind a foreground pillar.
+- 16:9, 1280×720 or larger; **2–3 variations of the same room** (same palette and style) per room.
+- Looking into the room from the dance floor: the back wall's foot around 2/3 down, open floor in the
+  front third (she walks along the front), no people.
+- **Arched doorways on the back wall are great**: they become the room's doors (neon signs go above).
+- Ink linework (walk _06/_11/_15 style) matches the game best; painterly is OK for dark rooms.
 
 ## Batch 1: the look test (needed first)
 Drop into `assets/nightclub/incoming/batch1/`.

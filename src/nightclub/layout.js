@@ -3,14 +3,14 @@
 // room is reachable from the entrance; checkClub() proves it, and buildClub() never returns a club
 // that fails it. Pure logic (no DOM): tools/nightclub/layoutcheck.mjs runs it in node.
 import { RNG } from '../rng.js';
-import { ROOMS, ATTACH, FLAGSHIP, CLUB_SIZE } from './rooms.js';
+import { ROOMS, ATTACH, FLAGSHIP, CLUB_SIZE, ART, roomWidth } from './rooms.js';
 
 const MARGIN = 260;    // doors and items keep clear of the plate edges (the camera stops there)
 const DOOR_GAP = 600;  // min spacing between doors on one wall
 const KEY_GAP = 180;   // a key never sits on a door
 
 /** Door slots a room's wall has room for (the entrance keeps one for the street). */
-const slots = (kind) => Math.max(2, Math.floor((ROOMS[kind].w - 2 * MARGIN) / DOOR_GAP) + 1) - (kind === 'entrance' ? 1 : 0);
+const slots = (kind) => Math.max(2, Math.floor((roomWidth(kind) - 2 * MARGIN) / DOOR_GAP) + 1) - (kind === 'entrance' ? 1 : 0);
 
 /** Grow a random club: entrance → main floor, then rooms hung off allowed parents, then 1–2 loops. */
 function grow(rng, size) {
@@ -50,11 +50,18 @@ function grow(rng, size) {
 function placeDoors(rng, rooms, links) {
   const byId = Object.fromEntries(rooms.map((r) => [r.id, r]));
   for (const r of rooms) {
-    r.w = ROOMS[r.kind].w;
+    r.w = roomWidth(r.kind);
     r.doors = [];
     const mine = links.filter((l) => l[0] === r.id || l[1] === r.id).map((l) => (l[0] === r.id ? l[1] : l[0]));
     const m = mine.length + (r.kind === 'entrance' ? 1 : 0);
-    const xs = m === 1 ? [rng.chance(0.5) ? MARGIN : r.w - MARGIN] : Array.from({ length: m }, (_, j) => MARGIN + (r.w - 2 * MARGIN) * (j / (m - 1)));
+    const art = ART.plates[r.kind];
+    let xs = m === 1 ? [rng.chance(0.5) ? MARGIN : r.w - MARGIN] : Array.from({ length: m }, (_, j) => MARGIN + (r.w - 2 * MARGIN) * (j / (m - 1)));
+    if (art) {
+      // doors go on the painted arches (spread across the room), else clear of the seam pillars
+      const A = art.arches;
+      if (A.length >= m) xs = Array.from({ length: m }, (_, j) => A[m === 1 ? 0 : Math.round(j * (A.length - 1) / (m - 1))]);
+      else xs = xs.map((x) => { const s = art.seams.find((q) => Math.abs(q - x) < 260); return s ? s + Math.sign(x - s || 1) * 260 : x; });
+    }
     let j = 0;
     if (r.kind === 'entrance') r.doors.push({ x: xs[j++], to: null, kind: 'street' }); // back to the sky
     for (const to of mine) r.doors.push({ x: xs[j++], to, kind: 'arch' });
@@ -117,8 +124,9 @@ function placeKeys(rng, rooms) {
 function placeSpots(rng, rooms) {
   for (const r of rooms) {
     r.spots = [];
-    const free = (x) => r.doors.every((d) => Math.abs(d.x - x) > KEY_GAP);
-    if (r.kind === 'bar') { let x = r.w * 0.5; if (!free(x)) x = r.w * 0.38; r.spots.push({ type: 'drink', x: Math.round(x) }); }
+    const seams = ART.plates[r.kind]?.seams || [];
+    const free = (x) => r.doors.every((d) => Math.abs(d.x - x) > KEY_GAP) && seams.every((q) => Math.abs(q - x) > 260);
+    if (r.kind === 'bar') { let x = r.w * 0.3; if (!free(x)) x = r.w * 0.7; r.spots.push({ type: 'drink', x: Math.round(x) }); }
     if (r.kind === 'main') r.spots.push({ type: 'djview', x: r.w - MARGIN - 120 });
   }
 }

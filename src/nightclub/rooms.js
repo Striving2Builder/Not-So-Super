@@ -31,7 +31,23 @@ export const ROOMS = {
  * plates: room kind → walk plate image (replaces the painted placeholder; same 1024 px height and
  * floor line); setPiece: room kind → set-piece loop video (the DJ booth view); dancers: clip urls.
  */
-export const ART = { plates: {}, setPiece: {}, dancers: [] };
+export const ART = {
+  // stitched by tools/nightclub/stitch.py from the user's 16:9 renders (bays joined at `seams`, hidden
+  // behind foreground pillars); lane/back = her walk line and the back wall's foot, as a fraction of
+  // the height; arches = painted doorways the layout puts its doors on
+  plates: {
+    main: { src: 'main.jpg', w: 4836, lane: 0.9, back: 0.66, seams: [1664, 3172], arches: [564, 910, 1220, 2072, 2418, 2727, 3579, 3925, 4235] },
+    corridor: { src: 'corridor.jpg', w: 3328, lane: 0.9, back: 0.66, seams: [1664], arches: [655, 910, 1165, 2163, 2418, 2673] },
+    dark: { src: 'dark.jpg', w: 3328, lane: 0.9, back: 0.64, seams: [1664], arches: [] },
+    bar: { src: 'bar.jpg', w: 3328, lane: 0.9, back: 0.68, seams: [1664], arches: [] },
+    lounge: { src: 'lounge.jpg', w: 3328, lane: 0.9, back: 0.66, seams: [1664], arches: [] },
+  },
+  setPiece: { main: 'set_main.jpg' },
+  dancers: [],
+};
+
+/** A room kind's walk width: its stitched art when there is some, else the placeholder's. */
+export const roomWidth = (kind) => ART.plates[kind]?.w || ROOMS[kind].w;
 
 /** Which rooms a room kind may hang off (the generator walks these when it grows a club). */
 export const ATTACH = {

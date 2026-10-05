@@ -20,3 +20,6 @@ docs/references/
 /shots/
 # Agent worktrees for the polish passes
 .claude/worktrees/
+
+# Raw nightclub renders from the user (the stitched plates in assets/nightclub/plates/ are tracked)
+assets/nightclub/incoming/

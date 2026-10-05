@@ -4,7 +4,7 @@
 // batch-1 assets arrive; the premade 3D clubs stay the default until this reaches parity
 // (main.js routes club zones here only with ?club=v2).
 import { buildClub } from './layout.js';
-import { ROOMS, PLATE } from './rooms.js';
+import { ROOMS, PLATE, ART } from './rooms.js';
 import { ClubStage } from './stage.js';
 import { beforeScene, afterScene, freeIntox, TIERS } from './intox.js';
 import { crowdAtlas, drawDancer } from './crowd.js';
@@ -194,7 +194,7 @@ export class Nightclub {
   }
 
   drawHero(ctx, view) {
-    const k = view.k, x = this.stage.sx(view, this.p.x), feet = (PLATE.floor + 24) * k;
+    const k = view.k, x = this.stage.sx(view, this.p.x), feet = this.stage.lane * k;
     const img = this.heroImage();
     if (!img) {
       if (!this.fallback) this.fallback = crowdAtlas('#ffd070');
@@ -212,15 +212,15 @@ export class Nightclub {
     const tag = (x, y, text, col) => { ctx.lineWidth = 4; ctx.strokeStyle = '#05040a'; ctx.strokeText(text, x, y); ctx.fillStyle = col; ctx.fillText(text, x, y); };
     if (this.stage.flashing) for (const key of this.club.keys) {
       if (key.room !== r.id || this.taken.has(`${key.room}:${key.x}`)) continue;
-      const x = this.stage.sx(view, key.x), y = (PLATE.floor - 30) * k + bob;
+      const x = this.stage.sx(view, key.x), y = (this.stage.lane - 54) * k + bob;
       ctx.fillStyle = '#ffd84d'; ctx.beginPath(); ctx.arc(x, y, 12 * k + 4, 0, Math.PI * 2); ctx.fill();
       ctx.lineWidth = 3; ctx.strokeStyle = '#05040a'; ctx.stroke();
     }
     for (const s of r.spots) {
       if (this.taken.has(`${r.id}:${s.x}`)) continue;
-      tag(this.stage.sx(view, s.x), (PLATE.floor - 360) * k + bob, s.type === 'drink' ? '?' : '👁', '#ffd84d');
+      tag(this.stage.sx(view, s.x), (this.stage.lane - 384) * k + bob, s.type === 'drink' ? '?' : '👁', '#ffd84d');
     }
-    if (n.door) tag(this.stage.sx(view, n.door.x), (PLATE.floor - 470) * k + bob, n.door.lock && !this.items.has(n.door.lock) ? '🔒' : '▼', '#fff');
+    if (n.door) tag(this.stage.sx(view, n.door.x), (this.stage.lane - 494) * k + bob, n.door.lock && !this.items.has(n.door.lock) ? '🔒' : '▼', '#fff');
   }
 
   render(ctx) {
@@ -234,12 +234,22 @@ export class Nightclub {
       view = { k, x0: clamp(this.room.w - 420 - vw / 2, 0, this.room.w - vw), w, h };
     }
     beforeScene(ctx, w, h, st ? st.intox : 0, this.t);
-    this.stage.drawBack(ctx, view, this.t);
+    const set = this.view === 'set' && this.setImage();
+    if (set) this.stage.drawSetPiece(ctx, set, w, h, this.t);
+    else this.stage.drawBack(ctx, view, this.t);
     if (this.view === 'walk') { this.drawMarkers(ctx, view); this.drawHero(ctx, view); }
     this.stage.drawFront(ctx, view, this.t, this.dt || 1 / 60);
     afterScene(ctx, g.canvas, w, h, st ? st.intox : 0, this.t);
     const dark = this.blackout ? clamp(this.blackout.t < 2.4 ? this.blackout.t / 1.2 : 1 - (this.blackout.t - 2.4) / 1.2, 0, 1) : this.fade.a;
     if (dark > 0) { ctx.fillStyle = `rgba(0,0,0,${dark})`; ctx.fillRect(0, 0, w, h); }
+  }
+
+  /** The room's set-piece render (loaded on first look), or null → the zoomed-in room. */
+  setImage() {
+    const src = ART.setPiece[this.room.kind];
+    if (!src) return null;
+    if (!this.setImg || this.setSrc !== src) { this.setImg = new Image(); this.setSrc = src; this.setImg.src = PLATE.dir + src; }
+    return this.setImg.complete && this.setImg.naturalWidth ? this.setImg : null;
   }
 
   exit() {

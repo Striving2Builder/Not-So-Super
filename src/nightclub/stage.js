@@ -204,11 +204,13 @@ function props(x, room, R, L, rng) {
 }
 
 /** An archway / door / staircase on the back wall, with the target's neon sign above it. */
-function doorway(x, d, to, L) {
+function doorway(x, d, to, L, foot = FLOOR, signOnly = false) {
+  const FLOOR = foot;
   const w = d.kind === 'stairs' ? 230 : 200, h = 380, px = d.x - w / 2, top = FLOOR - h;
   const TL = to ? ROOMS[to.kind].look : { haze: '#1a2a44', accent: '#ffffff' };
   const g = x.createLinearGradient(0, top, 0, FLOOR);
   g.addColorStop(0, shade(TL.haze, -0.5)); g.addColorStop(1, TL.haze);
+  if (!signOnly) {
   x.fillStyle = d.lock ? '#120c10' : g;
   x.beginPath();
   if (d.kind === 'arch') { x.moveTo(px, FLOOR); x.lineTo(px, top + w / 2); x.arc(d.x, top + w / 2, w / 2, Math.PI, 0); x.lineTo(px + w, FLOOR); }
@@ -220,6 +222,7 @@ function doorway(x, d, to, L) {
     x.strokeStyle = rgba(TL.accent, 0.5); x.lineWidth = 4;
     for (let i = 1; i < 7; i++) { const sy = FLOOR - i * 50; x.beginPath(); x.moveTo(px + 10, sy); x.lineTo(px + w - 10, sy); x.stroke(); }
   }
+  }
   if (d.lock) { x.fillStyle = '#ff2a3a'; x.beginPath(); x.arc(px + w - 26, FLOOR - h / 2, 9, 0, Math.PI * 2); x.fill(); }
   const word = to ? ROOMS[to.kind].sign : 'EXIT';
   x.save();
@@ -230,6 +233,18 @@ function doorway(x, d, to, L) {
   x.restore();
 }
 
+/** The user's stitched plate with the club's doors on it: a neon sign over a painted arch, else a doorway. */
+function composeArt(img, room, byId, spec) {
+  const c = document.createElement('canvas');
+  c.width = img.width; c.height = img.height;
+  const x = c.getContext('2d');
+  x.drawImage(img, 0, 0);
+  x.scale(img.width / room.w, img.height / H);
+  const L = ROOMS[room.kind].look;
+  for (const d of room.doors) doorway(x, d, d.to ? byId[d.to] : null, L, spec.back * H, spec.arches.includes(d.x));
+  return c;
+}
+
 // ------------------------------------------------------------------ the stage
 export class ClubStage {
   /** room: a layout room; byId: the club's rooms by id (doorway signs peek into the next room). */
@@ -238,18 +253,23 @@ export class ClubStage {
     const rng = new RNG(hashStr(`${seed}:${room.id}`));
     this.plate = paintPlate(room, byId, rng);
     // the user's render replaces the placeholder once it has loaded (doorway signs are in the art)
+    const spec = this.spec = ART.plates[room.kind] || null;
+    this.lane = spec ? spec.lane * H : FLOOR + 24;  // her feet
+    this.back = spec ? spec.back * H : FLOOR - 40;  // the back wall's foot (the far crowd stands here)
     this.art = null;
-    if (ART.plates[room.kind]) { const img = new Image(); img.onload = () => { this.art = img; }; img.src = PLATE.dir + ART.plates[room.kind]; }
-    this.atlas = crowdAtlas(lighten(this.L.haze, 0.55));
+    if (spec) { const img = new Image(); img.onload = () => { this.art = composeArt(img, room, byId, spec); }; img.src = PLATE.dir + spec.src; }
+    this.atlas = crowdAtlas(lighten(this.L.haze, this.spec ? 0.2 : 0.55));
     const W = room.w, dens = this.R.crowd / 1000;
     const clear = (px) => room.doors.every((d) => Math.abs(d.x - px) > 150);
     // far = small, fogged, slower; mid = full size on the floor line (kept out of doorways);
     // near = huge, pure ink, faster, feet below the frame
     this.far = []; this.mid = []; this.near = [];
-    for (let i = 0, n = Math.round(W * dens * 1.3); i < n; i++) this.far.push({ x: rng.range(0, W), y: FLOOR - rng.range(20, 70), t: rng.int(0, CROWD_TYPES - 1), o: rng.next(), f: rng.chance(0.5), s: rng.range(0.5, 0.62) });
+    for (let i = 0, n = Math.round(W * dens * 1.3); i < n; i++) this.far.push(spec ? { x: rng.range(0, W), y: this.back + rng.range(5, 40), t: rng.int(0, CROWD_TYPES - 1), o: rng.next(), f: rng.chance(0.5), s: rng.range(0.4, 0.48) } : { x: rng.range(0, W), y: FLOOR - rng.range(20, 70), t: rng.int(0, CROWD_TYPES - 1), o: rng.next(), f: rng.chance(0.5), s: rng.range(0.5, 0.62) });
     for (let i = 0, n = Math.round(W * dens); i < n; i++) {
       const px = rng.range(120, W - 120);
-      if (clear(px)) this.mid.push({ x: px, y: FLOOR + rng.range(0, 40), t: rng.int(0, CROWD_TYPES - 1), o: rng.next(), f: rng.chance(0.5), s: rng.range(0.9, 1.05) });
+      if (!clear(px)) continue;
+      if (spec) { const y = rng.range(this.back + 70, this.lane - 40); this.mid.push({ x: px, y, t: rng.int(0, CROWD_TYPES - 1), o: rng.next(), f: rng.chance(0.5), s: 0.55 + 0.45 * (y - this.back) / (this.lane - this.back) }); }
+      else this.mid.push({ x: px, y: FLOOR + rng.range(0, 40), t: rng.int(0, CROWD_TYPES - 1), o: rng.next(), f: rng.chance(0.5), s: rng.range(0.9, 1.05) });
     }
     this.mid.sort((a, b) => a.y - b.y);
     for (let i = 0, n = Math.round(W * dens * 0.22); i < n; i++) this.near.push({ x: rng.range(0, W * 1.3), y: H + rng.range(60, 160), t: rng.int(0, CROWD_TYPES - 1), o: rng.next(), f: rng.chance(0.5), s: rng.range(1.7, 2.0) });
@@ -281,9 +301,9 @@ export class ClubStage {
     }
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'lighter';
-    const fog = ctx.createLinearGradient(0, (FLOOR - 260) * k, 0, FLOOR * k);
+    const fog = ctx.createLinearGradient(0, (this.back - 260) * k, 0, this.back * k);
     fog.addColorStop(0, rgba(this.L.haze, 0)); fog.addColorStop(1, rgba(this.L.haze, 0.35));
-    ctx.fillStyle = fog; ctx.fillRect(0, (FLOOR - 260) * k, w, 260 * k);
+    ctx.fillStyle = fog; ctx.fillRect(0, (this.back - 260) * k, w, 260 * k);
     // moving heads: wedges sweeping from the truss, brightening on the beat
     const pulse = 0.75 + 0.25 * Math.max(0, Math.cos(beat * Math.PI * 2));
     for (const b of this.heads) {
@@ -291,7 +311,7 @@ export class ClubStage {
       if (x < -500 || x > w + 500) continue;
       const a = b.a0 + Math.sin(t * b.sp + b.ph) * 0.55;
       ctx.save(); ctx.translate(x, 150 * k); ctx.rotate(a);
-      ctx.globalAlpha = this.rig.beamA * pulse;
+      ctx.globalAlpha = this.rig.beamA * pulse * (this.art ? 0.55 : 1);
       ctx.drawImage(this.sprites[b.c], -90 * k, 0, 180 * k, 900 * k);
       ctx.restore();
     }
@@ -308,7 +328,7 @@ export class ClubStage {
     }
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     // the DJs behind the decks (main floor), cut off at the booth's front
-    if (this.room.kind === 'main') {
+    if (this.room.kind === 'main' && !this.spec) {
       const bx = this.room.w - 760;
       ctx.save(); ctx.beginPath(); ctx.rect(0, 0, w, (FLOOR - 205) * k); ctx.clip();
       drawDancer(ctx, this.atlas, 2, beat / 2, this.sx(view, bx + 250), (FLOOR - 130) * k, 300 * k);
@@ -325,6 +345,26 @@ export class ClubStage {
 
   drawFront(ctx, view, t, dt) {
     const { k, w, h } = view, beat = (t * BPM) / 60;
+    // ink pillars in the foreground hide the joins between stitched bays
+    if (this.spec) for (const q of this.spec.seams) {
+      const x = this.sx(view, q), pw = 300 * k;
+      if (x < -pw || x > w + pw) continue;
+      if (!this.colGrad || this.colGrad.pw !== pw) {
+        const g = ctx.createLinearGradient(-pw / 2, 0, pw / 2, 0);
+        g.addColorStop(0, '#05040a'); g.addColorStop(0.18, shade(this.L.wall, -0.2)); g.addColorStop(0.32, '#0a0912'); g.addColorStop(1, '#030206');
+        this.colGrad = { pw, g };
+      }
+      ctx.save(); ctx.translate(x, 0);
+      ctx.fillStyle = this.colGrad.g; ctx.fillRect(-pw / 2, 0, pw, h);
+      ctx.fillStyle = '#05040a'; for (const cy of [0.12, 0.62]) ctx.fillRect(-pw / 2 - 6 * k, h * cy, pw + 12 * k, 26 * k);
+      ctx.fillStyle = rgba(this.L.haze, 0.5); for (const cy of [0.12, 0.62]) ctx.fillRect(-pw / 2 - 6 * k, h * cy, pw + 12 * k, 3 * k);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = rgba(this.L.accent, 0.55 + 0.15 * Math.sin(t * 3)); ctx.fillRect(pw * 0.22, h * 0.14, 6 * k, h * 0.46);
+      ctx.fillStyle = rgba(this.L.accent, 0.12); ctx.fillRect(pw * 0.22 - 10 * k, h * 0.14, 26 * k, h * 0.46);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = '#05040a'; ctx.lineWidth = Math.max(2, 5 * k); ctx.strokeRect(-pw / 2, -10, pw, h + 20);
+      ctx.restore();
+    }
     for (const d of this.near) {
       const x = this.sx(view, d.x, 1.35);
       if (x < -300 || x > w + 300) continue;
@@ -353,6 +393,23 @@ export class ClubStage {
       this.vig = { w, h, g };
     }
     ctx.fillStyle = this.vig.g; ctx.fillRect(0, 0, w, h);
+  }
+
+  /** The DJ booth view: the user's render covering the screen, live beams, the crowd's heads and hands. */
+  drawSetPiece(ctx, img, w, h, t) {
+    const sc = Math.max(w / img.width, h / img.height), iw = img.width * sc, ih = img.height * sc;
+    ctx.drawImage(img, (w - iw) / 2, (h - ih) / 2, iw, ih);
+    const beat = (t * BPM) / 60, pulse = 0.75 + 0.25 * Math.max(0, Math.cos(beat * Math.PI * 2));
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 6; i++) {
+      ctx.save(); ctx.translate(w * (0.18 + i * 0.13), h * 0.08); ctx.rotate(Math.sin(t * (0.3 + i * 0.07) + i) * 0.5);
+      ctx.globalAlpha = 0.28 * pulse; ctx.drawImage(this.sprites[i % 3], -h * 0.12, 0, h * 0.24, h * 1.1); ctx.restore();
+    }
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    for (let i = 0; i < 14; i++) {
+      const s = 0.9 + ((i * 37) % 5) * 0.12;
+      drawDancer(ctx, this.atlas, i % CROWD_TYPES, beat / 2 + i * 0.13, w * (i / 13), h * (1.2 + ((i * 53) % 7) * 0.02), h * 0.5 * s, i % 2 === 0);
+    }
   }
 
   /** Is the strobe lit right now (clues in the dark room only show in a flash)? */
