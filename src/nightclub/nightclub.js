@@ -174,7 +174,7 @@ export class Nightclub {
     if (!this.sprite) this.sprite = new HeroSprite(220, 300);
     const now = performance.now();
     if (this.heroAt && now - this.heroAt < 33 && this.heroWalk === this.p.walking && this.heroFace === this.p.facing) return this.heroInk;
-    this.heroAt = now; this.heroWalk = this.p.walking; this.heroFace = this.p.facing;
+    this.heroAt = now; this.heroWalk = this.p.walking; this.heroFace = this.p.facing; this.heroStamp = (this.heroStamp || 0) + 1;
     const H = this.sprite.hero;
     if (this.p.walking) H.pose('jog', this.t * 1.1); else H.pose('pose', 0.5 + this.t * 0.4);
     H.setWind(Math.sin(this.t * 1.7) * 0.8, 0.5, this.p.walking ? -5 : -0.8);
@@ -207,7 +207,36 @@ export class Nightclub {
     }
     const hpx = HERO_H * k, wpx = hpx * (img.width / img.height);
     const top = feet - hpx * (1 - 0.12 / 2.6);
-    ctx.drawImage(img, x - wpx / 2, top, wpx, hpx);
+    const { lit, rim } = this.litHero(img);
+    // contact shadow, then (glossy plates) a faint squashed reflection below the feet
+    ctx.save(); ctx.translate(x, feet); ctx.scale(1, 0.16);
+    const sh = ctx.createRadialGradient(0, 0, 0, 0, 0, wpx * 0.42);
+    sh.addColorStop(0, 'rgba(0,0,0,0.6)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = sh; ctx.beginPath(); ctx.arc(0, 0, wpx * 0.42, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    if (this.stage.spec) {
+      ctx.save(); ctx.globalAlpha = 0.17; ctx.translate(x, feet); ctx.scale(1, -0.42);
+      ctx.drawImage(lit, -wpx / 2, top - feet, wpx, hpx); ctx.restore();
+    }
+    // the room's backlight wraps her edges, then her body graded by the room's light
+    ctx.globalAlpha = 0.85;
+    ctx.drawImage(rim, x - wpx / 2 - 2.5 * k, top - 2 * k, wpx, hpx); ctx.drawImage(rim, x - wpx / 2 + 2.5 * k, top - 2 * k, wpx, hpx);
+    ctx.globalAlpha = 1;
+    ctx.drawImage(lit, x - wpx / 2, top, wpx, hpx);
+  }
+
+  /** Her sprite graded by the room's haze colour, plus a solid backlight-coloured copy for the rim. */
+  litHero(img) {
+    const L = ROOMS[this.room.kind].look, key = `${this.heroStamp}:${this.room.kind}`;
+    if (this.litKey === key) return this.litCache;
+    const mk = () => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; return c; };
+    const lit = this.litCache?.lit || mk(), rim = this.litCache?.rim || mk();
+    const a = lit.getContext('2d'), b = rim.getContext('2d');
+    a.globalCompositeOperation = 'source-over'; a.clearRect(0, 0, lit.width, lit.height); a.drawImage(img, 0, 0);
+    a.globalCompositeOperation = 'source-atop'; a.fillStyle = L.haze; a.globalAlpha = 0.26; a.fillRect(0, 0, lit.width, lit.height); a.globalAlpha = 1;
+    b.globalCompositeOperation = 'source-over'; b.clearRect(0, 0, rim.width, rim.height); b.drawImage(img, 0, 0);
+    b.globalCompositeOperation = 'source-in'; b.fillStyle = L.accent; b.fillRect(0, 0, rim.width, rim.height);
+    this.litKey = key; this.litCache = { lit, rim };
+    return this.litCache;
   }
 
   drawMarkers(ctx, view) {
@@ -219,10 +248,12 @@ export class Nightclub {
       const x = this.stage.sx(view, key.x), y = (this.stage.lane - 54) * k + bob;
       ctx.fillStyle = '#ffd84d'; ctx.beginPath(); ctx.arc(x, y, 12 * k + 4, 0, Math.PI * 2); ctx.fill();
       ctx.lineWidth = 3; ctx.strokeStyle = '#05040a'; ctx.stroke();
+      ctx.save(); ctx.font = `bold ${Math.round(Math.max(12, 24 * k))}px Bangers, Impact, sans-serif`;
+      tag(x, y - 18 * k - 6, key.item.toUpperCase(), '#ffd84d'); ctx.restore();
     }
     for (const s of r.spots) {
       if (this.taken.has(`${r.id}:${s.x}`)) continue;
-      tag(this.stage.sx(view, s.x), (this.stage.lane - 384) * k + bob, s.type === 'drink' ? '?' : '👁', '#ffd84d');
+      tag(this.stage.sx(view, s.x), (this.stage.lane - 384) * k + bob, { closeup: 'SEARCH ▼', drink: 'DRINK ▼', djview: 'LOOK ▼' }[s.type] || 'LOOK ▼', '#ffd84d');
     }
     if (n.door) tag(this.stage.sx(view, n.door.x), (this.stage.lane - 494) * k + bob, n.door.lock && !this.items.has(n.door.lock) ? '🔒' : '▼', '#fff');
   }
@@ -242,7 +273,7 @@ export class Nightclub {
     const vid = this.view === 'set' && this.video && this.video.readyState >= 2 ? this.video : null;
     const set = this.view === 'set' && (vid || this.setImage());
     if (set) this.stage.drawSetPiece(ctx, set, w, h, this.t, !vid);
-    else this.stage.drawBack(ctx, view, this.t);
+    else this.stage.drawBack(ctx, view, this.t, this.view === 'walk' ? this.p.x : null);
     if (this.view === 'walk') { this.drawMarkers(ctx, view); this.drawHero(ctx, view); }
     this.stage.drawFront(ctx, view, this.t, this.dt || 1 / 60);
     afterScene(ctx, g.canvas, w, h, st ? st.intox : 0, this.t);

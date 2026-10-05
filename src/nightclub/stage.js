@@ -14,11 +14,12 @@ const BPM = 124;
 const FONT = 'Bangers, Impact, sans-serif';
 
 /** Room tunables by light rig. */
+// heads: moving-head spacing (0 = none: offices and restrooms aren't lit like a stage); sweep: swing
 const RIG = {
-  beams:  { heads: 380, beamA: 0.5, lasers: true, haze: 0.16 },
-  warm:   { heads: 620, beamA: 0.22, lasers: false, haze: 0.10 },
-  strobe: { heads: 900, beamA: 0.12, lasers: false, haze: 0.06 },
-  dim:    { heads: 900, beamA: 0.10, lasers: false, haze: 0.06 },
+  beams:  { heads: 380, sweep: 0.55, beamA: 0.5, lasers: true, haze: 0.16 },
+  warm:   { heads: 620, sweep: 0.12, beamA: 0.22, lasers: false, haze: 0.10 },
+  strobe: { heads: 900, sweep: 0.55, beamA: 0.12, lasers: false, haze: 0.06 },
+  dim:    { heads: 0, sweep: 0, beamA: 0, lasers: false, haze: 0.06 },
 };
 
 /** Lighten a #rrggbb toward white by amt (0..1), as #rrggbb (rgba() needs hex). */
@@ -278,7 +279,7 @@ export class ClubStage {
     const cols = [this.L.accent, lighten(this.L.haze, 0.5), '#ffffff'];
     this.sprites = cols.map(beamSprite);
     this.heads = [];
-    for (let px = rng.range(80, 240); px < W; px += this.rig.heads * rng.range(0.8, 1.2)) this.heads.push({ x: px, c: rng.int(0, 2), ph: rng.range(0, 6.28), sp: rng.range(0.25, 0.6), a0: rng.range(-0.25, 0.25) });
+    if (this.rig.heads) for (let px = rng.range(80, 240); px < W; px += this.rig.heads * rng.range(0.8, 1.2)) this.heads.push({ x: px, c: rng.int(0, 2), ph: rng.range(0, 6.28), sp: rng.range(0.25, 0.6), a0: rng.range(-0.25, 0.25) });
     this.lasers = this.rig.lasers ? [{ x: W * 0.3, ph: 0 }, { x: W * 0.72, ph: 2 }] : [];
     this.glow = glowSprite(this.L.haze);
     this.strobe = { next: 0.5, a: 0 };
@@ -287,7 +288,8 @@ export class ClubStage {
   /** view: { k (screen px per plate px), x0 (plate x at the screen's left), w, h } */
   sx(view, px, par = 1) { const vw = view.w / view.k, cx = view.x0 + vw / 2; return (px - cx * par + vw / 2) * view.k; }
 
-  drawBack(ctx, view, t) {
+  /** heroX (plate px): the dancers right around her step aside, so limbs don't cross hers. */
+  drawBack(ctx, view, t, heroX = null) {
     const { k, w, h } = view, beat = (t * BPM) / 60;
     if (this.atlas.version !== dancersVersion()) this.atlas = crowdAtlas(this.rim); // the baked sheet arrived
     // plate
@@ -311,7 +313,7 @@ export class ClubStage {
     for (const b of this.heads) {
       const x = this.sx(view, b.x);
       if (x < -500 || x > w + 500) continue;
-      const a = b.a0 + Math.sin(t * b.sp + b.ph) * 0.55;
+      const a = b.a0 + Math.sin(t * b.sp + b.ph) * this.rig.sweep;
       ctx.save(); ctx.translate(x, 150 * k); ctx.rotate(a);
       ctx.globalAlpha = this.rig.beamA * pulse * (this.art ? 0.55 : 1);
       ctx.drawImage(this.sprites[b.c], -90 * k, 0, 180 * k, 900 * k);
@@ -339,7 +341,9 @@ export class ClubStage {
     }
     // mid crowd on the floor line
     for (const d of this.mid) {
-      const x = this.sx(view, d.x);
+      let px = d.x;
+      if (heroX !== null && d.y > this.lane - 160) { const dx = d.x - heroX; if (Math.abs(dx) < 120) px = heroX + Math.sign(dx || 1) * 120; }
+      const x = this.sx(view, px);
       if (x < -120 || x > w + 120) continue;
       drawDancer(ctx, this.atlas, d.t, t, d.o, x, d.y * k, 300 * d.s * k, d.f);
     }
@@ -403,6 +407,12 @@ export class ClubStage {
     const sc = Math.max(w / iw0, h / ih0), iw = iw0 * sc, ih = ih0 * sc;
     ctx.drawImage(img, (w - iw) / 2, (h - ih) / 2, iw, ih);
     if (!live) return; // a video loop brings its own crowd and beams
+    // the DJs behind the decks of the still (the booth's top edge sits ~49% down the render)
+    const top = (h - ih) / 2 + ih * 0.49;
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, w, top); ctx.clip();
+    drawDancer(ctx, this.atlas, 5, t, 0, w / 2 - ih * 0.06, top + ih * 0.1, ih * 0.27);
+    drawDancer(ctx, this.atlas, 1, t, 0.4, w / 2 + ih * 0.07, top + ih * 0.1, ih * 0.26, true);
+    ctx.restore();
     const beat = (t * BPM) / 60, pulse = 0.75 + 0.25 * Math.max(0, Math.cos(beat * Math.PI * 2));
     ctx.globalCompositeOperation = 'lighter';
     for (let i = 0; i < 6; i++) {
