@@ -56,7 +56,7 @@ function atlas() {
 
 // ---------------------------------------------------------------- the shader
 /** Contact shade (AO) at the foot of walls: k = strength, h = falloff height in metres. */
-const AO = { k: 0.42, h: 4 };
+const AO = { k: 0.5, h: 6.5 };
 /**
  * Haze reach: far = max(fog far, camera height x perAlt), capped under the camera's far plane;
  * it starts at near x far, or nearAlt x the camera's height when that's further (from high patrol
@@ -76,9 +76,17 @@ const _cool = new THREE.Color(0.93, 0.98, 1.1);
  */
 export const HAZE_GLSL = /* glsl */`
 uniform vec3 uHazeCol; uniform vec3 uHorizon; uniform vec3 uHazeLow; uniform float uHazeNear; uniform float uHazeFar;
-// the air's colour at haze amount f along a ray dipping dn (sine) below the horizon
+uniform vec3 uSunAir; uniform vec2 uSunDirH;
+// the view ray (world, normalised), set by each shader that knows it; zero = no sun tint
+vec3 gRay = vec3(0.);
+// the air's colour at haze amount f along a ray dipping dn (sine) below the horizon. Toward the
+// sun the far air takes the dome's own warm glow (uSunAir: the same term the sky adds just above
+// the horizon, so haze and sky still meet without an edge); away from it it stays cool
 vec3 airAt(float f, float dn) {
-  return mix(mix(uHazeCol, uHorizon, smoothstep(0.35, 1., f)), uHazeLow, smoothstep(${HAZE.lowDn[0]}, ${HAZE.lowDn[1]}, dn));
+  vec3 a = mix(uHazeCol, uHorizon, smoothstep(0.35, 1., f));
+  float lw = dot(gRay.xz, gRay.xz) > 1e-6 ? pow(max(dot(normalize(gRay.xz), uSunDirH), 0.), 3.) : 0.;
+  a += uSunAir * lw * smoothstep(0.2, 1., f);
+  return mix(a, uHazeLow + uSunAir * lw * 0.35 * f, smoothstep(${HAZE.lowDn[0]}, ${HAZE.lowDn[1]}, dn));
 }
 // pulp grade: saturation and value contrast up (comic primaries), applied before the haze
 vec3 pulp(vec3 c) {
@@ -169,6 +177,7 @@ void main() {
   float d = length(vP - cameraPosition);
   float a = clamp(max(vWid, 1.) * 0.5 + 0.5 - abs(vAcross), 0., 1.) * min(vWid, 1.) * mix(1., 0.55, smoothstep(300., 700., d)) * (1. - smoothstep(1400., 2000., d));
   if (a < 0.01) discard;
+  gRay = (vP - cameraPosition) / max(d, 1e-3);
   gl_FragColor = vec4(haze(uInk, d, vP.y, 0.85), a); // a notch under the walls: silhouettes keep their line
 }`;
 
@@ -232,11 +241,12 @@ vec4 groups(vec2 c, vec2 w, vec4 L, float style, float seed) {
   float wn = wa.x * wa.y, lt = (0.08 + 0.62 / 3.) * (0.6 + 0.8 * L.w) * 0.8;
   float wl = mix(L.z, L.z * 0.72, 3. / 32.);
   if (style == 3.) wl = mix(wl, 1., 10. / 32. * (1. - wn));
-  float f = log2(max(w.x, w.y) * 3.3), l0 = floor(f), k = smoothstep(0.65, 1., f - l0);
-  if (f >= 2.) return vec4(wl * (1. - wn) + wn * 0.27, wn * 0.92, lt * wn * 0.92, lt * (1. - wn)); // (the mean)
+  // (2 x 2 groups fade to the mean sooner: past ~1.6 px a group's pattern isn't worth its cost)
+  float f = log2(max(w.x, w.y) * 3.3), l0 = floor(f), k = l0 > 0.5 ? smoothstep(0.25, 0.75, f - l0) : smoothstep(0.65, 1., f - l0);
+  if (f >= 1.75) return vec4(wl * (1. - wn) + wn * 0.27, wn * 0.92, lt * wn * 0.92, lt * (1. - wn)); // (the mean)
   vec2 gl = grp(c, w, m, l0, seed, L.w, lt);
   if (k > 0.) gl = mix(gl, l0 > 0.5 ? vec2(wn, lt) : grp(c, w, m, 1., seed, L.w, lt), k); // (level 2 = the mean)
-  gTemp = mix(gTemp, vec3(1.), smoothstep(0.5, 1., f)); // (colour temperatures only while a group is one window)
+  gTemp = vec3(1.); // (colour temperatures near only: far off the cool ones read as pale blotches)
   float g = gl.x, lit = gl.y;
   return vec4(wl * (1. - g) + g * 0.27, g * 0.92, lit * g * 0.92, lit * (1. - g));
 }
@@ -281,13 +291,14 @@ vec4 facade(vec2 c, vec2 w, float style, float seed) {
   }
 #endif
   float lit = uLit > 0. ? litWin(floor(c), seed, L.w) : 0.; // (only lit windows care: skipped by day)
-  float glass = max(0., win * (1. - fr) - rec * 0.45);
+  float glass = max(0., win * (1. - fr * (1. - lit)) - rec * 0.45 * (1. - lit)); // (a lit window: a plain lit pane, no glyph)
   // night glow: a lit window washes its own cell's wall with a little of its light (cheap: no
   // extra shape, the cell is the window's); far off it simply brightens the lit tint
   return vec4(wall * (1. - win) + win * mix(0.25, 0.45, fr), glass, lit * glass, lit * (1. - win));
 }
 void main() {
   float dist = length(vW - cameraPosition);
+  gRay = (vW - cameraPosition) / max(dist, 1e-3);
   vec3 col = vec3(0.), emi = vec3(0.);
   if (vKind == 2.) {
     vec3 s = texture2D(uSigns, vUv).rgb; // r tube core, g glow/letters, b board
@@ -328,7 +339,8 @@ void main() {
     // side and the shade side read apart on every tower, by day and at dusk
     float litK = smoothstep(0.0, 0.04, ndl), fullK = N.y > 0.5 ? 1. : smoothstep(0.3, 0.34, ndl);
     vec3 amb = mix(uAmbDn, uAmbUp, N.y * 0.5 + 0.5) * mix(vec3(${KEY.shade.join(', ')}), vec3(1.), litK);
-    vec3 light = amb + uKeyCol * litK * (0.5 + 0.5 * fullK);
+    // (roofs take less of the moon: under its blue key every near roof was one cobalt slab)
+    vec3 light = amb + uKeyCol * litK * (0.5 + 0.5 * fullK) * (N.y > 0.5 ? 1. - 0.45 * uNight : 1.);
     // each facade orientation keeps its own cel tone (east/west a step darker than north/south),
     // so a tower's two visible faces always read apart even when neither is in the sun
     if (N.y < 0.5) light *= abs(N.x) > abs(N.z) ? mix(0.82, 0.94, litK) : 1.;
@@ -348,7 +360,13 @@ void main() {
       // contact shade: the foot of every wall darkens where it meets the ground, a setback's roof
       // or the roof under a box (cheap AO: the height above the part's own base, per vertex)
       col *= 1. - AO.x * exp(-vHb / AO.y) * (1. - 0.4 * uNight) * step(abs(N.y), 0.5);
-      emi = vLit * (m.b * 1.15 * gTemp + m.a * 0.12) * uLit;
+      emi = vLit * (m.b * 1.15 * gTemp + m.a * 0.12) * uLit * mix(0.55, 1., smoothstep(0., 30., vW.y)); // (the street floors' light sinks into the canyon too)
+      // dusk rim: with the sun low, a face in shade gets a thin warm line on its sun-side edge
+      // (the edge a backlit tower's lit face turns away at); its quad position gives the edge
+      vec3 T = vec3(N.z, 0., -N.x); // along the quad (cross(up, N))
+      float ex = (dot(T, uKeyDir) > 0. ? 1. - vQ.x : vQ.x) / max(fwidth(vQ.x), 1e-5);
+      float rim = (1. - smoothstep(1.2 * dpr, 2.4 * dpr, ex)) * (1. - litK) * smoothstep(0.4, 0.08, uKeyDir.y) * (1. - uNight) * step(abs(N.y), 0.5);
+      col += uKeyCol * vec3(1., 0.8, 0.55) * rim * 0.7;
       // night rim: a cool sky-lit edge on faces turning away from her (the silhouette reads)
       emi += uSky * 0.45 * uNight * smoothstep(0.55, 0.85, fres) * (1. - m.g * 0.5);
     }
@@ -388,6 +406,7 @@ export class CityLook {
     this.atlas = atlas();
     const U = {
       uHazeCol: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() }, uHazeLow: { value: new THREE.Color() }, uHazeNear: { value: 400 }, uHazeFar: { value: 1600 },
+      uSunAir: { value: new THREE.Color(0, 0, 0) }, uSunDirH: { value: new THREE.Vector2(1, 0) },
       uAtlas: { value: this.atlas }, uSigns: { value: signTex },
       uKeyDir: { value: new THREE.Vector3(0.4, 0.7, 0.5).normalize() }, uKeyCol: { value: new THREE.Color(1, 1, 1) },
       uAmbUp: { value: new THREE.Color(0.4, 0.4, 0.5) }, uAmbDn: { value: new THREE.Color(0.2, 0.2, 0.3) },
@@ -411,8 +430,14 @@ export class CityLook {
    * haze: its colour leans from the (district-tinted) fog toward a cool desaturated grey, ends on
    * the dome's horizon colour, and reaches further the higher the camera (a city to the horizon).
    */
-  light(sun, hemi, fog, night, time, horizon, camY) {
+  light(sun, hemi, fog, night, time, horizon, camY, dome = null) {
     const U = this.U;
+    if (dome) {
+      // the sky's warm glow toward the sun (its toSun term, Sky3D DOME_FS) for the haze to share
+      const { band, mid, sunK, discDir } = dome, k = band.value.r > mid.value.r ? 0.35 * sunK.value : 0;
+      U.uSunAir.value.copy(band.value).sub(mid.value).multiplyScalar(k);
+      U.uSunDirH.value.set(discDir.value.x, discDir.value.z).normalize();
+    }
     if (sun) {
       U.uKeyDir.value.copy(sun.position).sub(sun.target.position).normalize();
       U.uKeyCol.value.copy(sun.color).multiplyScalar((0.12 + 0.36 * sun.intensity) * (1 - 0.15 * night) * KEY.key);

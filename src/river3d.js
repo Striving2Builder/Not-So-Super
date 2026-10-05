@@ -83,6 +83,7 @@ void main() {
 #endif
   gl_FragColor = linearToOutputTexel(vec4(c, 1.));
   gl_FragColor.rgb = pulp(gl_FragColor.rgb);
+  gRay = (vW - cameraPosition) / max(dist, 1e-3);
   gl_FragColor.rgb = haze(gl_FragColor.rgb, dist, 0., 1.);
 }`,
   });

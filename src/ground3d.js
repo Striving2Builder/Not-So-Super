@@ -231,7 +231,7 @@ export function cityGround(city, U, landmarks, rich = true) {
   const g = new THREE.PlaneGeometry(x1, z1); // the canvases span exactly the land
   g.rotateX(-Math.PI / 2); g.translate(x1 / 2, -0.25, z1 / 2);
   return new THREE.Mesh(g, new THREE.ShaderMaterial({
-    uniforms: { day: { value: T.day }, night: { value: T.night }, uKeyCol: U.uKeyCol, uAmbUp: U.uAmbUp, uNight: U.uNight, uLit: U.uLit, uHazeCol: U.uHazeCol, uHorizon: U.uHorizon, uHazeLow: U.uHazeLow, uHazeNear: U.uHazeNear, uHazeFar: U.uHazeFar },
+    uniforms: { day: { value: T.day }, night: { value: T.night }, uKeyCol: U.uKeyCol, uAmbUp: U.uAmbUp, uNight: U.uNight, uLit: U.uLit, uHazeCol: U.uHazeCol, uHorizon: U.uHorizon, uHazeLow: U.uHazeLow, uHazeNear: U.uHazeNear, uHazeFar: U.uHazeFar, uSunAir: U.uSunAir, uSunDirH: U.uSunDirH },
     vertexShader: 'varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
     fragmentShader: /* glsl */`
 uniform sampler2D day; uniform sampler2D night; uniform vec3 uKeyCol; uniform vec3 uAmbUp; uniform float uNight; uniform float uLit;
@@ -251,6 +251,7 @@ void main() {
 #endif
   gl_FragColor = linearToOutputTexel(vec4(c, 1.));
   gl_FragColor.rgb = pulp(gl_FragColor.rgb);
+  gRay = (vW - cameraPosition) / max(dist, 1e-3);
   gl_FragColor.rgb = haze(gl_FragColor.rgb, dist, 0., 1.);
 }`,
   }));

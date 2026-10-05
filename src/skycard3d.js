@@ -146,10 +146,13 @@ bool land(vec2 p) {
 }
 void main() {
   vec3 ray = vW - cameraPosition;
+  gRay = normalize(ray);
   float hl = max(length(ray.xz), 1.), slope = ray.y / hl;
   vec3 c = airAt(1., clamp(-ray.y / length(ray), 0., 1.));
   float az = atan(ray.z, ray.x) / 6.2832 + 0.5;
+  if (-slope < ${RING.dip[1]}) { // (steeper rays: every layer has faded out)
 ${RING.layers.map(ringLayer).reverse().join('\n')}
+  }
   gl_FragColor = vec4(c, 1.);
 }`,
     }));

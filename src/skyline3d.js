@@ -9,7 +9,7 @@ import { HAZE_GLSL } from './buildings3d.js';
 /** Metres. pitch/road: the outer street grid (the city's own block pitch). */
 export const OUTER = { river: 260, reach: 9000, pitch: 120, road: 26 };
 
-export const hazeU = (U) => ({ uHazeCol: U.uHazeCol, uHorizon: U.uHorizon, uHazeLow: U.uHazeLow, uHazeNear: U.uHazeNear, uHazeFar: U.uHazeFar });
+export const hazeU = (U) => ({ uHazeCol: U.uHazeCol, uHorizon: U.uHorizon, uHazeLow: U.uHazeLow, uHazeNear: U.uHazeNear, uHazeFar: U.uHazeFar, uSunAir: U.uSunAir, uSunDirH: U.uSunDirH });
 
 const WORLD_VS = 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }';
 
@@ -37,6 +37,7 @@ varying vec3 vW;
 float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 void main() {
   vec3 V = normalize(cameraPosition - vW);
+  gRay = -V;
   float fres = pow(1. - max(V.y, 0.), 4.);
   // water, not fog: a deep navy body looking down, the sky's own colour at grazing angles
   // (Fresnel), cel wave-crest strokes close by, comic ink ripple dashes drifting further out,
@@ -69,7 +70,7 @@ void main() {
 #endif
   gl_FragColor = linearToOutputTexel(vec4(c, 1.));
   gl_FragColor.rgb = pulp(gl_FragColor.rgb);
-  gl_FragColor.rgb = haze(gl_FragColor.rgb, dist * 0.8, 0., 1.);
+  gl_FragColor.rgb = haze(gl_FragColor.rgb, dist, 0., 1.); // (as the land: faster, the river ring was a pale band; slower, a dark plate with a hard coast)
 }`,
     }));
     scene.add(this.sea);
@@ -155,6 +156,7 @@ void main() {
 #endif
   gl_FragColor = linearToOutputTexel(vec4(c, 1.));
   gl_FragColor.rgb = pulp(gl_FragColor.rgb);
+  gRay = normalize(vW - cameraPosition);
   gl_FragColor.rgb = haze(gl_FragColor.rgb, length(vW - cameraPosition), 0., 1.);
 }`,
   });

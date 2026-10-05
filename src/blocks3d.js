@@ -2,6 +2,7 @@
 // (setbacks, podium + tower, Art Deco crown, spire, octagon), a roof kit (water tower, antenna with
 // a lit tip, helipad, garden, HVAC, penthouse, roof sign), district colours and window light, neon
 // and named venue signs. Everything is appended to the chunk's Builder (one draw call per chunk).
+import * as THREE from 'three';
 import { hash2 } from './rng.js';
 import { LOT } from './city.js';
 import { M, STYLE, box, prism, gable, wedge, tree, mast, lamp, neonRing, neonPost, look, KIND } from './buildings3d.js';
@@ -46,6 +47,8 @@ export function height3(o, district, core = 0) {
 }
 
 const pick = (a, h) => a[Math.min(a.length - 1, Math.floor(h * a.length))];
+const lum = (c) => 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
+const _g = new THREE.Color();
 function pickW(weights, h) {
   let sum = 0;
   for (const k in weights) sum += weights[k];
@@ -88,8 +91,12 @@ export function building(B, o, blk, S) {
   let style = STYLE[pickW(D.styles, h[1])];
   if (o.glass && D.styles.glass) style = h[1] < 0.7 ? STYLE.glass : style;
   const L = look(o.gold ? '#e6c66a' : wall, pick(D.lit, h[2]), style, o.roofCol || pick(D.roofs, h[3]), h[4] < 0.55 ? STYLE.gravel : STYLE.tar, Math.floor(h[5] * 8) / 8, Math.floor(h[6] * 16) / 16);
-  // roofs: the district's roof colour, pulled toward its own wall colour (no candy caps)
+  // muted palettes (candy blocks read as toys from altitude): walls a quarter of the way to their
+  // grey outside the vice districts (they keep their neon colour); roofs the district's roof
+  // colour pulled toward its own wall colour, then half way to a warm grey (no candy caps)
+  if (!D.neon) L.tint.lerp(_g.setRGB(1, 1, 1).multiplyScalar(lum(L.tint)), 0.25);
   L.roofTint.lerp(L.tint, 0.45).multiplyScalar(0.85);
+  L.roofTint.lerp(_g.setRGB(1, 0.94, 0.86).multiplyScalar(lum(L.roofTint)), D.neon ? 0.3 : 0.5);
   const face = streetFace(o, blk);
   tiers = [[x0, z0, x1, z1, 0, H]];
   if (o.container || o.truck) { L.style = STYLE.industrial; box(B, x0, z0, x1, z1, 0, H, L, { ink: 0.6 }); return; }

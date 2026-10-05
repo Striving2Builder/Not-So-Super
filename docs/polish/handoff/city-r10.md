@@ -22,7 +22,18 @@ Base for A/B: `git archive b615a78 src` (= phase-2 1e65910 + stub) in the scratc
   transom dropped (each pane was a "+").
 - tools: `shoot.js --only a,b` takes a list.
 
-## Perf (frozen-pose bench, Balanced, SwiftShader, 21:00, 8 rounds; head vs base)
+## Done (cycle 2)
+- **C8** haze takes the dome's warm toSun glow toward the sun (`uSunAir`/`uSunDirH`, `gRay` set per
+  shader; same term as the sky just above the horizon: no seam). **C6** dusk rim: warm line on the
+  sun-side edge of shaded faces (quad position). **C11** non-vice walls 25% to grey, roofs half way
+  to warm grey, less moon on roofs. **C12** AO 0.5/6.5 m, street floors' window light sinks too.
+  **C10** lit panes drop mullion/recess. Sea hazed like land (×1: ×0.8 made a hard dark coast).
+  Perf trims: 2×2 groups fade to the mean by f 1.75; ring layers skipped on steep rays.
+- Critic cycle 2: 6/10 (C3 fixed; C1 C2 C5 C6 C7 C9 C13 improved; C4 C8 C10 C11 not, C12 can't tell).
+- **Perf cycle 2 (frozen, 8 rounds): skim 0.917, cruise 0.907, high 0.922: OVER budget** (haze sun
+  term + rim run per pixel even when off). Fix first in cycle 3.
+
+## Perf cycle 1 (frozen-pose bench, Balanced, SwiftShader, 21:00, 8 rounds; head vs base)
 - skim 0.985, cruise 0.947, high 0.937 (≈1% over budget at cruise/high; trimming next). Calls/tris
   unchanged (±noise). No new textures/targets (GPU memory unchanged). Bench: flyab.js with the
   measurement swapped for a frozen pose (start spot +300 wu), median of 10 synced renders per round.
