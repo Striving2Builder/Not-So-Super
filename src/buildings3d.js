@@ -333,6 +333,9 @@ void main() {
     }
     vec3 N = normalize(vN), V = normalize(cameraPosition - vW);
     float ndl = dot(N, uKeyDir);
+    // dusk (sun low, not yet the moon): a warm, stronger key on the sun side and a deeper, cooler
+    // shade, so looking into the sun the towers turn to backlit silhouettes with warm edges
+    float dk = smoothstep(0.4, 0.08, uKeyDir.y); // (the moon key is high: none at night)
     // three cel bands per face: shade (the sky's cool fill alone, a darker, cooler step of the same
     // paint), raking (half the key), full light (roofs always full while the sun is up): the sun's
     // side and the shade side read apart on every tower, by day and at dusk
@@ -340,12 +343,27 @@ void main() {
     vec3 amb = mix(uAmbDn, uAmbUp, N.y * 0.5 + 0.5) * mix(vec3(${KEY.shade.join(', ')}), vec3(1.), litK);
     // (roofs take less of the moon: under its blue key every near roof was one cobalt slab)
     vec3 light = amb + uKeyCol * litK * (0.5 + 0.5 * fullK) * (N.y > 0.5 ? 1. - 0.45 * uNight : 1.);
+    if (dk > 0. && N.y < 0.5) light = amb * mix(vec3(1.), vec3(0.66, 0.7, 0.9), dk * (1. - litK)) + uKeyCol * litK * (0.5 + 0.5 * fullK) * mix(vec3(1.), vec3(1.3, 1.06, 0.8), dk);
     // each facade orientation keeps its own cel tone (east/west a step darker than north/south),
     // so a tower's two visible faces always read apart even when neither is in the sun
     if (N.y < 0.5) light *= abs(N.x) > abs(N.z) ? mix(0.82, 0.94, litK) : 1.;
     vec3 wall = vCol * m.r * light;
     if (roof) {
       col = mix(wall, vec3(0.9, 0.62, 0.05) * light, m.b);
+      // muted: a warm grey take on the paint (under the blue dusk / moon sky every roof was one
+      // cobalt slab), each roof its own value (seeded by its tier height and paint)
+      float rl = dot(col, vec3(0.299, 0.587, 0.114));
+      col = mix(col, rl * vec3(1.06, 1., 0.9), 0.6 * (1. - m.b)) * (0.8 + 0.4 * h12(vec2(floor(vHb * 3.), dot(vCol, vec3(31., 57., 11.)))));
+#ifdef FAR
+      // roof clutter without geometry: a 4 m grid of boxes, some dark (vents, plant, shadow), some
+      // pale (bulkheads, tanks), averaged away once a cell is under a pixel or so
+      vec2 cq = vW.xz * 0.25, cw = fwidth(cq);
+      float ck = 1. - smoothstep(0.35, 0.9, max(cw.x, cw.y));
+      if (ck > 0. && m.b < 0.5) {
+        float r = h12(floor(cq) + vHb), bx = pulse(cq.x, 0.2, 0.8, cw.x) * pulse(cq.y, 0.25, 0.75, cw.y);
+        col *= 1. + (r < 0.14 ? -0.4 : r < 0.24 ? 0.24 : 0.) * bx * ck;
+      }
+#endif
     } else {
       // glass: dark by night, mirrors the sky (more at grazing angles) by day; curtain walls most
       float fres = 1. - max(dot(N, V), 0.); fres *= fres; // (no pow: exp/log in software GL)
@@ -377,6 +395,7 @@ void main() {
     // ~1 px wide from the pixel's place in its quad, thinning off into the haze like the near ink
     vec2 e = min(vQ, 1. - vQ) / max(fwidth(vQ), vec2(1e-5));
     float inkA = (1. - smoothstep(0.9 * dpr - 0.5, 0.9 * dpr + 0.5, min(e.x, e.y))) * mix(0.9, 0.5, smoothstep(500., 1400., dist)) * (1. - smoothstep(1600., 2400., dist));
+    if (roof) col *= 1. + 0.22 * (1. - smoothstep(1.4 * dpr, 2.6 * dpr, min(e.x, e.y))); // a pale parapet lip inside the line
     col = mix(col, uInk, inkA); emi *= 1. - inkA;
 #else
     // halftone dots in the shade, close up only: fixed dot size (shrinking dots turn to salt),

@@ -195,7 +195,7 @@ export class City3D {
         if (budget-- <= 0) { const other = ch[which === 'near' ? 'lite' : 'near']; if (other) other.visible = true; continue; }
         this.build(ch, which);
       }
-      const full = camY < LOD.detailAlt && Math.hypot(Math.max(0, d), camY) < (which === 'near' ? LOD.detail : LOD.liteDetail);
+      const full = (camY < LOD.detailAlt || which === 'lite') && Math.hypot(Math.max(0, d), camY) < (which === 'near' ? LOD.detail : LOD.liteDetail);
       if (ch[which]) { ch[which].visible = true; range(ch[which], full); }
       if (which === 'near') ch.nearSeen = n;
       if (ch[which + 'Ink']) { ch[which + 'Ink'].visible = which === 'near' || d < LOD.farInk; range(ch[which + 'Ink'], full); }
