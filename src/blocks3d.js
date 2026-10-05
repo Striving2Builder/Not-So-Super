@@ -97,7 +97,7 @@ export function building(B, o, blk, S) {
   // (the vice districts are the `neon: true` ones; the casino and entertainment strips keep their
   // neon tubes and signs, not candy walls)
   const vice = D.neon === true;
-  if (!vice) L.tint.lerp(_g.setRGB(1, 1, 1).multiplyScalar(lum(L.tint)), 0.4);
+  L.tint.lerp(_g.setRGB(1, 1, 1).multiplyScalar(lum(L.tint)), vice ? 0.2 : 0.4); // (vice: a little, the tubes carry the colour)
   L.roofTint.lerp(L.tint, 0.45).multiplyScalar(0.85);
   L.roofTint.lerp(_g.setRGB(1, 0.94, 0.86).multiplyScalar(lum(L.roofTint)), vice ? 0.3 : 0.55);
   L.roofTint.multiplyScalar(0.8 + 0.4 * hash2(x, y, 99)); // each roof its own value (far roofs read as one slab)

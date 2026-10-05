@@ -347,6 +347,9 @@ void main() {
     // each facade orientation keeps its own cel tone (east/west a step darker than north/south),
     // so a tower's two visible faces always read apart even when neither is in the sun
     if (N.y < 0.5) light *= abs(N.x) > abs(N.z) ? mix(0.82, 0.94, litK) : 1.;
+    // roofs see the whole open sky: its light keeps the top planes the lightest value even with the
+    // sun grazing at dusk (they were darker than the walls: flat brown / navy slabs from patrol)
+    else light += uSky * 0.55 * (1. - 0.6 * uNight);
     vec3 wall = vCol * m.r * light;
     if (roof) {
       col = mix(wall, vec3(0.9, 0.62, 0.05) * light, m.b);
