@@ -76,8 +76,7 @@ Drop into `assets/nightclub/incoming/batch1/`.
 - Every clue object in an investigation prompt should be visible, separate from the others and not
   tiny: they become tap spots.
 
-**7. Optional: `club_loop.mp3`**: 1–2 min instrumental club track (deep house / techno, 120–126 bpm),
-loopable, royalty-free or your own generator's licence.
+**7. `club_*.mp3`: music**: the user's own tracks; drop 1–3 in the batch folder.
 
 ## Later batches (prompts come per batch)
 - **Batch 2, the flagship rooms:** walk plates for the entrance + coat check, bar, lounge/seating,

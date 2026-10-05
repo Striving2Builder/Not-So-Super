@@ -146,8 +146,27 @@ there's always a way back out.
 The user makes the images, videos and audio with their tools (AI image/video generators, Blender);
 the director gives prompts and specs per batch. See [nightclub-assets.md](nightclub-assets.md).
 
+## Built so far (2026-10-04, placeholder art, opt-in)
+- Try it: `?club=v2` routes club zones (premade clubs + the Nightclub venue) to the new mode; add
+  `&clubseed=N` for a generated club instead of the flagship (Club Nova). Default play is unchanged.
+- Code: `src/nightclub/` — `rooms.js` (room kinds, flagship graph, `ART` hook for the user's renders),
+  `layout.js` (club engine: grow, doors, floors, locks + keys, `checkClub` accessibility proof),
+  `stage.js` (layered Canvas 2D room: plate or painted placeholder, fogged far crowd, moving heads,
+  laser fans, mid crowd, DJs, near crowd, haze, strobe, vignette), `crowd.js` (procedural backlit
+  silhouette dancers, stand-ins for the clips), `intox.js` (Super Squirt screen effects on the
+  shared intox meter), `nightclub.js` (the mode: walk, doors, keys, the bar drink, the DJ view,
+  blackout → wake in a back room).
+- Tools: `node tools/nightclub/layoutcheck.mjs` (1,500 generated clubs, all accessible);
+  `node tools/shots/nightclub.js --label X [--seed N]` (every room + set piece + 3 intox levels,
+  fps, page errors).
+- Next: the user's batch 1 → plates/loop/dancers via `ART`, flagship door positions matched to the
+  art, then the iPad look test (fps, memory) before more rooms or the case generator.
+
+## Decisions (user, 2026-10-04)
+- The drug is called **Super Squirt**. Its look and how it ties to Kryptonian lore are still open.
+- Music: the user has their own tracks (dropped in with the assets).
+- Personal project for adults: no age gate or rating work; the game's mature dialogue is on.
+
 ## Open questions
-- The drug's name and look (pill, vial, glowing powder, a drink); how it ties to Kryptonian lore.
+- Super Squirt's look (pill, vial, glowing liquid, a drink) and why it works on her.
 - Can she refuse every drink, or are some cases only solvable dosed?
-- Music: licensed-free loops per club (user-made) or one shared score with per-room filters?
-- Age rating: drugs + intoxication + the existing adult venues → likely a mature rating.

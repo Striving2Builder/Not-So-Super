@@ -9,6 +9,7 @@ import { Captured } from './captured.js';
 import { ClubZone } from './clubzone.js';
 import { NightCase } from './nightcase.js';
 import { AsylumZone } from './asylum.js';
+import { Nightclub } from './nightclub/nightclub.js';
 import { showNewspaper } from './newspaper.js';
 import { HERO, DISTRICTS, THEMES, DEALS, BOSSES, VENUES, BILLBOARDS } from './data.js';
 import { UI, dialog, toast } from './ui.js';
@@ -38,6 +39,7 @@ game.modes = {
   club: new ClubZone(game),
   nightcase: new NightCase(game),
   asylum: new AsylumZone(game),
+  nightclub: new Nightclub(game),
 };
 game.overworld = game.modes.overworld;
 game.commentary = new Commentary(game);
@@ -81,8 +83,12 @@ game.gfxFailed = () => {
 };
 
 // ---------------------------------------------------------------- zone flow
+const NEW_CLUBS = /[?&]club=v2(&|$)/.test(location.search);
+
 /** Which game mode plays a zone. */
 function modeFor(z) {
+  // the detective nightclub redesign (docs/design/nightclub.md): opt-in with ?club=v2 until it reaches parity
+  if (NEW_CLUBS && z.mode === 'special' && (VENUES[z.venue]?.club || VENUES[z.venue]?.kind === 'club')) return 'nightclub';
   if (z.mode === 'special' && VENUES[z.venue]?.club) return 'club';  // raid inside a premade club
   return { brawl: 'brawler', investigate: 'investigate', special: 'special', nightcase: 'nightcase', asylum: 'asylum' }[z.mode];
 }
