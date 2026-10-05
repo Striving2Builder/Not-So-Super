@@ -1,4 +1,4 @@
-# QA round 10 handoff (cloud session 3, branch `cloud/qa-r10`)
+# QA round 10 handoff (cloud session 3, branch `cloud/qa-r10`): done
 
 Ran every harness tool on **phase-2** (1e65910) and on an **integration build**: a local scratch branch
 (not pushed) = phase-2 + `--no-ff` merges of `cloud/city-r10` (c18058f) → `cloud/flight-r10` (ef424de) →
@@ -78,7 +78,18 @@ hit there) and its knock-on (bug 2).
    Sheets: `shots/qa-dive-integ/*.png` after re-shooting locally.
 
 ## Perf (flybench, integration vs phase-2, 6 rounds, run alone)
-PENDING (filled when the run ends).
+Frozen pose, Balanced, `flybench.js --variants "integ;p2=<phase-2 src>;integ2=<empty>" --rounds 6`, nothing
+else running. fps (integ / p2 / integ again):
+| band | integ | phase-2 | integ2 | integ vs phase-2 |
+|---|---|---|---|---|
+| skim (0) | 7.27 | 5.96 | 6.77 | **×1.14–1.22** |
+| cruise (1) | 5.95 | 5.28 | 5.97 | **×1.13** |
+| high (2) | 8.21 | 6.73 | 7.99 | **×1.19–1.22** |
+Calls: same, +1 at skim (flight's drop shadow now in frame). Tris: +34 / +32 / +766 (city's
+penthouses from high patrol). Head-vs-head noise up to 7% at skim this run. Net: flight-r10's cheaper
+hero pass (~25–35%) more than pays for city-r10's ~5–10%; hero-r10 measured ±0. The combined build is
+within budget at every band. The real-device gain will be smaller (MSAA is cheap on Apple GPUs:
+confirm with `?perf=1`).
 
 ## Recommended merge order
 city-r10 → flight-r10 → hero-r10 (as tested), resolving herofly3d as above, then cloud/qa-r10 (touches
