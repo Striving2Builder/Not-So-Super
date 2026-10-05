@@ -103,6 +103,7 @@ async function main() {
       fill.position.copy(cam.position); fill.target.position.copy(P);
       sun.position.copy(P).add(new THREE.Vector3(-300, 400, 200)); sun.target.position.copy(P);
       fh.update(h, 0, 13, !!S.dive, 0, 0, !!S.boost); // (re-sync the cape light with the sun moved)
+      fh.cape.eye.copy(cam.position); // (in game the last frame's camera: here this tile's, for the keyline's distance thinning)
       lookFrame(renderer);
       renderer.render(scene, cam);
       const rad = C.head ? 1.0 : FlyHero3D.RADIUS * fh.size;

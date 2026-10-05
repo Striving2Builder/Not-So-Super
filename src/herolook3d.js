@@ -13,7 +13,7 @@ export const SUIT = { sat: 1.45, self: 0.32, rim: [0.62, 0.95, 1.0], rimK: [1.3,
  * keep a gentler saturation push, and their shade band takes its hue from the skin itself, a little
  * rosier (× shade), so the warm camera fill can't turn her thighs and hands orange-tan.
  */
-const SKIN = { sat: 1.1, shade: [0.95, 0.86, 0.88], g: [0.5, 0.93], b: [0.36, 0.86] }; // g, b: G/R and B/R ranges
+const SKIN = { sat: 1.1, shade: [0.97, 0.88, 0.9], grey: 0.35, floor: 0.66, g: [0.5, 0.93], b: [0.36, 0.86] }; // g, b: G/R and B/R ranges; grey: desaturation in the shade (ACES turns a dark peach orange); floor: shade brightness floor (× lit)
 /**
  * The scene's light on her (3D flight only; the sprites keep white): `tint` multiplies everything she
  * shows (time of day: full by day, warm at dusk, dim and blue at night, so she isn't a daylight sticker
@@ -90,7 +90,9 @@ ${rim ? `{ float rf = 1.0 - abs(dot(normal, normalize(vViewPosition)));
 { // skin: keep its brightness, take the hue from the skin (rosier in the shade), not from the warm fill
   vec3 a = max(diffuseColor.rgb, vec3(1e-3)); float al = dot(a, vec3(0.299, 0.587, 0.114));
   float L = dot(outgoingLight, vec3(0.299, 0.587, 0.114)) / al;
-  outgoingLight = mix(outgoingLight, a * L * mix(vec3(${SKIN.shade.join(', ')}), vec3(1.0), smoothstep(0.6, 1.0, L)), skinK); }
+  float lit = smoothstep(0.6, 1.0, L);
+  vec3 sh = mix(a, vec3(al), ${SKIN.grey.toFixed(2)}) * vec3(${SKIN.shade.join(', ')});
+  outgoingLight = mix(outgoingLight, mix(sh * max(L, ${SKIN.floor.toFixed(2)}), a * L, lit), skinK); }
 outgoingLight = outgoingLight * heroTint + rimAdd; // (the scene's time of day on all of her; the rim on top)
 #include <opaque_fragment>`);
   };

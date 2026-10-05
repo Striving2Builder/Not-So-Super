@@ -25,14 +25,14 @@ const POSE = {
  * The scene's light on her (HERO_LIGHT): tint by day / dusk / night (× the sun's colour a little) and
  * the rim's sky colour (day cyan-white, dusk sunset orange, night cool blue).
  */
-const SCENE = { night: [0.6, 0.63, 0.82], dusk: [1.0, 0.88, 0.8], sunMix: 0.18, rimDusk: [1.0, 0.62, 0.4], rimNight: [0.42, 0.55, 1.0] };
+const SCENE = { night: [0.5, 0.53, 0.74], dusk: [1.0, 0.88, 0.8], sunMix: 0.18, rimDusk: [1.0, 0.62, 0.4], rimNight: [0.42, 0.55, 1.0] };
 /**
  * Her silhouette keyline (CSS px, drawn by her sharp pass round body + cape as one shape): ink width
  * in open sky → against a dark or busy background (night, the street canyons, the map below the
  * patrol view), thinner as she gets small on screen (near: the chase distance, m; min: its floor).
  * No pale halo outside it any more (it read as a grey matte fringe): the sky-coloured rim separates her.
  */
-const LINE = { ink: [1.3, 2.3], halo: 0, near: 9, min: 0.6 };
+const LINE = { ink: [1.3, 2.3], halo: 0, near: 9, min: 0.45, hull: 2.2 }; // hull: her own ink hull's width (px, look3d's), thinned the same way
 /** Rim strength, shared by her materials (raised in the dark street canyons). */
 export const RIM = { value: SUIT.rimK[0] };
 export const RIM_K = SUIT.rimK;
@@ -64,6 +64,7 @@ export class FlyHero3D {
     scene.add(this.shadow);
     this.cape = new FlightCape(scene);
     this.sun = scene.children.find((o) => o.isDirectionalLight) || null; // Sky3D's sun/moon (added before her; the camera fill comes later)
+    this.olW = { value: LINE.hull }; // her ink hull's width (px), thinned with distance in keyline()
     this.idleK = 0; this.boostK = 0; this.boostT = 9; // (idle-clip facing, boost blend, time since the boost kicked in)
     this.cape.visible = false;
     this._f = new THREE.Vector3(); this._s = new THREE.Vector3(); this._o = new THREE.Vector3(); this._q = new THREE.Quaternion(); this._d = new THREE.Vector3();
@@ -82,6 +83,21 @@ export class FlyHero3D {
     });
     inkCharacter(this.model.root, { skip: [cloth] }); // outlines (materials are already comic)
     inkHull(this.model.root); // (no ink on eyeballs / teeth / face interior)
+    // her own copy of the shared ink hull material, so its width can thin with distance (at phone
+    // size the shared constant-px hull swallowed her silhouette); same program, own olW uniform
+    const hulls = new Map();
+    this.model.root.traverse((o) => {
+      if (!o.userData.ink || !o.material || Array.isArray(o.material)) return;
+      let h = hulls.get(o.material);
+      if (!h) {
+        const src = o.material, prev = src.onBeforeCompile;
+        h = src.clone();
+        h.onBeforeCompile = (sh, r) => { prev.call(h, sh, r); sh.uniforms.olW = this.olW; };
+        h.customProgramCacheKey = src.customProgramCacheKey;
+        hulls.set(src, h);
+      }
+      o.material = h;
+    });
     this.model.root.position.y = -0.9 * POSE.scale; // her body's middle on the pivot
     this.pivot.add(this.model.root);
     this.model.play('fly', { fade: 0 });
@@ -165,6 +181,7 @@ export class FlyHero3D {
     const k = Math.max(night, busy);
     const d = this.cape.eye.lengthSq() ? this.cape.eye.distanceTo(this.group.position) / this.size : LINE.near;
     const far = Math.min(1, Math.max(LINE.min, LINE.near / Math.max(1, d)));
+    this.olW.value = LINE.hull * Math.min(1, Math.max(LINE.min, Math.sqrt(LINE.near / Math.max(1, d)))); // (gentler: the hull draws her inner lines too)
     return [(LINE.ink[0] + (LINE.ink[1] - LINE.ink[0]) * k) * far, LINE.halo * night];
   }
 }

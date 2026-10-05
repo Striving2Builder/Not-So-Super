@@ -20,7 +20,7 @@ import * as THREE from 'three';
 export const FLY_POSE = {
   flyFrom: 14, flyFull: 70,   // speed where her horizontal flying pose starts / is full
   slowTo: 320,                // below this she tilts up into the slow glide (full at flyFull)
-  bank: 0.95,                 // roll per unit of the flight model's bank
+  bank: 1.15,                 // roll per unit of the flight model's bank
   boostBank: 1.2,             // (× at boost: tighter, more committed)
   rollSpring: [9, 0.5],       // [rad/s, damping]: rolls in with a small overshoot
   pitchSpring: [7, 0.8],
@@ -33,7 +33,7 @@ export const FLY_POSE = {
   divePitch: 1.15,
   chin: [1.6, 0.55, 0.5, 1.2], // head lift toward her back (tan of the crown's angle): cruise / boost / dive / slow
   arch: [0.5, -0.04, 0, 0.55],  // chest lift: cruise / boost / dive / slow
-  cruiseUp: 0.08,             // cruise: shoulders a touch above the hips (a line of action, not a plank)
+  cruiseUp: 0.14,             // cruise: shoulders a touch above the hips (a line of action, not a plank)
   turnArm: 0.85,              // how much a full bank hands the lead to the outside arm (mirrors the turns)
   bob: [0.05, 0.015],         // float bob (m): hover / flying
 };
@@ -190,7 +190,7 @@ export class FlightPose {
       ]);
       if (thigh) m.aim(`${L}UpLeg`, `${L}Leg`, thigh, k * 0.95);
       // the left knee bends at cruise; in a bank the inside knee does (mirrored turns)
-      const bend = cr * ((sg > 0 ? 0.9 : 0.12) * (1 - aT) + (T * sg < 0 ? 0.75 : 0.12) * aT);
+      const bend = cr * ((sg > 0 ? 0.9 : 0.22) * (1 - aT) + (T * sg < 0 ? 0.75 : 0.12) * aT);
       const shin = this.mix(V[2], [
         [cr, D(0, -1, bend, out * 0.8).addScaledVector(inward, 0.06 + wob)],
         [bk + dv, D(3, -1, 0, out * 0.5).addScaledVector(inward, 0.08 + 0.06 * bk)], // (locked together)

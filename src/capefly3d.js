@@ -173,7 +173,7 @@ export class FlightCape {
         .addScaledVector(side, Math.sin(t * f * 0.55 - i * 0.6) * amp * 0.6 * k + Math.sin(t * B[1] * 0.7 - i * 0.4) * B[0] * L * slow * k * i * 0.3
           + Math.sin(t * CAPE.sway[1] - i * 0.35) * CAPE.sway[0] * L * sk * (1 - 0.6 * bk) * k * i);
       tgt.y -= L * slow * 0.45 * i;
-      this.p[i].lerp(tgt, Math.min(1, dt * (8 + v / 6)));
+      this.p[i].lerp(tgt, Math.min(1, dt * (5 + v / 10))); // (a little lag down the chain: the wave reads as cloth, not a hinged board)
       const d = this._a.subVectors(this.p[i], this.p[i - 1]), len = d.length() || 1; // keep the segment length
       this.p[i].copy(this.p[i - 1]).addScaledVector(d, L / len);
     }
@@ -191,7 +191,7 @@ export class FlightCape {
         // out of her back: the arch (middle stands off), the folds (deeper toward the hem; the edges
         // curl down), and an out-of-phase flutter on the edges
         const fl = Math.sin(t * (6 + 6 * bk) - i * 1.1 + u * 1.5) * w * (0.07 + 0.05 * bk) * k * au;
-        const o = (CAPE.arch * scale * (1 - u * u) + CAPE.clear * scale * Math.min(1, k * 2) + CAPE.folds[j] * CAPE.fold * scale * k * k * breathe - w * (0.08 + 0.16 * k) * au * au + fl) * flat;
+        const o = (CAPE.arch * scale * (1 - u * u) + CAPE.clear * scale * Math.min(1, k * 2) + CAPE.folds[j] * CAPE.fold * scale * k * k * breathe - w * (0.12 + 0.26 * k) * au * au + fl) * flat;
         let x = q.x + side.x * w * u + up.x * o, y = q.y + side.y * w * u + up.y * o, z = q.z + side.z * w * u + up.z * o;
         if (tan) { const tip = w * 0.3 * (1 - au * au); x += tan.x * tip; y += tan.y * tip; z += tan.z * tip; }
         pos.setXYZ(i * C + j, x, y, z);
