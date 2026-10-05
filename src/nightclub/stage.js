@@ -4,7 +4,7 @@
 // mid crowd, then — after the mode draws her — the near crowd passing the camera, drifting haze
 // and the vignette. Canvas 2D only: no WebGL context (the iPad's limit), one room in memory.
 import { PLATE, ROOMS, ART } from './rooms.js';
-import { crowdAtlas, drawDancer, CROWD_TYPES } from './crowd.js';
+import { crowdAtlas, drawDancer, CROWD_TYPES, dancersVersion } from './crowd.js';
 import { RNG } from '../rng.js';
 import { rgba, shade } from '../util.js';
 
@@ -258,7 +258,8 @@ export class ClubStage {
     this.back = spec ? spec.back * H : FLOOR - 40;  // the back wall's foot (the far crowd stands here)
     this.art = null;
     if (spec) { const img = new Image(); img.onload = () => { this.art = composeArt(img, room, byId, spec); }; img.src = PLATE.dir + spec.src; }
-    this.atlas = crowdAtlas(lighten(this.L.haze, this.spec ? 0.2 : 0.55));
+    this.rim = lighten(this.L.haze, this.spec ? 0.2 : 0.55);
+    this.atlas = crowdAtlas(this.rim);
     const W = room.w, dens = this.R.crowd / 1000;
     const clear = (px) => room.doors.every((d) => Math.abs(d.x - px) > 150);
     // far = small, fogged, slower; mid = full size on the floor line (kept out of doorways);
@@ -288,6 +289,7 @@ export class ClubStage {
 
   drawBack(ctx, view, t) {
     const { k, w, h } = view, beat = (t * BPM) / 60;
+    if (this.atlas.version !== dancersVersion()) this.atlas = crowdAtlas(this.rim); // the baked sheet arrived
     // plate
     const vw = w / k;
     const src = this.art || this.plate, sc = src.width / this.room.w;
@@ -297,7 +299,7 @@ export class ClubStage {
     for (const d of this.far) {
       const x = this.sx(view, d.x, 0.85);
       if (x < -80 || x > w + 80) continue;
-      drawDancer(ctx, this.atlas, d.t, beat / 2 + d.o, x, d.y * k, 300 * d.s * k, d.f);
+      drawDancer(ctx, this.atlas, d.t, t, d.o, x, d.y * k, 300 * d.s * k, d.f);
     }
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'lighter';
@@ -331,15 +333,15 @@ export class ClubStage {
     if (this.room.kind === 'main' && !this.spec) {
       const bx = this.room.w - 760;
       ctx.save(); ctx.beginPath(); ctx.rect(0, 0, w, (FLOOR - 205) * k); ctx.clip();
-      drawDancer(ctx, this.atlas, 2, beat / 2, this.sx(view, bx + 250), (FLOOR - 130) * k, 300 * k);
-      drawDancer(ctx, this.atlas, 4, beat / 2 + 0.3, this.sx(view, bx + 400), (FLOOR - 130) * k, 290 * k, true);
+      drawDancer(ctx, this.atlas, 5, t, 0, this.sx(view, bx + 250), (FLOOR - 130) * k, 300 * k);
+      drawDancer(ctx, this.atlas, 6, t, 0.3, this.sx(view, bx + 400), (FLOOR - 130) * k, 290 * k, true);
       ctx.restore();
     }
     // mid crowd on the floor line
     for (const d of this.mid) {
       const x = this.sx(view, d.x);
       if (x < -120 || x > w + 120) continue;
-      drawDancer(ctx, this.atlas, d.t, beat / 2 + d.o, x, d.y * k, 300 * d.s * k, d.f);
+      drawDancer(ctx, this.atlas, d.t, t, d.o, x, d.y * k, 300 * d.s * k, d.f);
     }
   }
 
@@ -368,7 +370,7 @@ export class ClubStage {
     for (const d of this.near) {
       const x = this.sx(view, d.x, 1.35);
       if (x < -300 || x > w + 300) continue;
-      drawDancer(ctx, this.atlas, d.t, beat / 2 + d.o, x, d.y * k, 300 * d.s * k, d.f);
+      drawDancer(ctx, this.atlas, d.t, t, d.o, x, d.y * k, 300 * d.s * k, d.f);
     }
     // drifting haze
     ctx.globalCompositeOperation = 'lighter';
@@ -396,9 +398,11 @@ export class ClubStage {
   }
 
   /** The DJ booth view: the user's render covering the screen, live beams, the crowd's heads and hands. */
-  drawSetPiece(ctx, img, w, h, t) {
-    const sc = Math.max(w / img.width, h / img.height), iw = img.width * sc, ih = img.height * sc;
+  drawSetPiece(ctx, img, w, h, t, live = true) {
+    const iw0 = img.videoWidth || img.width, ih0 = img.videoHeight || img.height;
+    const sc = Math.max(w / iw0, h / ih0), iw = iw0 * sc, ih = ih0 * sc;
     ctx.drawImage(img, (w - iw) / 2, (h - ih) / 2, iw, ih);
+    if (!live) return; // a video loop brings its own crowd and beams
     const beat = (t * BPM) / 60, pulse = 0.75 + 0.25 * Math.max(0, Math.cos(beat * Math.PI * 2));
     ctx.globalCompositeOperation = 'lighter';
     for (let i = 0; i < 6; i++) {
@@ -408,7 +412,7 @@ export class ClubStage {
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     for (let i = 0; i < 14; i++) {
       const s = 0.9 + ((i * 37) % 5) * 0.12;
-      drawDancer(ctx, this.atlas, i % CROWD_TYPES, beat / 2 + i * 0.13, w * (i / 13), h * (1.2 + ((i * 53) % 7) * 0.02), h * 0.5 * s, i % 2 === 0);
+      drawDancer(ctx, this.atlas, i % CROWD_TYPES, t, i * 0.13, w * (i / 13), h * (1.2 + ((i * 53) % 7) * 0.02), h * 0.5 * s, i % 2 === 0);
     }
   }
 

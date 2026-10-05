@@ -1,0 +1,55 @@
+{
+ "fw": 112,
+ "fh": 180,
+ "frames": 16,
+ "types": [
+  {
+   "body": "supergirl",
+   "clip": "dance",
+   "dur": 1.467,
+   "loopCost": 0.062
+  },
+  {
+   "body": "hero_ponytail",
+   "clip": "dance",
+   "dur": 1.467,
+   "loopCost": 0.062
+  },
+  {
+   "body": "hero_classic",
+   "clip": "happyIdle",
+   "dur": 2.467,
+   "loopCost": 0.013
+  },
+  {
+   "body": "supergirl",
+   "clip": "happyIdle",
+   "dur": 2.467,
+   "loopCost": 0.013
+  },
+  {
+   "body": "supergirl",
+   "clip": "excited",
+   "dur": 1.4,
+   "loopCost": 0.097
+  },
+  {
+   "body": "riddler",
+   "clip": "dance",
+   "dur": 1.467,
+   "loopCost": 0.062
+  },
+  {
+   "body": "riddler",
+   "clip": "excited",
+   "dur": 1.4,
+   "loopCost": 0.097
+  },
+  {
+   "body": "riddler",
+   "clip": "happyIdle",
+   "dur": 2.467,
+   "loopCost": 0.013
+  }
+ ]
+}

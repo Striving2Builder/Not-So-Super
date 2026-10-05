@@ -126,7 +126,7 @@ function placeSpots(rng, rooms) {
     r.spots = [];
     const seams = ART.plates[r.kind]?.seams || [];
     const free = (x) => r.doors.every((d) => Math.abs(d.x - x) > KEY_GAP) && seams.every((q) => Math.abs(q - x) > 260);
-    if (r.kind === 'bar') { let x = r.w * 0.3; if (!free(x)) x = r.w * 0.7; r.spots.push({ type: 'drink', x: Math.round(x) }); }
+    if (r.kind === 'bar') { let x = r.w * 0.3; if (!free(x)) x = r.w * 0.7; r.spots.push({ type: 'closeup', x: Math.round(x) }); }
     if (r.kind === 'main') r.spots.push({ type: 'djview', x: r.w - MARGIN - 120 });
   }
 }

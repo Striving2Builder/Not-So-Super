@@ -67,7 +67,16 @@ const OUT = path.join(ROOT, 'shots', LABEL, 'nightclub');
     await page.evaluate(() => { const m = window.__game.mode; m.go('main', null); m.view = 'set'; m.setT = -99; });
     await page.waitForTimeout(700);
     await page.screenshot({ path: path.join(OUT, 'set_djview.png') });
-    await page.evaluate(() => { window.__game.mode.view = 'walk'; });
+    await page.evaluate(() => { const m = window.__game.mode; m.view = 'walk'; m.setVideo(false); });
+    // the bar close-up: the scene, then a tap on the napkin (its clue dialog)
+    await page.evaluate(() => { const m = window.__game.mode; m.go('bar', null); m.use({ spot: { type: 'closeup' } }); });
+    await page.waitForTimeout(1200);
+    await page.screenshot({ path: path.join(OUT, 'closeup_bar.png') });
+    await page.evaluate(() => { const m = window.__game.mode, R = m.closeupRect(m.g.w, m.g.h), s = m.scene.spots.find((q) => q.id === 'napkin'); m.g.input.taps.push({ x: R.x + s.x * R.w, y: R.y + s.y * R.h }); });
+    await page.waitForTimeout(900);
+    await page.screenshot({ path: path.join(OUT, 'closeup_bar_clue.png') });
+    await page.evaluate(() => { document.querySelectorAll('#modal-root .opt').forEach((b) => b.click()); const m = window.__game.mode; m.view = 'walk'; m.go('main', null); });
+    await page.waitForTimeout(400);
     // Super Squirt: light / medium / heavy on the main floor
     for (const lv of [35, 65, 92]) {
       await page.evaluate((lv) => { const m = window.__game.mode; m.g.state.intox = lv; m.p.x = m.room.w * 0.55; m.cam = m.p.x; }, lv);

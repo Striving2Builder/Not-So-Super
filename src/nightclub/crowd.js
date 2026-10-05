@@ -1,7 +1,7 @@
-// Silhouette crowd for the detective nightclubs: procedural dancers baked once into a small atlas
-// (TYPES poses × FRAMES), solid ink with a thin backlit rim tinted per room. Stand-ins until the
-// user's green-screen dancer clips arrive (docs/design/nightclub-assets.md, batch 1 item 5); the
-// stage only asks crowdFrame() for a canvas, so real clips can replace this file's art later.
+// Silhouette crowd for the detective nightclubs. The real dancers are baked from the game's own
+// rigged models + Mixamo clips (tools/nightclub/dancers.js → assets/nightclub/dancers.png/.json,
+// one row per body+clip, each its own loop length); until that sheet has loaded, procedural
+// stand-ins drawn here fill in. Either way: solid ink with a thin backlit rim tinted per room.
 
 const FW = 170, FH = 250, FRAMES = 8;  // one frame cell, wide enough for outflung arms (no bleed between frames)
 
@@ -14,7 +14,21 @@ const TYPES = [
   { arms: [0.3, 1.9], sway: 0.05, bob: 4, build: 1.12, hair: 0 },   // holding a drink up
   { arms: [2.2, 2.2], sway: 0.18, bob: 14, build: 0.95, hair: 1 },  // jumping
 ];
-export const CROWD_TYPES = TYPES.length;
+export const CROWD_TYPES = 8;   // types the stage picks from (wrapped to what the sheet has)
+const BEAT2 = 120 / 124;         // the stand-ins dance one loop per two beats
+
+// ---------------------------------------------------------------- the baked sheet
+let real = null, version = 0, asked = false;
+/** Start loading the baked dancer sheet (once); rooms built afterwards pick it up (dancersVersion). */
+export function loadDancers() {
+  if (asked) return; asked = true;
+  fetch('assets/nightclub/dancers.json').then((r) => r.json()).then((meta) => {
+    const img = new Image();
+    img.onload = () => { real = { img, meta }; version++; };
+    img.src = 'assets/nightclub/dancers.png';
+  }).catch(() => { /* stand-ins stay */ });
+}
+export const dancersVersion = () => version;
 
 function figure(c, type, f, fill) {
   const T = TYPES[type], ph = (f / FRAMES) * Math.PI * 2;
@@ -50,8 +64,9 @@ function figure(c, type, f, fill) {
 }
 
 let atlas = null;
-/** Solid ink frames (shared by every room). */
+/** Solid ink frames (shared by every room): the baked sheet, else the stand-ins. */
 function inkAtlas() {
+  if (real) return Object.assign(real.img, { fw: real.meta.fw, fh: real.meta.fh, frames: real.meta.frames, durs: real.meta.types.map((t) => t.dur) });
   if (atlas) return atlas;
   atlas = document.createElement('canvas');
   atlas.width = FW * FRAMES; atlas.height = FH * TYPES.length;
@@ -59,7 +74,7 @@ function inkAtlas() {
   for (let t = 0; t < TYPES.length; t++) for (let f = 0; f < FRAMES; f++) {
     c.save(); c.translate(f * FW, t * FH); figure(c, t, f, '#05040a'); c.restore();
   }
-  return atlas;
+  return Object.assign(atlas, { fw: FW, fh: FH, frames: FRAMES, durs: TYPES.map(() => BEAT2) });
 }
 
 /**
@@ -77,12 +92,13 @@ export function crowdAtlas(rim) {
   t.drawImage(ink, 0, 0); t.globalCompositeOperation = 'source-in'; t.fillStyle = rim; t.fillRect(0, 0, tint.width, tint.height);
   c.drawImage(tint, -2, -3); c.drawImage(tint, 2, -3);
   c.drawImage(ink, 0, 0);
-  return a;
+  return Object.assign(a, { fw: ink.fw, fh: ink.fh, frames: ink.frames, durs: ink.durs, version });
 }
 
-/** Draw one dancer: atlas, type, beat phase (0..1), feet at (x, y), height in px, mirrored. */
-export function drawDancer(ctx, a, type, phase, x, y, h, flip = false) {
-  const f = Math.floor(((phase % 1) + 1) % 1 * FRAMES), w = h * (FW / FH);
-  if (flip) { ctx.save(); ctx.translate(x, 0); ctx.scale(-1, 1); ctx.drawImage(a, f * FW, type * FH, FW, FH, -w / 2, y - h, w, h); ctx.restore(); }
-  else ctx.drawImage(a, f * FW, type * FH, FW, FH, x - w / 2, y - h, w, h);
+/** Draw one dancer: atlas, type, time (s), loop offset (0..1), feet at (x, y), height in px, mirrored. */
+export function drawDancer(ctx, a, type, t, o, x, y, h, flip = false) {
+  const ty = type % a.durs.length, ph = t / a.durs[ty] + o;
+  const f = Math.floor((ph - Math.floor(ph)) * a.frames), FW_ = a.fw, FH_ = a.fh, w = h * (FW_ / FH_);
+  if (flip) { ctx.save(); ctx.translate(x, 0); ctx.scale(-1, 1); ctx.drawImage(a, f * FW_, ty * FH_, FW_, FH_, -w / 2, y - h, w, h); ctx.restore(); }
+  else ctx.drawImage(a, f * FW_, ty * FH_, FW_, FH_, x - w / 2, y - h, w, h);
 }

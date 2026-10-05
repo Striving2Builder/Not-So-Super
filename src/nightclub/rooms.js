@@ -43,6 +43,7 @@ export const ART = {
     lounge: { src: 'lounge.jpg', w: 3328, lane: 0.9, back: 0.66, seams: [1664], arches: [] },
   },
   setPiece: { main: 'set_main.jpg' },
+  setLoop: { main: 'set_main.mp4' }, // the DJ view's video (its own crowd + beams); the still is its poster
   dancers: [],
 };
 

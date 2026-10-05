@@ -7,10 +7,11 @@ import { buildClub } from './layout.js';
 import { ROOMS, PLATE, ART } from './rooms.js';
 import { ClubStage } from './stage.js';
 import { beforeScene, afterScene, freeIntox, TIERS } from './intox.js';
-import { crowdAtlas, drawDancer } from './crowd.js';
+import { crowdAtlas, drawDancer, loadDancers } from './crowd.js';
+import { CLOSEUPS } from './scenes.js';
 import { heroReady, HeroSprite } from '../hero3d.js';
 import { clamp, wobble, $ } from '../util.js';
-import { banner, toast, dialog } from '../ui.js';
+import { banner, toast, dialog, UI } from '../ui.js';
 import { sfx } from '../sfx.js';
 
 const WALK = 520;          // plate px per second
@@ -25,6 +26,7 @@ export class Nightclub {
   enter({ zone }) {
     const g = this.g;
     this.zone = zone; this.done = false; this.t = 0;
+    loadDancers();
     const seed = +(new URLSearchParams(location.search).get('clubseed') || 0);
     this.club = buildClub(seed ? { seed, size: 'medium', name: zone.venue } : { flagship: true });
     this.byId = Object.fromEntries(this.club.rooms.map((r) => [r.id, r]));
@@ -80,9 +82,10 @@ export class Nightclub {
       else if (f.dir < 0 && f.a <= 0) f.dir = 0;
     }
     if (this.blackout) { this.updateBlackout(dt); return; }
+    if (this.view === 'closeup') { this.updateCloseup(); return; }
     if (this.view === 'set') {
       this.setT += dt;
-      if (this.setT > 6 || inp.pressed('interact') || inp.taps.length) { this.view = 'walk'; inp.taps.length = 0; }
+      if (this.setT > 8 || inp.pressed('interact') || inp.taps.length) { this.view = 'walk'; inp.taps.length = 0; this.setVideo(false); }
       return;
     }
     if (f.dir > 0) return;
@@ -107,7 +110,7 @@ export class Nightclub {
       }
     }
     const n = this.near();
-    const label = n.spot ? (n.spot.type === 'drink' ? 'DRINK' : 'LOOK') : n.door ? (n.door.to ? ROOMS[this.byId[n.door.to].kind].sign : 'EXIT') : 'LOOK';
+    const label = n.spot ? (n.spot.type === 'drink' ? 'DRINK' : n.spot.type === 'closeup' ? 'SEARCH' : 'LOOK') : n.door ? (n.door.to ? ROOMS[this.byId[n.door.to].kind].sign : 'EXIT') : 'LOOK';
     if (label !== this.lastLabel) { inp.setButton('interact', { label, lit: !!(n.spot || n.door) }); this.lastLabel = label; }
     if (inp.pressed('interact')) this.use(n);
     if (inp.pressed('leave')) this.leave();
@@ -133,7 +136,8 @@ export class Nightclub {
       if (yes) { st.addIntox(34); sfx.whoosh(); toast('It burns… then the room starts to glow.', 'info'); }
       return;
     }
-    if (n.spot?.type === 'djview') { this.view = 'set'; this.setT = 0; }
+    if (n.spot?.type === 'djview') { this.view = 'set'; this.setT = 0; this.setVideo(true); }
+    if (n.spot?.type === 'closeup' && CLOSEUPS[this.room.kind]) this.openCloseup(CLOSEUPS[this.room.kind]);
   }
 
   startBlackout() {
@@ -198,7 +202,7 @@ export class Nightclub {
     const img = this.heroImage();
     if (!img) {
       if (!this.fallback) this.fallback = crowdAtlas('#ffd070');
-      drawDancer(ctx, this.fallback, 0, 0, x, feet, 300 * k);
+      drawDancer(ctx, this.fallback, 0, 0, 0, x, feet, 300 * k);
       return;
     }
     const hpx = HERO_H * k, wpx = hpx * (img.width / img.height);
@@ -234,8 +238,10 @@ export class Nightclub {
       view = { k, x0: clamp(this.room.w - 420 - vw / 2, 0, this.room.w - vw), w, h };
     }
     beforeScene(ctx, w, h, st ? st.intox : 0, this.t);
-    const set = this.view === 'set' && this.setImage();
-    if (set) this.stage.drawSetPiece(ctx, set, w, h, this.t);
+    if (this.view === 'closeup') { this.renderCloseup(ctx, w, h); afterScene(ctx, g.canvas, w, h, st ? st.intox : 0, this.t); return; }
+    const vid = this.view === 'set' && this.video && this.video.readyState >= 2 ? this.video : null;
+    const set = this.view === 'set' && (vid || this.setImage());
+    if (set) this.stage.drawSetPiece(ctx, set, w, h, this.t, !vid);
     else this.stage.drawBack(ctx, view, this.t);
     if (this.view === 'walk') { this.drawMarkers(ctx, view); this.drawHero(ctx, view); }
     this.stage.drawFront(ctx, view, this.t, this.dt || 1 / 60);
@@ -252,7 +258,93 @@ export class Nightclub {
     return this.setImg.complete && this.setImg.naturalWidth ? this.setImg : null;
   }
 
+  /** The DJ view's video loop: a hidden muted inline <video> (iOS autoplay rules), played only while looked at. */
+  setVideo(on) {
+    const src = ART.setLoop?.[this.room.kind];
+    if (!src) return;
+    if (on && !this.video) {
+      const v = this.video = document.createElement('video');
+      v.muted = true; v.loop = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.preload = 'auto';
+      v.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none';
+      v.src = PLATE.dir + src;
+      document.body.appendChild(v);
+    }
+    if (!this.video) return;
+    if (on) this.video.play().catch(() => { /* the still stays */ }); else this.video.pause();
+  }
+
+  // ------------------------------------------------------------------ close-up search
+  openCloseup(scene) {
+    this.view = 'closeup'; this.scene = scene;
+    this.found = this.found || {};
+    if (!scene.img) { scene.img = new Image(); scene.img.src = PLATE.dir + scene.src; }
+    this.missT = 0; this.ring = null;
+    this.g.input.setButton('interact', { label: 'BACK', lit: false }); this.lastLabel = 'BACK';
+    toast('Tap anything that looks out of place.', 'info');
+  }
+
+  /** Where the image sits on screen (cover-fit), to map taps into its 0..1 space. */
+  closeupRect(w, h) {
+    const img = this.scene.img, iw0 = img.naturalWidth || 1280, ih0 = img.naturalHeight || 720;
+    const sc = Math.max(w / iw0, h / ih0);
+    return { x: (w - iw0 * sc) / 2, y: (h - ih0 * sc) * 0.8, w: iw0 * sc, h: ih0 * sc }; // crop the top, keep the counter
+  }
+
+  updateCloseup() {
+    const inp = this.g.input, sc = this.scene, key = this.room.kind;
+    this.missT = Math.max(0, this.missT - (this.dt || 0));
+    if (inp.pressed('interact') || inp.pressed('leave')) { this.view = 'walk'; inp.taps.length = 0; return; }
+    const tap = inp.taps.shift();
+    if (!tap || UI.open) return;
+    const R = this.closeupRect(this.g.w, this.g.h), u = (tap.x - R.x) / R.w, v = (tap.y - R.y) / R.h;
+    const hit = sc.spots.find((s) => Math.hypot((u - s.x) * (R.w / R.h), v - s.y) < s.r * 1.25);
+    if (!hit) { this.ring = { x: tap.x, y: tap.y, t: 0, miss: true }; return; }
+    this.ring = { x: R.x + hit.x * R.w, y: R.y + hit.y * R.h, t: 0 };
+    const seen = (this.found[key] = this.found[key] || new Set());
+    const fresh = !seen.has(hit.id);
+    seen.add(hit.id);
+    if (hit.item && !this.items.has(hit.item)) { this.items.add(hit.item); sfx.whoosh(); }
+    if (hit.drink) { this.offerDrink(hit.text); return; }
+    dialog({ title: sc.title, text: hit.text + (fresh ? `<span class="hint">Clue ${seen.size} of ${sc.spots.length}</span>` : '') });
+  }
+
+  async offerDrink(text) {
+    const yes = await dialog({
+      title: 'Super Squirt', text,
+      options: [{ label: 'Knock it back', value: true }, { label: 'Leave it', value: false }],
+    });
+    if (yes) { this.g.state.addIntox(34); sfx.whoosh(); toast('It burns… then the room starts to glow.', 'info'); }
+  }
+
+  renderCloseup(ctx, w, h) {
+    const sc = this.scene, img = sc.img;
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
+    if (!img.complete || !img.naturalWidth) return;
+    const R = this.closeupRect(w, h);
+    ctx.drawImage(img, R.x, R.y, R.w, R.h);
+    // found spots get an inked check ring; the last tap ripples (gold on a hit, grey on a miss)
+    const seen = this.found[this.room.kind] || new Set();
+    ctx.lineWidth = 3;
+    for (const s of sc.spots) {
+      if (!seen.has(s.id)) continue;
+      const x = R.x + s.x * R.w, y = R.y + s.y * R.h, r = s.r * R.w * 0.7;
+      ctx.strokeStyle = '#05040a'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = '#ffd84d'; ctx.lineWidth = 3; ctx.stroke();
+    }
+    if (this.ring) {
+      const q = this.ring; q.t += this.dt || 1 / 60;
+      const a = Math.max(0, 1 - q.t / 0.6), r = 18 + q.t * 90;
+      ctx.strokeStyle = q.miss ? `rgba(200,200,220,${a})` : `rgba(255,216,77,${a})`; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2); ctx.stroke();
+      if (a <= 0) this.ring = null;
+    }
+    ctx.font = `bold ${Math.round(Math.max(16, h * 0.05))}px Bangers, Impact, sans-serif`; ctx.textAlign = 'left';
+    const label = `${sc.title.toUpperCase()} · ${seen.size}/${sc.spots.length} CLUES`;
+    ctx.lineWidth = 5; ctx.strokeStyle = '#05040a'; ctx.strokeText(label, 18, h - 22); ctx.fillStyle = '#ffd84d'; ctx.fillText(label, 18, h - 22);
+  }
+
   exit() {
+    if (this.video) { this.video.pause(); this.video.remove(); this.video = null; }
     this.stage = null; freeIntox();
     $('hud-extra').innerHTML = '';
   }
