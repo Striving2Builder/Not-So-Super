@@ -356,19 +356,6 @@ void main() {
       // muted: a warm grey take on the paint, after the light (under the blue dusk / moon sky every
       // roof was one cobalt slab); each building's own roof value is baked into its tint (blocks3d)
       col = mix(col, dot(col, vec3(0.299, 0.587, 0.114)) * vec3(1.06, 1., 0.9), 0.6 * (1. - m.b));
-#ifdef FAR
-      // roof clutter without geometry: a 4 m grid of boxes, some dark (vents, plant, shadow), some
-      // pale (bulkheads, tanks), averaged away once a cell is under a pixel or so; from high
-      // height only (below it far roofs are grazing slivers: not worth the fps)
-      if (cameraPosition.y > 330.) {
-      vec2 cq = vW.xz * 0.25, cw = fwidth(cq);
-      float ck = 1. - smoothstep(0.35, 0.9, max(cw.x, cw.y));
-      if (ck > 0. && m.b < 0.5) {
-        float r = h12(floor(cq) + vHb), bx = pulse(cq.x, 0.2, 0.8, cw.x) * pulse(cq.y, 0.25, 0.75, cw.y);
-        col *= 1. + (r < 0.14 ? -0.4 : r < 0.24 ? 0.24 : 0.) * bx * ck;
-      }
-      }
-#endif
     } else {
       // glass: dark by night, mirrors the sky (more at grazing angles) by day; curtain walls most
       float fres = 1. - max(dot(N, V), 0.); fres *= fres; // (no pow: exp/log in software GL)
