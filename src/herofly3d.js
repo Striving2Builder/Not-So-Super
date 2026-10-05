@@ -17,12 +17,11 @@ const POSE = {
   scale: 1.5,       // model metres → scene metres (heroic: she's the star of the shot)
   boot: 0.72,       // boot (foot bone) scale
   patrolScale: 18,  // in the overhead patrol view she becomes a big inked map figure
-  shadow: 0x05060f,
   flesh: 0.25,      // model metres of body, hair and boot beyond her bones (pads her on-screen box)...
   inkPx: 14,        // ...plus her ink hull and the cape's ink, which keep a screen width (CSS px)
 };
 /** Drop shadow: size m (at 0 m + per m above), opacity from → to over fade m above the roof or street it lands on. */
-const SHADOW = { size: [2.6, 0.07], alpha: [0.8, 0], fade: [6, 130] };
+const SHADOW = { size: [2.8, 0.2], alpha: [0.95, 0], fade: [6, 160] };
 /**
  * Her silhouette keyline (CSS px, drawn by her sharp pass round body + cape as one shape): ink width
  * in open sky → against a dark or busy background (night, the street canyons, the map below the
@@ -47,13 +46,13 @@ export class FlyHero3D {
     this.model = null;
     this.size = 1; // patrol-view enlargement (eased)
     this.pose = new FlightPose();
-    // inked blob: a dark core with a crisp ink ring, so it reads on lit roofs and dark streets alike
+    // inked blob: a dark core with a crisp ink ring and a pale rim outside it, so it reads on lit roofs and dark streets alike
     const c = document.createElement('canvas'); c.width = c.height = 128;
     const g = c.getContext('2d'), grd = g.createRadialGradient(64, 64, 4, 64, 64, 60);
-    grd.addColorStop(0, 'rgba(0,0,0,.85)'); grd.addColorStop(0.75, 'rgba(0,0,0,.6)'); grd.addColorStop(0.86, 'rgba(0,0,0,.95)'); grd.addColorStop(0.9, 'rgba(0,0,0,.95)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+    grd.addColorStop(0, 'rgba(0,0,0,.9)'); grd.addColorStop(0.68, 'rgba(0,0,0,.7)'); grd.addColorStop(0.76, 'rgba(0,0,0,.95)'); grd.addColorStop(0.8, 'rgba(0,0,0,.95)'); grd.addColorStop(0.84, 'rgba(255,240,205,.55)'); grd.addColorStop(0.9, 'rgba(255,240,205,.4)'); grd.addColorStop(1, 'rgba(255,240,205,0)');
     g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
     const geo = new THREE.PlaneGeometry(1, 1); geo.rotateX(-Math.PI / 2);
-    this.shadow = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, color: POSE.shadow, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    this.shadow = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
     this.shadow.renderOrder = 2;
     scene.add(this.shadow);
     this.cape = new FlightCape(scene);

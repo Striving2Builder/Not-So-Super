@@ -9,7 +9,7 @@ const FX = {
   trail: { n: 24, life: 0.3, width: [0.34, 0.0], from: 140, head: [1, 0.2, 0.18], tail: [1, 0.8, 0.2], alpha: 1 },   // red off her heels → gold // speed (m/s) it starts
   wind: { n: 28, radius: [5, 14], ahead: [4, 26], width: 0.09, from: 0.62, len: 9, clear: [0.62, 0.95], eye: [7, 15] }, // from = speed fraction; close round her (they read at the screen edges, never as far hairlines); len cap (m); clear: NDC radius they fade in over; eye: m from the lens they fade in over
   ring: { life: 0.9, grow: [3, 70], boostGrow: [2, 26] },
-  lines: { from: 0.18, deal: 70, clear: [0.6, 1.0], len: [0.22, 0.32], width: [0.7, 1.6], edge: [10, 44], ink: { n: 28, len: 0.4, width: [1.6, 3.4], inner: 0.5, rgba: [14, 10, 28, 0.85], night: 0.55 } }, // speed fraction; re-deal ms; clear: the screen ellipse they fade in over (× the half size); len: longest streak × screen height (cruise, boost); width: half-width px at the widest; edge: px each one stops short of the screen edge
+  lines: { from: 0.18, deal: 70, clear: [0.6, 1.0], len: [0.22, 0.32], width: [0.7, 1.6], edge: [10, 44], ink: { n: 40, len: 0.5, width: [2.2, 4.8], inner: 0.42, rgba: [14, 10, 28, 0.92], night: 0.6 } }, // speed fraction; re-deal ms; clear: the screen ellipse they fade in over (× the half size); len: longest streak × screen height (cruise, boost); width: half-width px at the widest; edge: px each one stops short of the screen edge
 };
 
 // wind streaks: tapered at both ends, soft across, and only out at the screen edges (faded in

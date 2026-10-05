@@ -32,13 +32,23 @@ capefly3d) and city files untouched.
   per m down; straight down in the patrol view), ray-marched over roofs/streets (14 samples + 4
   bisections of `buildingAt`), hidden when the ray hits a wall; size 2.6 m + 0.07/m, opacity .8 → 0 by 130 m.
 
+**Cycle 3: making F1/F2 land** (critic 2).
+- F1: ink lines 40, half-width 2.2–4.8 px, length 0.5 H, start at 42% of each ray's edge distance (so
+  they ring the whole frame, not just the corners); the boost dolly only compensates 60% of the lens
+  (`dollyK`): she drops back ~15% while the city rushes out.
+- F2: the blob was rendering but ~15 px wide (it lands ~100 m out): size now 2.8 m + 0.2/m above,
+  opacity .95 → 0 over 6–160 m.
+
 ## Perf (flybench, Balanced, frozen pose, vs phase-2; head2 = head again, noise)
 | band | phase-2 | cycle 1 (head / head2) | vs phase-2 |
 |---|---|---|---|
 | skim | 6.85 | 8.39 / 8.98 | ×1.27 |
 | cruise | 6.38 | 8.04 / 7.95 | ×1.25 |
 | high | 7.94 | 10.38 / 10.74 | ×1.33 |
-Calls/tris identical (57/82/66 calls); no new render targets (her target only shrinks: GPU memory down).
+Cycle 2 (F1+F2 first pass) vs phase-2: skim ×1.29, cruise ×1.27, high ×1.34 (a probe ran alongside: ratios only).
+Cycle 3 vs phase-2: skim 6.87 → 8.68/9.01 (×1.29), cruise 6.31 → 7.73/7.88 (×1.24), high 7.72 → 10.07/10.21
+(×1.31): F1/F2 cost nothing measurable (+1 call: the shadow is back in frame).
+Cycle 1 calls/tris identical (57/82/66 calls); no new render targets (her target only shrinks: GPU memory down).
 Battery saver (flybench `--graphics saver`, rounds 5): skim 8.34 → 9.88/9.50 (×1.16), cruise
 8.86 → 9.96/10.19 (×1.14), high 10.74 → 12.81/13.47 (×1.22).
 
@@ -47,13 +57,15 @@ In-page heroab (same frame, Balanced, ms/frame): high band 125 → 90 ms (×1.40
 cheap, so the real-device gain will be smaller (mostly the box + density): confirm with `?perf=1`.
 
 ## Critic scores (fresh sonnet critic, new shots only, vs best HTML5/WebGL)
+- Cycle 3: 6.5/10. F1 "partial": a visible change, but lines still read as shards in places. F2 reads
+  in `cruise_1` (inked ellipse ahead/below her) but its pale rim looks glossy; unseen on dark night streets.
 - Cycle 2: 6/10. F1 "weak": ink lines too sparse/thin, partly under the HUD; FOV change not evident.
   F2 not seen in any shot. Hero: outline wobbly, white flecks (low, vice, patrolview).
 - Cycle 1: 6/10. No grey halo seen. Still: hero soft/noisy at phone size, white slivers on *interior*
   edges (skirt waist, leg-over-leg: rim light in herolook3d, not the pass), no altitude cue, boost ≈ cruise.
 
 ## Next
-Cycle 3: make F1 and F2 land (critic 2: lines too sparse, shadow unseen); cycle 4: F3 dive landing.
+Cycle 4: F3 dive landing (+ drop the shadow's pale rim).
 
 ## Flagged for local / other sessions
 - Hero session (`cloud/hero-r10`): white slivers on interior edges (skirt/leg) come from the rim term in
