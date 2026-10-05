@@ -31,14 +31,24 @@ export class HeroPass {
       halo += `    h = max(h, cover(vUv + ${d} * (inkW + haloW)));\n`;
     }
     this.mat = new THREE.ShaderMaterial({
-      uniforms: { map: { value: null }, rep: { value: new THREE.Vector2(1, 1) }, texel: { value: new THREE.Vector2() }, inkW: { value: 0 }, haloW: { value: 0 },
+      uniforms: { map: { value: null }, rep: { value: new THREE.Vector2(1, 1) }, texel: { value: new THREE.Vector2() }, inkW: { value: 0 }, haloW: { value: 0 }, inkIn: { value: 0 },
         ink: { value: new THREE.Color(PASS.ink) }, halo: { value: new THREE.Vector4(...PASS.halo) } },
       vertexShader: 'uniform vec2 rep; varying vec2 vUv; void main() { vUv = uv * rep; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `uniform sampler2D map; uniform vec2 rep, texel; uniform float inkW, haloW; uniform vec3 ink; uniform vec4 halo; varying vec2 vUv;
+      fragmentShader: `uniform sampler2D map; uniform vec2 rep, texel; uniform float inkW, haloW, inkIn; uniform vec3 ink; uniform vec4 halo; varying vec2 vUv;
 float cover(vec2 uv) { return texture2D(map, clamp(uv, vec2(0.0), rep - texel * 0.5)).a; } // (her rect's rim is empty margin)
 void main() {
   vec4 c = texture2D(map, vUv);
-  if (inkW <= 0.0 || c.a > 0.98) { gl_FragColor = c; return; } // (inside her: nothing to add)
+  if (c.a > 0.98) {
+    // inside her: optionally the keyline also eats inkIn px into her silhouette (without MSAA her
+    // rim light leaves a hard bright sliver along the edge; the ink covers it)
+    if (inkIn > 0.0) {
+      vec2 d = texel * inkIn;
+      float e = min(min(cover(vUv + vec2(d.x, 0.0)), cover(vUv - vec2(d.x, 0.0))), min(cover(vUv + vec2(0.0, d.y)), cover(vUv - vec2(0.0, d.y))));
+      c.rgb = mix(ink, c.rgb, smoothstep(0.35, 0.9, e));
+    }
+    gl_FragColor = c; return;
+  }
+  if (inkW <= 0.0) { gl_FragColor = c; return; }
   float o = 0.0, h = 0.0;
 ${taps}  if (haloW > 0.0) {
 ${halo}  }
@@ -74,22 +84,29 @@ ${halo}  }
   /**
    * Render the HERO_LAYER of `scene` as seen by `cam`, around a bounding sphere (center, radius
    * in metres), over what's already on the canvas. W/H: CSS size of the view; q = [MSAA samples,
-   * density × the frame's] (the graphics profile's fly3dHero). At 2× density the quad's bilinear
+   * density × the frame's, inner ink px] (the graphics profile's fly3dHero). At 2× density the quad's bilinear
    * read averages each 2×2 block: supersampled edges without MSAA (which is costly in software GL).
-   * line = [ink, halo] CSS px of the silhouette keyline round her (0 = none).
+   * line = [ink, halo] CSS px of the silhouette keyline round her (0 = none). box: her tighter
+   * on-screen rectangle [x0, y0, x1, y1] (CSS px, before the keyline) when known; it's clipped to the sphere's.
    */
-  render(renderer, scene, cam, center, radius, W, H, q, line = [0, 0]) {
+  render(renderer, scene, cam, center, radius, W, H, q, line = [0, 0], box = null) {
     _v.copy(center).project(cam);
     if (_v.z > 1 || _v.z < -1) return;
     const dist = cam.position.distanceTo(center);
     const pr = (radius * PASS.pad) / (dist * Math.tan((cam.fov * Math.PI) / 360)) * (H / 2) / (cam.zoom || 1) + line[0] + line[1] + 2; // (every pixel of her rect pays for the keyline: no spare margin)
     const sx = (_v.x * 0.5 + 0.5) * W, sy = (-_v.y * 0.5 + 0.5) * H;
-    const x0 = Math.max(0, Math.floor(sx - pr)), y0 = Math.max(0, Math.floor(sy - pr));
-    const x1 = Math.min(W, Math.ceil(sx + pr)), y1 = Math.min(H, Math.ceil(sy + pr));
+    let x0 = Math.max(0, Math.floor(sx - pr)), y0 = Math.max(0, Math.floor(sy - pr));
+    let x1 = Math.min(W, Math.ceil(sx + pr)), y1 = Math.min(H, Math.ceil(sy + pr));
+    if (box) {
+      const e = line[0] + line[1] + 2;
+      x0 = Math.max(x0, Math.floor(box[0] - e)); y0 = Math.max(y0, Math.floor(box[1] - e));
+      x1 = Math.min(x1, Math.ceil(box[2] + e)); y1 = Math.min(y1, Math.ceil(box[3] + e));
+    }
     const w = x1 - x0, h = y1 - y0;
     if (w < 2 || h < 2) return;
     const dpr = renderer.getPixelRatio() * q[1], rw = Math.ceil(w * dpr), rh = Math.ceil(h * dpr);
     const rt = this.target(rw, rh, q[0]);
+    this.last = [rw, rh, x0, y0, w, h, dpr]; // (the harness reads her pass size and rect)
     rt.viewport.set(0, 0, rw, rh); rt.scissor.set(0, 0, rw, rh); rt.scissorTest = true;
     // her camera: the main one, cropped to her rectangle
     this.cam.copy(cam);
@@ -110,7 +127,7 @@ ${halo}  }
     const u = this.mat.uniforms;
     u.rep.value.set(rw / rt.width, rh / rt.height);
     u.texel.value.set(dpr / rt.width, dpr / rt.height); // one CSS px in the target's uv
-    u.inkW.value = line[0]; u.haloW.value = line[1];
+    u.inkW.value = line[0]; u.haloW.value = line[1]; u.inkIn.value = line[0] > 0 ? q[2] || 0 : 0;
     this.quad.scale.set(w / W, h / H, 1);
     this.quad.position.set(((x0 + w / 2) / W) * 2 - 1, 1 - ((y0 + h / 2) / H) * 2, 0);
     const ac = renderer.autoClear;

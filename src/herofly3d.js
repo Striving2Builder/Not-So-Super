@@ -18,13 +18,15 @@ const POSE = {
   boot: 0.72,       // boot (foot bone) scale
   patrolScale: 18,  // in the overhead patrol view she becomes a big inked map figure
   shadow: 0x05060f,
+  flesh: 0.25,      // model metres of body, hair and boot beyond her bones (pads her on-screen box)...
+  inkPx: 14,        // ...plus her ink hull and the cape's ink, which keep a screen width (CSS px)
 };
 /**
  * Her silhouette keyline (CSS px, drawn by her sharp pass round body + cape as one shape): ink width
  * in open sky → against a dark or busy background (night, the street canyons, the map below the
  * patrol view); a pale halo outside it at night, so the dark ink still separates her from dark walls.
  */
-const LINE = { ink: [1.3, 2.3], halo: 1.4 };
+const LINE = { ink: [1.3, 2.3], halo: 0 }; // (halo off: the pale ring read as a grey fringe round her on night and dusk skies)
 /** Rim strength, shared by her materials (raised in the dark street canyons). */
 export const RIM = { value: SUIT.rimK[0] };
 export const RIM_K = SUIT.rimK;
@@ -127,6 +129,35 @@ export class FlyHero3D {
       const day = Math.min(1, Math.max(0, (this.sun.intensity - 0.7) / 1.6));
       CAPE_LIGHT.tint.value.setRGB(1, 1, 1).lerp(this.sun.color, 0.25).multiplyScalar(0.85 + 0.15 * day);
     }
+  }
+
+  /**
+   * Her on-screen rectangle [x0, y0, x1, y1] (CSS px of a W×H view) from her bones and the cape's
+   * cloth, padded by the flesh and hair round the bones; null if she isn't loaded or a point is off
+   * the camera's depth range. Much tighter than her bounding sphere's square: from the chase camera
+   * she's foreshortened (head to toe runs into the screen), so her sharp pass shades fewer pixels.
+   */
+  screenRect(cam, W, H, out) {
+    const m = this.model;
+    if (!m) return null;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, ok = true;
+    const v = this._in;
+    const add = () => {
+      v.project(cam);
+      if (v.z < -1 || v.z > 1) ok = false;
+      if (v.x < x0) x0 = v.x; if (v.x > x1) x1 = v.x; if (v.y < y0) y0 = v.y; if (v.y > y1) y1 = v.y;
+    };
+    for (const k in m.bones) { m.bones[k].getWorldPosition(v); add(); }
+    if (this.cape.visible) {
+      const a = this.cape.cloth.geometry.attributes.position;
+      for (let i = 0; i < a.count; i++) { v.fromBufferAttribute(a, i); add(); }
+    }
+    if (!ok) return null;
+    const dist = Math.max(0.5, cam.position.distanceTo(this.group.position));
+    const pad = (POSE.flesh * POSE.scale * this.size) / (dist * Math.tan((cam.fov * Math.PI) / 360)) * (H / 2) / (cam.zoom || 1) + POSE.inkPx;
+    out[0] = (x0 * 0.5 + 0.5) * W - pad; out[2] = (x1 * 0.5 + 0.5) * W + pad;
+    out[1] = (0.5 - y1 * 0.5) * H - pad; out[3] = (0.5 - y0 * 0.5) * H + pad;
+    return out;
   }
 
   /** [ink, halo] keyline widths for her sharp pass; night 0..1, busy 0..1 (canyon / patrol view). */

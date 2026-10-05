@@ -348,7 +348,7 @@ export class Flight3D {
       quality().fly3dSharp ?? 0.5, quality().fly3dSharpTaps || 2);
     lookFrame(r); // back to the canvas for her pass
     if (sharp) this.heroPass.render(r, this.scene, this.cam.cam, this.hero.group.position, FlyHero3D.RADIUS * this.hero.size, W, H, hq, // (radius: her + the cape)
-      this.hero.keyline(night, Math.max(this.cam.canyonK, this.cam.patrolK)));
+      this.hero.keyline(night, Math.max(this.cam.canyonK, this.cam.patrolK)), this.noBox ? null : this.hero.screenRect(this.cam.cam, W, H, this._box || (this._box = [0, 0, 0, 0])));
     this.overlay(ctx, night, frac, boosting);
   }
 
