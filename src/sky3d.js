@@ -29,7 +29,8 @@ const SKY = [
   [20.6, '#04071a', '#141038', '#35275e', '#35275e'], // night
 ];
 /** Sun/moon: disc radius (cos of the angle), the disc's highest drawn elevation (sin), day/dusk fills + rim. */
-const SUN = { disc: 0.9988, maxUp: 0.42, day: ['#fffbe6', '#ffb340'], dusk: ['#ffdc5e', '#d8461e'], moonFrom: [0.82, 0.95], setBy: [0.55, 0.72] }; // moonFrom / setBy: the game's night value
+// (the dusk fill is a pale cream: a yellow disc on the yellow sunset glow read as a hollow orange ring)
+const SUN = { disc: 0.9988, maxUp: 0.42, day: ['#fffbe6', '#ffb340'], dusk: ['#fff4d6', '#d8461e'], moonFrom: [0.82, 0.95], setBy: [0.55, 0.72] }; // moonFrom / setBy: the game's night value
 /** Cloud decks (metres) and their three cel tones + ink, per time of day (display colours). */
 const CLOUD = {
   count: 64, layers: [360, 520], size: [44, 250], aspect: [0.44, 0.62], variants: 8,
@@ -60,7 +61,7 @@ void main(){
   if (sunK > 0.0) {
     c += sunCol * (pow(max(d, 0.0), 60.0) * 0.18 + pow(max(d, 0.0), 8.0) * 0.1) * sunK; // (a modest glow: a disc paler than its halo reads as a hollow ring)
     float disc = clamp((d - ${SUN.disc.toFixed(5)}) / fw + 0.5, 0.0, 1.0), core = clamp((d - ${(SUN.disc + 0.00025).toFixed(5)}) / fw + 0.5, 0.0, 1.0);
-    c = mix(c, mix(sunRim, sunCol, core), disc * sunK);
+    c = mix(c, mix(sunRim, sunCol, core) * (1.0 + 0.12 * smoothstep(0.9993, 1.0, d)), disc * sunK); // (a touch hotter in the middle: a filled disc)
   }
   // the moon (night only): a pale disc + halo
   float m = dot(p, sunDir), fm = fwidth(m) + 1e-6;

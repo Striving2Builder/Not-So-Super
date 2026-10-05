@@ -100,7 +100,7 @@ void main() {
  * one flat pale plate. One draw, one texture fetch per layer, early-z behind the city.
  * layers: [distance × r, tallest (m), how far the silhouette darkens off the air, texture repeat].
  */
-const RING = { r: 4300, segs: 48, minEye: 80, layers: [[1.12, 110, 0.42, 7], [1.45, 150, 0.36, 5], [1.95, 200, 0.29, 4], [2.8, 260, 0.22, 3]], win: [14, 9] }; // win: lit cluster cell (m)
+const RING = { r: 4300, segs: 48, minEye: 80, layers: [[1.12, 110, 0.42, 7], [1.45, 150, 0.36, 5], [1.95, 200, 0.29, 4], [2.8, 260, 0.22, 3]], win: [14, 9], dip: [0.03, 0.07] }; // win: lit cluster cell (m); dip: ray slopes the layers fade out over
 
 function ringLayer([k, hm, dk, rep], i) {
   return `  {
@@ -114,7 +114,10 @@ function ringLayer([k, hm, dk, rep], i) {
         // lit window clusters at night: a few warm specks per tower, dimmer on the far layer
         vec2 cell = floor(vec2(az * 6.2832 * D / ${RING.win[0]}., y / ${RING.win[1]}.));
         s += vec3(1., 0.72, 0.42) * step(h12(cell + ${i}.), 0.11) * uLit * uLit * ${(0.5 - i * 0.08).toFixed(2)};
-        c = s;
+        // grounded: the base melts into the ground haze, and a layer seen well below the horizon
+        // (from high patrol) fades out: darker than the hazed city in front of it, it read as
+        // a strip of skyline floating in the fog
+        c = mix(c, s, smoothstep(0., ${(hm * 0.35).toFixed(1)}, y) * (1. - smoothstep(${RING.dip[0]}, ${RING.dip[1]}, -slope)));
       }
     }
   }`;

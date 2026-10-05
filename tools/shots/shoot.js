@@ -334,7 +334,7 @@ async function shootNightClues(page, dir, name) {
       fs.mkdirSync(dir, { recursive: true });
       report[area] = {};
       for (const [name, sc] of Object.entries(AREAS[area])) {
-        if (ONLY && ONLY !== name) continue;
+        if (ONLY && !ONLY.split(',').includes(name)) continue; // (a comma list: --only a,b)
         const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
         const page = await ctx.newPage();
         const errors = [];

@@ -38,29 +38,38 @@ float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); 
 void main() {
   vec3 V = normalize(cameraPosition - vW);
   float fres = pow(1. - max(V.y, 0.), 4.);
-  // pulp blue water that reads against the city from any height: saturated body, sky in it at
-  // grazing angles, comic wave-crest strokes (filtered out with distance), city lights by night
-  // (a deeper navy body than before: the saturated mid-blue read as a plastic sheet from altitude)
-  vec3 deep = mix(vec3(0.02, 0.12, 0.33), vec3(0.01, 0.04, 0.12), uNight);
-  vec3 c = mix(deep, uSky * 0.9, 0.12 + 0.45 * fres);
+  // water, not fog: a deep navy body looking down, the sky's own colour at grazing angles
+  // (Fresnel), cel wave-crest strokes close by, comic ink ripple dashes drifting further out,
+  // city lights by night, one hard sun/moon glint streak stretched toward the lens; hazed less
+  // than the land, so the coast holds its edge (it melted into the haze as a pale lilac plate)
+  vec3 deep = mix(vec3(0.015, 0.07, 0.22), vec3(0.008, 0.03, 0.1), uNight);
+  vec3 c = mix(deep, uSky * 0.95, 0.06 + 0.7 * fres);
   float dist = length(vW - cameraPosition);
   float w = sin(vW.x * 0.07 + uTime * 0.5 + sin(vW.z * 0.03) * 2.) * sin(vW.z * 0.09 - uTime * 0.35 + vW.x * 0.02);
   // crest strokes only close by: further off they alias into a white dash pattern
   float near = 1. - smoothstep(200., 650., dist);
   c = mix(c, mix(vec3(0.7, 0.85, 1.), vec3(0.25, 0.3, 0.5), uNight), step(0.9, w) * 0.45 * near);
   c *= 0.94 + 0.08 * step(0.35, w) * near;
+  // ripple dashes: a short ink stroke in some 36 x 9 m cells, drifting; box-filtered by the
+  // pixel's footprint, so far off they fade to a faint average instead of a shimmer
+  vec2 q = vec2(vW.x / 36. + uTime * 0.02, vW.z / 9.), cq = floor(q), fq = fract(q), fw = fwidth(q);
+  float on = step(0.72, h21(cq + 17.)), o = h21(cq) * 0.5;
+  float dash = clamp((min(fq.x - o, o + 0.45 - fq.x)) / max(fw.x, 1e-4) + 0.5, 0., 1.) * clamp((0.12 - abs(fq.y - 0.5)) / max(fw.y, 1e-4) + 0.5, 0., 1.);
+  c = mix(c, deep * 0.45, dash * on * 0.55 * (1. - smoothstep(0.2, 0.45, max(fw.x, fw.y * 0.25))));
   c += vec3(1., 0.75, 0.4) * step(0.94, h21(floor(vW.xz / 6.) + floor(uTime * 1.5))) * uNight * 0.5 * near;
-  // the glint: a hard comic streak toward the sun/moon, broken into sparkles at its edges
+  // the glint: a hard comic streak toward the sun/moon, narrow across, long toward the lens,
+  // broken into sparkles at its edges
   vec3 R = reflect(-V, vec3(0., 1., 0.));
-  float g = dot(R, uKeyDir);
-  float sp = step(0.86, h21(floor(vW.xz / 3.) + floor(uTime * 3.))) * smoothstep(0.86, 0.97, g) * (1. - smoothstep(400., 1200., dist));
-  c += uKeyCol * (smoothstep(0.985, 0.995, g) * 1.4 + sp * 0.9);
+  float az = dot(normalize(R.xz + 1e-5), normalize(uKeyDir.xz + 1e-5)), el = abs(R.y - uKeyDir.y);
+  float g = smoothstep(0.9975, 0.9995, az) * (1. - smoothstep(0.04, 0.22, el));
+  float sp = step(0.86, h21(floor(vW.xz / 3.) + floor(uTime * 3.))) * smoothstep(0.97, 0.999, az) * (1. - smoothstep(0.05, 0.3, el)) * (1. - smoothstep(400., 1600., dist));
+  c += uKeyCol * (g * 1.3 + sp * 0.9) * mix(1., 0.6, uNight);
 #ifdef TONE_MAPPING
   c = toneMapping(c);
 #endif
   gl_FragColor = linearToOutputTexel(vec4(c, 1.));
   gl_FragColor.rgb = pulp(gl_FragColor.rgb);
-  gl_FragColor.rgb = haze(gl_FragColor.rgb, dist * 1.35, 0., 1.);
+  gl_FragColor.rgb = haze(gl_FragColor.rgb, dist * 0.8, 0., 1.);
 }`,
     }));
     scene.add(this.sea);
