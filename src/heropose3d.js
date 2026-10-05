@@ -1,24 +1,26 @@
 // Supergirl's flight body language (3D flight): her whole-body attitude and procedural bone offsets
 // on top of the fly / idle clips, blended from the flight state, so every shot isn't the same stiff
 // silhouette. Bones only (no extra clips, no extra draw calls): a handful of aims per frame.
-//   CRUISE  right fist forward, left arm tucked, chest up, chin up (she looks where she goes), left
-//           knee bent: the classic flying pose
-//   BOOST   both fists punched forward together, head tucked, body and legs locked straight
-//   DIVE    head-first, arms swept back along her sides, legs together (a stooping hawk)
+//   CRUISE  a curved line of action: chest arched up, hips a little low, right fist forward with a
+//           soft elbow, left arm swept back and out like a wing, left knee bent, chin up
+//   BOOST   one fist punched dead ahead (arm locked), the other pinned to her side, chin tucked,
+//           body flat and legs locked together with the toes pointed (a missile, not a glide)
+//   DIVE    head-first, both arms locked overhead toward the ground, legs together (a power dive)
 //   SLOW    tilted up into a glide, one arm reaching ahead, the other out for balance, knees bent
 //           with the shins trailing back (not dangling straight: that read as standing on air)
 //   HOVER   a relaxed superhero float: leaning a little forward, right knee lifted, the left leg
 //           trailing back with a soft knee, toes pointed down, right fist on her hip, left arm
 //           loose, a slow bob with a little sway in the legs; the cape drifts back off her shoulders
-//   TURNS   roll into the bank on a spring (a little overshoot), head and fist lead into the turn,
-//           legs swing to the outside; CLIMB / DESCEND pitch her with her vertical speed
+//   TURNS   roll into the bank on a spring (a little overshoot), the inside shoulder drops, the head
+//           turns into the turn and the outside arm leads across (a swimmer's stroke), legs swing to
+//           the outside; a left turn is the exact mirror of a right one. CLIMB / DESCEND pitch her
 import * as THREE from 'three';
 
 /** Tunables (radians, unit-less weights; speeds in overworld units/s). */
 export const FLY_POSE = {
   flyFrom: 14, flyFull: 70,   // speed where her horizontal flying pose starts / is full
   slowTo: 320,                // below this she tilts up into the slow glide (full at flyFull)
-  bank: 0.95,                 // roll per unit of the flight model's bank
+  bank: 1.15,                 // roll per unit of the flight model's bank
   boostBank: 1.2,             // (× at boost: tighter, more committed)
   rollSpring: [9, 0.5],       // [rad/s, damping]: rolls in with a small overshoot
   pitchSpring: [7, 0.8],
@@ -29,8 +31,11 @@ export const FLY_POSE = {
   climb: 0.85,                // body pitch per rad of climb angle (atan(vz / speed))
   climbMax: 0.6,
   divePitch: 1.15,
-  chin: [1.6, 0.9, 0.5, 1.2], // head lift toward her back (tan of the crown's angle): cruise / boost / dive / slow
-  arch: [0.35, 0.05, 0, 0.55],  // chest lift: cruise / boost / dive / slow
+  chin: [1.6, 0.55, 0.5, 1.2], // head lift toward her back (tan of the crown's angle): cruise / boost / dive / slow
+  arch: [0.5, -0.04, 0, 0.55],  // chest lift: cruise / boost / dive / slow
+  cruiseUp: 0.14,             // cruise: shoulders a touch above the hips (a line of action, not a plank)
+  boostDip: 0.14,             // boost: nose down a touch (a missile driving forward; more of her back to the chase camera)
+  turnArm: 0.85,              // how much a full bank hands the lead to the outside arm (mirrors the turns)
   bob: [0.05, 0.015],         // float bob (m): hover / flying
 };
 
@@ -52,7 +57,7 @@ export class FlightPose {
     this.lastZ = null; this.vz = 0;
     // body axes (world) and scratch, reused every frame
     this.f = new THREE.Vector3(); this.s = new THREE.Vector3(); this.l = new THREE.Vector3(); this.dn = new THREE.Vector3(0, -1, 0);
-    this.v = [0, 1, 2, 3, 4, 5].map(() => new THREE.Vector3());
+    this.v = Array.from({ length: 12 }, () => new THREE.Vector3());
     this.hl = new THREE.Vector3(); this.hr = new THREE.Vector3(); this.mid = new THREE.Vector3(); this.inw = new THREE.Vector3();
   }
 
@@ -84,7 +89,7 @@ export class FlightPose {
     if (perch) pitch = -h.lean * P.hoverLean;
     else if (this.hover) pitch = -h.lean * P.hoverLean - P.hoverTilt + Math.sin(t * 1.7 + 0.8) * 0.025; // (leans as she bobs)
     else if (diving) pitch = -P.divePitch;
-    else pitch = (1 - fk) * P.slowPitch + this.slow * P.slowPitch * 0.8 + this.climb * P.climb * fk - h.lean * 0.25;
+    else pitch = (1 - fk) * P.slowPitch + this.slow * P.slowPitch * 0.8 + this.climb * P.climb * fk - h.lean * 0.25 + P.cruiseUp * fk * (1 - this.boost) - P.boostDip * fk * this.boost;
     const roll = perch ? 0 : h.bank * P.bank * (1 + (P.boostBank - 1) * this.boost) * (this.hover ? 0.5 : 1);
     if (!this.init) { this.init = true; this.pitch.x = pitch; this.roll.x = roll; }
     if (dt > 0) { spring(this.pitch, pitch, dt, P.pitchSpring); spring(this.roll, roll, dt, P.rollSpring); }
@@ -110,11 +115,15 @@ export class FlightPose {
     return out.lengthSq() > 1e-6 ? out.normalize() : null;
   }
 
-  /** Body axes from the model root: f = head-first flight direction, s = her back (sky), l = her left. */
-  axes(m) {
+  /**
+   * Body axes from the model root: f = head-first flight direction, s = her back (sky), l = her left.
+   * idle: the idle clip (hover / perch) stands her facing the root's −x, so there f = where she
+   * faces, s = up (her head) and l = her left (the root's +z).
+   */
+  axes(m, idle = false) {
     m.root.updateWorldMatrix(true, true);
     const q = m.root.getWorldQuaternion(_q);
-    this.f.set(0, 0, 1).applyQuaternion(q); this.s.set(0, 1, 0).applyQuaternion(q); this.l.set(1, 0, 0).applyQuaternion(q);
+    this.f.set(idle ? -1 : 0, 0, idle ? 0 : 1).applyQuaternion(q); this.s.set(0, 1, 0).applyQuaternion(q); this.l.set(idle ? 0 : 1, 0, idle ? 1 : 0).applyQuaternion(q);
   }
 
   /** Bone offsets for the flying poses (after the clip; k = how much she's flying, 0..1). */
@@ -129,7 +138,7 @@ export class FlightPose {
     // ---- spine: chest lifted at cruise / slow, flat at boost; twists a little into the bank
     const arch = cr * P.arch[0] + bk * P.arch[1] + dv * P.arch[2] + sl * P.arch[3] + Math.max(0, this.climb) * 0.4;
     if (arch > 0.01) m.aim('Spine1', 'Spine2', D(0, 1, arch, 0).normalize(), 0.6 * k);
-    this.twist(m, 'Spine2', f, T * 0.22 * k);
+    this.twist(m, 'Spine2', f, T * 0.32 * k); // (the inside shoulder drops)
     // ---- head: chin up so she looks where she's going (her face reads from the front, the back of
     // her head from the chase camera), turned and tilted into the turn
     const chin = cr * P.chin[0] + bk * P.chin[1] + dv * P.chin[2] + sl * P.chin[3] + this.climb * 0.3;
@@ -137,25 +146,33 @@ export class FlightPose {
     m.aim('Neck', 'Head', crown, 0.55 * k);
     m.aim('Head', 'HeadTop_End', crown, k);
     this.twist(m, 'Head', crown, -T * 0.35 * k);
-    // ---- arms (upper, fore) per pose, blended
+    // ---- arms (upper, fore) per pose, blended. Who leads: the right fist when flying straight; in a
+    // bank the lead goes to the outside arm, so a left turn mirrors a right one
+    const aT = Math.min(1, Math.abs(T) * 1.6) * P.turnArm;
     const arm = (side, sg) => {
-      // sg = +1 left / -1 right; the right arm leads at cruise
-      const lead = sg < 0;
+      // sg = +1 left / -1 right
+      const outside = T * sg > 0; // (a right turn: her left arm is outside)
+      const ld = (sg < 0 ? 1 : 0) * (1 - aT) + (outside ? aT : 0), tr = 1 - ld;
+      const cross = into * 0.3 + (outside ? -sg * 0.18 * aT : 0); // the leading fist reaches across into the turn
       const up = this.mix(V[2], [
-        [cr, lead ? D(3, 1, 0.08, -0.05 + into * 0.3) : D(3, -1, -0.12, 0.38)],
-        [bk, D(4, 1, 0.04, sg * 0.03 + into * 0.15)],
+        [cr * ld, D(6, 1, 0.16, -sg * 0.04 + cross)],     // cruise lead: forward, a little high
+        [cr * tr, D(7, -0.75, 0.08, sg * 0.85)],          // cruise trail: swept back and well out (a wing: a wide X, boost is a narrow line)
+        [bk * ld, D(8, 1, 0.03, cross * 0.4)],            // boost lead: dead ahead
+        [bk * tr, D(9, -1, 0.06, sg * 0.14)],             // boost trail: pinned along her side
       ]);
       const terms = [];
       if (up) terms.push([cr + bk, V[5].copy(up)]);
-      terms.push([dv, D(3, -1, 0.15, sg * 0.28)]);
-      terms.push([sl, lead ? D(4, 0.6, -0.7, -0.22) : D(4, 0.05, -0.9, 0.5)]);
+      terms.push([dv, D(3, 1, 0.12, sg * 0.1)]); // dive: both arms overhead, toward the ground
+      terms.push([sl, ld > 0.5 ? D(4, 0.6, -0.7, -0.22) : D(4, 0.05, -0.9, 0.5)]);
       const u = this.mix(V[2], terms);
       if (u) m.aim(`${side}Arm`, `${side}ForeArm`, u, k);
       const fore = this.mix(V[2], [
-        [cr, lead ? D(3, 1, 0.08, -0.05 + into * 0.3) : D(3, -1, -0.22, 0.12)],
-        [bk, D(4, 1, 0.02, -sg * 0.05)],
-        [dv, D(0, -1, 0.1, sg * 0.18)],
-        [sl, lead ? D(1, 0.85, -0.35, -0.1) : D(1, 0.5, -0.7, 0.3)],
+        [cr * ld, D(6, 1, 0.3, -sg * 0.1 + cross)],       // (a soft elbow: the fist rides a little high)
+        [cr * tr, D(7, -1, -0.2, sg * 0.35)],
+        [bk * ld, D(8, 1, 0.02, 0)],                      // locked straight
+        [bk * tr, D(9, -1, -0.05, sg * 0.02)],
+        [dv, D(10, 1, 0.02, -sg * 0.06)],                  // fists meet ahead of her head
+        [sl, ld > 0.5 ? D(11, 0.85, -0.35, -0.1) : D(11, 0.5, -0.7, 0.3)],
       ]);
       if (fore) m.aim(`${side}ForeArm`, `${side}Hand`, fore, k);
     };
@@ -169,19 +186,20 @@ export class FlightPose {
       const out = -into * 0.3; // swing to the outside of the turn
       const wob = 0.02 * Math.sin(t * 3 + sg);
       const thigh = this.mix(V[2], [
-        [cr + bk + dv, D(0, -1, -0.06 + 0.04 * bk, out).addScaledVector(inward, 0.12 + 0.04 * bk)],
+        [cr + bk + dv, D(0, -1, -0.12 * cr + 0.02 * bk, out).addScaledVector(inward, 0.12 + 0.1 * bk)], // (cruise: hips low, the legs angle down off them)
         [sl, V[1].copy(dn).multiplyScalar(0.75).addScaledVector(f, sg < 0 ? 0.3 : -0.3).addScaledVector(inward, 0.06)],
       ]);
       if (thigh) m.aim(`${L}UpLeg`, `${L}Leg`, thigh, k * 0.95);
-      const bend = cr * (sg > 0 ? 0.65 : 0.1) * (1 - Math.abs(T) * 0.5); // the left knee bends at cruise
+      // the left knee bends at cruise; in a bank the inside knee does (mirrored turns)
+      const bend = cr * ((sg > 0 ? 1.1 : 0.22) * (1 - aT) + (T * sg < 0 ? 0.75 : 0.12) * aT);
       const shin = this.mix(V[2], [
         [cr, D(0, -1, bend, out * 0.8).addScaledVector(inward, 0.06 + wob)],
-        [bk + dv, D(3, -1, 0, out * 0.5).addScaledVector(inward, 0.08)],
+        [bk + dv, D(3, -1, 0, out * 0.5).addScaledVector(inward, 0.08 + 0.06 * bk)], // (locked together)
         [sl, V[1].copy(dn).multiplyScalar(sg < 0 ? 0.55 : 0.5).addScaledVector(f, sg < 0 ? -0.85 : -0.95)],
       ]);
       if (shin) {
         m.aim(`${L}Leg`, `${L}Foot`, shin, k * 0.95);
-        m.aim(`${L}Foot`, `${L}ToeBase`, V[3].copy(shin).addScaledVector(s, -0.15).normalize(), k * 0.8); // pointed toes
+        m.aim(`${L}Foot`, `${L}ToeBase`, V[3].copy(shin).addScaledVector(s, -0.15 + 0.1 * bk).normalize(), k * 0.8); // pointed toes
       }
     }
   }
@@ -194,7 +212,7 @@ export class FlightPose {
    */
   hovering(m, k, t = 0) {
     if (k <= 0.01 || !m.bones.LeftFoot) return;
-    this.axes(m);
+    this.axes(m, true);
     const { f, s, l } = this, V = this.v;
     const D = (i, down, fw, left) => V[i].copy(s).multiplyScalar(-down).addScaledVector(f, fw).addScaledVector(l, left).normalize();
     const sw = Math.sin(t * 1.7) * 0.06, sw2 = Math.sin(t * 1.7 + 1.2) * 0.05;

@@ -2,6 +2,7 @@
 // (setbacks, podium + tower, Art Deco crown, spire, octagon), a roof kit (water tower, antenna with
 // a lit tip, helipad, garden, HVAC, penthouse, roof sign), district colours and window light, neon
 // and named venue signs. Everything is appended to the chunk's Builder (one draw call per chunk).
+import * as THREE from 'three';
 import { hash2 } from './rng.js';
 import { LOT } from './city.js';
 import { M, STYLE, box, prism, gable, wedge, tree, mast, lamp, neonRing, neonPost, look, KIND } from './buildings3d.js';
@@ -46,6 +47,8 @@ export function height3(o, district, core = 0) {
 }
 
 const pick = (a, h) => a[Math.min(a.length - 1, Math.floor(h * a.length))];
+const lum = (c) => 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
+const _g = new THREE.Color();
 function pickW(weights, h) {
   let sum = 0;
   for (const k in weights) sum += weights[k];
@@ -74,6 +77,10 @@ const TIERS = {
 
 /** The current building's first setback height (m; 0 = none), for its cornice trim. */
 let ledge = 0;
+/** The current building's wall tiers [x0, z0, x1, z1, bot, top] (m): neon goes on a real wall. */
+let tiers = [];
+/** The tier whose walls stand at height y (null: none, e.g. a crown or a round tower). */
+const foot = (y) => tiers.find((t) => y >= t[4] && y <= t[5]) || null;
 
 /** One city.js box building → tiers + crown + roof kit + neon + signs. Returns nothing. */
 export function building(B, o, blk, S) {
@@ -84,9 +91,18 @@ export function building(B, o, blk, S) {
   let style = STYLE[pickW(D.styles, h[1])];
   if (o.glass && D.styles.glass) style = h[1] < 0.7 ? STYLE.glass : style;
   const L = look(o.gold ? '#e6c66a' : wall, pick(D.lit, h[2]), style, o.roofCol || pick(D.roofs, h[3]), h[4] < 0.55 ? STYLE.gravel : STYLE.tar, Math.floor(h[5] * 8) / 8, Math.floor(h[6] * 16) / 16);
-  // roofs: the district's roof colour, pulled toward its own wall colour (no candy caps)
+  // muted palettes (candy blocks read as toys from altitude): walls 40% of the way to their
+  // grey outside the vice districts (they keep their neon colour); roofs the district's roof
+  // colour pulled toward its own wall colour, then half way to a warm grey (no candy caps)
+  // (the vice districts are the `neon: true` ones; the casino and entertainment strips keep their
+  // neon tubes and signs, not candy walls)
+  const vice = D.neon === true;
+  L.tint.lerp(_g.setRGB(1, 1, 1).multiplyScalar(lum(L.tint)), vice ? 0.2 : 0.4); // (vice: a little, the tubes carry the colour)
   L.roofTint.lerp(L.tint, 0.45).multiplyScalar(0.85);
+  L.roofTint.lerp(_g.setRGB(1, 0.94, 0.86).multiplyScalar(lum(L.roofTint)), vice ? 0.3 : 0.55);
+  L.roofTint.multiplyScalar(0.8 + 0.4 * hash2(x, y, 99)); // each roof its own value (far roofs read as one slab)
   const face = streetFace(o, blk);
+  tiers = [[x0, z0, x1, z1, 0, H]];
   if (o.container || o.truck) { L.style = STYLE.industrial; box(B, x0, z0, x1, z1, 0, H, L, { ink: 0.6 }); return; }
   if (o.house || o.barn) {
     if (o.barn) L.style = STYLE.industrial;
@@ -101,11 +117,12 @@ export function building(B, o, blk, S) {
   if (shape === 'spire' && H < 80) shape = 'setback';
   if ((shape === 'podium' || shape === 'octa') && (Smin < 26 || H < 50)) shape = 'slab';
   let top = H, rx0 = x0, rz0 = z0, rx1 = x1, rz1 = z1;
-  ledge = 0;
+  ledge = 0; tiers = [];
   if (shape === 'octa') {
     // a round glass tower on a square plinth
     const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, pod = Math.min(18, H * 0.15);
     box(B, x0, z0, x1, z1, 0, pod, { ...L, style: STYLE.concrete });
+    tiers.push([x0, z0, x1, z1, 0, pod]);
     const r = Smin * 0.46;
     prism(B, cx, cz, r, r, pod, H, 8, L, { rot: Math.PI / 8 });
     neonRing(B, cx - r * 0.7, cz - r * 0.7, cx + r * 0.7, cz + r * 0.7, H + 0.3, pick(D.lit, h[3]), 0.3);
@@ -119,6 +136,7 @@ export function building(B, o, blk, S) {
       const podium = shape === 'podium' && bot === 0;
       const TL = podium ? { ...L, style: STYLE.concrete, roofTint: L.roofTint } : L;
       box(B, rx0, rz0, rx1, rz1, bot, t, TL, { roof: true });
+      tiers.push([rx0, rz0, rx1, rz1, bot, t]);
       if (podium && h[4] < 0.6) B.detail(() => roofGarden(B, x0, z0, x1, z1, t, h, rx0, rz0, rx1, rz1));
       bot = t;
     }
@@ -247,18 +265,21 @@ function roofExtras(B, o, blk, S, D, L, h, face, x0, z0, x1, z1, H, roof) {
   }
   // vice neon: tubes round the roof edge and a band two floors down, corner posts on some
   // every district gets the vice district's trick in its own colours: neon trim on some roofs
+  // (every ring on the wall of the tier at its height: rings round the base footprint floated in
+  // the air round the stepped-in tiers above, lines across the gaps between towers)
+  const ring = (y, col, t) => { const f = foot(y); if (f) neonRing(B, f[0], f[1], f[2], f[3], y, col, t); };
   if (!o.neon && D.trim && hash2(o.x | 0, o.y | 0, 77) < D.trimOdds && H > 20) {
-    const roofY = roof ? roof[4] : H, r = roof || [x0, z0, x1, z1];
-    neonRing(B, r[0], r[1], r[2], r[3], roofY - 1, pick(D.trim, h[3]), 0.6);
+    ring((roof ? roof[4] : H) - 1, pick(D.trim, h[3]), 0.6);
     // a second ring: a cornice light on the first setback's ledge (a lone ring at 30% of a plain
     // slab read as a stray orange line across the tower); the vice districts keep their mid band
-    if (H > 60 && h[4] < 0.5 && (ledge || D.neon)) neonRing(B, x0, z0, x1, z1, ledge ? ledge - 0.6 : Math.max(4, H * 0.3), pick(D.trim, h[5]), ledge ? 0.8 : 0.5);
+    if (H > 60 && h[4] < 0.5 && (ledge || D.neon)) ring(ledge ? ledge - 0.6 : Math.max(4, H * 0.3), pick(D.trim, h[5]), ledge ? 0.8 : 0.5);
   }
   if (o.neon) {
-    const roofY = Math.min(H, roof ? roof[4] : H);
-    neonRing(B, x0, z0, x1, z1, roofY - 1.2, o.neon);
-    neonRing(B, x0, z0, x1, z1, Math.max(3, H * 0.62), o.neon2 || o.neon);
-    if (h[5] < 0.4 && !B.lite) for (const [px, pz] of [[x0, z0], [x1, z1]]) neonPost(B, px, pz, 4, roofY - 1, o.neon2 || o.neon);
+    const roofY = Math.min(H, roof ? roof[4] : H), f = foot(4);
+    ring(roofY - 1.2, o.neon);
+    ring(Math.max(3, H * 0.62), o.neon2 || o.neon);
+    // corner posts up the bottom tier only (up a whole stepped tower they stood off in the air)
+    if (h[5] < 0.4 && !B.lite && f) for (const [px, pz] of [[f[0], f[1]], [f[2], f[3]]]) neonPost(B, px, pz, 4, Math.min(roofY, f[5]) - 1, o.neon2 || o.neon);
   }
   // signs: the 2D view's named venue / mall signs on the street face and the roof
   const vice = o.neon || D.neon;

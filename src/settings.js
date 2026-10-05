@@ -17,7 +17,8 @@ const KEY = 'supergirl-settings';
  * flyTileRes: canvas pixels per city block in the flight view's baked ground tiles.
  * flySpriteMax: cap (device px) on her flight sprite, which is otherwise rendered 1:1 with the screen.
  * fly3dDpr: [open sky, street canyons] pixel-ratio caps for the 3D flight view (canyons are fill-rate bound).
- * fly3dHero: [MSAA samples, density × the canvas's] for her own sharp pass in 3D flight (0 density = no pass).
+ * fly3dHero: [MSAA samples, density × the canvas's, inner ink px] for her own sharp pass in 3D flight (0 density = no pass;
+ * inner ink: her keyline also eats into her silhouette, hiding the hard rim-light sliver an edge has without MSAA).
  * fly3dOut: the 3D flight canvas's pixel-ratio cap (her pass + overlay); the scene renders at fly3dDpr.
  * fly3dAA: whole-frame anti-aliasing for 3D flight: 'msaa' | 'fxaa' | 'none'.
  * fly3dSharp: 0..1 contrast-adaptive sharpening on the 3D flight scene's upscale to the canvas.
@@ -46,7 +47,7 @@ export const PROFILES = {
     clubTex: 'lite', clubCache: 1, clubMaterials: 'standard', clubLights: 3,
     look3d: 'lite',
     nightlife: 'lite',
-    flyDetail: true, flyTileRes: 144, flySpriteMax: 512, fly3dDpr: [1, 0.75], fly3dHero: [2, 1], fly3dAA: 'fxaa', fly3dOut: 1.5, fly3dSharp: 0.6,
+    flyDetail: true, flyTileRes: 144, flySpriteMax: 512, fly3dDpr: [1, 0.75], fly3dHero: [0, 1, 1], fly3dAA: 'fxaa', fly3dOut: 1.5, fly3dSharp: 0.6,
     fly3dSharpTaps: 2,
     scanFilter: true,
     brawlSprite: 256, brawlBakeMs: 900,
@@ -57,7 +58,7 @@ export const PROFILES = {
     clubTex: 'lite', clubCache: 1, clubMaterials: 'lambert', clubLights: 2,
     look3d: 'min',
     nightlife: 'min',
-    flyDetail: false, flyTileRes: 96, flySpriteMax: 256, fly3dDpr: [0.85, 0.75], fly3dHero: [0, 1.5], fly3dAA: 'none', fly3dOut: 1.5, fly3dSharp: 0.5,
+    flyDetail: false, flyTileRes: 96, flySpriteMax: 256, fly3dDpr: [0.85, 0.75], fly3dHero: [0, 1, 1], fly3dAA: 'none', fly3dOut: 1.5, fly3dSharp: 0.5,
     fly3dSharpTaps: 2,
     scanFilter: false,
     brawlSprite: 180, brawlBakeMs: 250,

@@ -59,7 +59,7 @@ void main() {
   }
   float dist = length(vW - cameraPosition);
   vec3 V = normalize(cameraPosition - vW);
-  float fres = pow(1. - max(V.y, 0.), 3.);
+  float fres = 1. - max(V.y, 0.); fres = fres * fres * fres; // (no pow)
   // linear values: the haze lifts water a lot from altitude, so the channel starts near-black navy
   vec3 deep = mix(vec3(0.004, 0.02, 0.055), vec3(0.002, 0.008, 0.025), uNight);
   vec3 shallow = mix(vec3(0.02, 0.085, 0.11), vec3(0.008, 0.025, 0.045), uNight);
@@ -83,6 +83,7 @@ void main() {
 #endif
   gl_FragColor = linearToOutputTexel(vec4(c, 1.));
   gl_FragColor.rgb = pulp(gl_FragColor.rgb);
+  gRay = (vW - cameraPosition) / max(dist, 1e-3);
   gl_FragColor.rgb = haze(gl_FragColor.rgb, dist, 0., 1.);
 }`,
   });

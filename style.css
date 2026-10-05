@@ -562,6 +562,10 @@ body.fly3d .tbtn.f3-perch { font-size: 10px; }
    Everything after the impact moves by transform/opacity, so it keeps playing through a zone's load. */
 #dive-fx { position: absolute; inset: 0; z-index: 7; pointer-events: none; overflow: hidden; font-family: "Bangers", Impact, "Arial Black", sans-serif; }
 body.divefx #hud, body.divefx #btns, body.divefx #touch { z-index: 8; }
+/* the zone's own HUD (title, side panel, objectives) takes over under the panel: keep it out of sight
+   until the wipe, then bring it in with it (the LIVE feed and the minimap corner never hide) */
+body.divefx-landed #hud-left, body.divefx-landed #hud-top, body.divefx-landed #objectives, body.divefx-landed #prompt, body.divefx-landed #marker { opacity: 0; }
+body.divefx-landed.divefx-out #hud-left, body.divefx-landed.divefx-out #hud-top, body.divefx-landed.divefx-out #objectives, body.divefx-landed.divefx-out #prompt, body.divefx-landed.divefx-out #marker { opacity: 1; transition: opacity .3s .1s; }
 /* a zone's title banner waits (held on its first, invisible keyframe) and plays once the panel is gone */
 body.divefx-hold #banner.show { animation-play-state: paused; }
 #dive-fx canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -578,9 +582,9 @@ body.divefx-hold #banner.show { animation-play-state: paused; }
 .df-ring.late { animation-delay: calc(var(--stop) + 90ms); animation-duration: .5s; }
 .df-ring svg { position: absolute; left: 0; top: 0; overflow: visible; }
 @keyframes df-ring { 0% { transform: scale(.12); opacity: 1; } 45% { opacity: 1; } 100% { transform: scale(3.2); opacity: 0; } }
-.df-puff { position: absolute; left: var(--x); top: var(--y); animation: df-puff .6s calc(var(--stop) + var(--d)) cubic-bezier(.1, .8, .3, 1) both; }
+.df-puff { position: absolute; left: var(--x); top: var(--y); animation: df-puff 1.5s calc(var(--stop) + var(--d)) cubic-bezier(.1, .8, .3, 1) both; } /* (long: still drifting through the hold) */
 .df-puff svg { width: 100%; height: 100%; overflow: visible; transform: scaleX(var(--f)); }
-@keyframes df-puff { 0% { transform: translate(0, 0) scale(.2); opacity: 1; } 55% { opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(1.25); opacity: 0; } }
+@keyframes df-puff { 0% { transform: translate(0, 0) scale(.2); opacity: 1; } 40% { transform: translate(calc(var(--dx) * .78), calc(var(--dy) * .78)) scale(1.05); opacity: 1; } 100% { transform: translate(var(--dx), calc(var(--dy) - 14px)) scale(1.35); opacity: 0; } }
 /* the onomatopoeia: burst balloon + hand-lettered word, popped in past full size, then a slow swell */
 .df-word { position: absolute; display: grid; place-items: center; transform: rotate(var(--rot)); filter: drop-shadow(5px 6px 0 rgba(0, 0, 0, .55));
   animation: df-word-in .36s var(--stop) cubic-bezier(.2, 1.7, .45, 1) both, df-word-hold 1.6s calc(var(--stop) + 360ms) ease-out forwards; } /* (forwards: a backwards fill would hide the pop-in) */
@@ -588,7 +592,7 @@ body.divefx-hold #banner.show { animation-play-state: paused; }
 .df-word span { position: relative; line-height: 1; letter-spacing: .02em; white-space: nowrap; -webkit-text-stroke: 4px #111; paint-order: stroke fill; text-shadow: .045em .055em 0 var(--sh), .085em .1em 0 #111; }
 .df-word i { display: inline-block; font-style: normal; transform: translateY(var(--y)) rotate(var(--r)); }
 @keyframes df-word-in { 0% { transform: rotate(calc(var(--rot) - 26deg)) scale(0); } 62% { transform: rotate(calc(var(--rot) + 3deg)) scale(1.3); } 82% { transform: rotate(var(--rot)) scale(.95); } 100% { transform: rotate(var(--rot)) scale(1); } }
-@keyframes df-word-hold { from { transform: rotate(var(--rot)) scale(1); } to { transform: rotate(calc(var(--rot) - 2deg)) scale(1.07); } }
+@keyframes df-word-hold { 0% { transform: rotate(var(--rot)) scale(1); } 22% { transform: rotate(calc(var(--rot) - 1deg)) scale(1.09); } 45% { transform: rotate(calc(var(--rot) - 1deg)) scale(1.02); } 70% { transform: rotate(calc(var(--rot) - 2deg)) scale(1.08); } 100% { transform: rotate(calc(var(--rot) - 2deg)) scale(1.05); } } /* (a throb: the panel is alive while the zone loads) */
 /* the zone's name, as a caption tag; it grows the LOADING dashes if the zone is slow */
 .df-tag { position: absolute; padding: 4px 13px 3px; background: #ffe24a; color: #111; border: 3px solid #111; box-shadow: 4px 4px 0 rgba(0, 0, 0, .55); font-size: clamp(15px, 2.4vw, 22px); letter-spacing: .07em; white-space: nowrap; transform: skew(-6deg); animation: df-tag-in .26s calc(var(--stop) + 220ms) cubic-bezier(.2, 1.5, .5, 1) both; }
 .df-tag s { display: none; overflow: hidden; height: 4px; margin: 4px 0 1px; }

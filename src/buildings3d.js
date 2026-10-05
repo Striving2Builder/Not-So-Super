@@ -56,7 +56,7 @@ function atlas() {
 
 // ---------------------------------------------------------------- the shader
 /** Contact shade (AO) at the foot of walls: k = strength, h = falloff height in metres. */
-const AO = { k: 0.42, h: 4 };
+const AO = { k: 0.5, h: 6.5 };
 /**
  * Haze reach: far = max(fog far, camera height x perAlt), capped under the camera's far plane;
  * it starts at near x far, or nearAlt x the camera's height when that's further (from high patrol
@@ -76,9 +76,19 @@ const _cool = new THREE.Color(0.93, 0.98, 1.1);
  */
 export const HAZE_GLSL = /* glsl */`
 uniform vec3 uHazeCol; uniform vec3 uHorizon; uniform vec3 uHazeLow; uniform float uHazeNear; uniform float uHazeFar;
-// the air's colour at haze amount f along a ray dipping dn (sine) below the horizon
+uniform vec3 uSunAir; uniform vec2 uSunDirH;
+// the view ray (world, normalised), set by each shader that knows it; zero = no sun tint
+vec3 gRay = vec3(0.);
+// the air's colour at haze amount f along a ray dipping dn (sine) below the horizon. Toward the
+// sun the far air takes the dome's own warm glow (uSunAir: the same term the sky adds just above
+// the horizon, so haze and sky still meet without an edge); away from it it stays cool
 vec3 airAt(float f, float dn) {
-  return mix(mix(uHazeCol, uHorizon, smoothstep(0.35, 1., f)), uHazeLow, smoothstep(${HAZE.lowDn[0]}, ${HAZE.lowDn[1]}, dn));
+  vec3 a = mix(uHazeCol, uHorizon, smoothstep(0.35, 1., f)), lo = uHazeLow;
+  if (uSunAir.r > 0.002 && f > 0.2) { // (skipped at night and in the near, thin haze)
+    float lw = max(dot(gRay.xz, uSunDirH), 0.); lw *= lw * lw; // (gRay.xz ~ unit where it matters: far, level rays)
+    a += uSunAir * lw * smoothstep(0.2, 1., f); lo += uSunAir * lw * 0.35 * f;
+  }
+  return mix(a, lo, smoothstep(${HAZE.lowDn[0]}, ${HAZE.lowDn[1]}, dn));
 }
 // pulp grade: saturation and value contrast up (comic primaries), applied before the haze
 vec3 pulp(vec3 c) {
@@ -105,18 +115,30 @@ vec3 haze(vec3 c, float d, float y, float k) {
 
 const VERT = /* glsl */`
 attribute vec3 aAux; attribute vec4 aCol; attribute vec4 aLit;
-uniform vec2 res; uniform float dpr; uniform float uInkW; uniform float uNeonFar; uniform float uNight;
+uniform vec2 res; uniform float dpr; uniform float uInkW; uniform float uNeonFar; uniform float uNight; uniform float uLit;
 // per-face values are flat: exact (they seed hashes) and cheaper than interpolating
 varying vec2 vUv; flat varying vec3 vCol; flat varying vec3 vLit; flat varying vec3 vN; varying vec3 vW;
-flat varying float vStyle; flat varying float vKind; varying float vHb;
+flat varying float vStyle; flat varying float vKind; varying float vHb; varying vec2 vQ;
 void main() {
-  vKind = floor(aCol.a * 255. + .5); vStyle = floor(aLit.a * 255. + .5);
+  float kb = floor(aCol.a * 255. + .5), qc = floor(kb / 8.) - 4.; // kind + 8 x (4 + quad corner), or no corner
+  vKind = mod(kb, 8.); vStyle = floor(aLit.a * 255. + .5);
+  // the position inside its quad (0..1 each way; tris and lamps: the middle, no edges)
+  vQ = qc < 0. ? vec2(0.5) : vec2(qc == 1. || qc == 2. ? 1. : 0., qc >= 2. ? 1. : 0.);
   vUv = uv; vCol = aCol.rgb; vLit = aLit.rgb; vN = aAux; vHb = length(aAux) - 1.;
   vec4 wp = modelMatrix * vec4(position, 1.);
-  vW = wp.xyz;
   vec4 mv = viewMatrix * wp;
-  // neon tubes drop out past ~650 m (far off they were a dotted circuit board, not glow)
-  if (vKind == 3. && -mv.z > uNeonFar * mix(0.45, 1., uNight)) { gl_Position = vec4(0., 0., 2., 1.); return; } // thin tubes by day read as stray strokes
+  if (vKind == 3.) {
+    // neon tubes: off until it's dark (by day and at dusk the thin tubes read as stray strokes
+    // across the towers), dropped past ~650 m (far off a dotted circuit board, not glow), and
+    // never thinner than ~2 px: each side moves out across the tube (rings: up; corner posts,
+    // style 1: sideways) by what a pixel spans at its depth
+    if (uLit < 0.2 || -mv.z > uNeonFar * mix(0.45, 1., uNight)) { gl_Position = vec4(0., 0., 2., 1.); return; }
+    vec3 across = vStyle == 1. ? cross(vec3(0., 1., 0.), aAux) : vec3(0., 1., 0.);
+    float px = 2. * -mv.z / (projectionMatrix[1][1] * res.y); // metres per pixel here
+    wp.xyz += across * (uv.y * 2. - 1.) * max(0., px - 0.3);
+    mv = viewMatrix * wp;
+  }
+  vW = wp.xyz;
   gl_Position = projectionMatrix * mv;
 }`;
 
@@ -157,6 +179,7 @@ void main() {
   float d = length(vP - cameraPosition);
   float a = clamp(max(vWid, 1.) * 0.5 + 0.5 - abs(vAcross), 0., 1.) * min(vWid, 1.) * mix(1., 0.55, smoothstep(300., 700., d)) * (1. - smoothstep(1400., 2000., d));
   if (a < 0.01) discard;
+  gRay = (vP - cameraPosition) / max(d, 1e-3);
   gl_FragColor = vec4(haze(uInk, d, vP.y, 0.85), a); // a notch under the walls: silhouettes keep their line
 }`;
 
@@ -169,7 +192,7 @@ uniform float uFogMax;
 ${HAZE_GLSL}
 // per-face values are flat: exact (they seed hashes) and cheaper than interpolating
 varying vec2 vUv; flat varying vec3 vCol; flat varying vec3 vLit; flat varying vec3 vN; varying vec3 vW;
-flat varying float vStyle; flat varying float vKind; varying float vHb;
+flat varying float vStyle; flat varying float vKind; varying float vHb; varying vec2 vQ;
 float gShine = 0.; // facade(): the near glass glint (out-of-band result)
 // (sin-free: cheaper than the usual fract(sin()) where it runs on every lit wall pixel)
 float h12(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
@@ -187,11 +210,49 @@ float pulse(float x, float a, float b, float w) { return (P1(x + 0.5 * w, a, b) 
  * they fade to the style's mean (a solid lit tint, no sparkle). Returns (wall shade, glass, lit),
  * like the old atlas masks, + the lit windows' wash on the wall (night glow).
  */
+// A window's light (id: its cell; busy 0..1): lit the way offices are, never dense 2D noise
+// (that formed letters and Tetris shapes): a few whole lit floors with the odd dark window and a
+// sparse scatter of single windows.
+float litWin(vec2 id, float seed, float busy) {
+  float b = 0.6 + 0.8 * busy, r = h12(id + seed * 3.17), hf = h12(vec2(id.y, seed));
+  float fl = step(hf, 0.12 * b) * step(0.15, r);                 // lit floors (the odd dark window)
+  float on = max(fl, step(r, 0.1 * b));                          // + a sparse scatter of single windows
+  return on * (0.7 + 0.3 * fract(r * 37.1));
+}
+// The far facade: the windows grouped 2^k at a time (k from the pixel footprint), each group a
+// window of the same margins and glass share: a window grid of >= ~3 px cells that keeps the
+// facade's mean (no flat tint, no moire, no pinstripes), lit per window or 2 x 2 group at night,
+// the mean past that. A level's cells blur toward its mean as they shrink; over the last
+// third of a level the next one fades in (only there: every extra level costs fps).
+vec2 grp(vec2 c, vec2 w, vec2 m, float lv, float seed, float busy, float lt) {
+  float ip = lv > 0.5 ? 0.5 : 1.; // (levels 0 and 1 only: no exp2)
+  vec2 q = c * ip, wq = w * ip;
+  float g = pulse(q.x, m.x, 1. - m.x, wq.x) * pulse(q.y, m.y, 1. - m.y, wq.y);
+  // lights: level 0 = the near windows' own, softened (a lit window of a few pixels, sharpened on the
+  // upscale, became an "x" glyph); 2 x 2 groups glow at the mean (lit groups read as pale blotches)
+  float lit = lt;
+  if (uLit > 0. && lv < 0.5) lit = mix(litWin(floor(q), seed, busy), lt, 0.5);
+  return vec2(g, lit);
+}
+vec4 groups(vec2 c, vec2 w, vec4 L, float style, float seed) {
+  vec2 m = L.xy / 32., wa = 1. - 2. * m;
+  float wn = wa.x * wa.y, lt = (0.08 + 0.62 / 3.) * (0.6 + 0.8 * L.w) * 0.8;
+  float wl = mix(L.z, L.z * 0.72, 3. / 32.);
+  if (style == 3.) wl = mix(wl, 1., 10. / 32. * (1. - wn));
+  // the level and the place within it, linear (no log2): 2 x 2 groups fade to the mean early (past
+  // ~2 px a group's pattern isn't worth its cost)
+  // (2 x 2 groups only from high patrol, where they carry the far city: below it the mean)
+  float t0 = max(w.x, w.y) * 3.3, top = cameraPosition.y > 420. ? 3. : 2., l0 = t0 >= 2. ? 1. : 0., k = l0 > 0.5 ? smoothstep(0.2, 0.5, t0 * 0.5 - 1.) : smoothstep(0.75, 1., t0 - 1.);
+  if (t0 >= top) return vec4(wl * (1. - wn) + wn * 0.27, wn * 0.92, lt * wn * 0.92, lt * (1. - wn)); // (the mean)
+  vec2 gl = grp(c, w, m, l0, seed, L.w, lt);
+  if (k > 0.) gl = mix(gl, l0 > 0.5 || top < 2.5 ? vec2(wn, lt) : grp(c, w, m, 1., seed, L.w, lt), k); // (past level 1: the mean)
+  float g = gl.x, lit = gl.y;
+  return vec4(wl * (1. - g) + g * 0.27, g * 0.92, lit * g * 0.92, 0.);
+}
 vec4 facade(vec2 c, vec2 w, float style, float seed) {
   w = max(w, vec2(1e-3));
-  bool tiny = max(w.x, w.y) > 0.6; // windows under ~1.7 px: every feature is its average (cheap far pixels)
   if (style == 4.) {
-    if (tiny) return vec4(0.74, 0.08, 0.019, 0.);
+    if (max(w.x, w.y) > 0.6) return vec4(0.74, 0.08, 0.019, 0.);
     // industrial: corrugated sheet, a strip window every fourth floor
     float corr = pulse(c.x * 8., 0., 0.5, w.x * 8.);
     float sx = pulse(c.x, 2. / 32., 30. / 32., w.x), sy = pulse(c.y * 0.25, 12. / 128., 22. / 128., w.y * 0.25);
@@ -201,12 +262,8 @@ vec4 facade(vec2 c, vec2 w, float style, float seed) {
   }
   vec4 L = style == 0. ? vec4(7., 7., 0.86, 0.6) : style == 1. ? vec4(1., 2., 0.7, 0.35) : style == 2. ? vec4(8., 8., 0.8, 0.55) : vec4(9., 4., 0.62, 0.55);
   vec2 m = L.xy / 32., wa = 1. - 2. * m;
-  if (tiny) {
-    float lt = (0.08 + 0.62 / 3.) * (0.6 + 0.8 * L.w) * 0.8, wn = wa.x * wa.y, gl = wn * 0.92;
-    float wl = mix(L.z, L.z * 0.72, 3. / 32.);
-    if (style == 3.) wl = mix(wl, 1., 10. / 32. * (1. - wn));
-    return vec4(wl * (1. - wn) + wn * 0.27, gl, lt * gl, lt * (1. - wn));
-  }
+  // windows under ~3 px (either way): grouped (sub-3 px cells were mush: moire, pinstripes)
+  if (max(w.x, w.y) > 0.3) return groups(c, w, L, style, seed);
   float wx = pulse(c.x, m.x, 1. - m.x, w.x), wy = pulse(c.y, m.y, 1. - m.y, w.y), win = wx * wy;
   // the floor slab under each window row: its average once a floor is under ~3 px
   float slab = w.y > 0.35 ? 3. / 32. : pulse(c.y, 0., 3. / 32., w.y);
@@ -224,8 +281,7 @@ vec4 facade(vec2 c, vec2 w, float style, float seed) {
     }
     float sill = pulse(c.x, m.x - 1. / 32., 1. - m.x + 1. / 32., w.x) * pulse(c.y, m.y - 2. / 32., m.y, w.y);
     wl = mix(wl, min(1., L.z * 1.18), sill);
-    float tr = 1. - (m.y + (1. - 2. * m.y) * 0.32);
-    float f2 = max(pulse(c.x, 15. / 32., 17. / 32., w.x), pulse(c.y, tr - 0.5 / 32., tr + 0.5 / 32., w.y)); // mullion, transom
+    float f2 = pulse(c.x, 15. / 32., 17. / 32., w.x); // the mullion (a transom too made every pane a "+" glyph)
     wall = mix(wall, wl, k); fr = mix(fr, f2, k);
     rec = pulse(c.y, 1. - m.y - 2. / 32., 1. - m.y, w.y) * wx * k;                                         // recess under the lintel
     // big panes up close: a comic glint, one diagonal stroke across each pane (by day), so a
@@ -233,21 +289,15 @@ vec4 facade(vec2 c, vec2 w, float style, float seed) {
     if (uNight < 0.6) gShine = pulse(c.x * 0.7 + c.y * 0.45, 0.62, 0.7, (w.x * 0.7 + w.y * 0.45)) * (1. - fr) * k * (1. - uNight / 0.6);
   }
 #endif
-  // lit: each floor has its own activity (dark, a few windows, busy), each window its own chance
-  // and brightness: scattered lights with busier floors, never solid bands across a tower
-  float lit = (0.08 + 0.62 / 3.) * (0.6 + 0.8 * L.w) * 0.8, fade = smoothstep(0.25, 0.6, max(w.x, w.y)); // (the mean)
-  if (uLit > 0. && fade < 1.) { // (only lit windows care: skipped by day)
-    vec2 id = floor(c);
-    float hf = h12(vec2(id.y, seed)), p = (0.08 + 0.62 * hf * hf) * (0.6 + 0.8 * L.w), r = h12(id.yx + seed * 3.17);
-    lit = mix(step(r, p) * (0.6 + 0.4 * fract(r * 37.1)), lit, fade);
-  }
-  float glass = max(0., win * (1. - fr) - rec * 0.45);
+  float lit = uLit > 0. ? mix(litWin(floor(c), seed, L.w), (0.08 + 0.62 / 3.) * (0.6 + 0.8 * L.w) * 0.8, 0.5 * smoothstep(0.15, 0.3, max(w.x, w.y))) : 0.; // (only lit windows care: skipped by day; few-pixel ones soften)
+  float glass = max(0., win * (1. - fr * (1. - lit)) - rec * 0.45 * (1. - lit)); // (a lit window: a plain lit pane, no glyph)
   // night glow: a lit window washes its own cell's wall with a little of its light (cheap: no
   // extra shape, the cell is the window's); far off it simply brightens the lit tint
   return vec4(wall * (1. - win) + win * mix(0.25, 0.45, fr), glass, lit * glass, lit * (1. - win));
 }
 void main() {
   float dist = length(vW - cameraPosition);
+  gRay = (vW - cameraPosition) / max(dist, 1e-3);
   vec3 col = vec3(0.), emi = vec3(0.);
   if (vKind == 2.) {
     vec3 s = texture2D(uSigns, vUv).rgb; // r tube core, g glow/letters, b board
@@ -261,7 +311,8 @@ void main() {
     // cornice rings read as stray yellow lines across the canyons before dark
     float p = 1. - abs(vUv.y * 2. - 1.), thin = smoothstep(0.2, 0.5, fwidth(vUv.y));
     emi = vCol * mix(mix(0.55, 1.05, p), 0.8, thin) + mix(vCol, vec3(1.), 0.6) * mix(smoothstep(0.55, 0.95, p), 0.25, thin) * 0.55;
-    emi *= mix(0.9, 1.3, uNight) * (0.3 + 0.7 * smoothstep(0.1, 0.6, uLit));
+    emi *= mix(0.9, 1.3, uNight) * smoothstep(0.2, 0.6, uLit);
+    col = vCol * 0.12; // (the unlit glass: a tube switching on is never a black stroke)
     emi *= 1. - smoothstep(uNeonFar * 0.6, uNeonFar, dist / mix(0.45, 1., uNight));
   } else if (vKind == 4.) {
     emi = vCol * (0.25 + 2.5 * step(0.6, fract(uTime * 0.7 + vUv.x)));
@@ -282,40 +333,67 @@ void main() {
     }
     vec3 N = normalize(vN), V = normalize(cameraPosition - vW);
     float ndl = dot(N, uKeyDir);
+    // dusk (sun low, not yet the moon): a warm, stronger key on the sun side and a deeper, cooler
+    // shade, so looking into the sun the towers turn to backlit silhouettes with warm edges
+    float dk = smoothstep(0.4, 0.08, uKeyDir.y); // (the moon key is high: none at night)
     // three cel bands per face: shade (the sky's cool fill alone, a darker, cooler step of the same
     // paint), raking (half the key), full light (roofs always full while the sun is up): the sun's
     // side and the shade side read apart on every tower, by day and at dusk
     float litK = smoothstep(0.0, 0.04, ndl), fullK = N.y > 0.5 ? 1. : smoothstep(0.3, 0.34, ndl);
     vec3 amb = mix(uAmbDn, uAmbUp, N.y * 0.5 + 0.5) * mix(vec3(${KEY.shade.join(', ')}), vec3(1.), litK);
-    vec3 light = amb + uKeyCol * litK * (0.5 + 0.5 * fullK);
+    // (roofs take less of the moon: under its blue key every near roof was one cobalt slab)
+    vec3 light = amb + uKeyCol * litK * (0.5 + 0.5 * fullK) * (N.y > 0.5 ? 1. - 0.45 * uNight : 1.);
+    if (dk > 0. && N.y < 0.5) light = amb * mix(vec3(1.), vec3(0.66, 0.7, 0.9), dk * (1. - litK)) + uKeyCol * litK * (0.5 + 0.5 * fullK) * mix(vec3(1.), vec3(1.3, 1.06, 0.8), dk);
     // each facade orientation keeps its own cel tone (east/west a step darker than north/south),
     // so a tower's two visible faces always read apart even when neither is in the sun
     if (N.y < 0.5) light *= abs(N.x) > abs(N.z) ? mix(0.82, 0.94, litK) : 1.;
+    // roofs see the whole open sky: its light keeps the top planes the lightest value even with the
+    // sun grazing at dusk (they were darker than the walls: flat brown / navy slabs from patrol)
+    else light += uSky * 0.55 * (1. - 0.6 * uNight);
     vec3 wall = vCol * m.r * light;
     if (roof) {
       col = mix(wall, vec3(0.9, 0.62, 0.05) * light, m.b);
+      // muted: a warm grey take on the paint, after the light (under the blue dusk / moon sky every
+      // roof was one cobalt slab); each building's own roof value is baked into its tint (blocks3d)
+      col = mix(col, dot(col, vec3(0.299, 0.587, 0.114)) * vec3(1.06, 1., 0.9), 0.6 * (1. - m.b));
     } else {
       // glass: dark by night, mirrors the sky (more at grazing angles) by day; curtain walls most
-      float fres = pow(1. - max(dot(N, V), 0.), 2.);
+      float fres = 1. - max(dot(N, V), 0.); fres *= fres; // (no pow: exp/log in software GL)
       vec3 dayGlass = mix(vec3(0.07, 0.14, 0.3), uSky * 0.75, (vStyle == 1. ? 0.3 : 0.15) + 0.45 * fres);
       vec3 glass = mix(dayGlass, vec3(0.03, 0.035, 0.055) + uSky * 0.08 * fres, uNight);
       // (in the shade the glass dims and leans to the wall's own paint: a shaded face is the same
       // tower in shadow, not a dark blue panel)
       glass = mix(glass * mix(0.5, 1., litK), wall * 0.55, (1. - litK) * 0.35 * (1. - uNight));
       col = mix(wall, glass + (uSky * 0.6 + 0.25) * gShine * (0.4 + 0.6 * litK), m.g);
-      col *= mix(0.42, 1., smoothstep(0., 45., vW.y)); // canyon floors are darker
+      float cy = smoothstep(0., 45., vW.y);
+      col *= mix(0.42, 1., cy); // canyon floors are darker
       // contact shade: the foot of every wall darkens where it meets the ground, a setback's roof
       // or the roof under a box (cheap AO: the height above the part's own base, per vertex)
       col *= 1. - AO.x * exp(-vHb / AO.y) * (1. - 0.4 * uNight) * step(abs(N.y), 0.5);
-      emi = vLit * (m.b * 1.15 + m.a * 0.12) * uLit;
+      emi = vLit * (m.b * 1.15 + m.a * 0.12) * uLit * mix(0.55, 1., cy); // (the street floors' light sinks into the canyon too)
+      // dusk rim: with the sun low, a face in shade gets a thin warm line on its sun-side edge
+      // (the edge a backlit tower's lit face turns away at); its quad position gives the edge
+      if (uKeyDir.y < 0.4 && uNight < 0.95) { // (a uniform branch: low sun only)
+        vec3 T = vec3(N.z, 0., -N.x); // along the quad (cross(up, N))
+        float ex = (dot(T, uKeyDir) > 0. ? 1. - vQ.x : vQ.x) / max(fwidth(vQ.x), 1e-5);
+        float rim = (1. - smoothstep(1.2 * dpr, 2.4 * dpr, ex)) * (1. - litK) * smoothstep(0.4, 0.08, uKeyDir.y) * (1. - uNight) * step(abs(N.y), 0.5);
+        col += uKeyCol * vec3(1., 0.8, 0.55) * rim * 0.7;
+      }
       // night rim: a cool sky-lit edge on faces turning away from her (the silhouette reads)
       emi += uSky * 0.45 * uNight * smoothstep(0.55, 0.85, fres) * (1. - m.g * 0.5);
     }
-#ifndef FAR
+#ifdef FAR
+    // ink without line geometry: every quad's own edges (roof outlines, corners, setback lips),
+    // ~1 px wide from the pixel's place in its quad, thinning off into the haze like the near ink
+    vec2 e = min(vQ, 1. - vQ) / max(fwidth(vQ), vec2(1e-5));
+    float inkA = (1. - smoothstep(0.9 * dpr - 0.5, 0.9 * dpr + 0.5, min(e.x, e.y))) * mix(0.9, 0.5, smoothstep(500., 1400., dist)) * (1. - smoothstep(1600., 2400., dist));
+    if (roof) col *= 1. + 0.22 * (1. - smoothstep(1.4 * dpr, 2.6 * dpr, min(e.x, e.y))); // a pale parapet lip inside the line
+    col = mix(col, uInk, inkA); emi *= 1. - inkA;
+#else
     // halftone dots in the shade, close up only: fixed dot size (shrinking dots turn to salt),
     // the strength fades out instead
     // (the raking band gets a lighter screen than the full shadow)
-    float sh = (1. - 0.6 * litK - 0.4 * fullK * litK) * (1. - m.g * 0.7) * (1. - smoothstep(220., 420., dist));
+    float sh = (1. - 0.6 * litK - 0.4 * fullK * litK) * (1. - m.g * 0.7) * (1. - smoothstep(150., 300., dist)); // (by 300 m: further out the 45° dots beat against the window grid, a diagonal net)
     if (sh > 0.01) {
       vec2 p = mat2(0.7071, -0.7071, 0.7071, 0.7071) * gl_FragCoord.xy / (6. * dpr);
       col *= 1. - 0.45 * sh * (1. - smoothstep(0.32, 0.44, length(fract(p) - 0.5) * 1.414));
@@ -341,6 +419,7 @@ export class CityLook {
     this.atlas = atlas();
     const U = {
       uHazeCol: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() }, uHazeLow: { value: new THREE.Color() }, uHazeNear: { value: 400 }, uHazeFar: { value: 1600 },
+      uSunAir: { value: new THREE.Color(0, 0, 0) }, uSunDirH: { value: new THREE.Vector2(1, 0) },
       uAtlas: { value: this.atlas }, uSigns: { value: signTex },
       uKeyDir: { value: new THREE.Vector3(0.4, 0.7, 0.5).normalize() }, uKeyCol: { value: new THREE.Color(1, 1, 1) },
       uAmbUp: { value: new THREE.Color(0.4, 0.4, 0.5) }, uAmbDn: { value: new THREE.Color(0.2, 0.2, 0.3) },
@@ -364,8 +443,14 @@ export class CityLook {
    * haze: its colour leans from the (district-tinted) fog toward a cool desaturated grey, ends on
    * the dome's horizon colour, and reaches further the higher the camera (a city to the horizon).
    */
-  light(sun, hemi, fog, night, time, horizon, camY) {
+  light(sun, hemi, fog, night, time, horizon, camY, dome = null) {
     const U = this.U;
+    if (dome) {
+      // the sky's warm glow toward the sun (its toSun term, Sky3D DOME_FS) for the haze to share
+      const { band, mid, sunK, discDir } = dome, k = band.value.r > mid.value.r ? 0.35 * sunK.value : 0;
+      U.uSunAir.value.copy(band.value).sub(mid.value).multiplyScalar(k);
+      U.uSunDirH.value.set(discDir.value.x, discDir.value.z).normalize();
+    }
     if (sun) {
       U.uKeyDir.value.copy(sun.position).sub(sun.target.position).normalize();
       U.uKeyCol.value.copy(sun.color).multiplyScalar((0.12 + 0.36 * sun.intensity) * (1 - 0.15 * night) * KEY.key);
@@ -415,22 +500,23 @@ export class Builder {
   }
 
   /** tint/lit: THREE.Color or hex; style: atlas cell; kind: KIND.* */
-  v(p, aux, u, w, tint, kind, lit, style) {
+  v(p, aux, u, w, tint, kind, lit, style, q = 0) {
     // surfaces: the face normal's length carries 1 + the height above the part's own base (contact
     // shade at the foot of every wall, setback and roof box; the shader normalises it back)
     const s = kind === 0 ? 1 + Math.max(0, p[1] - this.base) : 1;
     this.pos.push(p[0], p[1], p[2]); this.aux.push(aux[0] * s, aux[1] * s, aux[2] * s); this.uv.push(u, w);
-    this.col.push(b255(tint.r), b255(tint.g), b255(tint.b), kind);
+    this.col.push(b255(tint.r), b255(tint.g), b255(tint.b), kind + q);
     this.lit.push(b255(lit.r), b255(lit.g), b255(lit.b), style);
     return this.n++;
   }
 
   /** a b c d counter-clockwise seen from the front; uvs: [[u,v] x4]. */
   quad(a, b, c, d, nrm, uvs, tint, lit, style, kind = 0) {
-    const i = this.v(a, nrm, uvs[0][0], uvs[0][1], tint, kind, lit, style);
-    this.v(b, nrm, uvs[1][0], uvs[1][1], tint, kind, lit, style);
-    this.v(c, nrm, uvs[2][0], uvs[2][1], tint, kind, lit, style);
-    this.v(d, nrm, uvs[3][0], uvs[3][1], tint, kind, lit, style);
+    // (the kind byte's spare bits carry the quad corner: the far shader inks every quad's edges)
+    const i = this.v(a, nrm, uvs[0][0], uvs[0][1], tint, kind, lit, style, 32);
+    this.v(b, nrm, uvs[1][0], uvs[1][1], tint, kind, lit, style, 40);
+    this.v(c, nrm, uvs[2][0], uvs[2][1], tint, kind, lit, style, 48);
+    this.v(d, nrm, uvs[3][0], uvs[3][1], tint, kind, lit, style, 56);
     this.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
   }
 
@@ -541,7 +627,9 @@ export function prism(B, cx, cz, r, rTop, bot, top, n, L, { cap = true, ink = 1,
     const u0 = L.uoff + fu((i / n) * circ), u1 = L.uoff + fu(((i + 1) / n) * circ);
     const a0 = [cx + ca * r, bot, cz + sa * r], b0 = [cx + cb * r, bot, cz + sb * r], b1 = [cx + cb * rTop, top, cz + sb * rTop], a1 = [cx + ca * rTop, top, cz + sa * rTop];
     // wound outward: (b0, a0, a1, b1) faces away from the axis
-    B.quad(b0, a0, a1, b1, [nrm.x, nrm.y, nrm.z], [[u1, v0], [u0, v0], [u0, v1], [u1, v1]], L.tint, L.lit, L.style);
+    // a face leaning back more than ~33° (pyramids, spire and dome tops, tank hats) is a roof: the
+    // roof material, never the window grid (a windowed pyramid next to blank faces read as broken)
+    B.quad(b0, a0, a1, b1, [nrm.x, nrm.y, nrm.z], [[u1, v0], [u0, v0], [u0, v1], [u1, v1]], L.tint, L.lit, nrm.y > 0.55 ? L.roofStyle : L.style);
     if (ink && n <= 10) B.ink(a0, a1, ink);
     if (ink && rTop > 0) B.ink(a1, b1, ink);
   }
@@ -646,14 +734,26 @@ export function neonRing(B, x0, z0, x1, z1, y, colour, t = 0.7) {
   B.quad([X1, y0, Z0], [X0, y0, Z0], [X0, y1, Z0], [X1, y1, Z0], [0, 0, -1], UVQ, _l, _l, 0, KIND.neon);
   B.quad([X0, y0, Z0], [X0, y0, Z1], [X0, y1, Z1], [X0, y1, Z0], [-1, 0, 0], UVQ, _l, _l, 0, KIND.neon);
 }
+/** Neon round an octagon of circumradius r (rot π/8, faces on the axes, like prism's) at height y. */
+export function neonOct(B, cx, cz, r, y, colour, t = 0.7) {
+  _l.set(colour);
+  t = Math.max(t, B.lite ? 1.6 : 0.6);
+  const R = r + 0.15 / Math.cos(Math.PI / 8), y0 = y - t / 2, y1 = y + t / 2;
+  for (let i = 0; i < 8; i++) {
+    const a = Math.PI / 8 + (i * Math.PI) / 4, b = a + Math.PI / 4, m = a + Math.PI / 8;
+    const p = [cx + Math.cos(a) * R, cz + Math.sin(a) * R], q = [cx + Math.cos(b) * R, cz + Math.sin(b) * R];
+    B.quad([q[0], y0, q[1]], [p[0], y0, p[1]], [p[0], y1, p[1]], [q[0], y1, q[1]], [Math.cos(m), 0, Math.sin(m)], UVQ, _l, _l, 0, KIND.neon);
+  }
+}
 /** A vertical neon tube up a corner (x, z) from y0 to y1. */
 export function neonPost(B, x, z, y0, y1, colour, t = 0.6) {
   _l.set(colour);
   const h = t / 2;
-  B.quad([x - h, y0, z + h], [x + h, y0, z + h], [x + h, y1, z + h], [x - h, y1, z + h], [0, 0, 1], UVP, _l, _l, 0, KIND.neon);
-  B.quad([x + h, y0, z + h], [x + h, y0, z - h], [x + h, y1, z - h], [x + h, y1, z + h], [1, 0, 0], UVP, _l, _l, 0, KIND.neon);
-  B.quad([x + h, y0, z - h], [x - h, y0, z - h], [x - h, y1, z - h], [x + h, y1, z - h], [0, 0, -1], UVP, _l, _l, 0, KIND.neon);
-  B.quad([x - h, y0, z - h], [x - h, y0, z + h], [x - h, y1, z + h], [x - h, y1, z - h], [-1, 0, 0], UVP, _l, _l, 0, KIND.neon);
+  // (style 1: the shader widens a post sideways, a ring upward)
+  B.quad([x - h, y0, z + h], [x + h, y0, z + h], [x + h, y1, z + h], [x - h, y1, z + h], [0, 0, 1], UVP, _l, _l, 1, KIND.neon);
+  B.quad([x + h, y0, z + h], [x + h, y0, z - h], [x + h, y1, z - h], [x + h, y1, z + h], [1, 0, 0], UVP, _l, _l, 1, KIND.neon);
+  B.quad([x + h, y0, z - h], [x - h, y0, z - h], [x - h, y1, z - h], [x + h, y1, z - h], [0, 0, -1], UVP, _l, _l, 1, KIND.neon);
+  B.quad([x - h, y0, z - h], [x - h, y0, z + h], [x - h, y1, z + h], [x - h, y1, z - h], [-1, 0, 0], UVP, _l, _l, 1, KIND.neon);
 }
 /** Neon uvs: v runs across the tube (the shader's tube profile); UVP for upright posts. */
 const UVQ = [[0, 0], [1, 0], [1, 1], [0, 1]], UVP = [[0, 0], [0, 1], [1, 1], [1, 0]];

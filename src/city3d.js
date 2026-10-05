@@ -12,7 +12,7 @@ import { SignAtlas } from './signs3d.js';
 import { chooseLandmarks, buildLandmarks, districtGlow } from './landmarks3d.js';
 import { Horizon, haze } from './skyline3d.js';
 import { Outer } from './outer3d.js';
-import { cityGround, tone, dressNear, lotDressing } from './ground3d.js';
+import { cityGround, tone, dressNear, lotDressing, lotDetail } from './ground3d.js';
 import { buildRiver } from './river3d.js';
 import { SkyCard, FarRing } from './skycard3d.js';
 import { Street } from './street3d.js';
@@ -43,7 +43,7 @@ export class City3D {
     this.art = new CityArt(city, tileRes, 400); // big cache: tile canvases back live textures, never recycle them
     this.art.riverBank = '#4f7046'; // green banks: the 3D river is a smooth ribbon laid over them
     // the near tiles wear the far plan's muted lot tones and lot dressing, so there is no seam where they meet
-    this.art.tone = tone; this.art.dress = dressNear;
+    this.art.tone = tone; this.art.dress = dressNear; this.art.lotDetail = lotDetail;
     this.chunks = new Map();
     this.cols = Math.ceil(city.cols / TILE); this.rows = Math.ceil(city.rows / TILE);
     // the skyline peaks over downtown + financial: buildings there get taller toward the core
@@ -182,7 +182,7 @@ export class City3D {
     const n = (this.n = performance.now());
     for (const ch of this.chunks.values()) for (const k of ['near', 'lite', 'nearInk', 'liteInk', 'gl', 'gd']) if (ch[k]) ch[k].visible = false;
     // haze first: from altitude it reaches further than the band's fog, and so do the chunks
-    this.look.light(this.sun, this.hemi, this.scene.fog, night, (performance.now() - this.t0) / 1000, this.sky?.horizon || this.dome?.material.uniforms.bottom.value, cam.position.y);
+    this.look.light(this.sun, this.hemi, this.scene.fog, night, (performance.now() - this.t0) / 1000, this.sky?.horizon || this.dome?.material.uniforms.bottom.value, cam.position.y, this.dome?.material.uniforms);
     const reach = Math.max(far, this.look.U.uHazeFar.value), cut = reach * 0.92; // the haze is all but solid past this
     for (let cy = ccy - R; cy <= ccy + R; cy++) for (let cx = ccx - R; cx <= ccx + R; cx++) {
       if (cx < 0 || cy < 0 || cx >= this.cols || cy >= this.rows) continue;
@@ -195,7 +195,7 @@ export class City3D {
         if (budget-- <= 0) { const other = ch[which === 'near' ? 'lite' : 'near']; if (other) other.visible = true; continue; }
         this.build(ch, which);
       }
-      const full = camY < LOD.detailAlt && Math.hypot(Math.max(0, d), camY) < (which === 'near' ? LOD.detail : LOD.liteDetail);
+      const full = (camY < LOD.detailAlt || which === 'lite') && Math.hypot(Math.max(0, d), camY) < (which === 'near' ? LOD.detail : LOD.liteDetail);
       if (ch[which]) { ch[which].visible = true; range(ch[which], full); }
       if (which === 'near') ch.nearSeen = n;
       if (ch[which + 'Ink']) { ch[which + 'Ink'].visible = which === 'near' || d < LOD.farInk; range(ch[which + 'Ink'], full); }
