@@ -94,9 +94,12 @@ export function building(B, o, blk, S) {
   // muted palettes (candy blocks read as toys from altitude): walls 40% of the way to their
   // grey outside the vice districts (they keep their neon colour); roofs the district's roof
   // colour pulled toward its own wall colour, then half way to a warm grey (no candy caps)
-  if (!D.neon) L.tint.lerp(_g.setRGB(1, 1, 1).multiplyScalar(lum(L.tint)), 0.4);
+  // (the vice districts are the `neon: true` ones; the casino and entertainment strips keep their
+  // neon tubes and signs, not candy walls)
+  const vice = D.neon === true;
+  if (!vice) L.tint.lerp(_g.setRGB(1, 1, 1).multiplyScalar(lum(L.tint)), 0.4);
   L.roofTint.lerp(L.tint, 0.45).multiplyScalar(0.85);
-  L.roofTint.lerp(_g.setRGB(1, 0.94, 0.86).multiplyScalar(lum(L.roofTint)), D.neon ? 0.3 : 0.5);
+  L.roofTint.lerp(_g.setRGB(1, 0.94, 0.86).multiplyScalar(lum(L.roofTint)), vice ? 0.3 : 0.55);
   const face = streetFace(o, blk);
   tiers = [[x0, z0, x1, z1, 0, H]];
   if (o.container || o.truck) { L.style = STYLE.industrial; box(B, x0, z0, x1, z1, 0, H, L, { ink: 0.6 }); return; }

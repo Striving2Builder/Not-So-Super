@@ -38,7 +38,7 @@ float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); 
 void main() {
   vec3 V = normalize(cameraPosition - vW);
   gRay = -V;
-  float fres = pow(1. - max(V.y, 0.), 4.);
+  float fres = 1. - max(V.y, 0.); fres *= fres; fres *= fres; // (no pow)
   // water, not fog: a deep navy body looking down, the sky's own colour at grazing angles
   // (Fresnel), cel wave-crest strokes close by, comic ink ripple dashes drifting further out,
   // city lights by night, one hard sun/moon glint streak stretched toward the lens; hazed less
@@ -55,16 +55,21 @@ void main() {
   // pixel's footprint, so far off they fade to a faint average instead of a shimmer
   vec2 q = vec2(vW.x / 36. + uTime * 0.02, vW.z / 9.), cq = floor(q), fq = fract(q), fw = fwidth(q);
   float on = step(0.72, h21(cq + 17.)), o = h21(cq) * 0.5;
-  float dash = clamp((min(fq.x - o, o + 0.45 - fq.x)) / max(fw.x, 1e-4) + 0.5, 0., 1.) * clamp((0.12 - abs(fq.y - 0.5)) / max(fw.y, 1e-4) + 0.5, 0., 1.);
-  c = mix(c, deep * 0.45, dash * on * 0.55 * (1. - smoothstep(0.2, 0.45, max(fw.x, fw.y * 0.25))));
+  float dk = (1. - smoothstep(0.2, 0.45, max(fw.x, fw.y * 0.25))) * on;
+  if (dk > 0.) { // (only where a dash can show)
+    float dash = clamp((min(fq.x - o, o + 0.45 - fq.x)) / max(fw.x, 1e-4) + 0.5, 0., 1.) * clamp((0.12 - abs(fq.y - 0.5)) / max(fw.y, 1e-4) + 0.5, 0., 1.);
+    c = mix(c, deep * 0.45, dash * dk * 0.55);
+  }
   c += vec3(1., 0.75, 0.4) * step(0.94, h21(floor(vW.xz / 6.) + floor(uTime * 1.5))) * uNight * 0.5 * near;
   // the glint: a hard comic streak toward the sun/moon, narrow across, long toward the lens,
   // broken into sparkles at its edges
   vec3 R = reflect(-V, vec3(0., 1., 0.));
-  float az = dot(normalize(R.xz + 1e-5), normalize(uKeyDir.xz + 1e-5)), el = abs(R.y - uKeyDir.y);
-  float g = smoothstep(0.9975, 0.9995, az) * (1. - smoothstep(0.04, 0.22, el));
-  float sp = step(0.86, h21(floor(vW.xz / 3.) + floor(uTime * 3.))) * smoothstep(0.97, 0.999, az) * (1. - smoothstep(0.05, 0.3, el)) * (1. - smoothstep(400., 1600., dist));
-  c += uKeyCol * (g * 1.3 + sp * 0.9) * mix(1., 0.6, uNight);
+  if (dot(R, uKeyDir) > 0.9) { // (only near the reflected sun/moon)
+    float az = dot(normalize(R.xz + 1e-5), normalize(uKeyDir.xz + 1e-5)), el = abs(R.y - uKeyDir.y);
+    float g = smoothstep(0.9975, 0.9995, az) * (1. - smoothstep(0.04, 0.22, el));
+    float sp = step(0.86, h21(floor(vW.xz / 3.) + floor(uTime * 3.))) * smoothstep(0.97, 0.999, az) * (1. - smoothstep(0.05, 0.3, el)) * (1. - smoothstep(400., 1600., dist));
+    c += uKeyCol * (g * 1.3 + sp * 0.9) * mix(1., 0.6, uNight);
+  }
 #ifdef TONE_MAPPING
   c = toneMapping(c);
 #endif
