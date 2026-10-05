@@ -723,6 +723,17 @@ export function neonRing(B, x0, z0, x1, z1, y, colour, t = 0.7) {
   B.quad([X1, y0, Z0], [X0, y0, Z0], [X0, y1, Z0], [X1, y1, Z0], [0, 0, -1], UVQ, _l, _l, 0, KIND.neon);
   B.quad([X0, y0, Z0], [X0, y0, Z1], [X0, y1, Z1], [X0, y1, Z0], [-1, 0, 0], UVQ, _l, _l, 0, KIND.neon);
 }
+/** Neon round an octagon of circumradius r (rot π/8, faces on the axes, like prism's) at height y. */
+export function neonOct(B, cx, cz, r, y, colour, t = 0.7) {
+  _l.set(colour);
+  t = Math.max(t, B.lite ? 1.6 : 0.6);
+  const R = r + 0.15 / Math.cos(Math.PI / 8), y0 = y - t / 2, y1 = y + t / 2;
+  for (let i = 0; i < 8; i++) {
+    const a = Math.PI / 8 + (i * Math.PI) / 4, b = a + Math.PI / 4, m = a + Math.PI / 8;
+    const p = [cx + Math.cos(a) * R, cz + Math.sin(a) * R], q = [cx + Math.cos(b) * R, cz + Math.sin(b) * R];
+    B.quad([q[0], y0, q[1]], [p[0], y0, p[1]], [p[0], y1, p[1]], [q[0], y1, q[1]], [Math.cos(m), 0, Math.sin(m)], UVQ, _l, _l, 0, KIND.neon);
+  }
+}
 /** A vertical neon tube up a corner (x, z) from y0 to y1. */
 export function neonPost(B, x, z, y0, y1, colour, t = 0.6) {
   _l.set(colour);

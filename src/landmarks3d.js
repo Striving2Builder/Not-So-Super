@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { hash2 } from './rng.js';
 import { BLOCK } from './city.js';
-import { M, STYLE, Builder, box, prism, mast, lamp, neonRing, neonPost, look, KIND } from './buildings3d.js';
+import { M, STYLE, Builder, box, prism, mast, lamp, neonRing, neonOct, neonPost, look, KIND } from './buildings3d.js';
 import { signQuad, bladeSign } from './signs3d.js';
 
 /** district → [kind, body height m, colour, window light]. Body tops stay under the 450 m collision ceiling. */
@@ -58,13 +58,18 @@ export function buildLandmarks(list, S) {
     const o = lm.o, x0 = o.x * M, z0 = o.y * M, x1 = (o.x + o.w) * M, z1 = (o.y + o.d) * M;
     const p = { x0, z0, x1, z1, H, cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, S: Math.min(x1 - x0, z1 - z0), col, lit, seed: hash2(o.x | 0, o.y | 0, 5) };
     BUILD[lm.kind](B, S, p);
-    // the navigation mark: a thick crown band in the tower's signature colour, readable from altitude
-    const s = p.S * 0.36;
-    neonRing(B, p.cx - s, p.cz - s, p.cx + s, p.cz + s, H * 0.94, lit, 2.2);
+    // the navigation mark: a thick crown band in the tower's signature colour, readable from altitude,
+    // on the wall the tower has at that height (`p.nav`: a rect, or `p.navOct`: an octagon's radius;
+    // one fixed square floated off the stepped tops and hung in the gap between the twin towers)
+    if (p.navOct) neonOct(B, p.cx, p.cz, p.navOct, H * 0.94, lit, 2.2);
+    else if (p.nav) neonRing(B, ...p.nav, H * 0.94, lit, 2.2);
     lamp(B, p.cx, H * 1.02 + 6, p.cz, 3.5, lit, KIND.neon);
   }
   return B;
 }
+
+/** A square [x0, z0, x1, z1] of half-size h round the landmark's centre. */
+const sq = (p, h) => [p.cx - h, p.cz - h, p.cx + h, p.cz + h];
 
 /** Stack square tiers centred on (cx, cz): [half-size, top] each, from `bot`. */
 function tiers(B, cx, cz, bot, list, L, neon = null) {
@@ -80,18 +85,20 @@ const BUILD = {
   needle(B, S, p) {
     const L = look(p.col, p.lit, STYLE.glass, '#4a5260', STYLE.tar), s = p.S / 2, H = p.H;
     const top = tiers(B, p.cx, p.cz, 0, [[s, H * 0.5], [s * 0.8, H * 0.75], [s * 0.62, H * 0.9], [s * 0.46, H]], L, '#bfe8ff');
+    p.nav = sq(p, s * 0.46);
     prism(B, p.cx, p.cz, s * 0.46 * 1.41, 0.6, top, top + H * 0.24, 4, { ...L, style: STYLE.deco }, { rot: Math.PI / 4, ink: 1.3 });
     mast(B, p.cx, p.cz, top + H * 0.24, top + H * 0.33, 0.5, '#ff3030', '#d8dce4');
   },
   deco(B, S, p) {
     const L = look(p.col, p.lit, STYLE.deco, '#5a5550', STYLE.gravel), s = p.S / 2, H = p.H;
     let b = tiers(B, p.cx, p.cz, 0, [[s, H * 0.6], [s * 0.78, H * 0.8], [s * 0.64, H * 0.92], [s * 0.54, H]], L);
+    p.nav = sq(p, s * 0.54);
     // the sunburst crown: stacked octagons, each trimmed in light
     const C = { ...L, tint: L.tint.clone().set('#d8dce4'), style: STYLE.glass };
     for (let k = 0; k < 5; k++) {
       const r0 = s * (0.5 - k * 0.085), r1 = s * (0.5 - (k + 1) * 0.085), t = b + H * 0.04;
       prism(B, p.cx, p.cz, r0, r1 + s * 0.04, b, t, 8, C, { rot: Math.PI / 8, ink: 1.2 });
-      neonRing(B, p.cx - r1 * 0.95, p.cz - r1 * 0.95, p.cx + r1 * 0.95, p.cz + r1 * 0.95, t - 0.3, '#fff0c0', 0.35);
+      neonOct(B, p.cx, p.cz, r1 + s * 0.04, t - 0.3, '#fff0c0', 0.35); // (a square ring's corners stood off the octagon)
       b = t;
     }
     prism(B, p.cx, p.cz, s * 0.08, 0.1, b, b + H * 0.14, 4, C, { ink: 1 });
@@ -106,7 +113,8 @@ const BUILD = {
     for (const f of ['n', 's', 'e', 'w']) signQuad(B, S, 'CASINO', '#ffd84d', p.x0, p.z0, p.x1, p.z1, f, 11, 12);
     const L = look(p.col, p.lit, STYLE.glass, '#6a4a2a', STYLE.tar), r = p.S * 0.36;
     prism(B, p.cx, p.cz, r, r, pod, H, 8, L, { rot: Math.PI / 8, ink: 1.3 });
-    for (const y of [H - 1, H - 9, H * 0.6]) neonRing(B, p.cx - r * 0.93, p.cz - r * 0.93, p.cx + r * 0.93, p.cz + r * 0.93, y, y > H - 2 ? '#ffd84d' : '#ff4d4d', 0.7);
+    for (const y of [H - 1, H - 9, H * 0.6]) neonOct(B, p.cx, p.cz, r, y, y > H - 2 ? '#ffd84d' : '#ff4d4d', 0.7);
+    p.navOct = r;
     const q = r * 0.7;
     prism(B, p.cx, p.cz, r * 0.75, r * 0.3, H, H + 18, 8, { ...L, tint: L.tint.clone().set('#ffd84d') }, { rot: Math.PI / 8 });
     for (const f of ['n', 's', 'e', 'w']) signQuad(B, S, 'JACKPOT', '#ffd84d', p.cx - q, p.cz - q, p.cx + q, p.cz + q, f, H - 8, 6, { out: 0.6 });
@@ -119,6 +127,7 @@ const BUILD = {
     neonRing(B, p.x0, p.z0, p.x1, p.z1, 13.4, '#ffcc33', 0.7);
     neonRing(B, p.x0, p.z0, p.x1, p.z1, 9, '#ff55aa', 0.5);
     box(B, p.x0 + i, p.z0 + i, p.x1 - i, p.z1 - i, 14, H, L, { ink: 1.3 });
+    p.nav = [p.x0 + i, p.z0 + i, p.x1 - i, p.z1 - i];
     for (const f of ['n', 's']) signQuad(B, S, 'ROXY', '#33ddff', p.x0, p.z0, p.x1, p.z1, f, 15, 10);
     for (const f of ['n', 's', 'e', 'w']) bladeSign(B, S, 'PALACE', '#ffcc33', p.x0 + i, p.z0 + i, p.x1 - i, p.z1 - i, f, H * 0.3, H * 0.6);
     neonRing(B, p.x0 + i, p.z0 + i, p.x1 - i, p.z1 - i, H - 0.6, '#ff55aa', 0.6);
@@ -137,6 +146,7 @@ const BUILD = {
       neonRing(B, p.cx - hs, p.cz - hs, p.cx + hs, p.cz + hs, top - 0.5, k % 2 ? '#27e0ff' : '#ff2fd0', 0.6);
       bot = top;
     });
+    p.nav = sq(p, list[n - 1][0]);
     const hs = list[n - 1][0] * 0.8;
     prism(B, p.cx, p.cz, hs * 1.41, 0, bot, bot + hs * 1.6, 4, { ...L, tint: L.tint.clone().set('#ff2fd0') }, { rot: Math.PI / 4, ink: 1.2 });
     for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) neonPost(B, p.cx + x * hs, p.cz + z * hs, bot, bot + 2, '#27e0ff', 0.6);
@@ -154,6 +164,7 @@ const BUILD = {
       box(B, r[0], r[1], r[2], r[3], 0, H2 * 0.82, L, { ink: 1.3 });
       const i = Math.min(r[2] - r[0], r[3] - r[1]) * 0.14;
       box(B, r[0] + i, r[1] + i, r[2] - i, r[3] - i, H2 * 0.82, H2, L, { ink: 1.3 });
+      if (!side) p.nav = [r[0] + i, r[1] + i, r[2] - i, r[3] - i];
       const cx = (r[0] + r[2]) / 2, cz = (r[1] + r[3]) / 2;
       prism(B, cx, cz, (Math.min(r[2] - r[0], r[3] - r[1]) / 2 - i) * 1.3, 0, H2, H2 + 14, 4, { ...L, tint: L.tint.clone().set('#4f7a6a') }, { rot: Math.PI / 4 });
       mast(B, cx, cz, H2 + 14, H2 + 24, 0.35);
@@ -168,6 +179,7 @@ const BUILD = {
   hotel(B, S, p) {
     const H = p.H, L = look(p.col, p.lit, STYLE.brick, '#2a1418', STYLE.tar), s = p.S / 2;
     const top = tiers(B, p.cx, p.cz, 0, [[s, H * 0.7], [s * 0.84, H]], L);
+    p.nav = sq(p, s * 0.84);
     for (const y of [H * 0.25, H * 0.5, H * 0.7 - 0.5, H - 0.6]) neonRing(B, p.cx - s * (y > H * 0.71 ? 0.84 : 1), p.cz - s * (y > H * 0.71 ? 0.84 : 1), p.cx + s * (y > H * 0.71 ? 0.84 : 1), p.cz + s * (y > H * 0.71 ? 0.84 : 1), y, '#ff2244', 0.5);
     for (const f of ['n', 's', 'e', 'w']) bladeSign(B, S, 'HOTEL', '#ff2244', p.cx - s, p.cz - s, p.cx + s, p.cz + s, f, H * 0.3, H * 0.36);
     const q = s * 0.84;
@@ -180,6 +192,7 @@ const BUILD = {
     neonRing(B, p.x0, p.z0, p.x1, p.z1, 15.5, '#39ff6a', 0.6);
     const r = s * 0.8;
     prism(B, p.cx, p.cz, r * 1.41, r * 0.25, 16, H, 4, L, { rot: Math.PI / 4, ink: 1.4 });
+    p.nav = sq(p, (r * 1.41 + (r * 0.25 - r * 1.41) * (H * 0.94 - 16) / (H - 16)) / 1.414);
     for (const [x, z] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
       // green slits up each corner of the spike
       const a = [p.cx + x * r * 1.41, p.cz + z * r * 1.41], b = [p.cx + x * r * 0.35, p.cz + z * r * 0.35];

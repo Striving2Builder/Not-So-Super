@@ -26,6 +26,11 @@ b615a78 src` (= phase-2 1e65910 + the stub). All procedural: nothing needed Blen
   moonlight on roofs. **C12** AO 0.5 / 6.5 m, street floors' window light sinks into the canyon.
 - **C13** `lotDetail()` (ground3d, hooked into CityArt + the far plan; same canvas sizes): plaza
   paving, lawn, construction pit, car park, plain ±tone.
+- After cycle 4 (verified by shot, not by a critic): **landmark neon** (landmarks3d): the navigation
+  crown band sits on each landmark's own top (`p.nav` / `p.navOct`; one fixed square floated off the
+  needle/deco/ziggurat/spike tops and hung between the twin towers), octagonal towers get octagonal
+  tubes (`neonOct` in buildings3d; square rings' corners stood off the casino and deco crowns).
+  This was the cruise_2 "yellow ring overshooting the tower" the critics kept flagging (C2).
 - Tools: `shoot.js --only a,b` (list); **`tools/shots/flybench.js`** (frozen-pose A/B, see Perf).
 
 ## Perf (flybench.js, Balanced, SwiftShader, 21:00, 6 rounds, head vs base, head run twice)
@@ -51,8 +56,9 @@ stray lines (neon on landmarks, cables); no visible base darkening; far lots sti
 - Roofs read empty (vice near roofs, far flat caps): a cheap instanced roof kit further out (C11),
   or roof value noise in the FAR shader if perf allows. Haze from high patrol away from the sun still
   reads as one flat lilac. Ghost far blocks (outer boroughs hazing out) above the fog line.
-- `cruise_2` (19:11) neon on some crowned towers still overshoots: check `foot()` for crowns whose
-  top tier is narrower than the ring's tier.
+- C6 at dusk: the critic reads camera-facing (shaded) faces as cool lilac and lit faces as warm tan
+  "the wrong way round" when looking into the sun; the light is right, the read isn't: try a
+  stronger warm key on lit faces at dusk and a deeper cool shade.
 
 ## Flagged for local
 - Nothing needs Blender. Re-shoot and run the blind critic after merging (critics here saw only
