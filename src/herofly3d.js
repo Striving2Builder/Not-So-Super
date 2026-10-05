@@ -21,6 +21,8 @@ const POSE = {
   flesh: 0.25,      // model metres of body, hair and boot beyond her bones (pads her on-screen box)...
   inkPx: 14,        // ...plus her ink hull and the cape's ink, which keep a screen width (CSS px)
 };
+/** Drop shadow: size m (at 0 m + per m above), opacity from → to over fade m above the roof or street it lands on. */
+const SHADOW = { size: [2.6, 0.07], alpha: [0.8, 0], fade: [6, 130] };
 /**
  * Her silhouette keyline (CSS px, drawn by her sharp pass round body + cape as one shape): ink width
  * in open sky → against a dark or busy background (night, the street canyons, the map below the
@@ -80,10 +82,10 @@ export class FlyHero3D {
   }
 
   /**
-   * h = the overworld hero; ground = height (world units) of whatever is under her; patrol 0..1;
+   * h = the overworld hero; spot = where her drop shadow lands ({ x, y, z } world units, null = none); patrol 0..1;
    * boost = boosting (both fists, the cape whips harder).
    */
-  update(h, dt, t, diving, ground, patrol = 0, boost = false) {
+  update(h, dt, t, diving, spot, patrol = 0, boost = false) {
     this.group.position.set(h.x * M, h.z * M, h.y * M);
     // heading: her forward (+z model) along (cos ang, sin ang) in the x/z plane
     this.group.rotation.set(0, Math.PI / 2 - h.ang, 0);
@@ -95,12 +97,18 @@ export class FlyHero3D {
     this.pivot.position.y = A.bob * POSE.scale * this.size;
     this.size += (1 + (POSE.patrolScale - 1) * patrol - this.size) * Math.min(1, dt * 6);
     this.pivot.scale.setScalar(this.size);
-    const above = Math.max(0, h.z - ground) * M;
-    this.shadow.position.set(h.x * M, ground * M + 0.15, h.y * M);
-    const s = Math.max(1.6, 3.4 - above * 0.012) * this.size;
-    this.shadow.scale.set(s, 1, s * (1.2 + 0.5 * fk));
-    this.shadow.rotation.y = Math.PI / 2 - h.ang;
-    this.shadow.material.opacity = Math.max(0.3, 0.85 - above * 0.003) * (1 - 0.3 * patrol) + 0.3 * patrol;
+    // drop shadow (the altitude cue): tight and dark just over a roof, wider, softer and fainter
+    // the higher she flies, gone by ~SHADOW.gone m (patrol view: always there, her map marker)
+    const S = SHADOW, above = spot ? Math.max(0, h.z - spot.z) * M : 1e9;
+    this.shadow.visible = !!spot;
+    if (spot) {
+      this.shadow.position.set(spot.x * M, spot.z * M + 0.15, spot.y * M);
+      const s = (S.size[0] + above * S.size[1]) * this.size;
+      this.shadow.scale.set(s, 1, s * (1.2 + 0.5 * fk));
+      this.shadow.rotation.y = Math.PI / 2 - h.ang;
+      const k = Math.min(1, Math.max(0, (above - S.fade[0]) / (S.fade[1] - S.fade[0])));
+      this.shadow.material.opacity = (S.alpha[0] + (S.alpha[1] - S.alpha[0]) * k * k * (3 - 2 * k)) * (1 - patrol) + 0.55 * patrol;
+    }
     if (!this.ensure()) return;
     const m = this.model;
     const perched = this.pose.perched;

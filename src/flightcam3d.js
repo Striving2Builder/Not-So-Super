@@ -18,7 +18,7 @@ const CAM = {
   // side: to her right, so the camera sits ~25-35° off her tail (a 3/4 rear-side view: her profile,
   // the cape and the punching arm read; straight behind she's a lump of boots and hair)
   chase: { dist: [4.4, 3.2], height: [0.7, 1.15], side: [1.7, 2.1], fov: [58, 66], at: [0.52, 0.58] }, // at = her spot on screen (x, y from top-left)
-  boost: { dist: 0.45, height: 0.15, fov: 13, kickFov: 8, shake: [0.035, 0.14], lag: 2.6 }, // shake m: sustained / on the punch; lag = spring rate         // sustained while boosting + a kick on the press
+  boost: { dist: 0.7, height: 0.15, fov: 13, kickFov: 8, shake: [0.035, 0.14], lag: 2.6 }, // shake m: sustained / on the punch; lag = spring rate         // sustained while boosting + a kick on the press
   canyon: { height: 1.3, dist: 3.1, at: [0.5, 0.58], fovUp: 4, snap: 0.62, side: 0.75 }, // skim band: lower, along the street (snap ≈ 35°); side: × the chase side
   // high patrol, flying: level with her, centred in the safe zone against the sky,
   // the city's far edge down in the bottom third (the Superman-over-the-city shot)
@@ -65,7 +65,7 @@ export class FlightCam3D {
     const ease = (k, want, rate) => k + (want - k) * Math.min(1, dt * rate);
     this.patrolK = ease(this.patrolK, o.patrol ? 1 : 0, o.patrol ? 2.2 : 4.5); // quick to swoop back down
     if (!o.patrol && this.patrolK < 0.01) this.patrolK = 0;
-    this.boostK = ease(this.boostK, o.boosting ? 1 : 0, o.boosting ? 3 : 1.5);
+    this.boostK = ease(this.boostK, o.boosting ? 1 : 0, o.boosting ? 8 : 1.5); // (in fast: the lens and the ink lines snap open in ~150 ms)
     this.canyonK = ease(this.canyonK, o.canyon || 0, 2);
     this.highK = ease(this.highK || 0, clamp((h.z - CAM.high.from) / (CAM.high.to - CAM.high.from), 0, 1) * (o.diving ? 0 : 1), 3);
     this.kick = Math.max(0, this.kick - dt * 1.6);
