@@ -176,11 +176,33 @@ the director gives prompts and specs per batch. See [nightclub-assets.md](nightc
 - Next: the user's batch 1 → plates/loop/dancers via `ART`, flagship door positions matched to the
   art, then the iPad look test (fps, memory) before more rooms or the case generator.
 
+## The case loop (built 2026-10-05)
+- Cases are data: `src/nightclub/cases/*.js` (clue text per close-up object, items, drinks, the
+  deduction questions, the map leads); `case.js` is the engine (`CaseBook`, `pickCase`); close-up
+  images + object positions in `scenes.js` are shared by every case. Super Squirt is the first; a
+  blackmail case is next (the user's call: get this one right first).
+- CASE button (N): the case board (found clues as notes, x/8). At 8 counted clues: the accusation,
+  three questions (who deals: Moe, the DJ; who supplies: "K", Kraken Shipping; the drop: Thursday,
+  Pier 9). All right → case solved (+25 rep, the newspaper) and its distribution points go on the
+  city map as case leads: Pier 9 (3D raid, +120), Kraken Shipping warehouse (3D raid, +100), Bayside
+  Motel room 9 (street brawl, +80), each unlocked only by a clue that points to it (at least Pier 9).
+  Leads are saved, never expire, and close when won. A wrong accusation: she gets dosed (+40) and
+  can't accuse again for a minute.
+- Blackout (intox hits 100, in any view): the comic-panel cinematic from snapshots of her night
+  (taken every 5 s while she's over 40), then she wakes in a back room with 3 polaroids of herself
+  scattered in rooms she can reach (one may be the user's art, `ART.polaroids`). All 3 found → the
+  night comes back: a free unfound clue, intox −20. Leaving with polaroids behind: −10 rep each and
+  `state.photosLost` (blackmail material for later). The third blackout in one visit → captured (the
+  existing captured sequence).
+- Test: `node tools/shots/clubcase.js` (cinematic, polaroid hunt, capture, board, accusation, leads
+  on the map, a lead mission starting).
+
 ## Decisions (user, 2026-10-04)
 - The drug is called **Super Squirt**. Its look and how it ties to Kryptonian lore are still open.
 - Music: the user has their own tracks (dropped in with the assets).
 - Personal project for adults: no age gate or rating work; the game's mature dialogue is on.
 
 ## Open questions
-- Super Squirt's look (pill, vial, glowing liquid, a drink) and why it works on her.
+- Why Super Squirt works on her (Kryptonian lore); club music (the user is sending tracks); the
+  blackmail case; the captured sequence may get a club-specific version.
 - Can she refuse every drink, or are some cases only solvable dosed?

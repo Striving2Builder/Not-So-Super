@@ -122,6 +122,7 @@ game.endZone = async (zone, res) => {
     return;
   }
   if (res.outcome === 'win') {
+    if (zone.leadId) { st.leads = st.leads.filter((l) => l.id !== zone.leadId); st.leadsDone.push(zone.leadId); } // a case lead, closed
     st.addRep(res.rep, 'Saved the day');
     if (zone.mode === 'brawl') st.stats.saves++;
     if (zone.mode === 'investigate' || zone.mode === 'nightcase' || zone.mode === 'asylum') st.stats.cases++;

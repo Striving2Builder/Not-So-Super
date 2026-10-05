@@ -420,10 +420,27 @@ export class Overworld {
 
   removeZone(z) { this.zones = this.zones.filter((q) => q !== z); }
 
+  /** Case leads (a solved club case's distribution points) stay on the map until they're won. */
+  ensureLeads() {
+    const st = this.g.state;
+    if (!st || !st.leads || !st.leads.length || this.attract) return;
+    for (const L of st.leads) if (!this.zones.some((z) => z.leadId === L.id)) this.spawnLead(L);
+  }
+
+  spawnLead(L) {
+    const z = this.spawn(L.kind, true, L.venue || undefined);
+    if (!z) return;
+    // the first time it's placed, its spot is saved so it's in the same place after a reload
+    if (L.x != null) { z.x = L.x; z.y = L.y; z.district = L.district; } else { L.x = z.x; L.y = z.y; L.district = z.district; this.g.state.save(); }
+    Object.assign(z, { name: L.name, reward: L.reward, ttl: Infinity, color: '#39ff6a', glyph: '$', risk: 'Case lead', blurb: L.blurb, leadId: L.id, lockKey: 'Case leads' });
+    if (L.theme) z.theme = L.theme;
+  }
+
   // ------------------------------------------------------------------ update
   update(dt) {
     this.t += dt;
     const g = this.g, h = this.hero, st = g.state, inp = g.input, city = g.city;
+    if ((this.leadT = (this.leadT || 0) - dt) <= 0) { this.leadT = 1; this.ensureLeads(); }
     city.updateTraffic(dt);
     this.updateParticles(dt);
 
@@ -658,7 +675,7 @@ export class Overworld {
     const key = document.body.classList.contains('touch') ? 'DIVE' : 'SPACE';
     const html = lock
       ? `🔒 <b>${z.name}</b> — locked by your deal for ${fmtTime(lock)}`
-      : `<b>${key}</b> to dive: <b>${z.name}</b> · ${DISTRICTS[z.district].name}<span class="risk" style="background:${rc}33;color:${rc}">${z.risk}</span><br><small>${z.blurb || ''} Reward +${z.reward} · ${fmtTime(z.ttl - z.t)} left</small>`;
+      : `<b>${key}</b> to dive: <b>${z.name}</b> · ${DISTRICTS[z.district].name}<span class="risk" style="background:${rc}33;color:${rc}">${z.risk}</span><br><small>${z.blurb || ''} Reward +${z.reward} · ${z.leadId ? 'Case lead' : `${fmtTime(z.ttl - z.t)} left`}</small>`;
     if (el._html !== html) { el.innerHTML = html; el._html = html; }
     el.classList.add('on');
   }
