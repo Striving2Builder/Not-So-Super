@@ -73,13 +73,62 @@ Drop into `assets/nightclub/incoming/batch1/`.
 
 **7. `club_*.mp3`: music**: the user's own tracks; drop 1–3 in the batch folder.
 
-## Later batches (prompts come per batch)
-- **Batch 2, the flagship rooms:** walk plates for the entrance + coat check, bar, lounge/seating,
-  dark dance room, VIP balcony (plus a looking-down view of the main floor), one VIP room, restrooms,
-  back office; foreground occluders for each; 4–6 investigation close-ups; informant silhouettes with
-  a coloured rim light.
-- **Batch 3, the blackout:** the blackout cinematic (POV: lights smear, panels crack apart, fade to
-  black), 3 wake-up rooms (VIP back room, cellar, the inside of a van), 6–8 memory-fragment panels
-  (comic panels of the night, out of order).
-- **Batch 4+, the room kit:** 3 variants per room kind under the plate rules, plus signage and props
-  as separate green-screen images, so the engine can mix them.
+## Batch 1 result (2026-10-04)
+Used: walk _06/_11/_15 (main floor), _02 (bar), _10/_13 (corridor), _14 (dark room), djview _03/_05
+(lounge), djview _11 (DJ still), video v8 (DJ loop), bar_closeup (the inked one). The crowd dancers are
+baked from our own models (`tools/nightclub/dancers.js`), so no dancer clips are needed.
+
+## Batch 2: the rest of the flagship (Club Nova)
+Drop into `assets/nightclub/incoming/batch2/`. Every image **16:9, 1280×720 or larger**, **no people**,
+no text/logos. **Attach `mainfloor_walk_11.jpg` as a style reference** if the tool allows (it is the
+look: inked linework, crosshatching, cyan/magenta/amber light, haze).
+
+**Style block v2** (paste first): *Comic book noir illustration, bold black ink linework and
+crosshatching like a graphic novel, flat cel colours, atmospheric haze, dramatic coloured light from
+behind. Nightclub interior. No people, no text, no logos.*
+
+**Walk rooms**: make **3 variations of each**, same room and palette, camera at eye level looking
+across the room at its back wall, back wall's foot about 2/3 down, open floor in the front third,
+**1–3 arched or framed doorways in the back wall**. Name `<room>_01.jpg` … `_03.jpg`.
+- `entrance`: *[style] A nightclub entrance lobby: a coat-check counter with hanging coats, velvet
+  rope stanchions, a ticket window glowing pink, a neon arrow pointing deeper inside, street door
+  light spilling in from the side. Magenta and warm amber light.*
+- `balcony`: *[style] A VIP balcony running along the back of a nightclub: a brass railing across
+  the front third, beyond it the dance floor below glowing cyan with light beams rising through the
+  haze, plush booths along the back wall, gold accents.*
+- `vip`: *[style] A private VIP room in a nightclub: a curved velvet sofa, a low table with a
+  champagne bucket, a gold-framed mirror, red velvet curtains, a two-way window glowing on the back
+  wall. Deep red and gold light, smoky.*
+- `restroom`: *[style] A nightclub restroom: a row of sinks under backlit mirrors, graffiti on the
+  tiles, three stall doors along the back wall (one ajar), flickering teal light, wet floor
+  reflections.*
+- `office`: *[style] A nightclub back office: a cluttered desk with a green-shaded lamp, security
+  monitors on the wall, filing cabinets, a wall safe, a two-way mirror looking onto the club, cold
+  fluorescent and green light.*
+- `storage`: *[style] A nightclub cellar storeroom: stacked crates and kegs, metal shelves of
+  bottles, a caged section with a padlock, a single bare bulb, pipes along the ceiling, cold blue and
+  sickly green light.*
+- `alley`: *[style] The back alley exit of a nightclub at night: a steel stage door under a red bulb,
+  dumpsters, wet cobblestones, fire escape, steam from a grate, neon spill from the street, a van
+  parked in the shadows.*
+
+**Close-ups** (investigation scenes): **2 variations each**, objects large and clearly separated
+(each becomes a tap spot), shot from the customer's eye level. Name `closeup_<name>_01.jpg`.
+- `closeup_dj`: *[style] Close-up of DJ decks on a booth: two turntables, a mixer with glowing
+  faders, a phone propped against the mixer showing a map pin, a set list taped down with one track
+  circled, a small glowing green vial tucked behind the mixer, headphones.*
+- `closeup_vip`: *[style] Close-up of a VIP table: an ice bucket with champagne, three glasses (one
+  with lipstick), a silver tray with a dusting of glittering green powder, a business card for a
+  shipping company, a wristwatch left behind, a matchbook from a motel.*
+- `closeup_restroom`: *[style] Close-up of a restroom sink counter: a cracked mirror with a phone
+  number written in lipstick, a soap dispenser, a crumpled receipt, a small zip bag of glowing green
+  pills stuck behind the paper towel holder, a dropped earring.*
+- `closeup_office`: *[style] Close-up of a desk in a nightclub office: an open ledger with columns of
+  numbers, a stack of cash with a rubber band, a burner phone, a framed photo, a security monitor
+  showing a hallway, a key on a red tag.*
+- `closeup_coatcheck`: *[style] Close-up of a coat-check counter: numbered claim tickets, a leather
+  jacket with something bulging in the pocket, a guest list clipboard with names crossed out, a bowl of
+  mints, a VIP wristband.*
+
+**Later**: batch 3 = the blackout (wake-up rooms, memory-fragment comic panels); batch 4 = a second
+club's set (a palette swap of the same rooms is fine).
