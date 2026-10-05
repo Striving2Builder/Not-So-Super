@@ -399,6 +399,8 @@ export class Overworld {
       });
     } else if (night) {
       Object.assign(z, nightCaseFields());
+      // the detective clubs play their own cases (Super Squirt for now; blackmail and others to come)
+      if (this.g.newClubs) Object.assign(z, { theme: 'drugs', clubCase: 'squirt', name: `Super Squirt at ${/^The /.test(z.venue) ? z.venue : 'the ' + z.venue}`, risk: 'Night · Super Squirt', blurb: 'Someone is pushing a new drug, Super Squirt, through the club. Find out who, and where it comes from.' });
     } else if (kind === 'case') {
       Object.assign(z, {
         mode: 'investigate', def, name: def.name, reward: def.reward, lockKey: 'Investigations', ttl: rand(160, 230),

@@ -93,7 +93,7 @@ game.newClubs = NEW_CLUBS; // the overworld skips loading the premade club build
 /** Which game mode plays a zone. */
 function modeFor(z) {
   // the detective nightclub redesign (docs/design/nightclub.md)
-  if (NEW_CLUBS && z.mode === 'special' && (VENUES[z.venue]?.club || VENUES[z.venue]?.kind === 'club')) return 'nightclub';
+  if (NEW_CLUBS && (z.mode === 'special' || z.mode === 'nightcase') && (VENUES[z.venue]?.club || VENUES[z.venue]?.kind === 'club')) return 'nightclub';
   if (z.mode === 'special' && VENUES[z.venue]?.club) return 'club';  // raid inside a premade club
   return { brawl: 'brawler', investigate: 'investigate', special: 'special', nightcase: 'nightcase', asylum: 'asylum' }[z.mode];
 }
