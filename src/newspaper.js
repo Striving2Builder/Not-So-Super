@@ -55,6 +55,13 @@ function drawStamp(g, W, text) {
 
 function drawPhoto(c, kind, tabloid) {
   const g = c.getContext('2d'), W = c.width, H = c.height;
+  if (kind && typeof kind !== 'string') {
+    // a real picture of her (a leaked polaroid): cover-fit, a little crooked, stamped
+    const iw = kind.naturalWidth || kind.width, ih = kind.naturalHeight || kind.height, s = Math.max(W / iw, H / ih);
+    g.fillStyle = '#222'; g.fillRect(0, 0, W, H);
+    g.save(); g.translate(W / 2, H / 2); g.rotate(-0.04); g.drawImage(kind, -iw * s / 2, -ih * s / 2, iw * s, ih * s); g.restore();
+    return drawStamp(g, W, 'LEAKED!');
+  }
   const sky = g.createLinearGradient(0, 0, 0, H);
   sky.addColorStop(0, kind === 'fire' ? '#5a4a40' : '#6a8ab0'); sky.addColorStop(1, '#d8c8a8');
   g.fillStyle = sky; g.fillRect(0, 0, W, H);

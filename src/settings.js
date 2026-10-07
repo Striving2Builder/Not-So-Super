@@ -27,6 +27,8 @@ const KEY = 'supergirl-settings';
  * scanFilter: night-case detective vision darkens the 3D view with a CSS filter.
  * nightlife (code-built clubs' show): 'full' haze, 4 moving heads, dense specks · 'lite' 2 heads, no
  * haze · 'min' no lasers, sparse specks.
+ * club3: the 3D infiltration clubs (src/club3d/): crowd = dancers in the main room, heads = moving
+ * head beams, haze = additive haze sprites, dpr = pixel-ratio cap (the hall is fill-rate bound).
  * (One line per area's keys, so each area's additions merge cleanly.)
  */
 export const PROFILES = {
@@ -40,6 +42,7 @@ export const PROFILES = {
     fly3dSharpTaps: 2, // (4 cost ~5% on High for a barely visible gain: see handoff/stability.md)
     scanFilter: true,
     brawlSprite: 256, brawlBakeMs: 900,
+    club3: { crowd: 320, heads: 6, haze: 26, dpr: 1.5 },
   },
   // phones/tablets that keep up: full frame rate, but lite club textures (memory is what runs out)
   balanced: {
@@ -51,6 +54,7 @@ export const PROFILES = {
     fly3dSharpTaps: 2,
     scanFilter: true,
     brawlSprite: 256, brawlBakeMs: 900,
+    club3: { crowd: 230, heads: 4, haze: 0, dpr: 1.25 },
   },
   // older devices / low-power mode: 30 fps, 1× resolution, cheap club materials
   saver: {
@@ -62,6 +66,7 @@ export const PROFILES = {
     fly3dSharpTaps: 2,
     scanFilter: false,
     brawlSprite: 180, brawlBakeMs: 250,
+    club3: { crowd: 150, heads: 2, haze: 0, dpr: 1 },
   },
 };
 

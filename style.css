@@ -619,3 +619,31 @@ body.divefx-hold #banner.show { animation-play-state: paused; }
 
 /* === feed sound === */
 #feed .feed-snd { margin-left: auto; color: #fff; opacity: .85; font-size: 10px; letter-spacing: .03em; }
+
+/* === 3D infiltration club (src/club3d/) === */
+/* close-ups and the VIP dance are drawn flat on the 2D canvas, over the waiting 3D view */
+body.three.c3-flat #c2d { display: block; position: absolute; z-index: 1; }
+body.c3-flat #objectives, body.c3-flat #marker, body.c3-flat #prompt, body.c3-flat #c3-talk, body.c3-flat #c3-chat { display: none; }
+/* a Talker's two bars over their heads: evidence (gold) and their suspicion (red) */
+#c3-talk { position: absolute; left: 0; top: 0; width: 132px; margin: -46px 0 0 -66px; padding: 4px 7px 6px; background: rgba(10, 6, 18, .78); border: 2px solid #111; border-radius: 8px; display: none; font: 400 13px "Bangers", Impact, sans-serif; letter-spacing: .06em; color: #ffd84d; text-align: center; }
+#c3-talk.on { display: block; }
+#c3-talk .bar { height: 7px; margin-top: 3px; }
+#c3-talk .ev { background: #ffd84d; }
+#c3-talk .su { background: #ff3a5a; }
+/* bubbles in the crowd you can tap: rumours (noted), whispers (super-hearing), offers (accept) */
+#c3-chat { position: absolute; inset: 0; pointer-events: none; z-index: 51; overflow: hidden; font-family: "Bangers", Impact, "Arial Black", sans-serif; }
+#c3-chat .c3b { position: absolute; left: 0; top: 0; max-width: min(260px, 58vw); padding: 8px 13px 7px; pointer-events: auto; cursor: pointer; background: #fff; color: #111; border: 3px solid #111; border-radius: 20px; font: inherit; font-size: clamp(14px, 2vw, 19px); letter-spacing: .03em; line-height: 1.1; text-align: center; box-shadow: 4px 4px 0 rgba(0, 0, 0, .45); animation: bub-in .32s cubic-bezier(.2, 1.7, .5, 1) both; transition: opacity .25s; }
+#c3-chat .c3b small { display: block; margin-top: 4px; font-size: .62em; letter-spacing: .12em; color: #b8860b; }
+#c3-chat .c3b b { display: block; font-size: .62em; letter-spacing: .14em; color: #7a3ad8; margin-bottom: 2px; }
+#c3-chat .c3b.rumour { border-color: #b8860b; box-shadow: 4px 4px 0 rgba(0, 0, 0, .45), 0 0 0 3px #ffd84d inset; }
+#c3-chat .c3b.whisper { font-style: italic; background: #efe4ff; border-color: #5a2ab0; }
+#c3-chat .c3b.offer { background: #fff0f8; border-color: #c0106a; }
+#c3-chat .c3b.offer small { color: #c0106a; }
+#c3-chat .c3b.out { opacity: 0; }
+/* the shot-off's timing bar, and the countdown bars on the host's and the owner's questions */
+.c3-timing { position: relative; height: 26px; margin: 12px 0 4px; background: #24183a; border: 2px solid #111; border-radius: 6px; overflow: hidden; }
+.c3-timing .zone { position: absolute; top: 0; bottom: 0; background: #3ee08a; }
+.c3-timing .needle { position: absolute; top: -2px; bottom: -2px; width: 5px; margin-left: -2px; background: #fff; box-shadow: 0 0 6px #fff; }
+.c3-clock { height: 8px; margin: 8px 0 2px; }
+/* the polaroid the owner slides across the desk */
+.c3-pol { display: block; width: min(44%, 170px); margin: 4px auto 8px; transform: rotate(-4deg); box-shadow: 0 6px 18px #000a; }

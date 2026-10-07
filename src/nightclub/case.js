@@ -29,7 +29,7 @@ export class CaseBook {
   notes() { return [...this.found].map((k) => this.def.clues[k]).filter(Boolean).map((c) => c.note); }
 
   /** A counted clue she hasn't found (the memory-fragment reward). */
-  unfound() { return Object.keys(this.def.clues).filter((k) => !this.found.has(k) && !this.def.clues[k].flavour && !this.def.clues[k].drink); }
+  unfound() { return Object.keys(this.def.clues).filter((k) => !this.found.has(k) && !this.def.clues[k].flavour && !this.def.clues[k].drink && !this.def.clues[k].v3); }
 
   /** The map leads this solve unlocks: every lead with a clue found (at least the first). */
   leads() {

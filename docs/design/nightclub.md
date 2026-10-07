@@ -331,8 +331,10 @@ first; the blackmail case is next. The accusation, case board and map leads carr
 - The big main room is the risk: the first build step measures it.
 
 ## Assets needed from the user
-- **Dance clips** for the VIP dance (the user is sending them; the `SG_RLD_Game` clips are the
-  closest existing footage).
+- **Dance clips** for the VIP dance, CCTV and the screens: green-screen clips in
+  `assets/video/ClubDance/` (keyed in game). Clothed, non-sexual footage only: batch 1's clips with
+  nudity or sexual content (and the `SG_RLD_Game` set) are deliberately not used, because the
+  photoreal faces may resemble a real actress.
 - **A sedation clip** (until then, an asylum or captured clip as a stand-in).
 - **Humiliation clips / polaroid stills** for the leak (the LIVE feed + billboards + newspaper).
 - More DJ loops, TV story clips, the VIP host and boss portraits, club music (own tracks).

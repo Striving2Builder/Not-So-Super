@@ -12,7 +12,7 @@ const KEYS = {
   KeyK: ['special'], KeyX: ['xray', 'special'],
   ShiftLeft: ['boost'], ShiftRight: ['boost'],
   KeyE: ['interact'], Enter: ['interact', 'dive'],
-  KeyC: ['camera'], KeyN: ['notes'], KeyQ: ['accuse'], KeyM: ['map'],
+  KeyC: ['camera'], KeyN: ['notes'], KeyQ: ['accuse'], KeyM: ['map'], KeyG: ['dance'], KeyV: ['hear'],
   Escape: ['pause'], KeyP: ['pause'], Backspace: ['leave'],
 };
 

@@ -196,7 +196,7 @@ export class Nightclub {
     sfx.pickup?.();
     banner('CASE SOLVED', fresh.length ? `${fresh.length} target${fresh.length === 1 ? '' : 's'} marked on your map` : 'The trail is already on your map', '#39ff6a');
     const where = (fresh.length ? fresh : leads).map((l) => `<div class="item"><b>${l.name}</b> · ${l.reward} REP<br>${l.blurb}</div>`).join('');
-    await dialog({ title: 'Case solved', text: `Moe deals it, "K" supplies it, and the next drop is Thursday at Pier 9. The distribution points are marked on your map:<div class="list">${where}</div>` });
+    await dialog({ title: 'Case solved', text: `${d.solvedText || ''} The distribution points are marked on your map:<div class="list">${where}</div>` });
     this.done = true;
     // the front page is about this case, not the club zone's rolled theme or boss
     if (d.theme) this.zone.theme = d.theme;

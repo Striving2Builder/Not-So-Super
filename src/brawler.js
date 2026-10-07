@@ -10,6 +10,7 @@ import { sfx } from './sfx.js';
 import { banner, toast } from './ui.js';
 import { comic } from './comic.js';
 import { Stage } from './brawlstage.js';
+import { PlateStage } from './brawlplate.js';
 import { spriteBudget, prewarm, spritesReady, CORE_ANIMS, LOOKS, VARIANTS } from './brawlsprite.js';
 import { heroReady, HeroSprite } from './hero3d.js';
 import { loadingPanel } from './gfx.js';
@@ -81,7 +82,7 @@ export class Brawler {
     if (this.fire) for (let i = 0; i < 2; i++) this.fires.push({ x: 800 + i * 700, z: rand(0.3, 0.8), w: 130, hp: 100 });
     // breakables: a couple per stretch of street, kept clear of captives
     const kinds = this.D.style === 'docks' || this.D.style === 'warehouses' || this.D.style === 'factory' ? ['barrel', 'crate', 'barrel'] : this.D.style === 'farm' ? ['crate', 'barrel'] : ['can', 'can', 'crate', 'newsbox'];
-    for (let x = 470; x < this.len - 200; x += this.rng.range(230, 380)) {
+    for (let x = 470; x < this.len - 200 && !zone.plate; x += this.rng.range(230, 380)) {
       if (this.captives.some((c) => Math.abs(c.x - x) < 90)) continue;
       const kind = this.rng.pick(kinds);
       this.breakables.push({ x, z: this.rng.range(0.1, 0.85), kind, hp: kind === 'crate' || kind === 'barrel' ? 2 : 1, broken: false, wob: 0 });
@@ -91,7 +92,7 @@ export class Brawler {
     this.cam = 0;
     this.lock = null;
     this.geom();
-    this.stage = new Stage(this);
+    this.stage = zone.plate ? new PlateStage(this) : new Stage(this); // (a fight indoors: a painted room)
     const lk = (ws) => [...new Set(ws.flatMap((w) => w.looks))].filter((l) => LOOKS[l]);
     this.looks = lk(this.waves);
     this.firstLooks = lk(this.waves.slice(0, 1)).filter((l) => LOOKS[l].model !== 'riddler');
@@ -136,7 +137,7 @@ export class Brawler {
     this.loading = null; this.paintNext = false;
     loadingPanel(null);
     const zone = this.zone;
-    banner(zone.name.toUpperCase(), this.fire ? 'Put out the fires · Rescue the trapped' : 'Clear the street · Save the captives', '#ffd23f');
+    banner(zone.name.toUpperCase(), this.fire ? 'Put out the fires · Rescue the trapped' : zone.plate ? 'Fight your way out' : 'Clear the street · Save the captives', '#ffd23f');
   }
 
   exit() { $('objectives').classList.remove('on'); loadingPanel(null); }
@@ -785,7 +786,7 @@ export class Brawler {
     // someone still tied up (or a fire still burning) behind her, off screen: point back to them
     const vh = this.viewHalf, left = (x) => x < this.cam - vh;
     this.backHint = !this.lock && (this.captives.some((c) => !c.done && left(c.x)) || this.fires.some((f) => f.hp > 0 && left(f.x + f.w / 2)));
-    rows.push([this.backHint ? '← Someone still needs you back there' : 'Head down the street →', false, !done && !this.backHint]);
+    rows.push([this.backHint ? '← Someone still needs you back there' : this.zone.plate ? 'Push on through →' : 'Head down the street →', false, !done && !this.backHint]);
     const html = rows.map(([t, d, dim]) => `<div class="${d ? 'done' : dim ? '' : 'cur'}">${d ? '✓' : '•'} ${t}</div>`).join('');
     const el = $('objectives');
     if (el._h !== html) { el.innerHTML = html; el._h = html; }
@@ -808,13 +809,16 @@ export class Brawler {
     if (win) {
       sfx.win();
       banner('SAVED THE DAY!', this.best >= 10 ? `Best combo: ${this.best} hits` : '', '#3ee08a');
-      setTimeout(() => this.g.endZone(z, { outcome: 'win', rep: z.reward + saved * 3, saved, photo: this.fire ? 'fire' : 'hero' }), 1200);
+      setTimeout(() => this.end({ outcome: 'win', rep: z.reward + saved * 3, saved, photo: this.fire ? 'fire' : 'hero' }), 1200);
     } else {
-      setTimeout(() => this.g.endZone(z, { outcome: 'lose', rep: -8, text: `${HERO} goes down under a pile of thugs. The crooks get away…`, reason: `…and they don't leave her behind. They drag ${HERO} off to their hideout.` }), 600);
+      setTimeout(() => this.end({ outcome: 'lose', rep: -8, text: `${HERO} goes down under a pile of thugs. The crooks get away…`, reason: `…and they don't leave her behind. They drag ${HERO} off to their hideout.` }), 600);
     }
   }
 
-  abort() { this.done = true; this.g.endZone(this.zone, { outcome: 'abort', rep: -3 }); }
+  abort() { this.done = true; this.end({ outcome: 'abort', rep: -3 }); }
+
+  /** The fight's over: back to the city, or to whoever started it (a fight inside the 3D club). */
+  end(res) { if (this.zone.onEnd) this.zone.onEnd(res); else this.g.endZone(this.zone, res); }
 
   // ------------------------------------------------------------------ render
   render(ctx) {

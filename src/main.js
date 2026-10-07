@@ -10,6 +10,7 @@ import { ClubZone } from './clubzone.js';
 import { NightCase } from './nightcase.js';
 import { AsylumZone } from './asylum.js';
 import { Nightclub } from './nightclub/nightclub.js';
+import { Club3D } from './club3d/club3d.js';
 import { showNewspaper } from './newspaper.js';
 import { HERO, DISTRICTS, THEMES, DEALS, BOSSES, VENUES, BILLBOARDS, CAPTURE_VIDEOS } from './data.js';
 import { UI, dialog, toast } from './ui.js';
@@ -42,6 +43,7 @@ game.modes = {
   nightcase: new NightCase(game),
   asylum: new AsylumZone(game),
   nightclub: new Nightclub(game),
+  club3: new Club3D(game),
 };
 game.overworld = game.modes.overworld;
 game.commentary = new Commentary(game);
@@ -57,6 +59,7 @@ function resize() {
   game.modes.club.resize();
   game.modes.nightcase.resize();
   game.modes.asylum.resize();
+  game.modes.club3.resize();
 }
 addEventListener('resize', resize);
 settings.onChange(() => resize()); // resolution follows the graphics profile
@@ -86,14 +89,18 @@ game.gfxFailed = () => {
 };
 
 // ---------------------------------------------------------------- zone flow
-// the detective nightclubs are the default since 2026-10-05; ?club=v1 brings back the premade 3D clubs
+// the detective nightclubs are the default since 2026-10-05; ?club=v1 brings back the premade 3D clubs,
+// ?club=v3 plays the 3D infiltration clubs (docs/design/nightclub.md; opt-in until they reach parity)
 const NEW_CLUBS = !/[?&]club=v1(&|$)/.test(location.search);
+const CLUBS_3D = /[?&]club=v3(&|$)/.test(location.search);
 game.newClubs = NEW_CLUBS; // the overworld skips loading the premade club buildings
 
 /** Which game mode plays a zone. */
 function modeFor(z) {
   // the detective nightclub redesign (docs/design/nightclub-2d.md)
-  if (NEW_CLUBS && (z.mode === 'special' || z.mode === 'nightcase') && (VENUES[z.venue]?.club || VENUES[z.venue]?.kind === 'club')) return 'nightclub';
+  const clubVenue = VENUES[z.venue]?.club || VENUES[z.venue]?.kind === 'club';
+  if (CLUBS_3D && (z.mode === 'special' || z.mode === 'nightcase') && clubVenue) return 'club3';
+  if (NEW_CLUBS && (z.mode === 'special' || z.mode === 'nightcase') && clubVenue) return 'nightclub';
   if (z.mode === 'special' && VENUES[z.venue]?.club) return 'club';  // raid inside a premade club
   return { brawl: 'brawler', investigate: 'investigate', special: 'special', nightcase: 'nightcase', asylum: 'asylum' }[z.mode];
 }

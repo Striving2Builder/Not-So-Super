@@ -179,6 +179,7 @@ export const sfx = {
   }),
   pickup: voice('pickup', () => [660, 880, 1175].forEach((f, i) => tone(f, 0.1, 'triangle', 0.2, 0, i * 0.06))),
   shutter() { noise(0.04, 0.5, 6000); noise(0.05, 0.4, 3000, 0.07); },
+  scratch() { tone(900, 0.12, 'sawtooth', 0.12, -700); noise(0.14, 0.45, 2400); tone(500, 0.1, 'sawtooth', 0.1, 600, 0.11); },
   alarm: voice('alarm', () => { tone(760, 0.22, 'square', 0.14, -240); tone(760, 0.22, 'square', 0.14, -240, 0.28); }),
   /** X-ray / detective vision switching on. */
   xray: voice('xray', () => tone(180, 0.5, 'sawtooth', 0.14, 700)),
