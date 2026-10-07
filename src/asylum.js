@@ -5,8 +5,9 @@
 // "club" (BVH collider + walkable floor), so movement, camera, orderlies, X-ray and the whole
 // night-case investigation (CaseFile, clues, witness, captives, suspect board) come for free.
 //
-// What's different here: getting caught means being sedated. A clip plays (assets/video/Asylum/),
-// and she wakes up in a random cell with the same case reset: the only way out is to solve it.
+// What's different here: getting caught means being sedated. She wakes in a random cell and the
+// wall TV plays a green-screen clip (assets/video/SG_Asylum_Game/) on a loop until she taps out.
+// The same case is reset: the only way out is to solve it.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { NightCase } from './nightcase.js';
@@ -645,7 +646,7 @@ export class AsylumZone extends NightCase {
       if (this.g.mode !== this) return;
       this.restartInCell();
       // she comes to in her cell, and the TV on the wall has to be watched before she can move on
-      await playScreenScene({ screens: ASYLUM.tvScreens, folder: ASYLUM.tvFolder, lockSecs: ASYLUM.tvSecs, caption: `Cell ${this.wakeCell.id} · the TV switches on by itself…` });
+      await playScreenScene({ screens: ASYLUM.tvScreens, folder: ASYLUM.tvFolder, untilTap: true, caption: `Cell ${this.wakeCell.id} · the TV switches on by itself…` });
     }, 1300);
   }
 

@@ -546,7 +546,7 @@ export class Overworld {
       if (D && !this.attract) {
         if (D.vice) toast('📸 Tabloid photographers lurk in this district', 'bad');
         this.g.commentary.onDistrict(d); // "MEANWHILE, IN THE DOCKS…" caption with the crime report
-        this.feed.onDistrict(d, D.name);
+        this.feed.onDistrict(d, D.name, st ? st.intox : 0);
       }
     }
     const D = DISTRICTS[d];
@@ -555,7 +555,7 @@ export class Overworld {
     const exposure = h.perch ? BANDS[h.z < BANDS[CRUISE_BAND].z - 60 ? 0 : CRUISE_BAND].vice : BANDS[h.band].vice;
     g.vice = { active: !!(D && D.vice), where: D && D.name, rate: 1.1 * exposure };
 
-    if (!this.attract && st) { this.updateCity(dt); this.feed.update(dt, DISTRICTS[this.district]?.name); }
+    if (!this.attract && st) { this.updateCity(dt); this.feed.update(dt, DISTRICTS[this.district]?.name, st.intox); }
 
     // --- zones
     if (!this.attract) {

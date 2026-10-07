@@ -1,11 +1,14 @@
 // City feed: short clips of the heroine (videos or stills) that play in the minimap corner. The
 // corner grows into a 16:9 panel while a clip plays (the map shrinks to an inset), then settles back.
 //   entering a district → a clip from the "flying" folder
+//   the Red Light district → a clip from the "rld" folder (and more while she stays)
+//   intoxicated (the bar is in the warning range) → a clip from the "intox" folder
 //   perching on a roof  → a clip from the "rooftop" folder
-//   hot districts (Red Light, Entertainment) → clips keep coming while she's there
+//   other hot districts (Entertainment) → flying clips keep coming while she's there
 // Clips are listed in assets/video/manifest.json (tools/build_video_manifest.js); what plays where
 // is tuned in CITY_FEED (data.js). With no clips on disk it simply never shows.
 import { CITY_FEED } from './data.js';
+import { INTOX_LIMIT } from './state.js';
 import { settings } from './settings.js';
 import { rand, shuffle, $ } from './util.js';
 import { mediaFolders, isImage as imageUrl } from './media.js';
@@ -51,11 +54,19 @@ export class CityFeed {
 
   get enabled() { return settings.cityFeed && !!this.panel; }
 
+  /** Which clip set this moment uses. Red Light wins over intoxication; both win over flying. */
+  clipCat(intox) {
+    if (this.district === CITY_FEED.rld) return 'rld';
+    if (intox >= INTOX_LIMIT) return 'intox';
+    return 'flying';
+  }
+
   /** She flew into a new district. */
-  onDistrict(key, name) {
+  onDistrict(key, name, intox = 0) {
     this.district = key;
-    const hot = CITY_FEED.hot.includes(key);
-    if (hot || this.t - this.last > CITY_FEED.cooldown) this.play('flying', name, hot);
+    const cat = this.clipCat(intox);
+    const hot = cat !== 'flying' || CITY_FEED.hot.includes(key);
+    if (hot || this.t - this.last > CITY_FEED.cooldown) this.play(cat, name, hot);
   }
 
   /** She landed on a rooftop. */
@@ -63,15 +74,16 @@ export class CityFeed {
     if (this.t - this.last > CITY_FEED.perchCooldown) this.play('rooftop', name ? `Rooftops · ${name}` : 'Rooftops');
   }
 
-  update(dt, districtName) {
+  update(dt, districtName, intox = 0) {
     this.t += dt;
     if (this.playing) {
       if (this.video.paused && this.playing.video) this.video.play().catch(() => {}); // resume after a pause
       if (this.t - this.playing.start > (this.playing.video ? CITY_FEED.clipMax : CITY_FEED.imageSecs)) this.stop();
       return;
     }
-    // Hot districts: more clips, for as long as she stays
-    if (CITY_FEED.hot.includes(this.district) && this.t - this.last > this.hotGap) this.play('flying', districtName, true);
+    // Red Light, intoxication, and other hot districts: more clips for as long as that lasts
+    const cat = this.clipCat(intox);
+    if ((cat !== 'flying' || CITY_FEED.hot.includes(this.district)) && this.t - this.last > this.hotGap) this.play(cat, districtName, true);
   }
 
   /** Game paused (dialog, map): freeze the clip. */

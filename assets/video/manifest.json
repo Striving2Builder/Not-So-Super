@@ -1,9 +1,7 @@
 {
- "generated": "2026-09-27T03:02:22.854Z",
+ "generated": "2026-10-07T04:04:55.556Z",
  "folders": {
-  "Captive": [
-   "Captive/supergirl_the_kryptonite_tank.mp4"
-  ],
+  "Captive": [],
   "Flying": [
    "Flying/SG_Fly_Intoxicated1.mp4",
    "Flying/SG_Fly_Intoxicated10.mp4",
@@ -38,6 +36,82 @@
    "Flying/SG_Fly_Normal6.mp4",
    "Flying/SG_Fly_Normal7.mp4",
    "Flying/SG_Fly_Normal8.mp4"
+  ],
+  "SG_Asylum_Game": [
+   "SG_Asylum_Game/SG_Asylum1.mp4",
+   "SG_Asylum_Game/SG_Asylum10.mp4",
+   "SG_Asylum_Game/SG_Asylum11.mp4",
+   "SG_Asylum_Game/SG_Asylum12.mp4",
+   "SG_Asylum_Game/SG_Asylum2.mp4",
+   "SG_Asylum_Game/SG_Asylum3.mp4",
+   "SG_Asylum_Game/SG_Asylum4.mp4",
+   "SG_Asylum_Game/SG_Asylum5.mp4",
+   "SG_Asylum_Game/SG_Asylum6.mp4",
+   "SG_Asylum_Game/SG_Asylum7.mp4",
+   "SG_Asylum_Game/SG_Asylum8.mp4",
+   "SG_Asylum_Game/SG_Asylum9.mp4"
+  ],
+  "SG_Captured_Game": [
+   "SG_Captured_Game/SG_Captured1.mp4",
+   "SG_Captured_Game/SG_Captured13.mp4",
+   "SG_Captured_Game/SG_Captured19.mp4",
+   "SG_Captured_Game/SG_Captured22.mp4",
+   "SG_Captured_Game/SG_Captured26.mp4",
+   "SG_Captured_Game/SG_Captured28.mp4",
+   "SG_Captured_Game/SG_Captured37.mp4",
+   "SG_Captured_Game/SG_Captured40.mp4",
+   "SG_Captured_Game/SG_Captured43.mp4",
+   "SG_Captured_Game/SG_Captured45.mp4",
+   "SG_Captured_Game/SG_Captured46.mp4",
+   "SG_Captured_Game/SG_Captured55.mp4",
+   "SG_Captured_Game/SG_Captured57.mp4",
+   "SG_Captured_Game/SG_Captured58.mp4",
+   "SG_Captured_Game/SG_Captured6.mp4",
+   "SG_Captured_Game/SG_Captured61.mp4",
+   "SG_Captured_Game/SG_Captured62.mp4",
+   "SG_Captured_Game/SG_Captured67.mp4",
+   "SG_Captured_Game/SG_Captured68.mp4",
+   "SG_Captured_Game/SG_Captured73.mp4",
+   "SG_Captured_Game/SG_Captured74.mp4"
+  ],
+  "SG_Intox_Game": [
+   "SG_Intox_Game/SG_Intox1.mp4",
+   "SG_Intox_Game/SG_Intox10.mp4",
+   "SG_Intox_Game/SG_Intox15.mp4",
+   "SG_Intox_Game/SG_Intox17.mp4",
+   "SG_Intox_Game/SG_Intox2.mp4",
+   "SG_Intox_Game/SG_Intox4.mp4",
+   "SG_Intox_Game/SG_Intox43.mp4",
+   "SG_Intox_Game/SG_Intox5.mp4",
+   "SG_Intox_Game/SG_Intox59.mp4",
+   "SG_Intox_Game/SG_Intox6.mp4",
+   "SG_Intox_Game/SG_Intox60.mp4",
+   "SG_Intox_Game/SG_Intox61.mp4",
+   "SG_Intox_Game/SG_Intox7.mp4",
+   "SG_Intox_Game/SG_Intox8.mp4",
+   "SG_Intox_Game/SG_Intox9.mp4"
+  ],
+  "SG_RLD_Game": [
+   "SG_RLD_Game/Supergirl_RLD_40.mp4",
+   "SG_RLD_Game/Supergirl_RLD_42.mp4",
+   "SG_RLD_Game/Supergirl_RLD_43.mp4",
+   "SG_RLD_Game/Supergirl_RLD_46.mp4",
+   "SG_RLD_Game/Supergirl_RLD_48.mp4",
+   "SG_RLD_Game/Supergirl_RLD_49.mp4",
+   "SG_RLD_Game/Supergirl_RLD_50.mp4",
+   "SG_RLD_Game/Supergirl_RLD_51.mp4",
+   "SG_RLD_Game/Supergirl_RLD_52.mp4"
+  ],
+  "SG_Roof_Game": [
+   "SG_Roof_Game/SG_Roof1.mp4",
+   "SG_Roof_Game/SG_Roof12.mp4",
+   "SG_Roof_Game/SG_Roof15.mp4",
+   "SG_Roof_Game/SG_Roof16.mp4",
+   "SG_Roof_Game/SG_Roof3.mp4",
+   "SG_Roof_Game/SG_Roof4.mp4",
+   "SG_Roof_Game/SG_Roof5.mp4",
+   "SG_Roof_Game/SG_Roof6.mp4",
+   "SG_Roof_Game/SG_Roof9.mp4"
   ]
  }
 }

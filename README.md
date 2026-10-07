@@ -55,10 +55,12 @@ Drag the screen to turn the camera in 3D zones. Add `?touch=1` to the URL to tes
 ## Adding content
 
 - **Videos and stills:** drop clips (mp4/webm/mov, or jpg/png/webp/gif) into the folders under `assets/video/`, then run `node tools/build_video_manifest.js` (the game reads `assets/video/manifest.json`; a static site can't list folders itself).
-  - `Flying/`: plays in the minimap corner (which grows into a video panel) when she enters a district; in the Red Light and Entertainment districts clips keep coming while she stays.
-  - `Roof Top/`: plays when she perches.
-  - `Captive/`: loops on the capture-room TV.
-  - `Asylum/`: plays full screen when she's sedated in the asylum (tap to skip; a caption card shows while the folder is empty).
+  - `Flying/`: plays in the minimap corner (which grows into a video panel) when she enters a district; in the Entertainment district clips keep coming while she stays.
+  - `SG_RLD_Game/`: plays in that corner while she's in the Red Light district.
+  - `SG_Intox_Game/`: plays in that corner while she's intoxicated (the meter is in the warning range).
+  - `SG_Roof_Game/`: plays when she perches.
+  - `SG_Captured_Game/`: loops on the capture-room TV (nightclubs and venues) and plays inside the green-screen billboards when she loses a street fight.
+  - `SG_Asylum_Game/`: plays inside the cell TV's green screen after she's sedated, looping until she taps out.
   - Tuning (folders, hot districts, cooldowns, clip length) is `CITY_FEED` in `src/data.js`; players can switch the feed off in the pause menu.
   - Keep each file under 100 MB (GitHub's limit); short, compressed 720p clips load fastest on phones.
 - **New clubs:** `blender -b club.blend --python tools/export_club.py -- assets/clubs/name.glb --replace assets/clubs/replacements`, then `node tools/repair_glb.js assets/clubs/name.glb` and `node tools/bake_clubs.js name` (makes `name.lite.glb` for phones and bakes the walkable floor into `name.json`; run `npm install --prefix tools` once first), add it to `CLUBS` in `src/clubzone.js` and a venue in `VENUES` in `src/data.js`.

@@ -78,11 +78,10 @@ export const ASYLUM = {
   venue: 'Ravenmoor Asylum',
   districts: ['suburb', 'farm', 'lair'],
   cellsPerSide: 3,        // padded cells on each side of each of the four wings
-  videoFolder: 'Asylum',  // clips in assets/video/Asylum/ play when she's sedated
-  // Back in her cell she must watch the cell TV: a clip from assets/video/AsylumTV/ keyed into a
-  // green-screen still, unskippable for tvSecs (it loops if it's shorter). No clips yet → brief static.
-  tvFolder: 'AsylumTV',
-  tvSecs: 30,
+  videoFolder: 'Asylum',  // full-screen clip as the syringe hits (caption only while that folder is empty)
+  // Back in her cell, a clip from assets/video/SG_Asylum_Game/ plays inside a green-screen TV still.
+  // It loops until she taps out. No clips yet → brief static, then she can move.
+  tvFolder: 'SG_Asylum_Game',
   tvScreens: [
     ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => `asylum-tv${String(n).padStart(2, '0')}`),
     ...[2, 4, 5, 7, 8, 9, 10].map((n) => `asylum-tv2-${String(n).padStart(2, '0')}`),
@@ -94,7 +93,7 @@ export const ASYLUM = {
 // assets/video/<folders[0]>/ (falling back to the next folder) keyed into a green-screen
 // billboard still: red-light ones for fights in the vice districts, downtown ones elsewhere.
 export const BILLBOARDS = {
-  folders: ['Billboards', 'Captive'],
+  folders: ['Billboards', 'SG_Captured_Game'],
   vice: ['redlight', 'naughty', 'nightclub'],
   rld: [2, 4, 6, 8, 10].map((n) => `assets/billboards/rld/sg-mix-${String(n).padStart(2, '0')}.webp`),
   downtown: [
@@ -231,13 +230,14 @@ export const DEALS = [
 // With no videos listed, the TV shows the villain's green silhouette feed.
 export const CAPTURE_VIDEOS = {
   any: [],
-  folder: 'Captive', // every clip in assets/video/Captive/ plays on the capture-room TV (see media.js)
+  folder: 'SG_Captured_Game', // every clip in assets/video/SG_Captured_Game/ loops on the capture-room TV
 };
 
 // City feed: clips in the minimap corner (src/cityfeed.js). Folders are under assets/video/;
 // run `node tools/build_video_manifest.js` after adding clips.
 export const CITY_FEED = {
-  folders: { flying: 'Flying', rooftop: 'Roof Top' },
+  folders: { flying: 'Flying', rooftop: 'SG_Roof_Game', rld: 'SG_RLD_Game', intox: 'SG_Intox_Game' },
+  rld: 'redlight',              // this district plays the rld folder instead of flying clips
   hot: ['redlight', 'entertainment'], // clips keep coming while she's in these districts
   cooldown: 35,        // seconds between district-entry clips elsewhere
   perchCooldown: 20,   // seconds between rooftop clips

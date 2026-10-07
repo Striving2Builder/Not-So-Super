@@ -56,13 +56,14 @@ export async function playCutscene({ folder, caption = '', maxSecs = 12, holdSec
 /**
  * A clip played inside a green-screen still (a cell TV, a billboard…), full screen. Story beats are
  * told this way. `lockSecs` makes it unskippable for that long (a countdown shows; a short clip
- * loops); after that a tap ends it, or it ends with the clip. With no clip in `folder` the screen
- * shows static for `holdSecs` and the flow carries on.
+ * loops); after that a tap ends it, or it ends with the clip. `untilTap` keeps the clip looping
+ * until a tap, with no timer. With no clip in `folder` the screen shows static for `holdSecs`
+ * and the flow carries on.
  * @param screens  still URLs to pick from (see greenscreen.js)
  * @param folder   assets/video/<folder>/ for the clip, or a list (the first folder with clips wins)
  * @returns Promise that resolves when it's over
  */
-export async function playScreenScene({ screens, folder, caption = '', lockSecs = 0, maxSecs = 60, holdSecs = 3.5 }) {
+export async function playScreenScene({ screens, folder, caption = '', lockSecs = 0, maxSecs = 60, holdSecs = 3.5, untilTap = false }) {
   const el = $('cutscene');
   if (!el || !screens || !screens.length) return;
   const [{ loadScreen, drawScreen }, folders] = await Promise.all([import('./greenscreen.js'), mediaFolders()]);
@@ -100,11 +101,11 @@ export async function playScreenScene({ screens, folder, caption = '', lockSecs 
     const key = (e) => { e.preventDefault(); e.stopPropagation(); tap(); };
     addEventListener('keydown', key, true);
     el.addEventListener('click', tap);
-    let source = null;
+    let source = null, failed = false;
     if (clip) {
       video.src = clip;
-      video.loop = true; // a clip shorter than the lock repeats until it's served
-      video.onerror = () => { source = null; };
+      video.loop = true; // a clip shorter than the lock repeats until it's served; untilTap never turns this off
+      video.onerror = () => { source = null; failed = true; };
       video.play().then(() => { source = video; }).catch(() => { video.muted = true; video.play().then(() => { source = video; }).catch(() => {}); });
     }
     const frame = () => {
@@ -117,7 +118,9 @@ export async function playScreenScene({ screens, folder, caption = '', lockSecs 
       drawScreen(ctx, scr, source && source.readyState >= 2 ? source : null, 0, 0, w, h);
       const t = elapsed();
       skipEl.textContent = t < lock ? `🔒 ${Math.ceil(lock - t)}s` : 'tap to continue';
-      if ((!clip && t >= holdSecs) || (clip && !video.loop && video.ended) || t >= Math.max(maxSecs, lock)) return end();
+      if ((!clip || failed) && t >= holdSecs) return end();
+      if (untilTap && clip && !failed) { raf = requestAnimationFrame(frame); return; }
+      if ((clip && !video.loop && video.ended) || t >= Math.max(maxSecs, lock)) return end();
       if (clip && t >= lock && lock > 0) video.loop = false; // served: let it finish on its own
       raf = requestAnimationFrame(frame);
     };
