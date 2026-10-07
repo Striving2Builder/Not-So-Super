@@ -18,7 +18,7 @@ import { ambience } from './ambience.js';
 import { $, pick, chance, fmtTime } from './util.js';
 import { loadHero, HERO_SKIN } from './hero3d.js';
 import { loadEnemies } from './enemies.js';
-import { playScreenScene } from './cutscene.js';
+import { playCutscene, playScreenScene } from './cutscene.js';
 import { comic } from './comic.js';
 import { Commentary } from './commentary.js';
 import { settings, quality, autoTune, HERO_SKIN_LABELS } from './settings.js';
@@ -387,6 +387,8 @@ function frame(now) {
 if (game.h > game.w) $('rotate-hint').textContent = 'Tip: rotate your phone to landscape for the best experience.';
 showTitle();
 requestAnimationFrame(frame);
+// Opening titles. The city is already behind it; a tap or a key skips to the title screen.
+playCutscene({ src: 'assets/Intro Video.mp4', maxSecs: 0, tapSkips: true });
 // iOS killed the last visit for memory (it reloads the tab): lighter graphics from here on, once
 if (crashedLastTime() && settings.afterCrash()) setTimeout(() => toast('The browser ran out of memory last time, so graphics are now on Battery saver. You can change this in the pause menu.', 'info'), 1500);
 

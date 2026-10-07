@@ -6,16 +6,17 @@ import { UI } from './ui.js';
 import { pick, $ } from './util.js';
 
 /**
- * @param folder   assets/video/<folder>/ to pick a clip from
- * @param caption  HTML over the bottom of the screen
- * @param maxSecs  cut videos off after this long (stills and caption-only show for `holdSecs`)
+ * @param folder    assets/video/<folder>/ to pick a clip from
+ * @param src       one file to play instead of a folder (the game intro)
+ * @param caption   HTML over the bottom of the screen
+ * @param maxSecs   cut videos off after this long; 0 plays until the clip ends
+ * @param tapSkips  a tap always ends it (otherwise the first tap turns sound on)
  * @returns Promise that resolves when it's over
  */
-export async function playCutscene({ folder, caption = '', maxSecs = 12, holdSecs = 3.2 }) {
+export async function playCutscene({ folder, src, caption = '', maxSecs = 12, holdSecs = 3.2, tapSkips = false }) {
   const el = $('cutscene');
   if (!el) return;
-  const folders = await mediaFolders();
-  const url = pick(folders[folder] || []) || null;
+  const url = src || pick((await mediaFolders())[folder] || []) || null;
   const video = el.querySelector('video'), img = el.querySelector('img');
   el.querySelector('.cs-cap').innerHTML = caption;
   el.classList.toggle('bare', !url);
@@ -28,23 +29,28 @@ export async function playCutscene({ folder, caption = '', maxSecs = 12, holdSec
       done = true;
       clearTimeout(timer);
       removeEventListener('keydown', key, true);
-      el.removeEventListener('click', end);
-      video.pause(); video.removeAttribute('src'); video.load();
+      el.removeEventListener('click', onClick);
+      video.pause(); video.loop = false; video.removeAttribute('src'); video.load();
       img.removeAttribute('src');
       el.classList.remove('on');
       UI.open = Math.max(0, UI.open - 1);
       resolve();
     };
     const key = (e) => { e.preventDefault(); e.stopPropagation(); end(); };
+    const onClick = () => {
+      if (!tapSkips && video.muted && video.src && !video.paused) { video.muted = false; return; }
+      end();
+    };
     addEventListener('keydown', key, true);
-    el.addEventListener('click', () => { if (video.muted && video.src && !video.paused) { video.muted = false; return; } end(); });
+    el.addEventListener('click', onClick);
     if (url && !isImage(url)) {
       el.classList.remove('still');
+      video.loop = false;
       video.src = url;
       video.onended = end;
       video.onerror = () => { timer = setTimeout(end, holdSecs * 1000); }; // missing file: caption only
       video.play().catch(() => { video.muted = true; video.play().catch(() => {}); }); // sound if allowed
-      timer = setTimeout(end, maxSecs * 1000);
+      if (maxSecs > 0) timer = setTimeout(end, maxSecs * 1000);
     } else {
       el.classList.add('still');
       if (url) img.src = url;
