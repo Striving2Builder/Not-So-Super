@@ -399,7 +399,8 @@ club with `?club=v3`; without it they play the 2D club as before.
   accusation, solving, leaving, objectives), `sedation.js` (found out → sedation clip → wake spots;
   the envelope + its polaroids), `vip.js` (rope, quiz, the numpad dance), `office.js` (keypads,
   listening at the door, safe, CCTV, the blackmail exchange, the leak), `brawls.js` (the brawler
-  borrowed for back-room fights), `closeup.js` (close-ups, phone/paper views, the UV layer),
+  borrowed for back-room fights), `closeup.js` (close-ups, phone/paper views, the UV layer, the
+  CAMERA: a photo of each found clue adds a little to the visit's reward),
   `events.js` (the drop + five events), `undercover.js` (Kara's coat, changing in the restroom).
   Outside it: `src/brawlplate.js` (the brawler's painted-room stage), `cutscene.js` (`loops`,
   `skipTaps`), `newspaper.js` (a real photo on the front page), cases in `src/nightclub/cases/`

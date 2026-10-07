@@ -9,7 +9,7 @@ import { dialog, toast } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { tierOf } from '../commentary.js';
 import { HERO } from '../data.js';
-import { clamp, $ } from '../util.js';
+import { clamp } from '../util.js';
 import { scramble } from './cast.js';
 import { BPM } from './plan.js';
 

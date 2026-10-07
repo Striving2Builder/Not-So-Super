@@ -5,8 +5,8 @@
 // mode to place its gameplay on.
 import * as THREE from 'three';
 import { toon } from '../look3d.js';
-import { wallQ, floorQ, cnv, tex, C, rnd, pickR, TAU, speckle, neonText } from '../nlkit.js';
-import { damask, wainscot, coveWash, neonLine, WY, WS } from '../nlroom.js';
+import { cnv, tex, C, rnd, pickR, TAU, speckle } from '../nlkit.js';
+import { damask, wainscot, coveWash, neonLine, WY } from '../nlroom.js';
 import { ROOM_H, DOOR_W } from './plan.js';
 import { wallSeg, wallWithGaps, CUT_H } from './build.js';
 import { screenMat } from './video.js';

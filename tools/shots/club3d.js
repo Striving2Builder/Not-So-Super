@@ -131,7 +131,19 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
         g.input.taps.push({ x: R.x + p.x * R.w, y: R.y + p.y * R.h });
       });
       await V.page.waitForTimeout(900); await V.shot('flow_closeup_phone');
-      return { clues: await V.page.evaluate(() => window.__game.mode.book.count) };
+      // put the phone back, then photograph it with the CAMERA
+      await V.through(() => !document.querySelector('#modal-root .modal-back'), 5000);
+      await V.page.evaluate(() => { const g = window.__game; g.input.taps.push({ x: 5, y: 5 }); });
+      await V.page.waitForTimeout(300);
+      await V.page.evaluate(async () => {
+        const { CLOSEUPS } = await import('/src/nightclub/scenes.js');
+        const g = window.__game, sc = CLOSEUPS.bar, img = sc.img, s = Math.max(g.w / img.naturalWidth, g.h / img.naturalHeight);
+        const R = { x: (g.w - img.naturalWidth * s) / 2, y: (g.h - img.naturalHeight * s) * 0.8, w: img.naturalWidth * s, h: img.naturalHeight * s }, p = sc.spots.find((q) => q.id === 'phone');
+        g.input.pressedSet.add('camera');
+        setTimeout(() => g.input.taps.push({ x: R.x + p.x * R.w, y: R.y + p.y * R.h }), 300);
+      });
+      await V.page.waitForTimeout(1200); await V.shot('flow_closeup_camera');
+      return { clues: await V.page.evaluate(() => window.__game.mode.book.count), photos: await V.page.evaluate(() => [...window.__game.mode.snapped]), bonus: await V.page.evaluate(() => window.__game.mode.bonus) };
     });
     await flow('screens', '&club3room=rave&club3seed=7&club3event=none', async (V) => {
       // the office's live CCTV + her recorded dance; the restroom mirror when she's dosed

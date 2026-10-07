@@ -8,10 +8,8 @@ import * as THREE from 'three';
 import { Special3D } from '../special3d.js';
 import { bakeStatic, comicScene, groundBackdrop } from '../look3d.js';
 import { quality } from '../settings.js';
-import { HERO } from '../data.js';
 import { clamp, wobble, $ } from '../util.js';
-import { banner, toast, dialog, UI } from '../ui.js';
-import { sfx } from '../sfx.js';
+import { banner, toast } from '../ui.js';
 import { beat } from '../nlkit.js';
 import { makePlan, roomAt, floorY, BPM } from './plan.js';
 import { hallMats, makeClubKit, buildHall, buildShow, stepTiles, buildKit } from './build.js';
@@ -51,7 +49,7 @@ const VISIT = () => ({
   safeDone: false, recorderWiped: false, cctvDead: false,
   stockOpen: false, stashFound: false, uvRead: false, powderTaken: false, shotDone: false,
   drinks: 0, drunkCard: false, predator: null, predatorDone: false, taps: [], offerOut: false, snapQueue: [],
-  videoWant: null, cctvRT: null, extraPeople: [],
+  videoWant: null, cctvRT: null, extraPeople: [], snapped: new Set(),
 });
 
 export class Club3D extends Special3D {
@@ -68,7 +66,7 @@ export class Club3D extends Special3D {
     zone.name = `${this.caseDef.title} at ${/^the /i.test(zone.venue || '') ? zone.venue : 'the ' + (zone.venue || 'club')}`;
     super.enter({ zone });
     // after the base zone's reset: the camera's own state
-    this.camYaw = 0; this.yaw = 0; this.camPD = [...CAM_OPEN]; this.camSnap = true; this.camPitch = null;
+    this.yaw = 0; this.camPD = [...CAM_OPEN]; this.camSnap = true; this.camPitch = null;
     this.seedEnvelope();
     this.music = new ClubMusic(BPM); this.music.start();
     this.startEvents();
@@ -134,11 +132,8 @@ export class Club3D extends Special3D {
   /** The comic surface on everything, and ground out to the fog round the building (not under it). */
   finishLook() {
     comicScene(this.scene);
-    const all = this.plan.all, V = this.plan.V;
-    const x0 = Math.min(-V.hw, ...all.map((q) => q.x0)), x1 = Math.max(V.hw, ...all.map((q) => q.x1));
-    const z0 = Math.min(-V.hd, ...all.map((q) => q.z0)), z1 = Math.max(V.hd, ...all.map((q) => q.z1));
+    const V = this.plan.V;
     this.scene.add(groundBackdrop(this.backdrop.color, -0.04, { size: 220, hole: [-V.hw + 0.6, V.hw - 0.6, -V.hd + 0.6, V.hd - 0.6] }));
-    this.footprint = [x0, x1, z0, z1];
   }
 
   exit() {
@@ -183,7 +178,6 @@ export class Club3D extends Special3D {
     if (this.done || !this.scene) return;
     const g = this.g, inp = g.input, st = g.state, h = this.hero, plan = this.plan;
     this.t += dt; this.frameDt = dt;
-    this.inside += dt;
     g.vice = { active: true, where: this.zone.venue, rate: 1.2 };
     const B = (this.B = beat(this.t, BPM));
     this.room = roomAt(plan, h.position.x, h.position.z);
@@ -197,7 +191,7 @@ export class Club3D extends Special3D {
     const mx = a.x, mz = a.y, mag = Math.min(1, Math.hypot(mx, mz));
     const canMove = !this.busy && this.landT <= 0 && !this.dancing && !stunned;
     if (mag > 0.05 && canMove) {
-      const sp = SPEED * (1 - 0.5 * thick) * (this.undercover ? 1 : 1);
+      const sp = SPEED * (1 - 0.5 * thick);
       h.position.x += mx * sp * dt;
       h.position.z += mz * sp * dt;
       let da = Math.atan2(mx, mz) - h.rotation.y;

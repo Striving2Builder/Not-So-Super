@@ -1,14 +1,17 @@
 // Close-ups in the 3D club (docs/design/nightclub.md "Close-ups"): the user's close-up renders (the
 // bar, the coat check, the DJ booth, the VIP table, the restroom sinks, the office desk) drawn
 // flat over the paused 3D view; tap the spots. Same art, more kinds of looking: a phone opens as a
-// phone (the messages drawn in code), a note or a ledger opens as paper, and in drug-vision a UV
-// layer shows writing nobody sober can see. What a spot means is the case's (cases/*.js).
+// phone (the messages drawn in code), a note or a ledger opens as paper, in drug-vision a UV layer
+// shows writing nobody sober can see, and the CAMERA frames the evidence she's found: each photo
+// filed is a little extra on the front page. What a spot means is the case's (cases/*.js).
 import { CLOSEUPS } from '../nightclub/scenes.js';
 import { PLATE } from '../nightclub/rooms.js';
-import { dialog, toast, UI } from '../ui.js';
+import { dialog, toast, flash, UI } from '../ui.js';
+import { sfx } from '../sfx.js';
 import { $ } from '../util.js';
 
 const READ = new Set(['napkin', 'list', 'setlist', 'ledger', 'receipt', 'card', 'tickets']);
+const PHOTO_REP = 2; // per clue photographed (added to the visit's reward)
 
 export const closeupMethods = {
   openCloseup(kind) {
@@ -19,10 +22,10 @@ export const closeupMethods = {
     this.setXray(false);
     document.body.classList.add('c3-flat');
     inp.setStick(false); // (its touch zone sat over the spots on the left)
-    inp.setButtons([{ id: 'back', label: 'BACK', key: 'E', cls: 'big' }, { id: 'notes', label: 'CASE', key: 'N', slot: 1 }]);
+    inp.setButtons([{ id: 'back', label: 'BACK', key: 'E', cls: 'big' }, { id: 'notes', label: 'CASE', key: 'N', slot: 1 }, { id: 'camera', label: 'CAMERA', key: 'C', slot: 2 }]);
     $('prompt').classList.remove('on'); $('marker').classList.remove('on');
     const uv = this.dvision > 0 || g.state.intox >= 60;
-    let ring = null, view = null;
+    let ring = null, view = null, cam = false;
     toast(uv ? 'Tap anything out of place. Drug-vision shows what\'s written in UV.' : 'Tap anything that looks out of place.', 'info');
     const close = () => {
       this.sub = null;
@@ -39,6 +42,7 @@ export const closeupMethods = {
         if (UI.open) return;
         if (inp.pressed('back') || inp.pressed('interact')) { if (view) view = null; else { inp.taps.length = 0; close(); } return; }
         if (inp.pressed('notes')) { this.run(() => this.caseBoard()); return; }
+        if (inp.pressed('camera')) { cam = !cam; inp.setButton('camera', { toggled: cam }); if (cam) toast('Frame the evidence you\'ve found and tap to snap it.', 'info'); }
         const tap = inp.taps.shift();
         if (!tap) return;
         if (view) { view = null; return; }
@@ -46,6 +50,7 @@ export const closeupMethods = {
         const hit = sc.spots.find((s) => Math.hypot((u - s.x) * (R.w / R.h), v - s.y) < s.r * 1.25);
         if (!hit) { ring = { x: tap.x, y: tap.y, t: 0, miss: true }; return; }
         ring = { x: R.x + hit.x * R.w, y: R.y + hit.y * R.h, t: 0 };
+        if (cam) { this.snapClue(kind, hit); return; }
         this.run(() => this.useSpot(kind, sc, hit, (vw) => { view = vw; }));
       },
       render: (ctx) => {
@@ -72,10 +77,47 @@ export const closeupMethods = {
         ctx.font = `bold ${Math.round(Math.max(16, h * 0.05))}px Bangers, Impact, sans-serif`; ctx.textAlign = 'left';
         const label = `${sc.title.toUpperCase()} · ${seen}/${sc.spots.length} SEARCHED · CASE ${this.book.count}/${this.caseDef.need}`;
         ctx.lineWidth = 5; ctx.strokeStyle = '#05040a'; ctx.strokeText(label, 18, h - 22); ctx.fillStyle = '#ffd84d'; ctx.fillText(label, 18, h - 22);
+        if (cam) this.drawViewfinder(ctx, w, h, R, kind, sc);
         if (view) this.drawView(ctx, w, h, view);
       },
       hud: () => {},
     };
+  },
+
+  /** The camera: a found clue (one that counts) photographed for the file. */
+  snapClue(kind, s) {
+    const key = `${kind}:${s.id}`, c = this.book.clue(kind, s.id);
+    if (!this.book.has(kind, s.id)) { toast('Search it first: you can only photograph what you\'ve found.', 'info'); return; }
+    if (!c || c.flavour) { toast('Nothing worth a front page there.', 'info'); return; }
+    if (this.snapped.has(key)) { toast('Already on film.', 'info'); return; }
+    this.snapped.add(key);
+    this.bonus = (this.bonus || 0) + PHOTO_REP;
+    sfx.shutter(); flash('#ffffff');
+    toast(`Photo filed: ${c.note} (+${PHOTO_REP} rep when you're out)`, 'good');
+  },
+
+  /** Viewfinder over the close-up: thirds, corner brackets, REC, focus boxes on what's worth a photo. */
+  drawViewfinder(ctx, w, h, R, kind, sc) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(0, 0, w, 34); ctx.fillRect(0, h - 34, w, 34);
+    ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 1.5; ctx.beginPath();
+    for (const k of [1, 2]) { ctx.moveTo((w * k) / 3, 34); ctx.lineTo((w * k) / 3, h - 34); ctx.moveTo(0, (h * k) / 3); ctx.lineTo(w, (h * k) / 3); }
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 4;
+    for (const [x, y, dx, dy] of [[24, 48, 1, 1], [w - 24, 48, -1, 1], [24, h - 48, 1, -1], [w - 24, h - 48, -1, -1]]) { ctx.beginPath(); ctx.moveTo(x, y + dy * 46); ctx.lineTo(x, y); ctx.lineTo(x + dx * 46, y); ctx.stroke(); }
+    ctx.fillStyle = '#ff3030'; ctx.beginPath(); ctx.arc(w - 120, 60, 7 + Math.sin(this.t * 6) * 2, 0, Math.PI * 2); ctx.fill();
+    ctx.font = 'bold 18px Bangers, Impact, sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.fillText('REC', w - 106, 66);
+    for (const s of sc.spots) {
+      const c = this.book.clue(kind, s.id);
+      if (!this.book.has(kind, s.id) || !c || c.flavour) continue;
+      const done = this.snapped.has(`${kind}:${s.id}`), x = R.x + s.x * R.w, y = R.y + s.y * R.h, r = s.r * R.w * 0.8;
+      ctx.strokeStyle = done ? 'rgba(80,240,150,.95)' : `rgba(255,255,255,${0.55 + 0.45 * Math.sin(this.t * 8)})`; ctx.lineWidth = 3;
+      for (const [bx, by, dx, dy] of [[x - r, y - r, 1, 1], [x + r, y - r, -1, 1], [x - r, y + r, 1, -1], [x + r, y + r, -1, -1]]) { ctx.beginPath(); ctx.moveTo(bx, by + dy * 14); ctx.lineTo(bx, by); ctx.lineTo(bx + dx * 14, by); ctx.stroke(); }
+      ctx.font = 'bold 16px Bangers, Impact, sans-serif'; ctx.textAlign = 'center';
+      ctx.lineWidth = 4; ctx.strokeStyle = '#05040a'; const t = done ? 'FILED' : 'TAP TO SNAP';
+      ctx.strokeText(t, x, y - r - 8); ctx.fillStyle = done ? '#50f096' : '#fff'; ctx.fillText(t, x, y - r - 8);
+    }
+    ctx.restore();
   },
 
   /** A tapped spot: a drink is offered, a phone opens as a phone, a note as paper, the rest as text. */
