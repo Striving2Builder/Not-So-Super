@@ -810,7 +810,7 @@ export class Brawler {
       banner('SAVED THE DAY!', this.best >= 10 ? `Best combo: ${this.best} hits` : '', '#3ee08a');
       setTimeout(() => this.g.endZone(z, { outcome: 'win', rep: z.reward + saved * 3, saved, photo: this.fire ? 'fire' : 'hero' }), 1200);
     } else {
-      setTimeout(() => this.g.endZone(z, { outcome: 'lose', rep: -8, text: `${HERO} was overwhelmed and had to retreat. The crooks got away this time.` }), 600);
+      setTimeout(() => this.g.endZone(z, { outcome: 'lose', rep: -8, text: `${HERO} goes down under a pile of thugs. The crooks get away…`, reason: `…and they don't leave her behind. They drag ${HERO} off to their hideout.` }), 600);
     }
   }
 

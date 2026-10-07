@@ -231,6 +231,9 @@ export const DEALS = [
 export const CAPTURE_VIDEOS = {
   any: [],
   folder: 'SG_Captured_Game', // every clip in assets/video/SG_Captured_Game/ loops on the capture-room TV
+  // The moment she's fully captured (anywhere, a lost fight included), a clip from `folder` plays
+  // full screen `loops` times; the first tap turns the sound on, then `skipTaps` taps skip it.
+  forced: { loops: 3, skipTaps: 3 },
 };
 
 // City feed: clips in the minimap corner (src/cityfeed.js). Folders are under assets/video/;

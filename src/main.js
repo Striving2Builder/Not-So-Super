@@ -11,7 +11,7 @@ import { NightCase } from './nightcase.js';
 import { AsylumZone } from './asylum.js';
 import { Nightclub } from './nightclub/nightclub.js';
 import { showNewspaper } from './newspaper.js';
-import { HERO, DISTRICTS, THEMES, DEALS, BOSSES, VENUES, BILLBOARDS } from './data.js';
+import { HERO, DISTRICTS, THEMES, DEALS, BOSSES, VENUES, BILLBOARDS, CAPTURE_VIDEOS } from './data.js';
 import { UI, dialog, toast } from './ui.js';
 import { sfx } from './sfx.js';
 import { ambience } from './ambience.js';
@@ -92,7 +92,7 @@ game.newClubs = NEW_CLUBS; // the overworld skips loading the premade club build
 
 /** Which game mode plays a zone. */
 function modeFor(z) {
-  // the detective nightclub redesign (docs/design/nightclub.md)
+  // the detective nightclub redesign (docs/design/nightclub-2d.md)
   if (NEW_CLUBS && (z.mode === 'special' || z.mode === 'nightcase') && (VENUES[z.venue]?.club || VENUES[z.venue]?.kind === 'club')) return 'nightclub';
   if (z.mode === 'special' && VENUES[z.venue]?.club) return 'club';  // raid inside a premade club
   return { brawl: 'brawler', investigate: 'investigate', special: 'special', nightcase: 'nightcase', asylum: 'asylum' }[z.mode];
@@ -112,15 +112,22 @@ game.startZone = (z) => {
   if (z.mode === 'brawl' && game.h > game.w) toast('Tip: rotate to landscape for street fights', 'info');
 };
 
+/**
+ * Fully captured, from anywhere: the forced capture clip (it loops; the first tap turns the sound
+ * on, then a few deliberate taps skip it), then the capture room.
+ */
+async function captureFlow(zone, reason) {
+  game.state.stats.captures++;
+  const F = CAPTURE_VIDEOS.forced;
+  await playCutscene({ folder: CAPTURE_VIDEOS.folder, caption: reason || '', maxSecs: 0, loops: F.loops, skipTaps: F.skipTaps });
+  game.setMode('captured', { zone, reason, direct: chance(0.25) });
+  game.commentary.onZoneEnd('captured');
+}
+
 game.endZone = async (zone, res) => {
   const st = game.state;
   game.overworld.removeZone(zone);
-  if (res.outcome === 'captured') {
-    st.stats.captures++;
-    game.setMode('captured', { zone, reason: res.reason, direct: chance(0.25) });
-    game.commentary.onZoneEnd('captured');
-    return;
-  }
+  if (res.outcome === 'captured') { await captureFlow(zone, res.reason); return; }
   if (res.outcome === 'win') {
     if (zone.leadId) { st.leads = st.leads.filter((l) => l.id !== zone.leadId); st.leadsDone.push(zone.leadId); } // a case lead, closed
     st.addRep(res.rep, 'Saved the day');
@@ -130,15 +137,15 @@ game.endZone = async (zone, res) => {
     await showNewspaper({ ...victoryPaper(zone, res), rep: res.rep });
   } else if (res.outcome === 'lose') {
     st.addRep(res.rep, 'Mission failed');
-    if (zone.mode === 'brawl') {
-      // story beat: the city wakes up to her defeat on every billboard
-      const vice = BILLBOARDS.vice.includes(zone.district);
-      await playScreenScene({
-        screens: vice ? BILLBOARDS.rld : BILLBOARDS.downtown, folder: BILLBOARDS.folders, maxSecs: 14, holdSecs: 4,
-        caption: `By morning, every billboard in ${DISTRICTS[zone.district]?.name || 'the city'} is playing it…`,
-      });
-    }
     await dialog({ title: 'Mission failed', text: res.text || 'The crooks got away this time.' });
+    if (zone.mode === 'brawl') {
+      // a lost fight is a double loss: the penalty above, and the crooks carry her off to their
+      // hideout (the billboards play the fight once the capture is over: endCapture)
+      zone.lostFight = true;
+      zone.venue = zone.venue || `${DISTRICTS[zone.district]?.name || 'Street'} hideout`;
+      await captureFlow(zone, res.reason || `The crooks drag ${HERO} off before she can get back up…`);
+      return;
+    }
   } else {
     st.addRep(res.rep, 'Left the scene');
   }
@@ -150,6 +157,14 @@ game.endZone = async (zone, res) => {
 game.endCapture = async (zone, escaped, villain) => {
   const st = game.state;
   const venue = zone.venue.toUpperCase();
+  if (zone.lostFight) {
+    // story beat: the city wakes up to her lost fight on every billboard
+    const vice = BILLBOARDS.vice.includes(zone.district);
+    await playScreenScene({
+      screens: vice ? BILLBOARDS.rld : BILLBOARDS.downtown, folder: BILLBOARDS.folders, maxSecs: 14, holdSecs: 4,
+      caption: `By morning, every billboard in ${DISTRICTS[zone.district]?.name || 'the city'} is playing the fight…`,
+    });
+  }
   if (escaped) {
     st.addRep(-10, 'Captured');
     await showNewspaper({
@@ -239,7 +254,7 @@ function victoryPaper(zone, res) {
 // ---------------------------------------------------------------- menus
 const HOWTO = `<div class="howto">
   <h3>Patrol</h3>Fly over the city with the joystick (or <kbd>WASD</kbd>/arrows). <kbd>Shift</kbd>/BOOST to go fast. Change altitude with <kbd>R</kbd>/▲ and <kbd>F</kbd>/▼: high patrol is fast and hides you from tabloid cameras; skimming the rooftops lets you see the streets, but towers get in the way. Slow down over a rooftop and press <kbd>H</kbd>/PERCH to land and use super-hearing to pick up nearby crimes. Glowing beacons are incidents — fly over one and press DIVE (<kbd>Space</kbd>); you can steer your dive. <kbd>M</kbd> opens the map: tap it (or an incident in the list) to set a waypoint, and with autopilot on she flies there whenever you let go of the stick.<h3>In the air</h3>Emergencies happen mid-flight: catch a falling window-washer or a spiralling helicopter at <i>their</i> height, drop to rooftop height to grab runaway and getaway cars, fly a stunt course of hoops, and perch on a roof to rescue a stranded kitten. At night in vice districts, tabloid drones tail you and every flash adds tabloid heat: boost away or climb to high patrol to lose them.
-  <h3>Street crime ( ! and fires)</h3>Side-scrolling brawls. PUNCH (<kbd>J</kbd>) combos, JUMP (<kbd>L</kbd>/<kbd>Space</kbd>) for flying kicks, HEAT VISION / FREEZE BREATH (<kbd>K</kbd>). Stand next to captives to untie them.
+  <h3>Street crime ( ! and fires)</h3>Side-scrolling brawls. PUNCH (<kbd>J</kbd>) combos, JUMP (<kbd>L</kbd>/<kbd>Space</kbd>) for flying kicks, HEAT VISION / FREEZE BREATH (<kbd>K</kbd>). Stand next to captives to untie them. <b>Lose a fight and the crooks carry you off</b>: a lost fight costs reputation and gets you captured.
   <h3>Investigations ( ? )</h3>Tap objects to search. X-RAY (<kbd>X</kbd>) sees inside sealed things. CAMERA (<kbd>C</kbd>) photographs found clues for bonus rep. Question the witness, then accuse the suspect whose traits match your clues.
   <h3>Special zones ( ★ and ☠ bosses)</h3>3D infiltrations. Get the door code, find the keycard, get into the back room, finish the job and escape. USE (<kbd>E</kbd>), PUNCH (<kbd>F</kbd>) guards from behind, X-RAY reveals bait. Drag the screen to turn the camera. <b>You can be captured here.</b>
   <h3>Ravenmoor Asylum ( ✚ )</h3>A 3D investigation in padded-cell corridors. Open cell doors (USE) to find clues, patients and witnesses; X-RAY sees through the doors. Orderlies patrol the halls. <b>Get caught and you're sedated</b>: you wake in a cell with the same case reset. The only way out is to name the culprit (SUSPECTS).

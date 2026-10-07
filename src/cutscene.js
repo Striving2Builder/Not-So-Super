@@ -11,46 +11,54 @@ import { pick, $ } from './util.js';
  * @param caption   HTML over the bottom of the screen
  * @param maxSecs   cut videos off after this long; 0 plays until the clip ends
  * @param tapSkips  a tap always ends it (otherwise the first tap turns sound on)
+ * @param loops     play the clip this many times through (the forced capture clip: 3)
+ * @param skipTaps  taps it takes to skip (after the sound tap); a counter shows what's left
  * @returns Promise that resolves when it's over
  */
-export async function playCutscene({ folder, src, caption = '', maxSecs = 12, holdSecs = 3.2, tapSkips = false }) {
+export async function playCutscene({ folder, src, caption = '', maxSecs = 12, holdSecs = 3.2, tapSkips = false, loops = 1, skipTaps = 1 }) {
   const el = $('cutscene');
   if (!el) return;
   const url = src || pick((await mediaFolders())[folder] || []) || null;
   const video = el.querySelector('video'), img = el.querySelector('img');
+  const skipEl = el.querySelector('.cs-skip'), skipText = skipEl.textContent;
   el.querySelector('.cs-cap').innerHTML = caption;
   el.classList.toggle('bare', !url);
   el.classList.add('on');
   UI.open++;
   return new Promise((resolve) => {
-    let done = false, timer = null;
+    let done = false, timer = null, played = 0, taps = 0;
     const end = () => {
       if (done) return;
       done = true;
       clearTimeout(timer);
       removeEventListener('keydown', key, true);
       el.removeEventListener('click', onClick);
-      video.pause(); video.loop = false; video.removeAttribute('src'); video.load();
+      video.pause(); video.loop = false; video.onended = null; video.removeAttribute('src'); video.load();
       img.removeAttribute('src');
+      skipEl.textContent = skipText;
       el.classList.remove('on');
       UI.open = Math.max(0, UI.open - 1);
       resolve();
     };
-    const key = (e) => { e.preventDefault(); e.stopPropagation(); end(); };
+    const left = () => { skipEl.textContent = skipTaps > 1 ? (taps ? `tap ${skipTaps - taps} more to skip` : `tap ${skipTaps}× to skip`) : skipText; };
+    // a skip takes skipTaps deliberate taps (or keys), so a stray one never ends a forced clip
+    const skip = () => { if (++taps >= skipTaps) end(); else left(); };
+    const key = (e) => { e.preventDefault(); e.stopPropagation(); skip(); };
     const onClick = () => {
       if (!tapSkips && video.muted && video.src && !video.paused) { video.muted = false; return; }
-      end();
+      skip();
     };
     addEventListener('keydown', key, true);
     el.addEventListener('click', onClick);
+    left();
     if (url && !isImage(url)) {
       el.classList.remove('still');
       video.loop = false;
       video.src = url;
-      video.onended = end;
+      video.onended = () => { if (++played < loops) { video.currentTime = 0; video.play().catch(() => {}); } else end(); };
       video.onerror = () => { timer = setTimeout(end, holdSecs * 1000); }; // missing file: caption only
       video.play().catch(() => { video.muted = true; video.play().catch(() => {}); }); // sound if allowed
-      if (maxSecs > 0) timer = setTimeout(end, maxSecs * 1000);
+      if (maxSecs > 0 && loops <= 1) timer = setTimeout(end, maxSecs * 1000);
     } else {
       el.classList.add('still');
       if (url) img.src = url;
