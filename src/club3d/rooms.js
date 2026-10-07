@@ -128,33 +128,33 @@ export function buildRoom(zn, plan, q, M, X, video) {
     for (const v of [6.2, 7.2]) box(0.7, 1.6, 0.9, -(w / 2 - 0.55), 0.8, v, steel);
     A.boss = { x: at(0, 2.3)[0], z: at(0, 2.3)[1], rot: 0 };
     { const [x, z] = at(0.6, 4.7); A.closeup = { x, z }; A.confront = { x, z: z + 0.2 }; }
-    // the safe, behind a painting on the outer wall; X-ray sees through the canvas
-    const sv = 2.0;
-    { const [x, z] = [outer - s * 0.12, q.z0 + sv]; A.safe = { x: outer - s * 1.1, z, wx: x, wz: z };
-      const art = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.0), new THREE.MeshBasicMaterial({ map: tex(cnv(128, 96, (c) => { const g = c.createLinearGradient(0, 0, 128, 96); g.addColorStop(0, '#c08a40'); g.addColorStop(1, '#3a1a40'); c.fillStyle = g; c.fillRect(0, 0, 128, 96); c.fillStyle = '#ffe9b0'; c.beginPath(); c.arc(80, 34, 16, 0, TAU); c.fill(); c.strokeStyle = '#c09a34'; c.lineWidth = 8; c.strokeRect(0, 0, 128, 96); })) }));
-      art.position.set(x, 1.7, z); art.rotation.y = s < 0 ? Math.PI / 2 : -Math.PI / 2; S.add(art); A.safe.art = art; }
-    // the CCTV wall on the outer wall, nearer the camera: four feeds
+    // (the camera always looks north: whatever she should see faces south, on the back wall)
+    // the safe, behind a painting on the back wall; X-ray sees through the canvas
+    { const [x, z] = at(-(w / 2 - 2.2), 0.28); A.safe = { x, z: z + 1.4, wx: x, wz: z - 0.06 };
+      const art = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.05), new THREE.MeshBasicMaterial({ map: tex(cnv(128, 96, (c) => { const g = c.createLinearGradient(0, 0, 128, 96); g.addColorStop(0, '#c08a40'); g.addColorStop(1, '#3a1a40'); c.fillStyle = g; c.fillRect(0, 0, 128, 96); c.fillStyle = '#ffe9b0'; c.beginPath(); c.arc(80, 34, 16, 0, TAU); c.fill(); c.strokeStyle = '#c09a34'; c.lineWidth = 8; c.strokeRect(0, 0, 128, 96); })) }));
+      art.position.set(x, 1.75, z); S.add(art); A.safe.art = art; }
+    // the CCTV bank on the back wall: four feeds (two live cameras, two from the recorder)
     A.cctv = [];
     for (let i = 0; i < 4; i++) {
-      const sc = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.72), screenMat(video, { scan: true, bright: 1.1, bg: 0x0a1a12 }));
-      sc.position.set(outer - s * 0.1, 1.55 + (i >> 1) * 0.8, q.z0 + 4.4 + (i & 1) * 1.25);
-      sc.rotation.y = s < 0 ? Math.PI / 2 : -Math.PI / 2; S.add(sc);
+      const sc = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.72), screenMat(video, { scan: true, bright: 1.1, bg: 0x0a1a12, fit: 1.15 / 0.72 }));
+      const [x, z] = at(w / 2 - 2.6 + (i & 1) * 1.25 - 0.62, 0.3);
+      sc.position.set(x, 1.45 + (i >> 1) * 0.82, z); S.add(sc);
       A.cctv.push(sc.material);
     }
-    box(0.25, 1.9, 2.8, w / 2 - 0.15, 1.95, 5.0, lam(0x0c0b12), { collide: false }); // the monitors' backing
-    A.recorder = { x: outer - s * 1.0, z: q.z0 + 6.6 };
+    { const [x, z] = at(w / 2 - 2.6, 0.18); zn.box(2.8, 1.9, 0.2, x, 1.86, z, lam(0x0c0b12), { collide: false }); } // the monitors' backing
+    { const [x, z] = at(w / 2 - 2.6, 1.5); A.recorder = { x, z }; }
     X.pool(...at(0, 3.4), 2.4, 0xfff2a0, 0.3);
   } else if (q.kind === 'restroom') {
     const part = lam(0x2a4a4c), door = lam(0x1a3436);
-    for (let i = 0; i <= 3; i++) box(0.12, 2.1, 1.6, -w / 2 + 2 + i * 1.6, 1.05, 0.8, part);
-    for (let i = 0; i < 3; i++) box(1.3, 1.9, 0.08, -w / 2 + 2.8 + i * 1.6, 1.05, 1.62, door, { collide: false });
-    A.stalls = [0, 1, 2].map((i) => ({ x: at(-w / 2 + 2.8 + i * 1.6, 2.4)[0], z: at(0, 2.4)[1] }));
-    // sinks along the outer wall + the mirror above them
-    box(0.7, 0.9, 4.2, w / 2 - 0.5, 0.45, 5.6, lam(0xd8e0e0));
-    const mirror = new THREE.Mesh(new THREE.PlaneGeometry(4.0, 1.2), new THREE.MeshBasicMaterial({ color: 0x5a7a88 }));
-    mirror.position.set(outer - s * 0.08, 1.75, q.z0 + 5.6); mirror.rotation.y = s < 0 ? Math.PI / 2 : -Math.PI / 2; S.add(mirror);
+    // three stalls along the inner half of the back wall, the sinks + mirror along the outer half
+    for (let i = 0; i <= 3; i++) box(0.12, 2.1, 1.6, -w / 2 + 0.9 + i * 1.6, 1.05, 0.8, part);
+    for (let i = 0; i < 3; i++) box(1.3, 1.9, 0.08, -w / 2 + 1.7 + i * 1.6, 1.05, 1.62, door, { collide: false });
+    A.stalls = [0, 1, 2].map((i) => { const [x, z] = at(-w / 2 + 1.7 + i * 1.6, 2.4); return { x, z }; });
+    box(4.4, 0.9, 0.7, w / 2 - 2.9, 0.45, 0.45, lam(0xd8e0e0));
+    const mirror = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 1.2), new THREE.MeshBasicMaterial({ color: 0x5a7a88 }));
+    { const [x, z] = at(w / 2 - 2.9, 0.26); mirror.position.set(x, 1.8, z); } S.add(mirror);
     A.mirror = mirror;
-    { const [x, z] = at(w / 2 - 1.6, 5.6); A.closeup = { x, z }; }
+    { const [x, z] = at(w / 2 - 2.9, 1.6); A.closeup = { x, z }; }
     A.deal = A.stalls[2]; A.powder = A.stalls[0]; A.change = A.stalls[1];
     X.pool(...at(0, 4), 3, 0x7fffd4, 0.18);
   } else if (q.kind === 'dark') {

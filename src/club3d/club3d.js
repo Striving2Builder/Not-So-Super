@@ -48,9 +48,10 @@ const VISIT = () => ({
   hearing: false, dvision: 0, dvisionWas: false, xrayFree: 0, recog: 0, fansCard: false,
   vipIn: false, vipDone: false, vipLock: 0, quizPenalty: false,
   officeOpen: false, officeHeard: false, officeEar: 0, knowsOfficeCode: false, bossDone: false, bossWary: 0,
-  safeDone: false, recorderWiped: false, cctvDead: false, wasInOffice: undefined,
+  safeDone: false, recorderWiped: false, cctvDead: false,
   stockOpen: false, stashFound: false, uvRead: false, powderTaken: false, shotDone: false,
   drinks: 0, drunkCard: false, predator: null, predatorDone: false, taps: [], offerOut: false, snapQueue: [],
+  videoWant: null, cctvRT: null, extraPeople: [],
 });
 
 export class Club3D extends Special3D {
@@ -112,6 +113,7 @@ export class Club3D extends Special3D {
     for (const p of people) if (near(p, this.hallA.spots.bar.x, this.hallA.spots.bar.z, 3)) p.pose = 'stand';
     people.push(...X.people, ...(this.roomA.dark?.dancers || []), ...(this.roomA.lounge?.loungers || []));
     for (const s of this.roomA.vip?.seats || []) people.push({ x: s.x, z: s.z, pose: 'sit', rot: 0, y: 0, fixed: true });
+    people.push(...(this.extraPeople || []));
     this.crowd = new ClubCrowd(this, plan, people);
     this.video.show('ClubDJ', { extra: ['assets/nightclub/plates/set_main.mp4'] });
   }
@@ -141,6 +143,8 @@ export class Club3D extends Special3D {
 
   exit() {
     this.closeOverlays?.();
+    for (const rt of this.cctvRT || []) rt.dispose();
+    this.cctvRT = null;
     this.endChatter?.();
     this.music?.stop();
     this.video?.dispose(); this.video = null;
@@ -172,6 +176,7 @@ export class Club3D extends Special3D {
   // ---------------------------------------------------------------- update
   update(dt) {
     if (this.warming) return;
+    this.music.update(this.hearing ? 1 : 0, false); // (the beat goes on under a close-up, the dance, a fight)
     if (this.sub) { this.sub.update(dt); return; } // a fight in a back room, the VIP dance, a close-up
     if (this.done && this.keepAnimating && this.heroModel) this.heroModel.update(dt);
     if (this.scene) for (const e of this.cast) e.update(dt);
@@ -258,7 +263,6 @@ export class Club3D extends Special3D {
     tickScreens(this.screens, this.video, this.t, flash * 0.4);
     this.X.glow.flush(); this.X.signs.flush();
     if (this.X.pmat && this.renderer) this.X.pmat.uniforms.uScale.value = this.renderer.domElement.height / (2 * Math.tan((this.cam.fov * Math.PI) / 360));
-    this.music.update(this.hearing ? 1 : 0, false);
   }
 
   /** Run an async interaction with the world held still until it's done. */
@@ -282,6 +286,8 @@ export class Club3D extends Special3D {
   /** Guards' sight goes through this: hidden in the crowd, or blinded by the strobe, they don't see her. */
   clearLOS(a, b) {
     if (this.strobe > 0 || this.blend >= 0.75 || this.event?.id === 'raid' && this.event.phase === 1) return false;
+    // the VIP's rope bouncer is a gatekeeper, not an alarm: only someone in the VIP without leave alerts him
+    if (this.ropeGuard && a === this.ropeGuard.mesh.position && !(this.room === this.plan.byKind.vip && !this.vipIn)) return false;
     return super.clearLOS(a, b);
   }
 

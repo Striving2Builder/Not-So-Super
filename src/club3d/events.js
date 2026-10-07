@@ -115,6 +115,9 @@ export const eventMethods = {
       const vq = this.plan.byKind.vip, s = vq.side === 'W' ? 1 : -1;
       this.celeb = this.npc({ ...npcLook('civilian'), top: '#ffd84d', skirt: '#ffd84d', bottom: null, hairStyle: 'long', size: 1.04 }, vq.door.x + s * 4.2, vq.door.z + 2.6, -s * Math.PI / 2);
       this.addInter({ x: this.celeb.position.x, z: this.celeb.position.z + 1.2 }, 'Talk to the celebrity', () => !E.met, () => this.meetCeleb());
+      // the VIP is packed tonight: more of the entourage on the couches
+      const vip = this.roomA.vip;
+      if (vip) for (const u of [-1.4, 1.4, 3.0]) this.extraPeople.push({ x: vip.host.x + u * (vq.side === 'W' ? -1 : 1), z: vip.host.z + 0.05, pose: 'sit', rot: 0, y: 0, fixed: true });
     }
     if (E.id === 'paparazzi') {
       E.pap = [];

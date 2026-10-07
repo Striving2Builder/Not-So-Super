@@ -239,7 +239,7 @@ export const CAPTURE_VIDEOS = {
 // City feed: clips in the minimap corner (src/cityfeed.js). Folders are under assets/video/;
 // run `node tools/build_video_manifest.js` after adding clips.
 export const CITY_FEED = {
-  folders: { flying: 'Flying', rooftop: 'SG_Roof_Game', rld: 'SG_RLD_Game', intox: 'SG_Intox_Game' },
+  folders: { flying: 'Flying', rooftop: 'SG_Roof_Game', rld: 'SG_RLD_Game', intox: 'SG_Intox_Game', leak: 'SG_Captured_Game' }, // leak: played on cue (the 3D club's owner releasing her night)
   rld: 'redlight',              // this district plays the rld folder instead of flying clips
   hot: ['redlight', 'entertainment'], // clips keep coming while she's in these districts
   cooldown: 35,        // seconds between district-entry clips elsewhere

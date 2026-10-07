@@ -11,6 +11,8 @@ import { showNewspaper } from '../newspaper.js';
 import { playScreenScene } from '../cutscene.js';
 import { BILLBOARDS, DEALS, DISTRICTS, HERO } from '../data.js';
 import { pick, clamp } from '../util.js';
+import * as THREE from 'three';
+import { screenMat } from './video.js';
 
 const STOLEN = new Set(['pill', 'drunk', 'sedated', 'fans', 'paparazzi', 'couch', 'photos']); // what the safe holds
 
@@ -87,13 +89,52 @@ export const officeMethods = {
     for (const m of this.roomA.office?.cctv || []) m.userData.screen.bright.value = 0.25;
   },
 
-  /** Per frame (from stepCast): the CCTV shows her own dance once she's danced; the hall's video comes back outside. */
+  /**
+   * Per frame (from stepCast): what the one shared video plays follows where she is. The office's
+   * CCTV shows her own dance once she's danced; the restroom mirror, when she's dosed, shows a
+   * hallucination (her, dancing); everywhere else the DJ loop. Plus the live CCTV feeds.
+   */
   officeVideo() {
-    const inOffice = this.room === this.plan.byKind.office;
-    if (inOffice === this.wasInOffice) return;
-    this.wasInOffice = inOffice;
-    if (inOffice && !this.cctvDead && (this.envelope || []).some((c) => c.id === 'dance')) this.video.show('ClubDance', { keyed: true });
-    else this.video.show('ClubDJ', { extra: ['assets/nightclub/plates/set_main.mp4'] });
+    const q = this.room, inOffice = q === this.plan.byKind.office;
+    const halluc = q === this.plan.byKind.restroom && this.g.state.intox >= 45;
+    const want = inOffice ? (!this.cctvDead && (this.envelope || []).some((c) => c.id === 'dance') ? 'dance' : 'dj') : halluc ? 'mirror' : 'dj';
+    if (want !== this.videoWant) {
+      this.videoWant = want;
+      if (want === 'dj') this.video.show('ClubDJ', { extra: ['assets/nightclub/plates/set_main.mp4'] });
+      else this.video.show('ClubDance', { keyed: true });
+      this.mirrorOn(want === 'mirror');
+    }
+    if (inOffice && !this.cctvDead) this.stepCCTV();
+  },
+
+  /** The restroom mirror: glass, or (dosed) a screen showing her dancing back at her. */
+  mirrorOn(on) {
+    const m = this.roomA.restroom?.mirror;
+    if (!m) return;
+    if (!m.userData.glass) { m.userData.glass = m.material; m.userData.screen = screenMat(this.video, { bright: 0.9, bg: 0x2a3a48, fit: 4.2 / 1.2 }); this.screens.push(m.userData.screen); }
+    m.material = on ? m.userData.screen : m.userData.glass;
+    if (on) toast('The mirror isn\'t showing you. Or it is, and you\'re dancing.', 'info');
+  },
+
+  /** Two of the office's monitors are live: low-res views of the hall from the security cameras. */
+  stepCCTV() {
+    const cctv = this.roomA.office?.cctv;
+    if (!cctv?.length) return;
+    if (!this.cctvRT) {
+      const V = this.plan.V;
+      this.cctvRT = [0, 1].map(() => new THREE.WebGLRenderTarget(256, 144));
+      this.cctvCams = [
+        [new THREE.Vector3(V.hw - 1.5, V.wallH - 0.6, V.hd - 1.5), new THREE.Vector3(0, 0, V.floor.z)],
+        [new THREE.Vector3(-V.hw + 1.5, V.wallH - 0.6, -V.hd + 2), new THREE.Vector3(0, 0, V.hd * 0.4)],
+      ].map(([p, t]) => { const c = new THREE.PerspectiveCamera(70, 16 / 9, 0.3, 120); c.position.copy(p); c.lookAt(t); return c; });
+      cctv.slice(0, 2).forEach((m, i) => { m.userData.screen.map.value = this.cctvRT[i].texture; m.userData.live = true; });
+      this.cctvT = 0; this.cctvI = 0;
+    }
+    this.cctvT -= this.frameDt || 1 / 60;
+    if (this.cctvT > 0) return;
+    this.cctvT = 0.3;                    // a feed refreshes ~3x a second, one camera per refresh
+    const i = (this.cctvI = (this.cctvI + 1) % 2), r = this.renderer;
+    r.setRenderTarget(this.cctvRT[i]); r.render(this.scene, this.cctvCams[i]); r.setRenderTarget(null);
   },
 
   async confront() {
@@ -171,6 +212,9 @@ export const officeMethods = {
     await dialog({ speaker: B.name, text: '"Now get out of my club." Two bouncers walk you to the door.' });
     banner('THROWN OUT', 'The case stays open', '#ff3fb8');
     this.done = true;
-    this.g.endZone(this.zone, { outcome: 'abort', rep: 0 });
+    const venue = zone.venue || 'the club';
+    await this.g.endZone(this.zone, { outcome: 'abort', rep: 0 });
+    // …and back in the sky, the LIVE feed is playing it too
+    if (v === 'A') setTimeout(() => this.g.overworld?.feed?.play('leak', `LEAKED · ${venue}`, true), 1200);
   },
 };

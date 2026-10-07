@@ -23,7 +23,7 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const argv = process.argv.slice(2);
 const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
 const LABEL = arg('--label', 'c3'), PORT = +arg('--port', 8881), CASE = arg('--case', 'squirt');
-const ROOMS = arg('--rooms', 'rave,mezzanine,pit,centre,tunnel').split(',').filter(Boolean);
+const ROOMS = arg('--rooms', 'rave,mezzanine,pit,centre,tunnel').split(',').filter((r) => r && r !== 'none');
 const FLOWS = arg('--flows', 'all');
 const W = +arg('--w', 844), H = +arg('--h', 390);
 const OUT = path.join(ROOT, 'shots', LABEL, 'club3d');
@@ -132,6 +132,14 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
       });
       await V.page.waitForTimeout(900); await V.shot('flow_closeup_phone');
       return { clues: await V.page.evaluate(() => window.__game.mode.book.count) };
+    });
+    await flow('screens', '&club3room=rave&club3seed=7&club3event=none', async (V) => {
+      // the office's live CCTV + her recorded dance; the restroom mirror when she's dosed
+      await V.page.evaluate(() => { const m = window.__game.mode; m.officeOpen = true; m.openDoorOf('office'); m.addCard('dance', 'test', null); const b = m.roomA.office.recorder; m.hero.position.set(b.x, 0, b.z - 0.8); m.camSnap = true; });
+      await V.page.waitForTimeout(2500); await V.shot('flow_screens_cctv');
+      await V.page.evaluate(() => { const m = window.__game.mode, c = m.roomA.restroom.closeup; m.g.state.intox = 60; m.hero.position.set(c.x, 0, c.z); m.camSnap = true; });
+      await V.page.waitForTimeout(2500); await V.shot('flow_screens_mirror');
+      return await V.page.evaluate(() => ({ video: window.__game.mode.videoWant, cctv: !!window.__game.mode.cctvRT }));
     });
     await flow('dance', '&club3room=rave&club3seed=7&club3event=none', async (V) => {
       await V.page.evaluate(() => { const m = window.__game.mode, h = m.roomA.vip.quiz; m.vipIn = true; m.openDoorOf('vip'); m.hero.position.set(h.x, 0, h.z); m.camSnap = true; m.run(() => m.vipFail()); });
