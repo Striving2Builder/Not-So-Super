@@ -73,7 +73,7 @@ export const sedationMethods = {
 
   checkFailures() {
     if (this.alert >= 100) { this.alert = 60; this.foundOut(`The bouncers close in on ${HERO}.`); return true; }
-    if (this.g.state.intox >= 99.5) { this.sedate('Super Squirt takes her legs out from under her…', { blackout: true }); return true; }
+    if (this.g.state.intox >= 99.5) { this.sedate(`${this.caseDef.drugName || 'The drink'} takes her legs out from under her…`, { blackout: true }); return true; }
     return false;
   },
 

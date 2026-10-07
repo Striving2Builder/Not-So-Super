@@ -37,7 +37,7 @@ export const viceMethods = {
     const opts = [
       { label: '"The house special."', note: `+${DOSE.special} intoxication · he talks to drinkers`, value: 'special', cls: 'risky' },
       { label: '"Just water."', value: 'water' },
-      { label: '"Tell me about Moe."', value: 'ask' },
+      { label: '"What\'s really going on in here?"', value: 'ask' },
     ];
     if (spiked && !this.book.has('bar', 'spiked')) opts.unshift({ label: 'Expose the spiked "house special"', note: 'X-ray: powder in the glass', value: 'expose', cls: 'good' });
     opts.push({ label: 'Leave it', value: null });
@@ -50,7 +50,7 @@ export const viceMethods = {
     } else if (v === 'ask') {
       if (!this.drinks) await dialog({ speaker: 'Bartender', text: '"Buy something first. Then we talk."' });
       else if (!this.book.has('bar', 'napkin')) await this.gotClue('bar:napkin', { title: 'The bartender leans in' });
-      else await dialog({ speaker: 'Bartender', text: '"Moe runs the decks. That\'s all anybody says out loud."' });
+      else await dialog({ speaker: 'Bartender', text: '"That\'s all anybody says out loud in here. Ask upstairs."' });
     } else if (v === 'expose') {
       await this.gotClue('bar:spiked', { title: 'Spiked' });
       this.alert = Math.min(90, this.alert + 15);
@@ -73,7 +73,7 @@ export const viceMethods = {
 
   /** The DJ's vial (the booth close-up): drug-vision for a while. Required for the stock-room code. */
   async drinkVial(text) {
-    const v = await dialog({ title: 'Super Squirt', text: `${text}<span class="hint">Drink it: +${DOSE.vial} intoxication and you'll see what the sober crowd can't.</span>`, options: [{ label: 'Knock it back', value: true, cls: 'risky' }, { label: 'Leave it', value: false }] });
+    const v = await dialog({ title: this.caseDef.drugName || 'The vial', text: `${text}<span class="hint">Drink it: +${DOSE.vial} intoxication. On a Kryptonian it does something else: you'll see what the sober crowd can't.</span>`, options: [{ label: 'Knock it back', value: true, cls: 'risky' }, { label: 'Leave it', value: false }] });
     if (!v) return;
     sfx.drink(); this.g.state.addIntox(DOSE.vial);
     this.dvision = 45;
@@ -98,7 +98,7 @@ export const viceMethods = {
       this.items.add('VIP wristband');
       const r = (this.caseDef.rumours || []).find((q) => q.teach === 'who');
       if (r) this.noteRumour(r);
-      await dialog({ speaker: 'The gangster', text: '"Ha! Respect." He slides a VIP wristband across the table. "Rico only lets in people K sends. Tell him that."<span class="hint">You got a VIP wristband.</span>' });
+      await dialog({ speaker: 'The gangster', text: `"Ha! Respect." He slides a VIP wristband across the table.${r ? ` "${this.rumourText(r)} Remember that."` : ''}<span class="hint">You got a VIP wristband.</span>` });
     } else {
       sfx.drink(); st.addIntox(DOSE.shotLose);
       this.addCard('drunk', `${HERO} losing a drinking game`);

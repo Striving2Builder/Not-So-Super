@@ -1,14 +1,15 @@
 // The case in the 3D club: the CaseBook (shared with the 2D club's case data), the rumours and
 // whispers she's noted, the VIP answers she's learned, the case board (CASE), the accusation,
 // solving it (the leads go on the map) and getting out (the exit ring or the skylight).
-import { pickCase, CaseBook } from '../nightclub/case.js';
+import { pickCase, CaseBook, CLUB_CASES } from '../nightclub/case.js';
 import { dialog, toast, banner } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { HERO } from '../data.js';
 
 export const caseMethods = {
   startCase(zone) {
-    this.caseDef = pickCase(zone);
+    const forced = CLUB_CASES[new URLSearchParams(location.search).get('club3case')];
+    this.caseDef = forced || pickCase(zone, this.g.state);
     this.book = new CaseBook(this.caseDef);
     this.noted = new Set();      // rumour / whisper ids she's noted
     this.learned = new Set();    // VIP questions she knows the answer to
@@ -70,7 +71,7 @@ export const caseMethods = {
     this.g.state.addIntox(40); sfx.drink();
     this.alert = Math.min(95, this.alert + 25);
     this.addCard('drunk', 'Dosed after a wrong accusation');
-    await dialog({ title: 'Wrong call', text: `${right} of ${this.caseDef.questions.length} right. Word gets round the club fast. Before you can think it through, someone presses a glowing shot into your hand and the crowd makes sure you drink it.` });
+    await dialog({ title: 'Wrong call', text: `${right} of ${this.caseDef.questions.length} right. Word gets round the club fast. Before you can think it through, someone presses a drink into your hand and the crowd makes sure you finish it.` });
   },
 
   /** Solved (accusation or confession): the leads go on the map; now she has to get out. */

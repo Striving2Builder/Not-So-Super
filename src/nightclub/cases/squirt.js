@@ -106,6 +106,8 @@ export const SQUIRT = {
   },
   // ---- the 3D club (v3): Talkers, the crowd's rumours, the VIP host, the owner
   solvedText: 'Moe deals it, "K" supplies it, and the next drop is Thursday at Pier 9.',
+  drugName: 'Super Squirt', uvLine: 'SS > PIER 9 THU',
+  carrierLine: 'Kraken-stamped cap: the crowd\'s being supplied right here.',
   talks: [
     { id: 'pushers', who: 'Two dealers', clue: 'talk:pushers' },
     { id: 'crew', who: 'Two of the crew', clue: 'talk:crew' },

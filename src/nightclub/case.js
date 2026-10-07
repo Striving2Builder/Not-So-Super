@@ -1,12 +1,24 @@
 // The detective nightclubs' case engine: which case a club visit plays, the clues found so far, the
 // case board's lines and the leads a solved case puts on the map. Cases are data
-// (src/nightclub/cases/*.js); a second one (blackmail) slots in here.
+// (src/nightclub/cases/*.js): Super Squirt and the Polaroid Racket.
 import { SQUIRT } from './cases/squirt.js';
+import { BLACKMAIL } from './cases/blackmail.js';
 
-export const CLUB_CASES = { squirt: SQUIRT };
+export const CLUB_CASES = { squirt: SQUIRT, blackmail: BLACKMAIL };
 
-/** The case for this visit (one case for now; later by the zone's theme, e.g. 'blackmail'). */
-export function pickCase(zone) { return CLUB_CASES[zone?.clubCase] || SQUIRT; }
+/**
+ * The case for this visit: the zone's own (unless it's solved already), else one she hasn't
+ * solved yet (any, once she's solved them all). `state` = the save (its solved cases).
+ */
+export function pickCase(zone, state = null) {
+  const own = CLUB_CASES[zone?.clubCase];
+  const solved = (c) => !!state?.cases?.[c.id]?.solved;
+  if (own && !solved(own)) return own;
+  if (!state) return own || SQUIRT;
+  const open = Object.values(CLUB_CASES).filter((c) => !solved(c));
+  const pool = open.length ? open : Object.values(CLUB_CASES);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 export class CaseBook {
   constructor(def) { this.def = def; this.found = new Set(); }

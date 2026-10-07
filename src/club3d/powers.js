@@ -41,7 +41,7 @@ export const powerMethods = {
     const uvT = tex(cnv(512, 256, (c) => {
       c.fillStyle = '#000'; c.fillRect(0, 0, 512, 256);
       neonText(c, `STOCK ${this.stockCode}`, 256, 80, 70, '#c070ff', { maxW: 480 });
-      neonText(c, 'SS > PIER 9 THU', 256, 180, 54, '#7affd8', { maxW: 480 });
+      neonText(c, this.caseDef.uvLine || '', 256, 180, 54, '#7affd8', { maxW: 480 });
     }));
     const uv = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.3), new THREE.MeshBasicMaterial({ map: uvT, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0 }));
     uv.position.set(this.uvSpot.x + sgn * 0.04, 1.9, this.uvSpot.z); uv.rotation.y = sgn > 0 ? Math.PI / 2 : -Math.PI / 2;
@@ -59,7 +59,7 @@ export const powerMethods = {
     mk.lifted = true; mk.s.visible = false;
     sfx.pickup();
     this.bonus = (this.bonus || 0) + 3;
-    toast('You lift a vial off him. Kraken-stamped cap: the crowd\'s being supplied right here.', 'good');
+    toast(`You lift a vial off him. ${this.caseDef.carrierLine || ''}`, 'good');
   },
 
   stepPowers(dt) {

@@ -84,7 +84,7 @@ export const closeupMethods = {
     if (!c) { toast('Nothing useful there.', 'info'); return; }
     if (c.drink) {
       if (key === 'main:vial') return this.drinkVial(c.text);
-      const v = await dialog({ title: 'Super Squirt', text: c.text, options: [{ label: 'Knock it back', note: '+22 intoxication', value: true, cls: 'risky' }, { label: 'Leave it', value: false }] });
+      const v = await dialog({ title: this.caseDef.drugName || 'A drink', text: c.text, options: [{ label: 'Knock it back', note: '+22 intoxication', value: true, cls: 'risky' }, { label: 'Leave it', value: false }] });
       if (v) { this.g.state.addIntox(22); this.book.find(kind, s.id); }
       return;
     }
@@ -139,7 +139,7 @@ export const closeupMethods = {
     ctx.shadowColor = '#c070ff'; ctx.shadowBlur = 18; ctx.fillStyle = '#e8b8ff';
     const t = this.t;
     if (kind === 'main') ctx.fillText(`STOCK ${this.stockCode}`, R.x + R.w * 0.3, R.y + R.h * (0.18 + Math.sin(t) * 0.003));
-    ctx.fillText('SS > PIER 9 THU', R.x + R.w * 0.62, R.y + R.h * 0.12);
+    ctx.fillText(this.caseDef.uvLine || '', R.x + R.w * 0.62, R.y + R.h * 0.12);
     ctx.restore();
   },
 
