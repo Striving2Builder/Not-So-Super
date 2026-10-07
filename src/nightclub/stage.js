@@ -1,4 +1,4 @@
-// One room of a detective nightclub, drawn as layers (docs/design/nightclub.md "How it's built"):
+// One room of a detective nightclub, drawn as layers (docs/design/nightclub-2d.md "How it's built"):
 // a plate (the user's pre-rendered art when it exists, a painted comic placeholder until then),
 // a far crowd fogged into the haze, the live light rig (moving beams, laser fans, strobes), the
 // mid crowd, then — after the mode draws her — the near crowd passing the camera, drifting haze

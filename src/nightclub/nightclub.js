@@ -1,4 +1,4 @@
-// The detective nightclub mode (docs/design/nightclub.md): walk a club's rooms side-on, go through
+// The detective nightclub mode (docs/design/nightclub-2d.md): walk a club's rooms side-on, go through
 // its doors, find the items that open locked rooms, search close-ups for the case's clues, build
 // the case board and make the accusation (solved → the drug's distribution points go on the city
 // map). Super Squirt is offered along the way: each blackout plays the comic-panel cinematic and

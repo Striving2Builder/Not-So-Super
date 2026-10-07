@@ -95,7 +95,7 @@ the `day_1` look, the patrol-view composition, the vice district, street light t
 blocking + thick ink + S-shield, the close-up face, the climb and glide poses, the brawler sprites, the
 dive landing's structure.
 
-**Planned, not building yet:** the nightclub redesign (detective clubs, pre-rendered rooms + live foreground, hybrid walk/set-piece views, flagship + club engine, intoxication + blackout loop): [design/nightclub.md](../design/nightclub.md), asset prompts for the user in [design/nightclub-assets.md](../design/nightclub-assets.md). First step: a one-room look test on the iPad once batch 1 assets arrive.
+**Nightclub:** the 2D detective clubs (v2, [design/nightclub-2d.md](../design/nightclub-2d.md)) are superseded by the 3D infiltration clubs (v3, design agreed 2026-10-07, not built): [design/nightclub.md](../design/nightclub.md); asset prompts in [design/nightclub-assets.md](../design/nightclub-assets.md). First step: a one-room main-floor test on the iPad.
 dodging guard flashlight cones; user refs: foggy club, laser beams, DJ booth, backlit crowd).
 
 ## Merged in the round 7–9 thread (2026-10-03/04)

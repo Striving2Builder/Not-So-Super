@@ -23,3 +23,6 @@ docs/references/
 
 # Raw nightclub renders from the user (the stitched plates in assets/nightclub/plates/ are tracked)
 assets/nightclub/incoming/
+
+# Local secrets (API keys): never committed
+.env

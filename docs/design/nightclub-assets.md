@@ -136,3 +136,47 @@ vip 01 (mirrored)+03, restroom 01+03, office 01+03, storage 01+02, alley 01+03. 
 
 **Later**: batch 3 = the blackout (wake-up rooms, memory-fragment comic panels); batch 4 = a second
 club's set (a palette swap of the same rooms is fine).
+
+## Batch 4: camera angles for the Resident Evil / FF7 rooms (made in the Grok app)
+> **Dropped 2026-10-07:** the fixed-camera plan was rejected (see [nightclub.md](nightclub.md)).
+> The angles already generated can still serve as close-up art or green-screen wall images.
+
+Each room needs 2–4 shots of the SAME room from different camera positions (the game cuts between
+them as she walks). Upload the source image, then ask for the angles. Drop results in
+`assets/nightclub/incoming/batch4/` named `<room>_A.jpg`, `_B`, `_C`, `_D`.
+
+**Setup message (paste once at the start of the Grok chat):**
+> I'm making background art for a fixed-camera adventure game (like the original Resident Evil).
+> I'll upload images of nightclub rooms one at a time. For each one, re-render THE SAME ROOM from
+> new camera positions. Rules for every image you make:
+> - Keep the room identical: same furniture, same layout, same colours, same lighting, same comic-book
+>   noir style with bold black ink linework and crosshatching.
+> - Camera at standing eye level (about 1.6 m), 35 mm lens: no fisheye, no wide-angle distortion,
+>   level horizon, vertical lines stay vertical.
+> - The floor clearly visible across the lower third of the image, open enough to walk on.
+> - At least one doorway fully in view, top to bottom.
+> - No people, no text, no logos. 16:9 landscape, 1280×720 or larger.
+
+**Per room (upload the image, then):**
+> Room: <name>. Make these angles of this exact room:
+> A) from the left side of the room, looking diagonally toward the back-right corner
+> B) from the right side, looking diagonally toward the back-left corner
+> C) the reverse angle: standing at the back wall looking toward where this photo was taken
+> D) a high corner view, camera up near the ceiling in a corner (like a security camera) looking down
+>    across the whole room
+
+**Rooms and source images:**
+| Room | Upload | Angles |
+|---|---|---|
+| entrance | batch3 `entrance_06.jpg` | A, B, C |
+| main floor | batch1 `mainfloor_walk_11.jpg` | A, B, C, D |
+| bar | batch1 `mainfloor_walk_02.jpg` | A, B, C |
+| vip | batch3 `vip_06.jpg` | A, B, D |
+| office | batch3 `office_02.jpg` | A, C, D |
+| balcony | batch3 `balcony_02.jpg` | A, B |
+| storage | batch3 `storage_07.jpg` | A, B, D |
+| restroom | batch3 `restroom_07.jpg` | A, B |
+
+**Check each result before keeping it:** same furniture and doors as the source; no fisheye bend;
+floor visible; a door visible top to bottom. If Grok redesigns the room, regenerate, or say
+"you changed the room: keep every object exactly as in the uploaded image, only move the camera".

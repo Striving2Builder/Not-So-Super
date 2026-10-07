@@ -1,4 +1,4 @@
-// Room kinds for the detective nightclubs (docs/design/nightclub.md). World units are plate pixels:
+// Room kinds for the detective nightclubs (docs/design/nightclub-2d.md). World units are plate pixels:
 // every walk plate is 1024 px tall with the floor line at 80% (PLATE.floor), so a room is as wide
 // as its plate (small 2048, medium 3072, big 4096). The user's art drops into PLATE.dir; until it
 // does, stage.js paints a placeholder from the room's `look`.

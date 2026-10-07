@@ -1,4 +1,4 @@
-// Super Squirt on screen (docs/design/nightclub.md "Intoxication and the blackout"): the comic panel
+// Super Squirt on screen (docs/design/nightclub-2d.md "Intoxication and the blackout"): the comic panel
 // tilts and breathes, the ink doubles (a ghost copy of the frame drifting off register), the colour
 // slides toward magenta, the edges close in. Driven by the shared intox meter (state.intox, 0–100).
 // Cost: nothing when sober; above it one half-res copy of the frame + two full-screen draws.

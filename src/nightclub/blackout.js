@@ -1,4 +1,4 @@
-// The blackout (docs/design/nightclub.md "Intoxication and the blackout"): snapshots of her night
+// The blackout (docs/design/nightclub-2d.md "Intoxication and the blackout"): snapshots of her night
 // while she's dosed, the comic-panel cinematic when she goes under (her last frames freeze into
 // panels that slide in, crack and smear to black), and the polaroids of her the memory-fragment
 // hunt scatters round the club (blackmail material if she leaves without them).
