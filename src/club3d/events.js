@@ -220,7 +220,7 @@ export const eventMethods = {
       E.left -= dt;
       // the crowd thins out toward the doors (the cover goes with them)
       const gone = clamp(1 - E.left / 100, 0, 1), P = this.crowd.people;
-      for (let i = 0; i < P.length; i++) if (P[i].pose === 'dance' && (i % 100) / 100 < gone && !P[i].left) { P[i].left = true; P[i].hz = 300; P[i].hx = 300; }
+      for (let i = 0; i < P.length; i++) if (P[i].pose === 'dance' && (i % 100) / 100 < gone && !P[i].left) P[i].left = true; // (they walk out: crowd.js)
       if (Math.floor(E.t * 2) % 2 === 0) this.plights?.forEach((l) => l.color.set(0xff2020));
       if (E.left <= 0) {
         E.phase = 2;

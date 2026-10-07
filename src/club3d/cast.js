@@ -6,6 +6,7 @@
 // USE spot. Mixed into Club3D.prototype.
 import * as THREE from 'three';
 import { GUARD_RANGE, GUARD_FOV, basic } from '../zonekit.js';
+import { quality } from '../settings.js';
 import { npcLook } from '../art.js';
 import { clamp, $ } from '../util.js';
 import { dialog } from '../ui.js';
@@ -139,6 +140,8 @@ export const castMethods = {
   /** A procedural person standing (or sitting) somewhere, facing rot. */
   npc(look, x, z, rot = 0, { sit = false } = {}) {
     const m = this.makeNPC(look);
+    // ink outlines on the club's extras only on High: on the phone profiles they'd double their draw calls
+    if (quality().look3d !== 'full') m.traverse((o) => { if (o.userData.ink && o.parent) o.parent.remove(o); });
     m.position.set(x, floorY(this.plan, x, z), z);
     m.rotation.y = rot;
     if (sit) { for (const l of m.legs) l.rotation.x = -1.45; m.position.y -= 0.42; for (const a of m.arms) a.rotation.x = -0.4; }

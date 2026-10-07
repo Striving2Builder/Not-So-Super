@@ -14,7 +14,9 @@ src/
                           airevents, paparazzi, flight, flightaudio, nav, cityfeed
   three/                  shared 3D engine: special3d (zone base), look3d, hero3d, cape, enemies
   zones/                  3D zone types + their sets: clubzone, clubgeo, clubmood, venues3d,
-                          nightlife, asylum, nightcase
+                          nightlife, asylum, nightcase; the 2D detective club (nightclub/) and the
+                          3D infiltration club (club3d/: one module per system, mixed into a
+                          Special3D zone; see docs/design/nightclub.md "Built so far")
   brawl/                  side-scroller: brawler, brawlsprite, brawlstage, art (2D humanoids)
   investigate/            crime scenes: investigate, crimescene, evidenceart, casefile, leads
 tools/                    dev-only scripts (Blender export, slimming, harness in tools/shots)

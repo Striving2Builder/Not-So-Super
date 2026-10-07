@@ -302,6 +302,7 @@ export function buildHall(zn, plan, M, X, video) {
   if (V.arches) {
     const rib = brickMat('#4a2418', '#120806', 2);
     for (let z = -hd + 4; z < hd - 2; z += 6) {
+      if (V.doors.some((dz) => Math.abs(dz - z) < DOOR_W)) continue; // (never a rib across a doorway)
       for (const s of [-1, 1]) zn.box(0.8, H, 0.7, s * (hw - 0.4), H / 2, z, rib, { collide: false });
       const arch = new THREE.Mesh(new THREE.TorusGeometry(hw - 0.4, 0.35, 6, 24, Math.PI).scale(1, 0.45, 1), rib);
       arch.position.set(0, H - 0.6, z); S.add(arch); zn._static.push(arch); arch.userData.noInk = true;

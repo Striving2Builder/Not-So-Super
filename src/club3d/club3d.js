@@ -34,6 +34,7 @@ import { undercoverMethods } from './undercover.js';
 
 const SPEED = 4.6;          // her walk (m/s); the crowd slows her down to half
 const IDLE_FACE = 1.5;      // seconds standing still before she turns to the viewer
+const GUARD_GAIN = 0.7;     // how fast a bouncer who sees her raises the alert, vs the base zones'
 // follow camera: [pitch, distance] in the open and inside the crowd
 const CAM_OPEN = [0.7, 7.4], CAM_CROWD = [0.5, 5.0];
 
@@ -224,7 +225,9 @@ export class Club3D extends Special3D {
     this.stepCast(dt);
     this.stepChatter(dt);
     this.stepVices(dt);
+    const a0 = this.alert;
     this.updateGuards(dt);
+    if (this.alert > a0) this.alert = a0 + (this.alert - a0) * GUARD_GAIN; // (they're scanning a packed floor)
     this.stepAlert(dt);
     if (this.checkFailures()) return;
     // interactables

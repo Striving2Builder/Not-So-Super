@@ -1,8 +1,9 @@
-# Nightclub v3: 3D infiltration clubs (design, not built)
+# Nightclub v3: 3D infiltration clubs
 
-Status: design agreed with the user over five brainstorm rounds, 2026-10-07. No code yet.
-Supersedes the 2D detective clubs ([nightclub-2d.md](nightclub-2d.md), built in `src/nightclub/`,
-still the default until v3 reaches parity). Art specs per batch: [nightclub-assets.md](nightclub-assets.md).
+Status: design agreed with the user over five brainstorm rounds, 2026-10-07; **built the same day,
+opt-in with `?club=v3`** (see "Built so far" at the end). Supersedes the 2D detective clubs
+([nightclub-2d.md](nightclub-2d.md), built in `src/nightclub/`, still the default until v3 has been
+played on the iPad). Art specs per batch: [nightclub-assets.md](nightclub-assets.md).
 
 ## Why the change
 - The 2D side-scroll walk (v2) has the right vibe but no game loop and no danger, and every visit
@@ -378,3 +379,41 @@ first; the blackmail case is next. The accusation, case board and map leads carr
 - The VIP hosts and the boss: names, looks (silhouettes or real models).
 - Numpad dance tuning: grid size, speed curve, how many misses end it.
 - How long the paparazzi target is; whether undercover is chosen per visit or set by the case.
+
+## Built so far (2026-10-07, opt-in: `?club=v3`)
+Every section above is in, first pass. Club zones (special or night, at a club venue) open the 3D
+club with `?club=v3`; without it they play the 2D club as before.
+- **Try it:** `?club=v3`. Test params: `&club3room=rave|mezzanine|pit|centre|tunnel` (main room),
+  `&club3seed=N` (the plan), `&club3case=squirt|blackmail`, `&club3event=redcarpet|paparazzi|raid|firealarm|fight|none`,
+  `&club3under=0|1` (skip the "how do you go in?" question), `&club3wake=vip|office|storage|floor`.
+- **Code** (`src/club3d/`, a Special3D zone; the systems are mixins, the mode is the conductor):
+  `club3d.js` (enter/update/camera/HUD, the per-visit reset `VISIT`), `plan.js` (the 5 main rooms,
+  the side-room shuffle, `floorY` for the Pit), `build.js` (hall, DJ booth + video wall, bar, coat
+  check, TVs, the show, the nightlife kit's batches), `rooms.js` (side rooms + alley, the painted
+  plate on each back wall), `crowd.js` (instanced silhouette crowd, cover/thickness, parting, the
+  surge), `video.js` (one shared `<video>`, LED/CCTV/keyed screen shader), `music.js` (a synth
+  124 BPM loop until the user's tracks arrive: the drop's riser, the super-hearing low-pass),
+  `cast.js` (bouncers, Talkers, the cast, locked doors, every USE spot), `chatter.js` (bubbles,
+  tappable rumours/whispers/offers, recognition), `powers.js` (X-ray, super-hearing, drug-vision),
+  `vices.js` (the intoxication paths, the predator, the shot-off), `casework.js` (the case board,
+  accusation, solving, leaving, objectives), `sedation.js` (found out → sedation clip → wake spots;
+  the envelope + its polaroids), `vip.js` (rope, quiz, the numpad dance), `office.js` (keypads,
+  listening at the door, safe, CCTV, the blackmail exchange, the leak), `brawls.js` (the brawler
+  borrowed for back-room fights), `closeup.js` (close-ups, phone/paper views, the UV layer),
+  `events.js` (the drop + five events), `undercover.js` (Kara's coat, changing in the restroom).
+  Outside it: `src/brawlplate.js` (the brawler's painted-room stage), `cutscene.js` (`loops`,
+  `skipTaps`), `newspaper.js` (a real photo on the front page), cases in `src/nightclub/cases/`
+  (Super Squirt + the Polaroid Racket, both with the v3 fields).
+- **Media:** `assets/video/ClubDJ/` (3 DJ stage loops from batch 1, re-encoded, no audio) + the
+  plate's `set_main.mp4`; `assets/video/ClubDance/sg_dance_01.mp4` (batch 1's clothed green-screen
+  dance, keyed in game). Sedation clip: `ClubSedation/` (empty: falls back to `SG_Captured_Game`).
+- **Harness:** `node tools/shots/club3d.js --label X [--rooms rave,pit] [--flows all|none|sedate,…] [--case blackmail]`
+  → shots of each main room + side room, fps/calls/triangles, and every flow played through
+  (Talker, close-up, dance, fights, sedation → capture, confession → skylight, leak, the events).
+  2026-10-07: 0 page errors; SwiftShader High ~231 calls / 260k tris / 336 dancers, Balanced
+  ~137 calls / 169k tris / 246 dancers.
+- **Not yet / next:** the iPad test (fps, memory: the club scene stays in GPU memory under a
+  back-room fight), the user's dance clips and sedation clip, music tracks, more VIP hosts per case,
+  tuning (guard gain `GUARD_GAIN`, Talker rates in cast.js, DROP timings in events.js), the
+  overworld still labels night club zones as Super Squirt even when a visit plays the blackmail
+  case, then make v3 the default and retire v2.

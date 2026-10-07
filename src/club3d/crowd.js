@@ -160,6 +160,11 @@ export class ClubCrowd {
     const relax = Math.min(1, dt * 0.8), her = obs[0];
     let cover = 0, thick = 0;
     for (const p of people) {
+      if (p.left) {
+        // leaving (the fire alarm): walk for the door, then gone
+        const ex = this.plan.entrance, dx = ex.x - p.hx, dz = ex.z + 3 - p.hz, d = Math.hypot(dx, dz);
+        if (d > 1) { p.hx += (dx / d) * 2.6 * dt; p.hz += (dz / d) * 2.6 * dt; } else { p.hx = p.hz = 1e4; }
+      }
       if (!p.fixed) {
         let ox = p.ox * (1 - relax), oz = p.oz * (1 - relax);
         for (let i = 0; i < obs.length; i++) {
