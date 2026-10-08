@@ -415,6 +415,9 @@ What the first pass was missing (the review: a thin crowd, a plain room on phone
   drop, powers, tipsy, the first clue), remembered per device.
 - **The VIP dance** keys the clip on the GPU at the clip's own resolution (it was 240 px wide, on
   the CPU): the 3D renderer draws it in the left viewport; the numpad keeps its own panel.
+- **The cast:** the red-carpet celebrity is the game's diva model; on High, one of each Talker pair
+  is a character model too (leather, hooded thug, punk girl). At ~40k triangles each the phones
+  keep procedural Talkers.
 - **Music:** the user's three tracks (`assets/Music`), each one's tempo, first beat and drops
   measured offline; the lights, the crowd (3D and sprites), the VIP dance's beat and the club's drop
   follow whichever track is playing.

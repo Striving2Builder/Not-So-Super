@@ -13,7 +13,8 @@ import { comic } from '../comic.js';
 import { DOOR_W, floorY } from './plan.js';
 
 const TALK_R = 2.4, TALK_IN = 1.2, HEAR_R = 5.6;
-const TALK_MODELS = ['leather', 'hooded_thug', 'punk_girl']; // (one of each Talker pair is one of the game's character models)
+// on High, one of each Talker pair is one of the game's character models (~40k triangles each: too heavy for phones)
+const TALK_MODELS = ['leather', 'hooded_thug', 'punk_girl'];
 const DOOR_MAT = () => new THREE.MeshToonMaterial({ color: 0x2a2633 });
 
 /** Strip tags; keep a few words of a line, the rest lost in the music. */
@@ -71,7 +72,8 @@ export const castMethods = {
       if (!p) return;
       const [x, z] = p, y = floorY(plan, x, z);
       const a = this.npc(npcLook('civilian'), x - 0.42, z, Math.PI / 2);
-      const b = this.castModel(TALK_MODELS[i % TALK_MODELS.length], npcLook(i === 1 ? 'thug' : 'civilian'), x + 0.42, z, -Math.PI / 2);
+      const look = npcLook(i === 1 ? 'thug' : 'civilian');
+      const b = quality().look3d === 'full' ? this.castModel(TALK_MODELS[i % TALK_MODELS.length], look, x + 0.42, z, -Math.PI / 2) : this.npc(look, x + 0.42, z, -Math.PI / 2);
       const ring = new THREE.Mesh(new THREE.RingGeometry(TALK_R - 0.2, TALK_R, 48).rotateX(-Math.PI / 2), basic(0xffd84d, { transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
       const inner = new THREE.Mesh(new THREE.CircleGeometry(TALK_IN, 32).rotateX(-Math.PI / 2), basic(0xffd84d, { transparent: true, opacity: 0.08, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
       ring.position.set(x, y + 0.035, z); inner.position.set(x, y + 0.03, z);
