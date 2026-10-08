@@ -158,8 +158,15 @@ export function buildRoom(zn, plan, q, M, X, video) {
     A.deal = A.stalls[2]; A.powder = A.stalls[0]; A.change = A.stalls[1];
     X.pool(...at(0, 4), 3, 0x7fffd4, 0.18);
   } else if (q.kind === 'dark') {
+    // packed: a jittered grid with gaps, clear of the crew, the graffiti and the way in from the door
     A.dancers = [];
-    for (let i = 0; i < 9; i++) { const [x, z] = at(rnd(-w / 2 + 1.6, w / 2 - 1.6), rnd(2, d - 2.4)); A.dancers.push({ x, z, pose: 'dance', y: 0 }); }
+    const doorV = q.door.z - q.z0;
+    for (let u = -w / 2 + 1.5; u <= w / 2 - 1.5; u += 1.05) for (let v = 1.8; v <= d - 2; v += 1.05) {
+      const uu = u + rnd(-0.3, 0.3), vv = v + rnd(-0.3, 0.3);
+      if (Math.random() < 0.3 || Math.hypot(uu - (w / 2 - 2.2), vv - 2.2) < 1.8 || Math.hypot(uu + w / 2 - 2, vv - d + 2.2) < 1.3) continue;
+      if (uu < -w / 2 + 2.6 && Math.abs(vv - doorV) < 1.5) continue;
+      const [x, z] = at(uu, vv); A.dancers.push({ x, z, pose: 'dance', y: 0 });
+    }
     { const [x, z] = at(w / 2 - 2.2, 2.2); A.thugs = { x, z }; }
     { const [x, z] = at(-w / 2 + 2, d - 2.2); A.graffiti = { x, z }; }
   } else if (q.kind === 'storage') {

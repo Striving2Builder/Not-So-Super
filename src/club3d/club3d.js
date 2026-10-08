@@ -111,7 +111,7 @@ export class Club3D extends Special3D {
     people.push(...X.people, ...(this.roomA.dark?.dancers || []), ...(this.roomA.lounge?.loungers || []));
     for (const s of this.roomA.vip?.seats || []) people.push({ x: s.x, z: s.z, pose: 'sit', rot: 0, y: 0, fixed: true });
     people.push(...(this.extraPeople || []));
-    this.crowd = new ClubCrowd(this, plan, people);
+    this.crowd = new ClubCrowd(this, plan, people, { near: Q.near });
     this.video.show('ClubDJ', { extra: ['assets/nightclub/plates/set_main.mp4'] });
   }
 
@@ -142,7 +142,7 @@ export class Club3D extends Special3D {
     this.endChatter?.();
     this.music?.stop();
     this.video?.dispose(); this.video = null;
-    this.crowd = null; this.pw = null; this._castPos = null;
+    this.crowd?.dispose(); this.crowd = null; this.pw = null; this._castPos = null;
     document.body.classList.remove('c3-flat');
     super.exit();
   }
@@ -216,7 +216,7 @@ export class Club3D extends Special3D {
     this.moving = (this.moving || 0) + (moving - (this.moving || 0)) * Math.min(1, dt * 3);
     // the crowd: they part for her, the guards and the cast; at the drop they jump and shove
     const obs = [h.position, ...this.guards.filter((gd) => !gd.ko).map((gd) => gd.mesh.position), ...this.castPositions()];
-    const cov = this.crowd.update(this.t, dt, B, obs, this.surge || 0);
+    const cov = this.crowd.update(this.t, dt, B, obs, this.surge || 0, this.music.bpm);
     this.cover = cov.cover; this.crowdThick = cov.thick;
     this.blend = this.computeBlend();
     this.stepPowers(dt);

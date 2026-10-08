@@ -166,19 +166,21 @@ export function onWall(side, a, y, out = 0.03) {
 // near the source; additive, so overlapping beams bloom.
 export function coneMat() {
   return new THREE.ShaderMaterial({
-    uniforms: { uI: { value: 1 }, uC: { value: new THREE.Color(1, 1, 1) } },
+    uniforms: { uI: { value: 1 }, uC: { value: new THREE.Color(1, 1, 1) }, uNear: { value: 0 } },
     vertexColors: true,
-    vertexShader: `varying vec3 vC; varying float vF; varying float vV;
+    vertexShader: `uniform float uNear; varying vec3 vC; varying float vF; varying float vV; varying float vN;
       void main() {
         vec4 wp = modelMatrix * vec4(position, 1.0);
         vec3 n = normalize(mat3(modelMatrix) * normal);
         vF = abs(dot(n, normalize(cameraPosition - wp.xyz)));
         vV = uv.y; vC = color;
+        // uNear > 0: the beam fades out within that distance of the camera (no wash over the screen)
+        vN = uNear > 0.0 ? smoothstep(uNear * 0.35, uNear, distance(cameraPosition, wp.xyz)) : 1.0;
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
-    fragmentShader: `uniform float uI; uniform vec3 uC; varying vec3 vC; varying float vF; varying float vV;
+    fragmentShader: `uniform float uI; uniform vec3 uC; varying vec3 vC; varying float vF; varying float vV; varying float vN;
       void main() {
-        float a = vF * vF * (0.12 + 0.88 * vV * vV);
+        float a = vF * vF * (0.12 + 0.88 * vV * vV) * vN;
         gl_FragColor = vec4(vC * uC * a * uI, 1.0);
         #include <colorspace_fragment>
       }`,

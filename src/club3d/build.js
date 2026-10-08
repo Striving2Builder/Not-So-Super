@@ -318,13 +318,22 @@ export function buildHall(zn, plan, M, X, video) {
 }
 
 // ------------------------------------------------------------------ the light show
+/** The haze puffs: the kit's point sprites, but a puff the camera is in (or nearly) fades away
+ * instead of washing the whole screen (the crowd round her stays ink; the far room stays hazy). */
+function hazeMat(pm) {
+  const m = pm.clone();
+  m.uniforms = { map: pm.uniforms.map, uScale: pm.uniforms.uScale };   // (uScale follows the canvas, set per frame)
+  m.vertexShader = m.vertexShader.replace('vC = color;', 'vC = color * smoothstep(size * 0.45, size * 1.1, -(modelViewMatrix * vec4(position, 1.0)).z);');
+  return m;
+}
+
 /** Moving heads over the floor, lasers from the booth, the mirror ball, haze. Returns its per-frame step. */
 export function buildShow(zn, plan, X) {
   const V = plan.V, S = zn.scene, Q = quality().club3, F = V.floor, H = V.wallH;
   const heads = [], cm = coneMat();
   const hcols = [V.accent[0], V.accent[1], 0xffe14d, 0x9d4dff, 0x27e0ff, 0xff6a3d];
   for (let i = 0; i < Q.heads; i++) {
-    const mat = cm.clone(); mat.uniforms.uC.value = C(hcols[i % hcols.length]); mat.uniforms.uI.value = 0.5;
+    const mat = cm.clone(); mat.uniforms.uC.value = C(hcols[i % hcols.length]); mat.uniforms.uI.value = 0.5; mat.uniforms.uNear.value = 6;
     const beam = new THREE.Mesh(coneGeo(0.03, 0.5), mat);
     beam.frustumCulled = false;
     const a = (i / Q.heads) * TAU;
@@ -371,7 +380,7 @@ export function buildShow(zn, plan, X) {
   if (Q.haze) {
     const list = [];
     for (let i = 0; i < Q.haze; i++) list.push({ p: [rnd(-V.hw + 3, V.hw - 3), rnd(1.4, H - 0.8), rnd(-V.hd + 3, V.hd * 0.4)], s: rnd(6, 10), c: C(pickR(V.accent)).multiplyScalar(rnd(0.025, 0.045)) });
-    const hz = makePoints(list, pm); S.add(hz);
+    const hz = makePoints(list, hazeMat(pm)); S.add(hz);
     X.fx.push((t) => { hz.rotation.y = Math.sin(t * 0.04) * 0.08; });
   }
   const tmpV = new THREE.Vector3();
