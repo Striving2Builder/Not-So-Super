@@ -13,9 +13,10 @@ import { pick, $ } from './util.js';
  * @param tapSkips  a tap always ends it (otherwise the first tap turns sound on)
  * @param loops     play the clip this many times through (the forced capture clip: 3)
  * @param skipTaps  taps it takes to skip (after the sound tap); a counter shows what's left
+ * @param untilTap  loop the clip (or hold the still) until the player skips it: no timer, no loop count
  * @returns Promise that resolves when it's over
  */
-export async function playCutscene({ folder, src, caption = '', maxSecs = 12, holdSecs = 3.2, tapSkips = false, loops = 1, skipTaps = 1 }) {
+export async function playCutscene({ folder, src, caption = '', maxSecs = 12, holdSecs = 3.2, tapSkips = false, loops = 1, skipTaps = 1, untilTap = false }) {
   const el = $('cutscene');
   if (!el) return;
   const url = src || pick((await mediaFolders())[folder] || []) || null;
@@ -53,16 +54,16 @@ export async function playCutscene({ folder, src, caption = '', maxSecs = 12, ho
     left();
     if (url && !isImage(url)) {
       el.classList.remove('still');
-      video.loop = false;
+      video.loop = untilTap;
       video.src = url;
       video.onended = () => { if (++played < loops) { video.currentTime = 0; video.play().catch(() => {}); } else end(); };
       video.onerror = () => { timer = setTimeout(end, holdSecs * 1000); }; // missing file: caption only
       video.play().catch(() => { video.muted = true; video.play().catch(() => {}); }); // sound if allowed
-      if (maxSecs > 0 && loops <= 1) timer = setTimeout(end, maxSecs * 1000);
+      if (maxSecs > 0 && loops <= 1 && !untilTap) timer = setTimeout(end, maxSecs * 1000);
     } else {
       el.classList.add('still');
       if (url) img.src = url;
-      timer = setTimeout(end, holdSecs * 1000);
+      if (!url || !untilTap) timer = setTimeout(end, holdSecs * 1000);
     }
   });
 }

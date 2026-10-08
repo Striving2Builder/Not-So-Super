@@ -13,7 +13,9 @@ import { HERO } from '../data.js';
 import { clamp } from '../util.js';
 import { scramble } from './cast.js';
 
-const DANCE = { playSecs: 12, maxMisses: 8, clean: 2, speedUp: 0.55, folder: 'ClubDance', plate: 'assets/nightclub/plates/vip.jpg' };
+// beats: a key lights every this many beats of the music; lose (more than `clean` misses) and the
+// table plays her dance back full screen, on loop, until she taps
+const DANCE = { playSecs: 12, maxMisses: 10, clean: 3, beats: 2, speedUp: 0.2, folder: 'ClubDance', plate: 'assets/nightclub/plates/vip.jpg' };
 
 /**
  * The dance clip, keyed on the GPU at the clip's own resolution (one shader quad drawn by the 3D
@@ -111,7 +113,7 @@ export const vipMethods = {
       if (drink) { sfx.drink(); st.addIntox(15); if (!penalty) second++; } else timed = 9;
       if (penalty) { timed = 7; penalty = false; }
       const known = this.learned.has(q.id);
-      const swim = clamp((st.intox - 40) / 80, 0, 0.45);
+      const swim = clamp((st.intox - 30) / 80, 0, 0.45);
       const opts = q.options.map((o) => ({ label: swim > 0 ? scramble(o.label, swim) : o.label, value: o.value, note: known && o.value === q.answer ? 'You heard this on the floor' : undefined }));
       const a = timed ? await this.choiceTimer({ speaker: V.host, text: q.q, options: opts, secs: timed }) : await dialog({ speaker: V.host, text: q.q, options: opts });
       if (a === q.answer) { sfx.pickup(); continue; }
@@ -140,7 +142,8 @@ export const vipMethods = {
   /**
    * The VIP dance: the clip on the left (or top, portrait), the numpad in its own solid panel on
    * the right (or below). Cells light on the beat; the clip plays only while she taps them right.
-   * Resolves { misses } when the clip has played through (or too many misses).
+   * Resolves { misses } when the clip has played through (or too many misses). Lost: first the
+   * table plays her dance back at her, full screen and looping, until she taps.
    */
   danceGame() {
     return new Promise((resolve) => {
@@ -149,7 +152,7 @@ export const vipMethods = {
       this.video.pause();
       const view = danceView(this.video, DANCE.plate);
       const S = { t: 0, played: 0, misses: 0, lit: -1, litT: 0, hitWin: false, pauseT: 0.6, flash: 0, hits: 0 };
-      const beat = 60 / this.music.bpm; // (the keys light on the music's beat)
+      const beat = (60 / this.music.bpm) * DANCE.beats; // (the keys light on the music's beat)
       const kb = (e) => { const n = +e.key; if (n >= 1 && n <= 9) { e.preventDefault(); e.stopPropagation(); press(n - 1); } };
       addEventListener('keydown', kb, true);
       document.body.classList.add('c3-flat');
@@ -157,6 +160,7 @@ export const vipMethods = {
       g.input.setButtons([]);
       const layout = () => {
         const W = g.w, H = g.h, land = W >= H;
+        if (S.punish) return { vid: { x: 0, y: 0, w: W, h: H }, pad: { x: W, y: 0, w: 0, h: H }, cell: 64, gx: W, gy: H, land };
         const vid = land ? { x: 0, y: 0, w: Math.round(W * 0.6), h: H } : { x: 0, y: 0, w: W, h: Math.round(H * 0.55) };
         const pad = land ? { x: vid.w, y: 0, w: W - vid.w, h: H } : { x: 0, y: vid.h, w: W, h: H - vid.h };
         const cell = Math.max(64, Math.min((pad.w - 40) / 3, (pad.h - 110) / 3));
@@ -175,6 +179,13 @@ export const vipMethods = {
       };
       const finish = () => {
         if (S.done) return;
+        if (!S.over && !S.punish && S.misses > DANCE.clean) {
+          // the humiliation: every phone at the table, and the playback on the big screen
+          S.punish = true; S.punishT = 0; S.flash = 0; this.video.el.loop = true;
+          this.video.el.play().catch(() => {});
+          sfx.lose();
+          return;
+        }
         S.done = true;
         // a frame of the dance (somebody at the table was filming): drawn now and copied straight off the 3D canvas
         const L = layout(), snap = document.createElement('canvas'), rc = this.renderer.domElement, k = rc.width / g.w;
@@ -191,6 +202,13 @@ export const vipMethods = {
       };
       this.sub = {
         update: (dt) => {
+          if (S.punish) {
+            S.punishT += dt;
+            if (this.video.el.paused) this.video.el.play().catch(() => {});
+            const tapped = inp.taps.length > 0; inp.taps.length = 0;
+            if (tapped && S.punishT > 1.5) { S.punish = false; S.over = true; finish(); }
+            return;
+          }
           S.t += dt; S.flash = Math.max(0, S.flash - dt); S.good = Math.max(0, (S.good || 0) - dt);
           // speeds up as the clip goes on
           const spb = beat / (1 + DANCE.speedUp * clamp(S.played / DANCE.playSecs, 0, 1));
@@ -217,6 +235,16 @@ export const vipMethods = {
           const L = layout(), W = g.w, H = g.h;
           ctx.clearRect(0, 0, W, H);
           const v = L.vid;
+          if (S.punish) {
+            const f = Math.round(Math.min(W, H) * 0.075);
+            ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, H - f * 3.2, W, f * 3.2);
+            ctx.textAlign = 'center'; ctx.font = `bold ${f}px Bangers, Impact, sans-serif`; ctx.fillStyle = '#ff3fb8';
+            ctx.fillText('THE WHOLE TABLE IS FILMING', W / 2, H - f * 1.75);
+            ctx.font = `${Math.round(f * 0.42)}px system-ui, sans-serif`; ctx.fillStyle = '#e8dcff';
+            ctx.fillText(S.punishT > 1.5 ? 'They play it back on the big screen, again and again… tap to continue' : 'They play it back on the big screen…', W / 2, H - f * 0.7);
+            if (Math.sin(S.punishT * 9) > 0.6) { ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(0, 0, W, H); } // phone flashes
+            return;
+          }
           ctx.save(); ctx.beginPath(); ctx.rect(v.x, v.y, v.w, v.h); ctx.clip();
           if (S.pauseT > 0 && S.t > 0.7) { ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(v.x, v.y, v.w, v.h); ctx.font = `bold ${Math.round(Math.min(v.w, v.h) * 0.12)}px Bangers, Impact, sans-serif`; ctx.textAlign = 'center'; ctx.fillStyle = '#ff3a5a'; ctx.fillText(S.hits ? 'MISSED!' : 'TAP THE LIT KEY', v.x + v.w / 2, v.y + v.h / 2); }
           ctx.restore();

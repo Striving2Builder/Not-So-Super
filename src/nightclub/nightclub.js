@@ -299,7 +299,7 @@ export class Nightclub {
     // polaroids left behind will surface somewhere: tabloid heat now, blackmail later
     const lost = (this.lostPhotos || 0) + (this.photos ? this.photos.list.filter((p) => !p.found).length : 0);
     const st = this.g.state;
-    if (lost) { st.photosLost = (st.photosLost || 0) + lost; toast(`You left ${lost} polaroid${lost === 1 ? '' : 's'} of yourself behind. They'll turn up.`, 'bad'); }
+    if (lost) { st.photosLost = (st.photosLost || 0) + lost; st.stashVenue = this.zone?.venue || st.stashVenue; toast(`You left ${lost} polaroid${lost === 1 ? '' : 's'} of yourself behind. They'll turn up.`, 'bad'); }
     this.g.endZone(this.zone, { outcome: 'abort', rep: -LOST_PHOTO_REP * lost });
   }
 

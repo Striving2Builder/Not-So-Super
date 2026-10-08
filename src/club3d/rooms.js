@@ -179,6 +179,12 @@ export function buildRoom(zn, plan, q, M, X, video) {
     }
     { const [x, z] = at(w / 2 - 2.2, 2.2); A.thugs = { x, z }; }
     { const [x, z] = at(-w / 2 + 2, d - 2.2); A.graffiti = { x, z }; }
+    // the back-room screen, high on the back wall over the dancers: it plays the back-room clips
+    // (videos/ClubBackroom, RDL) whenever she's in here or by the door (office.js officeVideo)
+    { const sh = 2.3, sw = Math.min(w - 3, sh * 16 / 9), y = ROOM_H - 0.2 - sh / 2;
+      const sc = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), screenMat(video, { bright: 1, fit: sw / sh }));
+      sc.position.set(q.cx, y, q.z0 + 0.3); S.add(sc); A.screens = [sc.material];
+      zn.box(sw + 0.25, sh + 0.25, 0.08, q.cx, y, q.z0 + 0.25, M.black, { collide: false }); }
   } else if (q.kind === 'storage') {
     const crate = lam(0x6a4a2a), keg = lam(0x8a8a90);
     for (const [u, v, h] of [[-4, 1.2, 2], [-2.6, 1.2, 1.2], [3.6, 1.6, 2.4], [2.2, 1.2, 1.2], [-4, 4.4, 1.2], [3.8, 8.6, 1.6]]) box(1.2, h, 1.2, u, h / 2, v, crate);

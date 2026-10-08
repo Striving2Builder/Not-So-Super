@@ -27,6 +27,7 @@ import { toast, banner, openModal, closeModal } from './ui.js';
 import { hash2 } from './rng.js';
 import { sfx } from './sfx.js';
 import { diveFx } from './divefx.js';
+import { stepPolaroids, grabPolaroid, strayLost } from './polaroids.js';
 
 const TILT = 0.2;    // oblique view: perspective centre sits this fraction of the screen below centre
 const PERCH_EVERY = 40; // seconds between super-hearing reveals
@@ -356,7 +357,7 @@ export class Overworld {
   // ------------------------------------------------------------------ zones
   maintainZones(initial = false) {
     const counts = { street: 0, case: 0, special: 0 };
-    for (const z of this.zones) if (!z.lead) counts[z.kind]++; // leads are extra, beyond the quota
+    for (const z of this.zones) if (!z.lead && z.kind in counts && !z.stashJob) counts[z.kind]++; // leads are extra, beyond the quota
     // Always keep one club raid (premade 3D club) somewhere on the map.
     const clubs = Object.keys(VENUES).filter((v) => VENUES[v].club);
     if (clubs.length && !this.zones.some((z) => z.mode === 'special' && VENUES[z.venue]?.club)) { this.spawn('special', initial, pick(clubs)); return; }
@@ -567,6 +568,7 @@ export class Overworld {
 
     // --- zones
     if (!this.attract) {
+      stepPolaroids(this, dt);
       for (const z of this.zones) {
         z.t += dt;
         if (z.mode === 'nightcase' && !st.isNight && z !== this.near) {
@@ -577,6 +579,7 @@ export class Overworld {
         if (z.t > z.ttl) {
           this.removeZone(z);
           if (z.kind === 'street') st.addRep(-2, `${z.name} went unanswered`);
+          else if (z.polaroid) strayLost(st, z);
           else toast(`${z.name} has gone cold.`, 'info');
           break;
         }
@@ -664,6 +667,7 @@ export class Overworld {
   tryDive() {
     const z = this.near, st = this.g.state;
     if (!z) { toast('Fly over a crime marker to dive in', 'info'); return; }
+    if (z.polaroid) { grabPolaroid(this, z); return; }
     const lock = st.locked(z.lockKey);
     if (lock) { toast(`You promised to stay out of ${z.lockKey} zones for ${fmtTime(lock)}`, 'bad'); sfx.lose(); return; }
     this.diving = { z, t: 0, sx: this.hero.x, sy: this.hero.y, z0: this.hero.z, zoom0: this.zoom };

@@ -20,10 +20,15 @@ export class ClubVideo {
     this.folders = mediaFolders();
   }
 
-  /** Play a clip from the first of `folders` that has any (or `extra` urls); keyed = it's on green. */
+  /**
+   * Play a clip from the first of `folders` that has any (or `extra` urls); keyed = it's on green
+   * (or { folder: true } for the folders that are).
+   */
   async show(folders, { keyed = false, extra = [], pin = null } = {}) {
     const all = await this.folders;
-    const list = [].concat(folders).map((f) => all[f] || []).find((l) => l.length) || [];
+    const from = [].concat(folders).find((f) => (all[f] || []).length);
+    const list = (from && all[from]) || [];
+    if (typeof keyed === 'object') keyed = !!keyed[from];
     const url = pin && list.includes(pin) ? pin : this.src && list.includes(this.src) ? this.src : pick(list.concat(extra));
     this.keyed = keyed;
     if (!url || url === this.src) { this.resume(); return; }

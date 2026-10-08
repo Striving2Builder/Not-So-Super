@@ -13,7 +13,10 @@ import { BILLBOARDS, DEALS, DISTRICTS, HERO } from '../data.js';
 import { pick, clamp } from '../util.js';
 import * as THREE from 'three';
 import { screenMat } from './video.js';
+import { INTOX_HAZE } from '../state.js';
 
+// the back-room screen's clips: the first folder with any (the dance clip until the others are filled)
+const BACKROOM = ['ClubBackroom', 'RDL', 'ClubDance'];
 const STOLEN = new Set(['pill', 'drunk', 'sedated', 'fans', 'paparazzi', 'couch', 'photos']); // what the safe holds
 
 export const officeMethods = {
@@ -96,11 +99,14 @@ export const officeMethods = {
    */
   officeVideo() {
     const q = this.room, inOffice = q === this.plan.byKind.office;
-    const halluc = q === this.plan.byKind.restroom && this.g.state.intox >= 45;
-    const want = inOffice ? (!this.cctvDead && (this.envelope || []).some((c) => c.id === 'dance') ? 'dance' : 'dj') : halluc ? 'mirror' : 'dj';
+    const halluc = q === this.plan.byKind.restroom && this.g.state.intox >= INTOX_HAZE;
+    const dq = this.plan.byKind.dark, h = this.hero.position;
+    const backroom = dq && (q === dq || Math.hypot(h.x - dq.door.x, h.z - dq.door.z) < 6);
+    const want = inOffice ? (!this.cctvDead && (this.envelope || []).some((c) => c.id === 'dance') ? 'dance' : 'dj') : halluc ? 'mirror' : backroom ? 'backroom' : 'dj';
     if (want !== this.videoWant) {
       this.videoWant = want;
       if (want === 'dj') this.video.show('ClubDJ', { extra: ['assets/nightclub/plates/set_main.mp4'] });
+      else if (want === 'backroom') this.video.show(BACKROOM, { keyed: { ClubDance: true } });
       else this.video.show('ClubDance', { keyed: true });
       this.mirrorOn(want === 'mirror');
     }
@@ -200,10 +206,10 @@ export const officeMethods = {
     ] });
     if (v === 'A') {
       st.addRep(-30, 'Your night, on every front page');
-      st.photosLost = (st.photosLost || 0) + (this.envelope || []).length;
+      this.envelope = []; // (out in the world now: nothing left in his safe)
       await showNewspaper({ tabloid: true, rep: -30, photo: card?.img || 'tabloid', headline: `${HERO.toUpperCase()} PARTIES HARD AT ${(zone.venue || 'THE CLUB').toUpperCase()}`, sub: card ? `"${card.label}": the photos the club didn't want you to see` : 'Shock photos from inside the city\'s hottest club', body: [`The photographs arrived at every newsroom in the city overnight: ${HERO}, out of costume in all but name, very much not on patrol.`, '"Is this who protects us?" asked one reader. The club\'s owner declined to comment, smiling.'] });
       const vice = BILLBOARDS.vice.includes(zone.district);
-      await playScreenScene({ screens: vice ? BILLBOARDS.rld : BILLBOARDS.downtown, folder: BILLBOARDS.folders, maxSecs: 12, holdSecs: 4, caption: `By morning, the billboards in ${DISTRICTS[zone.district]?.name || 'the city'} are playing it…` });
+      await playScreenScene({ screens: vice ? BILLBOARDS.rld : BILLBOARDS.downtown, folder: BILLBOARDS.folders, untilTap: true, holdSecs: 4, caption: `By morning, the billboards in ${DISTRICTS[zone.district]?.name || 'the city'} are playing it…` });
     } else {
       st.addRep(-8, 'An embarrassing deal');
       st.lockouts[zone.lockKey] = 180;

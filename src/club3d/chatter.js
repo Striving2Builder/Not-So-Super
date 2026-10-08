@@ -9,6 +9,7 @@ import { toast } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { pick, clamp, $ } from '../util.js';
 import { scramble } from './cast.js';
+import { INTOX_HAZE } from '../state.js';
 
 const ATMOS = {
   good: ['This DJ is insane!', 'I love this song!', 'Best night ever!', 'Is that… Supergirl? No way!', 'Somebody said Supergirl\'s here!', 'Turn it UP!'],
@@ -58,7 +59,7 @@ export const chatterMethods = {
     if (rumours.length && roll < 0.3) return this.tapBubble(p, anchor, pick(rumours), 'rumour');
     if (roll < 0.42 && !this.offerOut) return this.tapBubble(p, anchor, pick(OFFERS), 'offer');
     let line;
-    if (st.intox >= 45 && Math.random() < 0.6) line = pick(REACT.high);
+    if (st.intox >= INTOX_HAZE && Math.random() < 0.6) line = pick(REACT.high);
     else if (this.dancing && Math.random() < 0.7) line = pick(REACT.dance);
     else if (this.alert > 60) line = pick(REACT.alert);
     else {
@@ -75,7 +76,7 @@ export const chatterMethods = {
     const el = document.createElement('button');
     el.className = `c3b ${kind}`;
     const text = kind === 'offer' ? item.text : `"${this.rumourText(item)}"`;
-    el.innerHTML = `${kind === 'whisper' ? '<b>WHISPER</b>' : ''}<span>${st.intox >= 45 && kind !== 'offer' ? scramble(text, 0.25) : text}</span><small>${kind === 'offer' ? item.label : 'TAP TO NOTE'}</small>`;
+    el.innerHTML = `${kind === 'whisper' ? '<b>WHISPER</b>' : ''}<span>${st.intox >= INTOX_HAZE && kind !== 'offer' ? scramble(text, 0.25) : text}</span><small>${kind === 'offer' ? item.label : 'TAP TO NOTE'}</small>`;
     p.talking = true;
     const b = { el, anchor, p, t: kind === 'whisper' ? 5.5 : 4.4, item, kind };
     el.addEventListener('pointerdown', (e) => {
@@ -83,7 +84,7 @@ export const chatterMethods = {
       if (b.gone) return;
       b.gone = true; el.classList.add('out');
       if (kind === 'offer') { this.offerOut = false; this.run(() => this.acceptOffer(item.id)); }
-      else if (st.intox >= 45) toast('The words swim away before you can hold on to them.', 'bad');
+      else if (st.intox >= INTOX_HAZE) toast('The words swim away before you can hold on to them.', 'bad');
       else this.noteRumour(item, kind === 'whisper');
     });
     this.chatLayer.appendChild(el);

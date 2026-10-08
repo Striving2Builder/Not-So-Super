@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { pick, $ } from '../util.js';
 import { floorY } from './plan.js';
+import { INTOX_HAZE } from '../state.js';
 
 const TIPS_KEY = 'supergirl-club3-tips';
 const TIPS = {
@@ -113,7 +114,7 @@ export const feelMethods = {
     if (this.guards.some((g) => g.seeing)) this.tip('seen');
     if (this.dropPhase === 'build') this.tip('drop');
     if (this.xray || this.hearing) this.tip('xray');
-    if (this.g.state.intox >= 45) this.tip('intox');
+    if (this.g.state.intox >= INTOX_HAZE) this.tip('intox');
     if (this.book?.count >= 1) this.tip('clue');
   },
 

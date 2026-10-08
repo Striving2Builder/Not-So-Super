@@ -11,6 +11,7 @@ import { banner, toast, flash } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { comic } from '../comic.js';
 import { HERO } from '../data.js';
+import { INTOX_HAZE } from '../state.js';
 
 export const DROP = { every: [38, 50], build: 7, strobe: 5.5, first: [22, 30] };
 export const EVENTS = {
@@ -192,7 +193,7 @@ export const eventMethods = {
     this.posing = inShot && this.facing;
     if (!inShot) return;
     E.got += dt * (this.posing ? 2 : 1);
-    if (this.g.state.intox >= 45 && !E.sloppy) { E.sloppy = true; this.addCard('paparazzi', 'Paparazzi shots: Supergirl, out of it'); toast('The flashes catch you swaying. Those photos won\'t be flattering.', 'bad'); }
+    if (this.g.state.intox >= INTOX_HAZE && !E.sloppy) { E.sloppy = true; this.addCard('paparazzi', 'Paparazzi shots: Supergirl, out of it'); toast('The flashes catch you swaying. Those photos won\'t be flattering.', 'bad'); }
     if (E.got >= PAP.need) {
       E.won = true; this.posing = false;
       for (const p of E.pap) p.cone.visible = false;

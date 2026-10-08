@@ -12,6 +12,7 @@ import { sfx } from '../sfx.js';
 import { comic } from '../comic.js';
 import { $ } from '../util.js';
 import { scramble } from './cast.js';
+import { INTOX_HAZE } from '../state.js';
 
 const DRAIN = { xray: 11, hear: 9 };
 const RADIO = ['"Floor\'s packed. Watch the VIP rope."', '"Lenny wants eyes on the staff door."', '"Swap at the drop. Doors are yours for a beat."', '"Anyone seen the cape? Boss says photograph her."', '"Courier\'s out back. Bag\'s heavy tonight."'];
@@ -74,7 +75,7 @@ export const powerMethods = {
     if (this.en <= 0) { this.en = 0; this.setXray(false); this.setHearing(false); toast('Out of power. Lie low in the crowd to recharge.', 'bad'); }
     if (!this.xray && !this.hearing) this.en = Math.min(100, this.en + dt * (this.dancing || this.blend >= 0.75 ? 14 : 5));
     // X-ray marks follow their dealers (intoxicated, they flicker and some are lies)
-    const high = st.intox >= 45;
+    const high = st.intox >= INTOX_HAZE;
     for (const m of P.marks) {
       m.s.position.set(m.p.x, (m.p.y ?? 0) + 2.25, m.p.z);
       m.s.visible = this.xray && !m.lifted && (!high || Math.sin(this.t * 13 + m.p.ph * 7) > -0.2);

@@ -8,6 +8,8 @@ export const RANKS = [[-9999, 'Disgraced'], [0, 'Rookie Hero'], [60, 'Local Hero
 // Thresholds where meters start costing reputation.
 export const VICE_LIMIT = 60;
 export const INTOX_LIMIT = 50;
+// Where the club's intoxication effects start: scrambled speech, the swaying view, the restroom mirror.
+export const INTOX_HAZE = 35;
 
 export class GameState {
   constructor(seed) {
@@ -24,7 +26,9 @@ export class GameState {
     this.leads = [];        // open case leads on the map (a solved club case's distribution points)
     this.leadsDone = [];    // lead ids already won
     this.cases = {};        // case id → { solved }
-    this.photosLost = 0;    // polaroids of her left behind in clubs (blackmail later)
+    this.photosLost = 0;    // polaroids of her in a club owner's safe (src/polaroids.js)
+    this.stashVenue = null; // …which club
+    this.stash = null;      // his deadline once he's holding enough: { t, venue, x, y, district }
   }
 
   get rank() {
@@ -87,7 +91,7 @@ export class GameState {
 
   save() {
     try {
-      localStorage.setItem(KEY, JSON.stringify({ seed: this.seed, rep: this.rep, stats: this.stats, clock: this.clock, lockouts: this.lockouts, leads: this.leads, leadsDone: this.leadsDone, cases: this.cases, photosLost: this.photosLost }));
+      localStorage.setItem(KEY, JSON.stringify({ seed: this.seed, rep: this.rep, stats: this.stats, clock: this.clock, lockouts: this.lockouts, leads: this.leads, leadsDone: this.leadsDone, cases: this.cases, photosLost: this.photosLost, stashVenue: this.stashVenue, stash: this.stash }));
     } catch (e) { /* storage unavailable (private mode etc.) */ }
   }
 
@@ -100,7 +104,7 @@ export class GameState {
       s.stats = { ...s.stats, ...d.stats };
       s.clock = d.clock ?? s.clock;
       s.lockouts = d.lockouts || {};
-      s.leads = d.leads || []; s.leadsDone = d.leadsDone || []; s.cases = d.cases || {}; s.photosLost = d.photosLost || 0;
+      s.leads = d.leads || []; s.leadsDone = d.leadsDone || []; s.cases = d.cases || {}; s.photosLost = d.photosLost || 0; s.stashVenue = d.stashVenue || null; s.stash = d.stash || null;
       return s;
     } catch (e) { return null; }
   }

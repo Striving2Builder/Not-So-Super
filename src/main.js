@@ -134,12 +134,14 @@ game.startZone = (z) => {
 
 /**
  * Fully captured, from anywhere: the forced capture clip (it loops; the first tap turns the sound
- * on, then a few deliberate taps skip it), then the capture room.
+ * on, then a few deliberate taps skip it), then the capture room. Caught in a club, it loops until
+ * she skips it.
  */
 async function captureFlow(zone, reason) {
   game.state.stats.captures++;
   const F = CAPTURE_VIDEOS.forced;
-  await playCutscene({ folder: CAPTURE_VIDEOS.folder, caption: reason || '', maxSecs: 0, loops: F.loops, skipTaps: F.skipTaps });
+  const inClub = !!(VENUES[zone.venue]?.club || VENUES[zone.venue]?.kind === 'club');
+  await playCutscene({ folder: CAPTURE_VIDEOS.folder, caption: reason || '', maxSecs: 0, loops: F.loops, skipTaps: F.skipTaps, untilTap: inClub });
   game.setMode('captured', { zone, reason, direct: chance(0.25) });
   game.commentary.onZoneEnd('captured');
 }

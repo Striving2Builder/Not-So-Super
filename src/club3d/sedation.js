@@ -60,7 +60,7 @@ export const sedationMethods = {
   seedEnvelope() {
     const lost = this.g.state.photosLost || 0;
     this.envelope = [];
-    if (lost) this.envelope.push({ id: 'photos', label: `${lost} polaroid${lost === 1 ? '' : 's'} of you from another night`, w: WEIGHT.photos, img: null, time: '' });
+    if (lost) this.envelope.push({ id: 'photos', n: lost, label: `${lost} polaroid${lost === 1 ? '' : 's'} of you from another night`, w: WEIGHT.photos, img: null, time: '' });
     this.envHud();
   },
 
@@ -94,7 +94,7 @@ export const sedationMethods = {
     const folders = await mediaFolders();
     const folder = SEDATION.folders.find((f) => (folders[f] || []).length);
     this.music.update(1, true);
-    await playCutscene({ folder, caption: `${reason}<br>${blackout ? 'Everything goes dark…' : 'A needle in the neck. Everything goes dark…'}`, maxSecs: 9 });
+    await playCutscene({ folder, caption: `${reason}<br>${blackout ? 'Everything goes dark…' : 'A needle in the neck. Everything goes dark…'}`, untilTap: true });
     await this.wake();
     this.sedating = false;
     this.busy = false;

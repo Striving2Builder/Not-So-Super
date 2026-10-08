@@ -11,6 +11,7 @@ import { npcLook } from '../art.js';
 import { clamp, $ } from '../util.js';
 import { comic } from '../comic.js';
 import { DOOR_W, floorY } from './plan.js';
+import { INTOX_HAZE } from '../state.js';
 
 const TALK_R = 2.4, TALK_IN = 1.2, HEAR_R = 5.6;
 // on High, one of each Talker pair is one of the game's character models (~40k triangles each: too heavy for phones)
@@ -41,6 +42,7 @@ export const castMethods = {
     for (const r of V.balconyRoutes || []) this.addBouncer(r, { y: V.balcony.y + 0.15 });
     // the VIP rope's bouncer paces in front of the door
     const vq = plan.byKind.vip, vs = vq.side === 'W' ? 1 : -1;
+    this.addTorchGuards();
     this.ropeGuard = this.addBouncer([[vq.door.x + vs * 2.0, vq.door.z - 1.4], [vq.door.x + vs * 2.0, vq.door.z + 1.4]]);
     // ---- locked doors
     this.doors = {};
@@ -216,7 +218,7 @@ export const castMethods = {
         const who = tk.npcs[Math.random() < 0.5 ? 0 : 1], text = fragment(this.book.clue(...tk.def.clue.split(':'))?.text || '…');
         const s = () => this.screenOf(who.position, 2.1);
         const p = s();
-        if (p) comic.say(this.hearing || d < TALK_R ? (st.intox >= 45 ? scramble(text, 0.35) : text) : '…', p.x, p.y, { kind: 'speech', ms: 2200, anchor: s });
+        if (p) comic.say(this.hearing || d < TALK_R ? (st.intox >= INTOX_HAZE ? scramble(text, 0.35) : text) : '…', p.x, p.y, { kind: 'speech', ms: 2200, anchor: s });
       }
       const a = tk.done ? 0.15 : 0.6 + 0.3 * Math.sin(this.t * 3);
       tk.ring.material.opacity = a; tk.inner.material.opacity = tk.done ? 0.02 : 0.06 + 0.04 * Math.sin(this.t * 3);
@@ -228,7 +230,7 @@ export const castMethods = {
     if (nd < TALK_R) { const inn = nd < TALK_IN; ev = inn ? 13 : 8; su = inn ? 15 : 6.5; }
     else if (this.hearing && nd < HEAR_R) ev = 7;
     if (this.dancing) su *= 0.4;
-    if (st.intox >= 45) su *= 0.7;
+    if (st.intox >= INTOX_HAZE) su *= 0.7;
     if (this.blend >= 0.75) su *= 0.6;
     if (nd < TALK_R && (this.xray || this.hearing)) su += 14; // glowing eyes, sound rings: they notice
     if (ev) { near.ev += ev * dt; near.sus += su * dt; } else near.sus = Math.max(0, near.sus - 10 * dt);
@@ -239,7 +241,7 @@ export const castMethods = {
 
   async talkerDone(tk) {
     const st = this.g.state, c = this.book.clue(...tk.def.clue.split(':'));
-    if (st.intox >= 45) {
+    if (st.intox >= INTOX_HAZE) {
       // too high to make sense of it: she has to come back sober
       tk.ev = 40;
       this.say(tk.pos, scramble(c.text.replace(/<[^>]+>/g, '').slice(0, 90), 0.4), { ms: 3400, speaker: tk.def.who });

@@ -173,8 +173,18 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
       await V.page.waitForTimeout(1500); await V.shot('flow_dance_landscape');
       await V.page.setViewportSize({ width: H, height: W }); await V.page.waitForTimeout(600); await V.shot('flow_dance_portrait');
       await V.page.setViewportSize({ width: W, height: H });
-      await V.through(() => !window.__game.mode.sub && !document.querySelector('#modal-root .modal-back'), 90000);
+      // (a lost dance loops the playback until a tap: tap the clip's corner, clear of the keys)
+      await V.through(() => { const m = window.__game.mode; if (m.sub) m.g.input.taps.push({ x: 2, y: 2 }); return !m.sub && !document.querySelector('#modal-root .modal-back'); }, 90000);
       return { envelope: await V.page.evaluate(() => window.__game.mode.envelope.map((c) => c.id + (c.img ? '*' : ''))) };
+    });
+    await flow('backroom', '&club3room=rave&club3seed=7&club3event=none', async (V) => {
+      // the dark room's screen (its clip plays while she's in there) and the floor's flashlight bouncers
+      await V.page.evaluate(() => { const m = window.__game.mode, q = m.plan.byKind.dark; m.hero.position.set(q.cx, 0, q.z0 + 4.5); m.camSnap = true; });
+      await V.page.waitForTimeout(2500); await V.shot('flow_backroom_screen');
+      const want = await V.page.evaluate(() => window.__game.mode.videoWant);
+      await V.page.evaluate(() => { const m = window.__game.mode, F = m.plan.V.floor; m.hero.position.set(F.x, 0, F.z + 3); m.camSnap = true; });
+      await V.page.waitForTimeout(2500); await V.shot('flow_backroom_torches');
+      return { video: want, torches: await V.page.evaluate(() => window.__game.mode.guards.filter((g) => g.torch).map((g) => g.phase)) };
     });
     await flow('brawl', '&club3room=rave&club3seed=7&club3event=none', async (V) => {
       const out = {};

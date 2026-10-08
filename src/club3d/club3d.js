@@ -16,6 +16,8 @@ import { buildRoom, buildAlley } from './rooms.js';
 import { dressHall } from './dressing.js';
 import { ClubCrowd, placeCrowd } from './crowd.js';
 import { ClubVideo, tickScreens } from './video.js';
+import { stashFromEnvelope } from '../polaroids.js';
+import { dangerMethods } from './danger.js';
 import { ClubMusic } from './music.js';
 import { castMethods } from './cast.js';
 import { eventMethods } from './events.js';
@@ -31,6 +33,7 @@ import { closeupMethods } from './closeup.js';
 import { undercoverMethods } from './undercover.js';
 import { quickMethods } from './quick.js';
 import { feelMethods } from './feel.js';
+import { INTOX_HAZE } from '../state.js';
 
 const SPEED = 4.6;          // her walk (m/s); a packed crowd slows her by up to 40%
 const IDLE_FACE = 1.5;      // seconds standing still before she turns to the viewer
@@ -100,7 +103,7 @@ export class Club3D extends Special3D {
     this.showStep = buildShow(this, plan, X);
     bakeStatic(S, this._static); this._static = null;
     buildKit(X);
-    this.screens = [...this.hallA.screens, ...(this.roomA.office?.cctv || [])];
+    this.screens = [...this.hallA.screens, ...(this.roomA.office?.cctv || []), ...(this.roomA.dark?.screens || [])];
     // the exit: a ring just inside the door
     this.exitRing = new THREE.Mesh(new THREE.RingGeometry(1.1, 1.5, 32), new THREE.MeshBasicMaterial({ color: 0x3ee08a, transparent: true, opacity: 0.25, side: THREE.DoubleSide }));
     this.exitRing.rotation.x = -Math.PI / 2; this.exitRing.position.set(0, 0.04, V.hd - 1.3);
@@ -140,6 +143,7 @@ export class Club3D extends Special3D {
   }
 
   exit() {
+    if (this.envelope && this.g.state) stashFromEnvelope(this.g.state, this.envelope, this.zone?.venue);
     this.closeOverlays?.();
     this.closeQuick?.(null);
     this.endTips?.();
@@ -229,8 +233,10 @@ export class Club3D extends Special3D {
     this.stepCast(dt);
     this.stepChatter(dt);
     this.stepVices(dt);
+    this.stepIncidents(dt);
     const a0 = this.alert;
     this.updateGuards(dt);
+    this.stepTorches(dt);
     this.stepInvestigate(dt);
     if (this.alert > a0) this.alert = a0 + (this.alert - a0) * GUARD_GAIN; // (they're scanning a packed floor)
     this.stepCoverRing(dt);
@@ -283,13 +289,13 @@ export class Club3D extends Special3D {
     const loud = (this.moving || 0) > 0.85 || this.xray || this.hearing;
     let b = clamp((this.cover - 1) / 4, 0, 1) * (loud ? 0.35 : 1);
     if (this.undercover) b = Math.min(1, b * 1.4 + 0.15);
-    if (this.g.state.intox >= 45) b = Math.min(1, b + 0.15); // she fits right in
+    if (this.g.state.intox >= INTOX_HAZE) b = Math.min(1, b + 0.15); // she fits right in
     return b;
   }
 
   /** Guards' sight goes through this: hidden in the crowd, or blinded by the strobe, they don't see her. */
   clearLOS(a, b) {
-    if (this.strobe > 0 || this.blend >= 0.75 || this.event?.id === 'raid' && this.event.phase === 1) return false;
+    if (this.strobe > 0 || this.blend >= (this.isTorch(a) ? 0.98 : 0.75) || this.event?.id === 'raid' && this.event.phase === 1) return false;
     // the VIP's rope bouncer is a gatekeeper, not an alarm: only someone in the VIP without leave alerts him
     if (this.ropeGuard && a === this.ropeGuard.mesh.position && !(this.room === this.plan.byKind.vip && !this.vipIn)) return false;
     return super.clearLOS(a, b);
@@ -388,4 +394,4 @@ export class Club3D extends Special3D {
   }
 }
 
-Object.assign(Club3D.prototype, castMethods, eventMethods, powerMethods, chatterMethods, viceMethods, caseMethods, sedationMethods, vipMethods, officeMethods, brawlMethods, closeupMethods, undercoverMethods, quickMethods, feelMethods);
+Object.assign(Club3D.prototype, castMethods, eventMethods, powerMethods, chatterMethods, viceMethods, caseMethods, sedationMethods, vipMethods, officeMethods, brawlMethods, closeupMethods, undercoverMethods, quickMethods, feelMethods, dangerMethods);
