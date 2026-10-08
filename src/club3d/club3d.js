@@ -10,8 +10,7 @@ import { bakeStatic, comicScene, groundBackdrop } from '../look3d.js';
 import { quality } from '../settings.js';
 import { clamp, wobble, $ } from '../util.js';
 import { banner, toast } from '../ui.js';
-import { beat } from '../nlkit.js';
-import { makePlan, roomAt, floorY, BPM } from './plan.js';
+import { makePlan, roomAt, floorY } from './plan.js';
 import { hallMats, makeClubKit, buildHall, buildShow, stepTiles, buildKit } from './build.js';
 import { buildRoom, buildAlley } from './rooms.js';
 import { ClubCrowd, placeCrowd } from './crowd.js';
@@ -68,7 +67,7 @@ export class Club3D extends Special3D {
     // after the base zone's reset: the camera's own state
     this.yaw = 0; this.camPD = [...CAM_OPEN]; this.camSnap = true; this.camPitch = null;
     this.seedEnvelope();
-    this.music = new ClubMusic(BPM); this.music.start();
+    this.music = new ClubMusic(); this.music.start();
     this.startEvents();
     this.startChatter();
     this.askUndercover();
@@ -179,7 +178,7 @@ export class Club3D extends Special3D {
     const g = this.g, inp = g.input, st = g.state, h = this.hero, plan = this.plan;
     this.t += dt; this.frameDt = dt;
     g.vice = { active: true, where: this.zone.venue, rate: 1.2 };
-    const B = (this.B = beat(this.t, BPM));
+    const B = (this.B = this.music.beat(this.t)); // (the lights and the crowd move with the track that's playing)
     this.room = roomAt(plan, h.position.x, h.position.z);
     this.stepEvents(dt);
     // moving: the camera never turns, so up is always toward the DJ wall

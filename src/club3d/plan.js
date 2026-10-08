@@ -10,7 +10,6 @@ export const SIDE_D = 11.5;      // side room depth (z)
 export const ROOM_H = 3.4;       // side room wall height
 export const ALLEY_W = 7;        // the alley strip behind the storage room
 export const DOOR_W = 2.6;       // door gaps
-export const BPM = 124;          // the club's tempo (the show, the music, the VIP dance)
 
 /**
  * The five main rooms. hw/hd: half width/depth; wallH: the hall's walls (the south wall is a low

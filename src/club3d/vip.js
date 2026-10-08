@@ -11,7 +11,6 @@ import { tierOf } from '../commentary.js';
 import { HERO } from '../data.js';
 import { clamp } from '../util.js';
 import { scramble } from './cast.js';
-import { BPM } from './plan.js';
 
 const DANCE = { playSecs: 12, maxMisses: 8, clean: 2, speedUp: 0.55, folder: 'ClubDance', plate: 'assets/nightclub/plates/vip.jpg' };
 
@@ -92,7 +91,7 @@ export const vipMethods = {
       const back = new Image(); back.src = DANCE.plate;
       const key = document.createElement('canvas'), kx = key.getContext('2d', { willReadFrequently: true });
       const S = { t: 0, played: 0, misses: 0, lit: -1, litT: 0, hitWin: false, pauseT: 0.6, flash: 0, hits: 0 };
-      const beat = 60 / BPM;
+      const beat = 60 / this.music.bpm; // (the keys light on the music's beat)
       const kb = (e) => { const n = +e.key; if (n >= 1 && n <= 9) { e.preventDefault(); e.stopPropagation(); press(n - 1); } };
       addEventListener('keydown', kb, true);
       document.body.classList.add('c3-flat');

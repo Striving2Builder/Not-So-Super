@@ -36,13 +36,23 @@ export const eventMethods = {
   },
 
   stepEvents(dt) {
-    // ---- the drop
-    this.dropT -= dt;
-    if (this.dropPhase === 'idle' && this.dropT <= DROP.build) {
-      this.dropPhase = 'build';
-      this.music.build(DROP.build - 0.1);
+    // ---- the drop: on the track's own drops (the synth stand-in keeps a timer)
+    const toDrop = this.music.timeToDrop();
+    if (toDrop !== null && this.dropT < 900) {
+      if (this.dropPhase === 'idle' && toDrop <= DROP.build) { this.dropPhase = 'build'; this.dropT = toDrop; }
+      if (this.dropPhase === 'build') {
+        this.dropT = toDrop;
+        if (toDrop <= 0.03) { this.music.consumeDrop(); this.startDrop(); }
+        else if (toDrop > DROP.build + 0.5) this.dropPhase = 'idle'; // (it went by under a dialog, or the track changed)
+      }
+    } else {
+      this.dropT -= dt;
+      if (this.dropPhase === 'idle' && this.dropT <= DROP.build) {
+        this.dropPhase = 'build';
+        this.music.build(DROP.build - 0.1);
+      }
+      if (this.dropPhase === 'build' && this.dropT <= 0) this.startDrop();
     }
-    if (this.dropPhase === 'build' && this.dropT <= 0) this.startDrop();
     if (this.dropPhase === 'strobe') {
       this.strobe -= dt;
       if (this.strobe <= 0) this.endDrop();
@@ -73,7 +83,7 @@ export const eventMethods = {
 
   endDrop() {
     this.dropPhase = 'idle'; this.strobe = 0; this.drop = false;
-    this.dropT = rand(...DROP.every);
+    this.dropT = this.dropT >= 900 ? this.dropT : rand(...DROP.every);
     for (const gd of this.guards) gd.cone.visible = !gd.ko && !gd.away;
     // slipped through while the lights were out? then she's in; else the doors swing shut again
     for (const k of this.dropOpened || []) {

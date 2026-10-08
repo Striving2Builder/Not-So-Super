@@ -17,6 +17,10 @@ padding clicks at the loop seam. Smoke test: `node tools/shots/audio.js`.
 | crime-scene + radio1/2 | investigation bed + random radio chatter (`src/ambience.js`) |
 | drone | asylum + captured bed |
 | street | brawler bed |
+| silence | a 0.15 s silent MP3: plays once in the first tap so iOS lets the club's music element play from code later |
+
+**Music:** the user's club tracks live in `assets/Music/` (not this folder) and are streamed as they
+are by `src/club3d/music.js`; each track's tempo, first beat and drops are measured into its `TRACKS` table.
 
 Still synthesized (no matching recording yet): punch, hit, hurt, pow, sonic boom, shutter,
 drink, door, win, lose, the spin sting and the siren. The raw library's peaks above 0 dBFS
