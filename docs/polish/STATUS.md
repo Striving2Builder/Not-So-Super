@@ -179,7 +179,8 @@ dodging guard flashlight cones; user refs: foggy club, laser beams, DJ booth, ba
 - `testdrive-2026-10-04`: adds the Supergirl look pass, city round 9, the comic dive landing and the iPad device fixes.
 - `testdrive-2026-10-05`/`05b`/`05c`: the 2D detective nightclubs (default then), the club case loop, iPad fixes, cloud round 10.
 - `testdrive-2026-10-07` (05b1cb7, also on main): the 3D infiltration clubs as the default (2D club = `?club=v2`, or automatic if the 3D club can't start), two club cases, the forced capture clip, a lost fight = a capture.
-- `testdrive-2026-10-07b` (2c16845, also on main): the club's second pass: the user's music, a packed crowd (3D near + sprite far), set dressing (towers, shafts, speakers, neon, floor reflection, mist), quick prompts instead of small dialogs, the cover ring, bouncers who investigate, tips, the GPU-keyed VIP dance, a third case (the Earworm). **Latest; the user should iPad-test the club.** (shoot.js `nightcase` is stale since club night cases open the 3D club.)
+- `testdrive-2026-10-07b` (2c16845, also on main): the club's second pass: the user's music, a packed crowd (3D near + sprite far), set dressing (towers, shafts, speakers, neon, floor reflection, mist), quick prompts instead of small dialogs, the cover ring, bouncers who investigate, tips, the GPU-keyed VIP dance, a third case (the Earworm). (shoot.js `nightcase` is stale since club night cases open the 3D club.)
+- `testdrive-2026-10-08` (136aecd, also on main): the club close-ups fill the screen again (picture slid to keep every spot clear; BACK/CASE/CAMERA in a column down the right), on top of the Cursor commit 0d054e9 that had shrunk them. **Latest; the user should phone-test a close-up.**
 
 ## Device testing (2026-10-03, iPad, real device)
 - "Plays but crashes and is a bit janky." Diving from flight into a brawler/activity: very long load or freeze. 3D flight: after a few freezes or a black screen it goes back to 2D.
