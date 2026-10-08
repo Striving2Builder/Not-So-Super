@@ -176,7 +176,9 @@ dodging guard flashlight cones; user refs: foggy club, laser beams, DJ booth, ba
 - `testdrive-2026-10-02b` (15d95a7): adds flight 5/5b, city round 5 and investigation round 3.
 - `testdrive-2026-10-02c` (dc6e56c): adds the crisp hero, city round 6 and flight round 6. The user tested on an iPad (see "Device testing").
 - `testdrive-2026-10-03` (774c006): rounds 7–8, hero variants (pause menu "Hero"), iPad stability, `?perf=1`.
-- `testdrive-2026-10-04`: adds the Supergirl look pass, city round 9, the comic dive landing and the iPad device fixes. **Latest; the user should iPad-test it.**
+- `testdrive-2026-10-04`: adds the Supergirl look pass, city round 9, the comic dive landing and the iPad device fixes.
+- `testdrive-2026-10-05`/`05b`/`05c`: the 2D detective nightclubs (default then), the club case loop, iPad fixes, cloud round 10.
+- `testdrive-2026-10-07` (05b1cb7, also on main): the 3D infiltration clubs as the default (2D club = `?club=v2`, or automatic if the 3D club can't start), two club cases, the forced capture clip, a lost fight = a capture. **Latest; the user should iPad-test the club.**
 
 ## Device testing (2026-10-03, iPad, real device)
 - "Plays but crashes and is a bit janky." Diving from flight into a brawler/activity: very long load or freeze. 3D flight: after a few freezes or a black screen it goes back to 2D.
