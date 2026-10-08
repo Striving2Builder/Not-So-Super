@@ -9,7 +9,7 @@ import { ROOMS, PLATE, ART } from './rooms.js';
 import { ClubStage } from './stage.js';
 import { beforeScene, afterScene, freeIntox, TIERS } from './intox.js';
 import { crowdAtlas, drawDancer, loadDancers } from './crowd.js';
-import { CLOSEUPS } from './scenes.js';
+import { CLOSEUPS, closeupFrame } from './scenes.js';
 import { pickCase, CaseBook } from './case.js';
 import { Snapshots, polaroid, drawCinematic, CINE_SECONDS } from './blackout.js';
 import { heroReady, HeroSprite } from '../hero3d.js';
@@ -97,7 +97,7 @@ export class Nightclub {
     }
     if (this.blackout) { this.updateBlackout(dt); return; }
     // passed out (in any view: a shot drunk in a close-up counts); a hair under 100 because the meter drains
-    if (st.intox >= 99.5 && !UI.open) { this.view = 'walk'; this.startBlackout(); return; }
+    if (st.intox >= 99.5 && !UI.open) { if (this.view === 'closeup') { this.g.input.setStick(true); document.body.classList.remove('closeup-on'); } this.view = 'walk'; this.startBlackout(); return; }
     if (this.view === 'closeup') { this.updateCloseup(); return; }
     if (this.view === 'set') {
       this.setT += dt;
@@ -460,20 +460,21 @@ export class Nightclub {
     this.view = 'closeup'; this.scene = scene;
     if (!scene.img) { scene.img = new Image(); scene.img.src = PLATE.dir + scene.src; }
     this.ring = null;
+    this.g.input.setStick(false); // its touch zone covers the left of the picture
+    document.body.classList.add('closeup-on');
     this.g.input.setButton('interact', { label: 'BACK', lit: false }); this.lastLabel = 'BACK';
     toast('Tap anything that looks out of place.', 'info');
   }
 
-  /** Where the image sits on screen (cover-fit), to map taps into its 0..1 space. */
+  /** Where the image sits: the whole picture, above the buttons. */
   closeupRect(w, h) {
-    const img = this.scene.img, iw0 = img.naturalWidth || 1280, ih0 = img.naturalHeight || 720;
-    const sc = Math.max(w / iw0, h / ih0);
-    return { x: (w - iw0 * sc) / 2, y: (h - ih0 * sc) * 0.8, w: iw0 * sc, h: ih0 * sc }; // crop the top, keep the counter
+    const img = this.scene.img;
+    return closeupFrame(w, h, img.naturalWidth || 1280, img.naturalHeight || 720);
   }
 
   updateCloseup() {
     const inp = this.g.input, sc = this.scene, kind = this.room.kind;
-    if (inp.pressed('interact') || inp.pressed('leave')) { this.view = 'walk'; inp.taps.length = 0; return; }
+    if (inp.pressed('interact') || inp.pressed('leave')) { this.view = 'walk'; inp.setStick(true); document.body.classList.remove('closeup-on'); inp.taps.length = 0; return; }
     if (inp.pressed('notes')) { this.caseBoard(); return; }
     const tap = inp.taps.shift();
     if (!tap || UI.open) return;
@@ -515,10 +516,11 @@ export class Nightclub {
     }
     ctx.font = `bold ${Math.round(Math.max(16, h * 0.05))}px Bangers, Impact, sans-serif`; ctx.textAlign = 'left';
     const label = `${sc.title.toUpperCase()} · ${seen}/${sc.spots.length} SEARCHED · CASE ${this.case.count}/${this.case.def.need}`;
-    ctx.lineWidth = 5; ctx.strokeStyle = '#05040a'; ctx.strokeText(label, 18, h - 22); ctx.fillStyle = '#ffd84d'; ctx.fillText(label, 18, h - 22);
+    ctx.lineWidth = 5; ctx.strokeStyle = '#05040a'; ctx.strokeText(label, 18, 30); ctx.fillStyle = '#ffd84d'; ctx.fillText(label, 18, 30);
   }
 
   exit() {
+    document.body.classList.remove('closeup-on');
     if (this.video) { this.video.pause(); this.video.remove(); this.video = null; }
     this.stage = null; freeIntox(); this.snaps?.free();
     $('hud-extra').innerHTML = '';

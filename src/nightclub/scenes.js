@@ -3,6 +3,17 @@
 // the case's business (src/nightclub/cases/*.js: clue text, items, drinks), so another case
 // (e.g. blackmail) reuses the same rooms and objects with its own story.
 
+/** Where a close-up sits. The joystick is hidden for the search (it covered the left of the
+ *  picture). BACK / CASE / CAMERA sit in one row along the bottom, and the whole image is
+ *  contained above that row so every spot can be tapped. */
+export function closeupFrame(w, h, iw = 1280, ih = 720) {
+  const top = 40, bar = Math.min(150, Math.max(112, Math.round(h * 0.22)));
+  const availH = Math.max(80, h - bar - top);
+  const s = Math.min(w / iw, availH / ih);
+  const dw = iw * s, dh = ih * s;
+  return { x: (w - dw) / 2, y: top + (availH - dh) / 2, w: dw, h: dh };
+}
+
 export const CLOSEUPS = {
   bar: {
     src: 'closeup_bar.jpg', title: 'The bar',

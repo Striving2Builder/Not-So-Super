@@ -4,7 +4,7 @@
 // phone (the messages drawn in code), a note or a ledger opens as paper, in drug-vision a UV layer
 // shows writing nobody sober can see, and the CAMERA frames the evidence she's found: each photo
 // filed is a little extra on the front page. What a spot means is the case's (cases/*.js).
-import { CLOSEUPS } from '../nightclub/scenes.js';
+import { CLOSEUPS, closeupFrame } from '../nightclub/scenes.js';
 import { PLATE } from '../nightclub/rooms.js';
 import { dialog, toast, flash, UI } from '../ui.js';
 import { sfx } from '../sfx.js';
@@ -20,8 +20,8 @@ export const closeupMethods = {
     if (!sc.img) { sc.img = new Image(); sc.img.src = PLATE.dir + sc.src; }
     const g = this.g, inp = g.input;
     this.setXray(false);
-    document.body.classList.add('c3-flat');
-    inp.setStick(false); // (its touch zone sat over the spots on the left)
+    document.body.classList.add('c3-flat', 'closeup-on');
+    inp.setStick(false); // the stick's touch zone covers the left of the picture
     inp.setButtons([{ id: 'back', label: 'BACK', key: 'E', cls: 'big' }, { id: 'notes', label: 'CASE', key: 'N', slot: 1 }, { id: 'camera', label: 'CAMERA', key: 'C', slot: 2 }]);
     $('prompt').classList.remove('on'); $('marker').classList.remove('on');
     const uv = this.dvision > 0 || g.state.intox >= 60;
@@ -29,14 +29,11 @@ export const closeupMethods = {
     toast(uv ? 'Tap anything out of place. Drug-vision shows what\'s written in UV.' : 'Tap anything that looks out of place.', 'info');
     const close = () => {
       this.sub = null;
-      document.body.classList.remove('c3-flat');
+      document.body.classList.remove('c3-flat', 'closeup-on');
       inp.setStick(true);
       this.setupControls(); this.envHud();
     };
-    const rect = (w, h) => {
-      const iw = sc.img.naturalWidth || 1280, ih = sc.img.naturalHeight || 720, s = Math.max(w / iw, h / ih);
-      return { x: (w - iw * s) / 2, y: (h - ih * s) * 0.8, w: iw * s, h: ih * s };
-    };
+    const rect = (w, h) => closeupFrame(w, h, sc.img.naturalWidth || 1280, sc.img.naturalHeight || 720);
     this.sub = {
       update: (dt) => {
         if (UI.open) return;
@@ -76,7 +73,7 @@ export const closeupMethods = {
         const seen = sc.spots.filter((s) => this.book.has(kind, s.id)).length;
         ctx.font = `bold ${Math.round(Math.max(16, h * 0.05))}px Bangers, Impact, sans-serif`; ctx.textAlign = 'left';
         const label = `${sc.title.toUpperCase()} · ${seen}/${sc.spots.length} SEARCHED · CASE ${this.book.count}/${this.caseDef.need}`;
-        ctx.lineWidth = 5; ctx.strokeStyle = '#05040a'; ctx.strokeText(label, 18, h - 22); ctx.fillStyle = '#ffd84d'; ctx.fillText(label, 18, h - 22);
+        ctx.lineWidth = 5; ctx.strokeStyle = '#05040a'; ctx.strokeText(label, 18, 30); ctx.fillStyle = '#ffd84d'; ctx.fillText(label, 18, 30);
         if (cam) this.drawViewfinder(ctx, w, h, R, kind, sc);
         if (view) this.drawView(ctx, w, h, view);
       },
@@ -189,7 +186,7 @@ export const closeupMethods = {
   closeOverlays() {
     if (this.brawlerOn) { this.brawlerOn.exit(); this.brawlerOn = null; }
     this.sub = null;
-    document.body.classList.remove('c3-flat');
+    document.body.classList.remove('c3-flat', 'closeup-on');
     const t = $('c3-talk'); if (t) t.classList.remove('on');
   },
 };
