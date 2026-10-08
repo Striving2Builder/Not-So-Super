@@ -9,11 +9,11 @@ import { GUARD_RANGE, GUARD_FOV, basic } from '../zonekit.js';
 import { quality } from '../settings.js';
 import { npcLook } from '../art.js';
 import { clamp, $ } from '../util.js';
-import { dialog } from '../ui.js';
 import { comic } from '../comic.js';
 import { DOOR_W, floorY } from './plan.js';
 
 const TALK_R = 2.4, TALK_IN = 1.2, HEAR_R = 5.6;
+const TALK_MODELS = ['leather', 'hooded_thug', 'punk_girl']; // (one of each Talker pair is one of the game's character models)
 const DOOR_MAT = () => new THREE.MeshToonMaterial({ color: 0x2a2633 });
 
 /** Strip tags; keep a few words of a line, the rest lost in the music. */
@@ -71,7 +71,7 @@ export const castMethods = {
       if (!p) return;
       const [x, z] = p, y = floorY(plan, x, z);
       const a = this.npc(npcLook('civilian'), x - 0.42, z, Math.PI / 2);
-      const b = this.npc(npcLook(i === 1 ? 'thug' : 'civilian'), x + 0.42, z, -Math.PI / 2);
+      const b = this.castModel(TALK_MODELS[i % TALK_MODELS.length], npcLook(i === 1 ? 'thug' : 'civilian'), x + 0.42, z, -Math.PI / 2);
       const ring = new THREE.Mesh(new THREE.RingGeometry(TALK_R - 0.2, TALK_R, 48).rotateX(-Math.PI / 2), basic(0xffd84d, { transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
       const inner = new THREE.Mesh(new THREE.CircleGeometry(TALK_IN, 32).rotateX(-Math.PI / 2), basic(0xffd84d, { transparent: true, opacity: 0.08, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
       ring.position.set(x, y + 0.035, z); inner.position.set(x, y + 0.03, z);
@@ -145,6 +145,14 @@ export const castMethods = {
     m.position.set(x, floorY(this.plan, x, z), z);
     m.rotation.y = rot;
     if (sit) { for (const l of m.legs) l.rotation.x = -1.45; m.position.y -= 0.42; for (const a of m.arms) a.rotation.x = -0.4; }
+    this.npcs.push(m);
+    return m;
+  },
+
+  /** One of the game's character models (enemies.js) standing at (x, z), facing rot; the procedural person until they've loaded. */
+  castModel(kind, look, x, z, rot = 0, scale = 1) {
+    const m = this.makeCharacter(kind, look, scale);
+    m.position.set(x, floorY(this.plan, x, z), z); m.rotation.y = rot;
     this.npcs.push(m);
     return m;
   },
@@ -232,7 +240,8 @@ export const castMethods = {
     if (st.intox >= 45) {
       // too high to make sense of it: she has to come back sober
       tk.ev = 40;
-      await dialog({ title: tk.def.who, text: `${scramble(c.text.replace(/<[^>]+>/g, ''), 0.4)}<span class="hint">You're too far gone to make sense of it. Come back when your head's clearer.</span>` });
+      this.say(tk.pos, scramble(c.text.replace(/<[^>]+>/g, '').slice(0, 90), 0.4), { ms: 3400, speaker: tk.def.who });
+      toast('You\'re too far gone to make sense of it. Come back when your head\'s clearer.', 'bad');
       return;
     }
     tk.done = true;

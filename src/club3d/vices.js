@@ -41,21 +41,21 @@ export const viceMethods = {
     ];
     if (spiked && !this.book.has('bar', 'spiked')) opts.unshift({ label: 'Expose the spiked "house special"', note: 'X-ray: powder in the glass', value: 'expose', cls: 'good' });
     opts.push({ label: 'Leave it', value: null });
-    const v = await dialog({ speaker: 'Bartender', text: `"What'll it be, ${this.undercover ? 'hon' : 'hero'}?"${spiked ? '<span class="hint">X-ray: a cloud of glittering green powder settles in every "house special" he pours.</span>' : ''}`, options: opts });
+    const v = await this.quick({ speaker: 'Bartender', text: `"What'll it be, ${this.undercover ? 'hon' : 'hero'}?"${spiked ? '<small>X-ray: glittering green powder settles in every "house special" he pours.</small>' : ''}`, options: opts, at: this.bartender });
     if (v === 'special') {
       sfx.drink(); st.addIntox(DOSE.special); this.drinks = (this.drinks || 0) + 1;
       const key = ['bar:napkin', 'bar:phone', 'bar:pills'].find((k) => !this.book.has(...k.split(':')));
       if (key) await this.gotClue(key, { title: 'The bartender leans in' });
-      else toast('"That\'s all I know, I swear."', 'info');
+      else this.say(this.bartender, '"That\'s all I know, I swear."');
     } else if (v === 'ask') {
-      if (!this.drinks) await dialog({ speaker: 'Bartender', text: '"Buy something first. Then we talk."' });
+      if (!this.drinks) this.say(this.bartender, '"Buy something first. Then we talk."');
       else if (!this.book.has('bar', 'napkin')) await this.gotClue('bar:napkin', { title: 'The bartender leans in' });
-      else await dialog({ speaker: 'Bartender', text: '"That\'s all anybody says out loud in here. Ask upstairs."' });
+      else this.say(this.bartender, '"That\'s all anybody says out loud in here. Ask upstairs."');
     } else if (v === 'expose') {
       await this.gotClue('bar:spiked', { title: 'Spiked' });
       this.alert = Math.min(90, this.alert + 15);
       toast('The bartender goes pale and stops pouring.', 'good');
-    } else if (v === 'water') toast('"Water. In a club. Sure."', 'info');
+    } else if (v === 'water') this.say(this.bartender, '"Water. In a club. Sure."');
   },
 
   async acceptOffer(id) {
@@ -87,7 +87,7 @@ export const viceMethods = {
   },
 
   async shotOff() {
-    const v = await dialog({ speaker: 'The gangster', text: '"The hero drinks? Shot for shot, cape. Win and I\'ll tell you something. Lose and you\'re on the floor."', options: [{ label: 'Accept the shot-off', note: 'A timing challenge', value: true, cls: 'risky' }, { label: 'Walk away', value: false }] });
+    const v = await this.quick({ speaker: 'The gangster', text: '"The hero drinks? Shot for shot, cape. Win and I\'ll tell you something. Lose and you\'re on the floor."', options: [{ label: 'Accept the shot-off', note: 'A timing challenge', value: true, cls: 'risky' }, { label: 'Walk away', value: false }], at: this.gangster });
     if (!v) return;
     this.shotDone = true;
     let hits = 0;
@@ -98,11 +98,13 @@ export const viceMethods = {
       this.items.add('VIP wristband');
       const r = (this.caseDef.rumours || []).find((q) => q.teach === 'who');
       if (r) this.noteRumour(r);
-      await dialog({ speaker: 'The gangster', text: `"Ha! Respect." He slides a VIP wristband across the table.${r ? ` "${this.rumourText(r)} Remember that."` : ''}<span class="hint">You got a VIP wristband.</span>` });
+      this.say(this.gangster, `"Ha! Respect."${r ? ` "${this.rumourText(r)} Remember that."` : ''}`, { ms: 4200, speaker: 'The gangster' });
+      toast('He slides a VIP wristband across the table.', 'good');
     } else {
       sfx.drink(); st.addIntox(DOSE.shotLose);
       this.addCard('drunk', `${HERO} losing a drinking game`);
-      await dialog({ speaker: 'The gangster', text: '"Lightweight." The table roars. Somebody takes a picture.' });
+      this.say(this.gangster, '"Lightweight."', { speaker: 'The gangster' });
+      toast('The table roars. Somebody takes a picture.', 'bad');
     }
   },
 
@@ -139,7 +141,7 @@ export const viceMethods = {
 
   async powder() {
     const st = this.g.state;
-    const v = await dialog({ title: 'The first stall', text: 'Lines of glittering green powder on the cistern lid. Someone left in a hurry.', options: [
+    const v = await this.quick({ speaker: 'The first stall', text: 'Lines of glittering green powder on the cistern lid. Someone left in a hurry.', options: [
       { label: 'Take a bump', note: `+${DOSE.powder} intoxication · X-ray for free for a while · blackout risk`, value: 'take', cls: 'risky' },
       { label: 'Bag a sample', note: 'Evidence', value: 'bag' },
       { label: 'Leave it', value: null },
@@ -180,7 +182,7 @@ export const viceMethods = {
     const x = this.xray;
     const opts = [{ label: 'Take the drink', note: 'Something feels off', value: 'take', cls: 'risky' }, { label: '"No thanks."', value: 'no' }];
     if (x) opts.unshift({ label: 'Expose him: the drink is spiked', value: 'expose', cls: 'good' });
-    const v = await dialog({ speaker: 'A man in a sharp suit', text: `"You look like you need this more than I do." He holds out a glass, smiling a little too long.${x ? '<span class="hint">X-ray: green powder still settling at the bottom of the glass.</span>' : ''}`, options: opts });
+    const v = await this.quick({ speaker: 'A man in a sharp suit', text: `"You look like you need this more than I do." He holds out a glass, smiling a little too long.${x ? '<small>X-ray: green powder still settling at the bottom of the glass.</small>' : ''}`, options: opts, at: this.predator, away: 'no' });
     if (v === 'take') {
       sfx.drink(); st.addIntox(DOSE.spiked);
       this.addCard('drunk', `${HERO}, spiked and swaying`);

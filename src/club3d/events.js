@@ -123,7 +123,7 @@ export const eventMethods = {
       // a press line inside the door, flashes going off; a celebrity holding court by the VIP rope
       this.press = [-3.2, -2, 2, 3.2].map((x, i) => this.npc({ ...npcLook('civilian'), top: '#1a1a1a' }, x, V.hd - 4.6 - (i % 2) * 0.5, Math.PI + (x < 0 ? -0.5 : 0.5)));
       const vq = this.plan.byKind.vip, s = vq.side === 'W' ? 1 : -1;
-      this.celeb = this.npc({ ...npcLook('civilian'), top: '#ffd84d', skirt: '#ffd84d', bottom: null, hairStyle: 'long', size: 1.04 }, vq.door.x + s * 4.2, vq.door.z + 2.6, -s * Math.PI / 2);
+      this.celeb = this.castModel('diva', { ...npcLook('civilian'), top: '#ffd84d', skirt: '#ffd84d', bottom: null, hairStyle: 'long', size: 1.04 }, vq.door.x + s * 4.2, vq.door.z + 2.6, -s * Math.PI / 2);
       this.addInter({ x: this.celeb.position.x, z: this.celeb.position.z + 1.2 }, 'Talk to the celebrity', () => !E.met, () => this.meetCeleb());
       // the VIP is packed tonight: more of the entourage on the couches
       const vip = this.roomA.vip;
@@ -154,12 +154,12 @@ export const eventMethods = {
   async meetCeleb() {
     const E = this.event;
     E.met = true;
-    const { dialog } = await import('../ui.js');
     if (this.undercover) {
-      await dialog({ speaker: 'The celebrity', text: '"Ugh, a fan? Security!" They look straight through you: plain clothes don\'t get you into their world.' });
+      this.say(this.celeb, '"Ugh, a fan? Security!"', { speaker: 'The celebrity' });
+      toast('They look straight through you: plain clothes don\'t get you into their world.', 'info');
       return;
     }
-    const v = await dialog({ speaker: 'The celebrity', text: `"Oh my god, ${HERO}?! Get in here. Selfie? Then come up to VIP with us, the rope's for other people."`, options: [{ label: 'Smile for the selfie', note: 'VIP access · a photo of you in a club, tonight', value: true, cls: 'risky' }, { label: '"Not tonight."', value: false }] });
+    const v = await this.quick({ speaker: 'The celebrity', text: `"Oh my god, ${HERO}?! Get in here. Selfie? Then come up to VIP with us, the rope's for other people."`, options: [{ label: 'Smile for the selfie', note: 'VIP access · a photo of you in a club, tonight', value: true, cls: 'risky' }, { label: '"Not tonight."', value: false }], at: this.celeb, away: false });
     if (!v) return;
     sfx.shutter?.();
     this.addCard('fans', 'A celebrity selfie, posted from the club');

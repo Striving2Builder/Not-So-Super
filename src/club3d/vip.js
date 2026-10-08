@@ -5,6 +5,7 @@
 // says "Dance for me": a 3x3 numpad lit on the beat next to the dance clip (never over it), the
 // clip playing only while her taps are right. Clean: one more try at his questions. Messy:
 // another polaroid in the owner's envelope.
+import * as THREE from 'three';
 import { dialog, toast } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { tierOf } from '../commentary.js';
@@ -14,25 +15,83 @@ import { scramble } from './cast.js';
 
 const DANCE = { playSecs: 12, maxMisses: 8, clean: 2, speedUp: 0.55, folder: 'ClubDance', plate: 'assets/nightclub/plates/vip.jpg' };
 
+/**
+ * The dance clip, keyed on the GPU at the clip's own resolution (one shader quad drawn by the 3D
+ * renderer into the left viewport): the VIP room plate behind her (cover fit), the clip in front
+ * (contain fit, standing on the bottom edge), green pulled out with a soft edge and its spill.
+ */
+const SIZE = new THREE.Vector2();
+function danceView(video, plateUrl) {
+  const plate = new THREE.TextureLoader().load(plateUrl);
+  plate.colorSpace = THREE.SRGBColorSpace;
+  const U = { vid: { value: video.tex }, plate: { value: plate }, viewA: { value: 1 }, vidA: { value: 9 / 16 }, plateA: { value: 3.375 }, ready: { value: 0 } };
+  const mat = new THREE.ShaderMaterial({
+    uniforms: U, depthTest: false, depthWrite: false,
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: `uniform sampler2D vid, plate; uniform float viewA, vidA, plateA, ready; varying vec2 vUv;
+void main(){
+  vec2 pu = vUv - 0.5;
+  if (viewA > plateA) pu.y *= plateA / viewA; else pu.x *= viewA / plateA;
+  vec3 c = texture2D(plate, pu + 0.5).rgb * 0.7;
+  const float s = 0.98;
+  vec2 vu;
+  if (viewA > vidA) { float w = vidA / viewA * s; vu = vec2((vUv.x - (1.0 - w) * 0.5) / w, vUv.y / s); }
+  else { float h = viewA / vidA * s; vu = vec2((vUv.x - (1.0 - s) * 0.5) / s, vUv.y / h); }
+  if (vu.x >= 0.0 && vu.x <= 1.0 && vu.y >= 0.0 && vu.y <= 1.0) {
+    vec3 v = texture2D(vid, vu).rgb;
+    float g = v.g - max(v.r, v.b);
+    float a = (1.0 - smoothstep(0.06, 0.2, g)) * ready;
+    v.g = min(v.g, max(v.r, v.b) * 1.05);
+    c = mix(c, v, a);
+  }
+  gl_FragColor = vec4(c, 1.0);
+  #include <colorspace_fragment>
+}`,
+  });
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
+  quad.frustumCulled = false;
+  const scene = new THREE.Scene();
+  scene.add(quad);
+  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  return {
+    U,
+    /** Draw it into the CSS-pixel rect v of the renderer's canvas (top-left origin). */
+    draw(r, v, H, video) {
+      const el = video.el;
+      U.ready.value = el.readyState >= 2 ? 1 : 0;
+      if (el.videoWidth) U.vidA.value = el.videoWidth / el.videoHeight;
+      if (plate.image?.width) U.plateA.value = plate.image.width / plate.image.height;
+      U.viewA.value = v.w / v.h;
+      const size = r.getSize(SIZE);
+      r.setViewport(v.x, H - v.y - v.h, v.w, v.h);
+      r.render(scene, cam);
+      r.setViewport(0, 0, size.x, size.y);
+    },
+    dispose() { quad.geometry.dispose(); mat.dispose(); plate.dispose(); },
+  };
+}
+
 export const vipMethods = {
   async vipRope() {
     if (this.items.has('VIP wristband')) {
-      await dialog({ speaker: 'Rope bouncer', text: 'He checks the wristband, unhooks the rope. "Enjoy."' });
+      this.say(this.ropeGuard.mesh, '"Enjoy."', { speaker: 'Rope bouncer' });
+      toast('He checks the wristband and unhooks the rope.', 'good');
       return this.letIntoVip();
     }
     const famous = !this.undercover && ['idol', 'hero'].includes(tierOf(this.g.state.rep));
-    const v = await dialog({ speaker: 'Rope bouncer', text: '"Wristband?"', options: [
-      { label: `"I'm ${HERO}."`, note: famous ? 'Your name opens doors tonight' : this.undercover ? 'Not in these clothes' : 'Your reputation isn\'t great right now', value: 'fame', disabled: this.undercover },
+    const v = await this.quick({ speaker: 'Rope bouncer', text: '"Wristband?"', at: this.ropeGuard.mesh, options: [
+      ...(this.undercover ? [] : [{ label: `"I'm ${HERO}."`, note: famous ? 'Your name opens doors tonight' : 'Your reputation isn\'t great right now', value: 'fame' }]),
       { label: 'Walk away', value: null },
     ] });
     if (v !== 'fame') return;
     if (famous) {
-      await dialog({ speaker: 'Rope bouncer', text: `"No way. ${HERO}! Go on up. Can I… get a picture after?"` });
+      this.say(this.ropeGuard.mesh, `"No way. ${HERO}! Go on up. Can I… get a picture after?"`, { ms: 3600, speaker: 'Rope bouncer' });
       this.addCard('fans', `${HERO} posing at the VIP rope`);
       return this.letIntoVip();
     }
     this.alert = Math.min(90, this.alert + 15);
-    await dialog({ speaker: 'Rope bouncer', text: '"Sure you are. Get lost before I call it in."<span class="hint">A wristband would do it: they turn up at the bar and the coat check. Or slip past at the drop.</span>' });
+    this.say(this.ropeGuard.mesh, '"Sure you are. Get lost before I call it in."', { speaker: 'Rope bouncer' });
+    toast('A wristband would do it: they turn up at the bar and the coat check. Or slip past at the drop.', 'info');
   },
 
   letIntoVip() { this.vipIn = true; this.openDoorOf('vip'); sfx.door(); },
@@ -88,8 +147,7 @@ export const vipMethods = {
       const g = this.g, inp = g.input;
       this.video.show(DANCE.folder, { keyed: true }).then(() => this.video.el.play().catch(() => {}));
       this.video.pause();
-      const back = new Image(); back.src = DANCE.plate;
-      const key = document.createElement('canvas'), kx = key.getContext('2d', { willReadFrequently: true });
+      const view = danceView(this.video, DANCE.plate);
       const S = { t: 0, played: 0, misses: 0, lit: -1, litT: 0, hitWin: false, pauseT: 0.6, flash: 0, hits: 0 };
       const beat = 60 / this.music.bpm; // (the keys light on the music's beat)
       const kb = (e) => { const n = +e.key; if (n >= 1 && n <= 9) { e.preventDefault(); e.stopPropagation(); press(n - 1); } };
@@ -118,10 +176,11 @@ export const vipMethods = {
       const finish = () => {
         if (S.done) return;
         S.done = true;
-        // a frame of the dance (somebody at the table was filming)
-        const L = layout(), snap = document.createElement('canvas');
+        // a frame of the dance (somebody at the table was filming): drawn now and copied straight off the 3D canvas
+        const L = layout(), snap = document.createElement('canvas'), rc = this.renderer.domElement, k = rc.width / g.w;
         snap.width = Math.round(L.vid.w); snap.height = Math.round(L.vid.h);
-        try { snap.getContext('2d').drawImage(g.canvas, 0, 0, g.canvas.width * (L.vid.w / g.w), g.canvas.height * (L.vid.h / g.h), 0, 0, snap.width, snap.height); } catch (e) { /* no frame */ }
+        try { view.draw(this.renderer, L.vid, g.h, this.video); snap.getContext('2d').drawImage(rc, L.vid.x * k, L.vid.y * k, L.vid.w * k, L.vid.h * k, 0, 0, snap.width, snap.height); } catch (e) { /* no frame */ }
+        view.dispose();
         removeEventListener('keydown', kb, true);
         document.body.classList.remove('c3-flat');
         this.sub = null;
@@ -152,30 +211,13 @@ export const vipMethods = {
           else if (!this.video.el.paused) this.video.el.pause();
           if (S.played >= DANCE.playSecs) finish();
         },
+        // the clip is drawn by the 3D renderer (render3d); this canvas sits over it, clear where it shows
+        render3d: (r) => view.draw(r, layout().vid, g.h, this.video),
         render: (ctx) => {
           const L = layout(), W = g.w, H = g.h;
-          ctx.fillStyle = '#05030a'; ctx.fillRect(0, 0, W, H);
-          // the clip: keyed over the VIP room (cover-fit, nothing on top of it)
+          ctx.clearRect(0, 0, W, H);
           const v = L.vid;
           ctx.save(); ctx.beginPath(); ctx.rect(v.x, v.y, v.w, v.h); ctx.clip();
-          if (back.complete && back.naturalWidth) {
-            const s = Math.max(v.w / back.naturalWidth, v.h / back.naturalHeight);
-            ctx.globalAlpha = 0.75; ctx.drawImage(back, v.x + (v.w - back.naturalWidth * s) / 2, v.y + (v.h - back.naturalHeight * s) / 2, back.naturalWidth * s, back.naturalHeight * s); ctx.globalAlpha = 1;
-          }
-          const el = this.video.el;
-          if (el.readyState >= 2 && el.videoWidth) {
-            const kw = 240, kh = Math.round((kw * el.videoHeight) / el.videoWidth);
-            if (key.width !== kw || key.height !== kh) { key.width = kw; key.height = kh; }
-            kx.drawImage(el, 0, 0, kw, kh);
-            const im = kx.getImageData(0, 0, kw, kh), d = im.data;
-            for (let i = 0; i < d.length; i += 4) {
-              const r = d[i], gg = d[i + 1], b = d[i + 2], m = Math.max(r, b), gs = gg - m;
-              if (gs > 18) { const a = clamp(1 - (gs - 18) / 45, 0, 1); d[i + 3] = a * 255; d[i + 1] = Math.min(gg, m * 1.05); }
-            }
-            kx.putImageData(im, 0, 0);
-            const s = Math.min(v.w / kw, v.h / kh) * 0.98;
-            ctx.drawImage(key, v.x + (v.w - kw * s) / 2, v.y + v.h - kh * s, kw * s, kh * s);
-          }
           if (S.pauseT > 0 && S.t > 0.7) { ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(v.x, v.y, v.w, v.h); ctx.font = `bold ${Math.round(Math.min(v.w, v.h) * 0.12)}px Bangers, Impact, sans-serif`; ctx.textAlign = 'center'; ctx.fillStyle = '#ff3a5a'; ctx.fillText(S.hits ? 'MISSED!' : 'TAP THE LIT KEY', v.x + v.w / 2, v.y + v.h / 2); }
           ctx.restore();
           // the numpad, in its own solid panel

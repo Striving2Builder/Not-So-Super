@@ -322,8 +322,14 @@ video into a painted still in 2D; v3 needs the same keying into a 3D wall textur
 ## Cases
 Cases stay data (`src/nightclub/cases/*.js`, engine `case.js`). Each case now also defines: its
 rumour pool, Talker conversations, the VIP host + quiz answers, the boss's script and confession,
-which intoxication paths are required, the brawl rooms used, and allowed events. Super Squirt is
-first; the blackmail case is next. The accusation, case board and map leads carry over.
+which intoxication paths are required, the brawl rooms used, and allowed events. Three so far:
+Super Squirt (a drug: who deals it, who supplies it, the next drop), the Polaroid Racket (councillors
+drugged and photographed in the VIP: who shoots them, who pays, the payoff) and **the Earworm**: a DJ
+hides a subliminal tone under "Track Zero" and tests it on the floor (the staff wear custom earplugs,
+the violet Lullaby cocktail makes the crowd suggestible), a media owner pays for it because he owns
+every radio station, and on Saturday at 3 AM it goes out citywide. Super-hearing is its star (the
+whispers, the tone under the bass), X-ray finds the earplugs. The accusation, case board and map
+leads carry over.
 
 ## Budget (HTML5 on an iPad)
 - One WebGL context for the club (as Special3D today); 60 fps target, measured on the iPad.
@@ -380,6 +386,40 @@ first; the blackmail case is next. The accusation, case board and map leads carr
 - Numpad dance tuning: grid size, speed curve, how many misses end it.
 - How long the paparazzi target is; whether undercover is chosen per visit or set by the case.
 
+## Look and feel (second pass, 2026-10-07)
+What the first pass was missing (the review: a thin crowd, a plain room on phones, too many popups).
+- **A packed crowd.** Everyone is one list. The ~150 nearest the camera (96 on Balanced, 56 on
+  Battery saver) are 3D figures: elbows, four heads (short hair, long hair, a bun, a hat like the
+  sheet's men), each with a groove of their own (bounce, sway, jump on the bar, step), a beat
+  offset, and a new move every bar. Everyone else is a sprite cut from the baked dancer sheet (the
+  game's rigged models dancing), one draw call for all of them, each loop rounded to whole beats of
+  the track. 520 / 400 / 280 on the floor per tier, the dark room packed (~35), the DJs, the VIP's
+  couch. Each figure's rim catches one of the two lights (no washed-out white tops); the haze puffs
+  and beams nearest the camera fade, so the crowd round her stays ink.
+- **The room, on every tier** (phones get no haze puffs): the video wall reflected in a glossy floor
+  (further from the wall = higher up it, rippled), a low mist the crowd stands in (it pools in the
+  Pit's bowl), the stage's glow rising behind the far crowd, truss towers at the dance floor's
+  corners whose par cans' shafts chase the beat, speaker stacks either side of the wall with cones
+  that thump on the kick, four neon pieces (heart and bolt, cocktail, "after DARK", a star).
+  Everything stands under 4 m: the camera always looks down and never sees higher. The side rooms'
+  painted plates sink into their walls under a vignette.
+- **Fewer popups.** The club's small talk is a quick prompt: a speech bubble over whoever says it,
+  and for a small choice a panel at the foot of the screen (keys 1–3, or a tap) while the music, the
+  crowd and the bouncers carry on; walking off is a no. The bartender, the rope bouncer, the first
+  stall, the man with the drink, the gangster's shot-off, the celebrity's selfie, the search notes.
+  Story beats stay modal: the VIP host, the office, clue cards, the accusation, sedation.
+- **Feel:** a ring round her feet fills as the crowd hides her (red in the open, gold in the crowd,
+  cyan when she's lost in it, flashing red while a bouncer has her); a bouncer who loses sight of
+  her walks to where he saw her, looks round, then goes back to his round (never through walls; the
+  rope and balcony guards stay put); one-time tips (a Talker's ring, the first time she's seen, the
+  drop, powers, tipsy, the first clue), remembered per device.
+- **The VIP dance** keys the clip on the GPU at the clip's own resolution (it was 240 px wide, on
+  the CPU): the 3D renderer draws it in the left viewport; the numpad keeps its own panel.
+- **Music:** the user's three tracks (`assets/Music`), each one's tempo, first beat and drops
+  measured offline; the lights, the crowd (3D and sprites), the VIP dance's beat and the club's drop
+  follow whichever track is playing.
+- **Tuning:** a packed crowd slows her by up to 40% (was half).
+
 ## Built so far (2026-10-07, the default)
 Every section above is in, first pass. Club zones (special or night, at a club venue) open the 3D
 club. **The 2D club is the fallback until it's deleted:** `?club=v2` plays it, and so does any
@@ -388,15 +428,17 @@ instead of dropping her back in the sky). `?club=v1` still brings back the prema
 map labels each club mission with the case it will play: the first one she hasn't solved
 (`CLUB_CASE_LABELS` in data.js; the zone's `clubCase` is the case).
 - **Test params:** `&club3room=rave|mezzanine|pit|centre|tunnel` (main room),
-  `&club3seed=N` (the plan), `&club3case=squirt|blackmail`, `&club3event=redcarpet|paparazzi|raid|firealarm|fight|none`,
+  `&club3seed=N` (the plan), `&club3case=squirt|blackmail|earworm`, `&club3event=redcarpet|paparazzi|raid|firealarm|fight|none`,
   `&club3under=0|1` (skip the "how do you go in?" question), `&club3wake=vip|office|storage|floor`.
 - **Code** (`src/club3d/`, a Special3D zone; the systems are mixins, the mode is the conductor):
   `club3d.js` (enter/update/camera/HUD, the per-visit reset `VISIT`), `plan.js` (the 5 main rooms,
   the side-room shuffle, `floorY` for the Pit), `build.js` (hall, DJ booth + video wall, bar, coat
-  check, TVs, the show, the nightlife kit's batches), `rooms.js` (side rooms + alley, the painted
-  plate on each back wall), `crowd.js` (instanced silhouette crowd, cover/thickness, parting, the
-  surge), `video.js` (one shared `<video>`, LED/CCTV/keyed screen shader), `music.js` (a synth
-  124 BPM loop until the user's tracks arrive: the drop's riser, the super-hearing low-pass),
+  check, TVs, the show, the nightlife kit's batches), `dressing.js` (truss towers, shafts, speaker
+  stacks, neon art, the floor reflection, mist, the stage glow), `rooms.js` (side rooms + alley, the
+  painted plate on each back wall), `crowd.js` (the nearest dancers as instanced 3D figures, the rest
+  as dancer-sheet sprites; cover/thickness, parting, the surge), `video.js` (one shared `<video>`,
+  LED/CCTV/keyed screen shader, the floor reflection), `music.js` (the user's tracks streamed through
+  the audio graph, the beat clock and drops from each track; the synth loop as a fallback),
   `cast.js` (bouncers, Talkers, the cast, locked doors, every USE spot), `chatter.js` (bubbles,
   tappable rumours/whispers/offers, recognition), `powers.js` (X-ray, super-hearing, drug-vision),
   `vices.js` (the intoxication paths, the predator, the shot-off), `casework.js` (the case board,
@@ -405,19 +447,23 @@ map labels each club mission with the case it will play: the first one she hasn'
   listening at the door, safe, CCTV, the blackmail exchange, the leak), `brawls.js` (the brawler
   borrowed for back-room fights), `closeup.js` (close-ups, phone/paper views, the UV layer, the
   CAMERA: a photo of each found clue adds a little to the visit's reward),
-  `events.js` (the drop + five events), `undercover.js` (Kara's coat, changing in the restroom).
+  `events.js` (the drop + five events), `undercover.js` (Kara's coat, changing in the restroom),
+  `quick.js` (speech bubbles and the quick-choice panel), `feel.js` (the cover ring, bouncers who
+  investigate, first-visit tips).
   Outside it: `src/brawlplate.js` (the brawler's painted-room stage), `cutscene.js` (`loops`,
   `skipTaps`), `newspaper.js` (a real photo on the front page), cases in `src/nightclub/cases/`
-  (Super Squirt + the Polaroid Racket, both with the v3 fields).
+  (Super Squirt, the Polaroid Racket, the Earworm, all with the v3 fields).
 - **Media:** `assets/video/ClubDJ/` (3 DJ stage loops from batch 1, re-encoded, no audio) + the
   plate's `set_main.mp4`; `assets/video/ClubDance/sg_dance_01.mp4` (batch 1's clothed green-screen
   dance, keyed in game). Sedation clip: `ClubSedation/` (empty: falls back to `SG_Captured_Game`).
+  Music: `assets/Music/` (the user's three tracks; `silence.mp3` primes iOS playback on the first tap).
 - **Harness:** `node tools/shots/club3d.js --label X [--rooms rave,pit] [--flows all|none|sedate,…] [--case blackmail]`
   → shots of each main room + side room, fps/calls/triangles, and every flow played through
-  (Talker, close-up, dance, fights, sedation → capture, confession → skylight, leak, the events).
+  (Talker, close-up, dance, fights, sedation → capture, confession → skylight, leak, quick prompts,
+  the events).
   2026-10-07: 0 page errors; SwiftShader High ~231 calls / 260k tris / 336 dancers, Balanced
   ~137 calls / 169k tris / 246 dancers.
 - **Not yet / next:** the iPad test (fps, memory: the club scene stays in GPU memory under a
-  back-room fight), the user's dance clips and sedation clip, music tracks, more VIP hosts per case,
-  tuning (guard gain `GUARD_GAIN`, Talker rates in cast.js, DROP timings in events.js), then
-  delete v2 (`src/nightclub/` minus the cases and close-up data, which v3 shares).
+  back-room fight; the second pass adds fill: mist, reflection, glow), the user's dance clips and
+  sedation clip, tuning on a device (guard gain `GUARD_GAIN`, Talker rates in cast.js, the drop),
+  then delete v2 (`src/nightclub/` minus the cases and close-up data, which v3 shares).

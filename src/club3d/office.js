@@ -37,7 +37,7 @@ export const officeMethods = {
   /** The stock room's stash: behind the beer crates (X-ray sees it; so does anyone who heard where). */
   async searchStash() {
     if (!this.xray && !this.noted.has('stash')) {
-      await dialog({ title: 'Beer crates', text: 'Crates of beer, stacked to the ceiling. Nothing but beer, as far as you can see.<span class="hint">X-ray would see further.</span>' });
+      toast('Crates of beer, stacked to the ceiling. Nothing but beer, as far as you can see. X-ray would see further.', 'info');
       return;
     }
     this.stashFound = true;
@@ -60,7 +60,7 @@ export const officeMethods = {
   },
 
   async safeCrack() {
-    if (!this.xray) { await dialog({ title: 'A painting', text: 'An ugly sunset in a gold frame. Hung a little too carefully.<span class="hint">X-ray would show what\'s behind it.</span>' }); return; }
+    if (!this.xray) { toast('An ugly sunset in a gold frame, hung a little too carefully. X-ray would show what\'s behind it.', 'info'); return; }
     const v = await dialog({ title: 'Behind the painting', text: 'X-ray: a wall safe, and through its door, a stack of envelopes. Polaroids.', options: [
       { label: 'Listen to the tumblers', note: this.hearing ? 'Super-hearing is on' : 'Needs super-hearing', value: 'ear', disabled: !this.hearing },
       { label: 'Tear the door off', note: 'Super-strength: everyone will hear it', value: 'rip', cls: 'risky' },

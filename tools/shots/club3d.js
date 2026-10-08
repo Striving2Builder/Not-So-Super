@@ -3,7 +3,7 @@
 // (Talker → clue, close-up + phone, VIP quiz → dance, a back-room fight, sedation → wake → capture,
 // the owner's confession → solved → skylight, the leak → thrown out, each per-visit event).
 //   node tools/shots/club3d.js [--label c3] [--port 8881] [--rooms rave,pit] [--flows all|none|sedate,confess]
-//                              [--case squirt|blackmail] [--w 844 --h 390]
+//                              [--case squirt|blackmail|earworm] [--w 844 --h 390]
 // → shots/<label>/club3d/*.png + metrics.json (fps is SwiftShader: compare runs, never a phone)
 const path = require('path');
 const fs = require('fs');
@@ -220,6 +220,24 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
       await V.page.waitForTimeout(1200); await V.shot('flow_leak_paper');
       const out = await V.through(() => window.__game.modeName === 'overworld');
       return { thrownOut: out, rep: await V.page.evaluate(() => window.__game.state.rep) };
+    });
+    await flow('quick', '&club3room=rave&club3seed=7&club3event=none', async (V) => {
+      // the bar's quick prompt (the club keeps going behind it), answered with a key
+      await V.page.evaluate(() => { const m = window.__game.mode, b = m.hallA.spots.bar; m.hero.position.set(b.x, 0, b.z); m.camSnap = true; m.run(() => m.barOrder()); });
+      await V.page.waitForTimeout(800); await V.shot('flow_quick_bar');
+      const open = await V.page.evaluate(() => !!document.querySelector('#c3-quick.on') && !window.__game.mode.busy);
+      await V.page.keyboard.press('2');
+      await V.page.waitForTimeout(500);
+      const closed = await V.page.evaluate(() => !document.querySelector('#c3-quick.on') && !window.__game.mode.quickOn);
+      // the restroom's first stall: bag a sample (a clue card, still modal)
+      await V.page.evaluate(() => { const m = window.__game.mode, r = m.roomA.restroom.powder; m.hero.position.set(r.x, 0, r.z); m.camSnap = true; m.run(() => m.powder()); });
+      await V.page.waitForTimeout(700);
+      await V.page.keyboard.press('2');
+      await V.through(() => !document.querySelector('#modal-root .modal-back') && !window.__game.mode.busy, 8000);
+      // a bouncer sees her: the one-time tip, the ring flashing red
+      await V.page.evaluate(() => { const m = window.__game.mode; m.grace = 0; const gd = m.guards.find((g) => !g.high && g !== m.ropeGuard), p = gd.mesh.position; m.hero.position.set(p.x + Math.sin(gd.mesh.rotation.y) * 4, 0, p.z + Math.cos(gd.mesh.rotation.y) * 4); m.camSnap = true; });
+      await V.page.waitForTimeout(900); await V.shot('flow_quick_seen');
+      return { open, closed, clues: await V.page.evaluate(() => window.__game.mode.book.count), tip: await V.page.evaluate(() => !!document.querySelector('#c3-tip.on')) };
     });
     for (const ev of ['redcarpet', 'paparazzi', 'raid', 'firealarm', 'fight']) {
       await flow(`ev_${ev}`, `&club3room=rave&club3seed=7&club3event=${ev}`, async (V) => {

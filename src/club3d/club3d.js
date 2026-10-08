@@ -13,6 +13,7 @@ import { banner, toast } from '../ui.js';
 import { makePlan, roomAt, floorY } from './plan.js';
 import { hallMats, makeClubKit, buildHall, buildShow, stepTiles, buildKit } from './build.js';
 import { buildRoom, buildAlley } from './rooms.js';
+import { dressHall } from './dressing.js';
 import { ClubCrowd, placeCrowd } from './crowd.js';
 import { ClubVideo, tickScreens } from './video.js';
 import { ClubMusic } from './music.js';
@@ -28,8 +29,10 @@ import { officeMethods } from './office.js';
 import { brawlMethods } from './brawls.js';
 import { closeupMethods } from './closeup.js';
 import { undercoverMethods } from './undercover.js';
+import { quickMethods } from './quick.js';
+import { feelMethods } from './feel.js';
 
-const SPEED = 4.6;          // her walk (m/s); the crowd slows her down to half
+const SPEED = 4.6;          // her walk (m/s); a packed crowd slows her by up to 40%
 const IDLE_FACE = 1.5;      // seconds standing still before she turns to the viewer
 const GUARD_GAIN = 0.7;     // how fast a bouncer who sees her raises the alert, vs the base zones'
 // follow camera: [pitch, distance] in the open and inside the crowd
@@ -48,7 +51,7 @@ const VISIT = () => ({
   safeDone: false, recorderWiped: false, cctvDead: false,
   stockOpen: false, stashFound: false, uvRead: false, powderTaken: false, shotDone: false,
   drinks: 0, drunkCard: false, predator: null, predatorDone: false, taps: [], offerOut: false, snapQueue: [],
-  videoWant: null, cctvRT: null, extraPeople: [], snapped: new Set(),
+  videoWant: null, cctvRT: null, extraPeople: [], snapped: new Set(), coverRing: null, tipQ: [], tipOn: false,
 });
 
 export class Club3D extends Special3D {
@@ -88,6 +91,7 @@ export class Club3D extends Special3D {
     this._static = [];
     const X = (this.X = makeClubKit(this));
     this.hallA = buildHall(this, plan, M, X, this.video);
+    this.dressStep = dressHall(this, plan, M, X, this.video, this.hallA);
     this.roomA = {};
     for (const r of plan.rooms) this.roomA[r.kind] = buildRoom(this, plan, r, M, X, this.video);
     this.roomA.alley = buildAlley(this, plan, plan.alley, M, X);
@@ -137,6 +141,8 @@ export class Club3D extends Special3D {
 
   exit() {
     this.closeOverlays?.();
+    this.closeQuick?.(null);
+    this.endTips?.();
     for (const rt of this.cctvRT || []) rt.dispose();
     this.cctvRT = null;
     this.endChatter?.();
@@ -190,7 +196,7 @@ export class Club3D extends Special3D {
     const mx = a.x, mz = a.y, mag = Math.min(1, Math.hypot(mx, mz));
     const canMove = !this.busy && this.landT <= 0 && !this.dancing && !stunned;
     if (mag > 0.05 && canMove) {
-      const sp = SPEED * (1 - 0.5 * thick);
+      const sp = SPEED * (1 - 0.4 * thick);
       h.position.x += mx * sp * dt;
       h.position.z += mz * sp * dt;
       let da = Math.atan2(mx, mz) - h.rotation.y;
@@ -211,7 +217,7 @@ export class Club3D extends Special3D {
       this.facing = true;
     }
     this.punchT = 0;
-    const moving = mag > 0.05 && canMove ? mag * (1 - 0.4 * thick) : 0;
+    const moving = mag > 0.05 && canMove ? mag * (1 - 0.3 * thick) : 0;
     this.animateHero(dt, moving);
     this.moving = (this.moving || 0) + (moving - (this.moving || 0)) * Math.min(1, dt * 3);
     // the crowd: they part for her, the guards and the cast; at the drop they jump and shove
@@ -225,9 +231,13 @@ export class Club3D extends Special3D {
     this.stepVices(dt);
     const a0 = this.alert;
     this.updateGuards(dt);
+    this.stepInvestigate(dt);
     if (this.alert > a0) this.alert = a0 + (this.alert - a0) * GUARD_GAIN; // (they're scanning a packed floor)
+    this.stepCoverRing(dt);
+    this.stepTips();
     this.stepAlert(dt);
     if (this.checkFailures()) return;
+    this.stepQuick();
     // interactables
     let best = null, bd = 1.9;
     for (const o of this.inter) {
@@ -236,7 +246,7 @@ export class Club3D extends Special3D {
       if (d < (o.r || bd) && d < bd + (o.r ? o.r : 0)) { bd = d; best = o; }
     }
     this.near = best;
-    if (best && inp.pressed('interact') && !this.busy) this.run(() => best.act());
+    if (best && inp.pressed('interact') && !this.busy && !this.quickOn) this.run(() => best.act());
     if (inp.pressed('notes') && !this.busy) this.run(() => this.caseBoard());
     // the exit
     this.exitRing.material.opacity = this.caseSolved ? 0.5 + Math.sin(this.t * 5) * 0.3 : 0.18;
@@ -253,6 +263,7 @@ export class Club3D extends Special3D {
     this.flashK = flash;
     this.crowd.light(tmpA, tmpB, 0.85 + 0.5 * B.pulse, flash, this.scene.fog);
     this.plights.forEach((l, i) => { l.color.copy(i ? tmpB : tmpA); l.intensity = (drop ? (flash ? 120 : 4) : 18 + 26 * B.pulse); });
+    this.dressStep(this.t, dt, B, drop, flash, tmpA, tmpB);
     tickScreens(this.screens, this.video, this.t, flash * 0.4);
     this.X.glow.flush(); this.X.signs.flush();
     if (this.X.pmat && this.renderer) this.X.pmat.uniforms.uScale.value = this.renderer.domElement.height / (2 * Math.tan((this.cam.fov * Math.PI) / 360));
@@ -308,7 +319,11 @@ export class Club3D extends Special3D {
   // ---------------------------------------------------------------- camera
   render() {
     if (!this.scene || this.warming) return;
-    if (this.sub && this.sub.render) { this.sub.render(this.g.ctx); if (!this.sub.see3d) return; }
+    if (this.sub && this.sub.render) {
+      this.sub.render(this.g.ctx);
+      if (this.sub.render3d) { this.sub.render3d(this.renderer); return; } // (the VIP dance's keyed clip)
+      if (!this.sub.see3d) return;
+    }
     const h = this.hero.position, st = this.g.state, dt = this.frameDt || 1 / 60;
     // pitch + distance ease toward the crowd framing when she's in it
     const inCrowd = clamp((this.cover - 1) / 4, 0, 1) * (this.room ? 0.5 : 1);
@@ -360,7 +375,7 @@ export class Club3D extends Special3D {
     this.hudObjectives();
     this.hudCast();
     const pr = $('prompt');
-    if (this.near && !this.busy && !this.done) {
+    if (this.near && !this.busy && !this.done && !this.quickOn) {
       const key = document.body.classList.contains('touch') ? 'USE' : 'E';
       const html = `<b>${key}</b> ${this.near.label}`;
       if (pr._html !== html) { pr.innerHTML = html; pr._html = html; }
@@ -373,4 +388,4 @@ export class Club3D extends Special3D {
   }
 }
 
-Object.assign(Club3D.prototype, castMethods, eventMethods, powerMethods, chatterMethods, viceMethods, caseMethods, sedationMethods, vipMethods, officeMethods, brawlMethods, closeupMethods, undercoverMethods);
+Object.assign(Club3D.prototype, castMethods, eventMethods, powerMethods, chatterMethods, viceMethods, caseMethods, sedationMethods, vipMethods, officeMethods, brawlMethods, closeupMethods, undercoverMethods, quickMethods, feelMethods);

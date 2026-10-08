@@ -82,6 +82,34 @@ void main(){
   return m;
 }
 
+/**
+ * The video wall in the glossy floor in front of it (additive): a floor point further from the wall
+ * shows a higher part of it (reach: wall heights per reflection length; from: the wall's foot, in
+ * wall heights), rippled, fading out with distance. Same uniforms as screenMat, so tickScreens feeds it.
+ */
+export function reflectMat(video, { reach = 1, from = 0, mirror = true, bright = 0.24 } = {}) {
+  const U = {
+    map: { value: video.tex }, ready: { value: 0 }, keyed: { value: 0 }, t: { value: 0 }, bright: { value: bright },
+    bg: { value: new THREE.Color(0) }, flash: { value: 0 }, fitA: { value: 0 }, vidA: { value: 16 / 9 }, reach: { value: reach }, from: { value: from },
+  };
+  const m = new THREE.ShaderMaterial({
+    uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform sampler2D map; uniform float ready, t, bright, flash, reach, from; varying vec2 vUv;
+void main(){
+  float d = 1.0 - vUv.y;                       // 0 at the wall → 1 at the far edge
+  vec2 uv = vec2(vUv.x + 0.004 * sin(vUv.y * 70.0 + t * 1.7) * d, d * reach - from);
+  ${mirror ? 'uv.x *= 2.0; if (uv.x > 1.0) uv.x = 2.0 - uv.x;' : ''}
+  vec3 c = texture2D(map, clamp(uv, 0.0, 1.0)).rgb * ready * step(0.0, uv.y) * step(uv.y, 1.0);
+  float k = (1.0 - d) * (1.0 - d) * smoothstep(0.0, 0.06, vUv.x) * smoothstep(1.0, 0.94, vUv.x);
+  gl_FragColor = vec4((c * bright + flash * 0.3) * k, 1.0);
+  #include <colorspace_fragment>
+}`,
+  });
+  m.userData.screen = U;
+  return m;
+}
+
 /** Per frame: feed the screens the clock, whether the video has a frame yet and if it's keyed. */
 export function tickScreens(mats, video, t, flash = 0) {
   const ready = video.ready ? 1 : 0;

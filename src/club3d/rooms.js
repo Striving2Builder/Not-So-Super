@@ -75,6 +75,13 @@ function roomMats(kind, accent) {
   return { wall, floor };
 }
 
+let vig = null;
+/** Dark edges over a plate, so it sinks into the wall instead of sitting on it like a poster. */
+const vignette = () => (vig = vig || tex(cnv(256, 128, (c) => {
+  const edge = (x0, y0, x1, y1, a) => { const g = c.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, `rgba(0,0,0,${a})`); g.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = g; c.fillRect(0, 0, 256, 128); };
+  edge(0, 0, 0, 34, 0.85); edge(0, 128, 0, 110, 0.6); edge(0, 0, 46, 0, 0.8); edge(256, 0, 210, 0, 0.8);
+})));
+
 /** The user's painted room on the back wall: the plate cropped to the wall above its floor line. */
 function backPlate(zn, kind, x, y, z, w, h, yaw = 0) {
   const [file, back] = PLATE[kind] || [];
@@ -86,6 +93,9 @@ function backPlate(zn, kind, x, y, z, w, h, yaw = 0) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t, color: 0xb8b8c0 }));
   m.position.set(x, y, z); m.rotation.y = yaw;
   zn.scene.add(m);
+  const v = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: vignette(), transparent: true, depthWrite: false }));
+  v.position.set(x, y, z); v.rotation.y = yaw; v.translateZ(0.01);
+  zn.scene.add(v);
   return m;
 }
 

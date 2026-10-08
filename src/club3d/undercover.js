@@ -42,7 +42,7 @@ export const undercoverMethods = {
 
   async suitUp() {
     const seen = !this.fought?.restroom && Math.random() < 0.3;
-    await dialog({ title: 'The middle stall', text: 'You bolt the door. Coat off, cape out…' });
+    toast('The middle stall: you bolt the door. Coat off, cape out…', 'info');
     this.undercover = false;
     this.coat.visible = false;
     if (this.heroModel) this.heroModel.cape.mesh.visible = true;
