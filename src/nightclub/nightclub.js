@@ -466,10 +466,10 @@ export class Nightclub {
     toast('Tap anything that looks out of place.', 'info');
   }
 
-  /** Where the image sits: the whole picture, above the buttons. */
+  /** Where the image sits (see closeupFrame), to map taps into its 0..1 space. */
   closeupRect(w, h) {
     const img = this.scene.img;
-    return closeupFrame(w, h, img.naturalWidth || 1280, img.naturalHeight || 720);
+    return closeupFrame(w, h, img.naturalWidth || 1280, img.naturalHeight || 720, this.scene.spots);
   }
 
   updateCloseup() {

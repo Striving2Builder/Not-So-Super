@@ -33,7 +33,7 @@ export const closeupMethods = {
       inp.setStick(true);
       this.setupControls(); this.envHud();
     };
-    const rect = (w, h) => closeupFrame(w, h, sc.img.naturalWidth || 1280, sc.img.naturalHeight || 720);
+    const rect = (w, h) => closeupFrame(w, h, sc.img.naturalWidth || 1280, sc.img.naturalHeight || 720, sc.spots);
     this.sub = {
       update: (dt) => {
         if (UI.open) return;

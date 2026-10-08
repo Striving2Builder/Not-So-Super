@@ -25,7 +25,7 @@ const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] :
 const LABEL = arg('--label', 'c3'), PORT = +arg('--port', 8881), CASE = arg('--case', 'squirt');
 const ROOMS = arg('--rooms', 'rave,mezzanine,pit,centre,tunnel').split(',').filter((r) => r && r !== 'none');
 const FLOWS = arg('--flows', 'all');
-const W = +arg('--w', 844), H = +arg('--h', 390);
+const W = +arg('--w', 844), H = +arg('--h', 390), DPR = +arg('--dpr', 1);
 const OUT = path.join(ROOT, 'shots', LABEL, 'club3d');
 const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
 
@@ -40,7 +40,7 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
   /** A fresh visit: new game, straight into a club zone. Resolves a helper bag. */
   async function visit(query) {
     const errors = [];
-    const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
+    const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: DPR, hasTouch: DPR > 1, isMobile: DPR > 1 });
     page.on('pageerror', (e) => errors.push(String(e.stack || e)));
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     const modal = () => page.evaluate(() => { const el = [...document.querySelectorAll('#modal-root .modal-back')].pop(); if (!el) return null; return { text: el.innerText.slice(0, 240).replace(/\s+/g, ' '), opts: [...el.querySelectorAll('.opt')].map((b) => b.innerText.replace(/\s+/g, ' ').trim()) }; });
@@ -124,10 +124,24 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
     await flow('closeup', '&club3room=rave&club3seed=7&club3event=none', async (V) => {
       await V.page.evaluate(() => window.__game.mode.openCloseup('bar'));
       await V.page.waitForTimeout(1000); await V.shot('flow_closeup_bar');
+      // every close-up's framing, its spots ringed: none may sit under the button column or off screen
+      for (const k of ['entrance', 'main', 'vip', 'restroom', 'office']) {
+        await V.page.evaluate((k) => { const m = window.__game.mode; m.sub = null; document.body.classList.remove('c3-flat', 'closeup-on'); m.openCloseup(k); }, k);
+        await V.page.waitForTimeout(700);
+        const bad = await V.page.evaluate(async (k) => {
+          const { CLOSEUPS, closeupFrame, CLOSEUP_RAIL } = await import('/src/nightclub/scenes.js');
+          const g = window.__game, sc = CLOSEUPS[k], R = closeupFrame(g.w, g.h, sc.img.naturalWidth, sc.img.naturalHeight, sc.spots);
+          return sc.spots.filter((s) => { const x = R.x + s.x * R.w, y = R.y + s.y * R.h; return x < 0 || x > g.w - CLOSEUP_RAIL || y < 40 || y > g.h; }).map((s) => s.id);
+        }, k);
+        if (bad.length) V.errors.push(`close-up ${k}: spots off screen or under the buttons: ${bad.join(', ')}`);
+        await V.shot(`flow_closeup_${k}`);
+      }
+      await V.page.evaluate(() => { const m = window.__game.mode; m.sub = null; document.body.classList.remove('c3-flat', 'closeup-on'); m.openCloseup('bar'); });
+      await V.page.waitForTimeout(700);
       await V.page.evaluate(async () => {
-        const { CLOSEUPS } = await import('/src/nightclub/scenes.js');
-        const g = window.__game, sc = CLOSEUPS.bar, img = sc.img, s = Math.max(g.w / img.naturalWidth, g.h / img.naturalHeight);
-        const R = { x: (g.w - img.naturalWidth * s) / 2, y: (g.h - img.naturalHeight * s) * 0.8, w: img.naturalWidth * s, h: img.naturalHeight * s }, p = sc.spots.find((q) => q.id === 'phone');
+        const { CLOSEUPS, closeupFrame } = await import('/src/nightclub/scenes.js');
+        const g = window.__game, sc = CLOSEUPS.bar, img = sc.img;
+        const R = closeupFrame(g.w, g.h, img.naturalWidth, img.naturalHeight, sc.spots), p = sc.spots.find((q) => q.id === 'phone');
         g.input.taps.push({ x: R.x + p.x * R.w, y: R.y + p.y * R.h });
       });
       await V.page.waitForTimeout(900); await V.shot('flow_closeup_phone');
@@ -136,9 +150,9 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
       await V.page.evaluate(() => { const g = window.__game; g.input.taps.push({ x: 5, y: 5 }); });
       await V.page.waitForTimeout(300);
       await V.page.evaluate(async () => {
-        const { CLOSEUPS } = await import('/src/nightclub/scenes.js');
-        const g = window.__game, sc = CLOSEUPS.bar, img = sc.img, s = Math.max(g.w / img.naturalWidth, g.h / img.naturalHeight);
-        const R = { x: (g.w - img.naturalWidth * s) / 2, y: (g.h - img.naturalHeight * s) * 0.8, w: img.naturalWidth * s, h: img.naturalHeight * s }, p = sc.spots.find((q) => q.id === 'phone');
+        const { CLOSEUPS, closeupFrame } = await import('/src/nightclub/scenes.js');
+        const g = window.__game, sc = CLOSEUPS.bar, img = sc.img;
+        const R = closeupFrame(g.w, g.h, img.naturalWidth, img.naturalHeight, sc.spots), p = sc.spots.find((q) => q.id === 'phone');
         g.input.pressedSet.add('camera');
         setTimeout(() => g.input.taps.push({ x: R.x + p.x * R.w, y: R.y + p.y * R.h }), 300);
       });

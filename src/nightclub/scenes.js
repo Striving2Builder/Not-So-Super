@@ -3,15 +3,33 @@
 // the case's business (src/nightclub/cases/*.js: clue text, items, drinks), so another case
 // (e.g. blackmail) reuses the same rooms and objects with its own story.
 
-/** Where a close-up sits. The joystick is hidden for the search (it covered the left of the
- *  picture). BACK / CASE / CAMERA sit in one row along the bottom, and the whole image is
- *  contained above that row so every spot can be tapped. */
-export function closeupFrame(w, h, iw = 1280, ih = 720) {
-  const top = 40, bar = Math.min(150, Math.max(112, Math.round(h * 0.22)));
-  const availH = Math.max(80, h - bar - top);
-  const s = Math.min(w / iw, availH / ih);
+export const CLOSEUP_RAIL = 96; // px down the right edge for BACK / CASE / CAMERA (style.css body.closeup-on #btns)
+const CLOSEUP_TOP = 40;         // the "THE BAR · 2/6 SEARCHED" label
+
+/** Where a close-up sits: as big as the screen allows. The picture covers the screen (cropping
+ *  what it must), slid so every spot stays clear of the label and of the button column on the
+ *  right; it only shrinks below cover when the spots wouldn't fit otherwise (a 4:3 iPad). The
+ *  joystick is hidden for the search (it covered the left of the picture). */
+export function closeupFrame(w, h, iw = 1280, ih = 720, spots = []) {
+  // the spots' extent in image fractions (r is in units of the image height, as the hit test has it)
+  let u0 = 0, u1 = 1, v0 = 0, v1 = 1;
+  if (spots.length) {
+    u0 = Math.min(...spots.map((s) => s.x - s.r * ih / iw)); u1 = Math.max(...spots.map((s) => s.x + s.r * ih / iw));
+    v0 = Math.min(...spots.map((s) => s.y - s.r)); v1 = Math.max(...spots.map((s) => s.y + s.r));
+  }
+  const sw = Math.max(80, w - CLOSEUP_RAIL), sh = Math.max(80, h - CLOSEUP_TOP);
+  const s = Math.min(Math.max(w / iw, h / ih), sw / ((u1 - u0) * iw), sh / ((v1 - v0) * ih));
   const dw = iw * s, dh = ih * s;
-  return { x: (w - dw) / 2, y: top + (availH - dh) / 2, w: dw, h: dh };
+  // start centred (crop the top rather than the counter), keep the screen covered, then the spots in view
+  const place = (pref, d, size, lo, hi, a, b) => {
+    let p = d >= size ? Math.min(0, Math.max(size - d, pref)) : pref;
+    return Math.min(b - hi * d, Math.max(a - lo * d, p));
+  };
+  return {
+    x: place((w - dw) / 2, dw, w, u0, u1, 0, sw),
+    y: place(dh >= h ? (h - dh) * 0.8 : (h - dh) / 2, dh, h, v0, v1, CLOSEUP_TOP, h),
+    w: dw, h: dh,
+  };
 }
 
 export const CLOSEUPS = {

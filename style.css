@@ -625,9 +625,10 @@ body.divefx-hold #banner.show { animation-play-state: paused; }
    That canvas covers the screen, so the action buttons (BACK, CASE, CAMERA) have to sit above it. */
 body.three.c3-flat #c2d { display: block; position: absolute; z-index: 1; }
 body.c3-flat #btns, body.closeup-on #btns { z-index: 3; }
-/* investigation close-up: one row of buttons under the picture, not a stack on top of it */
-body.closeup-on #btns { left: 0; right: calc(12px + var(--sr)); width: auto; height: 96px; display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
-body.closeup-on #btns .tbtn, body.closeup-on #btns .tbtn.big { position: static; width: 74px; height: 74px; }
+/* investigation close-up: the picture fills the screen; the buttons stand in one column down the right edge,
+   which closeupFrame (src/nightclub/scenes.js, CLOSEUP_RAIL) keeps every tappable spot clear of */
+body.closeup-on #btns { left: auto; right: calc(10px + var(--sr)); top: calc(44px + var(--st)); bottom: calc(10px + var(--sb)); width: 76px; height: auto; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; }
+body.closeup-on #btns .tbtn, body.closeup-on #btns .tbtn.big { position: static; width: 68px; height: 68px; flex: none; }
 body.c3-flat #objectives, body.c3-flat #marker, body.c3-flat #prompt, body.c3-flat #c3-talk, body.c3-flat #c3-chat { display: none; }
 /* a Talker's two bars over their heads: evidence (gold) and their suspicion (red) */
 #c3-talk { position: absolute; left: 0; top: 0; width: 132px; margin: -46px 0 0 -66px; padding: 4px 7px 6px; background: rgba(10, 6, 18, .78); border: 2px solid #111; border-radius: 8px; display: none; font: 400 13px "Bangers", Impact, sans-serif; letter-spacing: .06em; color: #ffd84d; text-align: center; }
