@@ -224,6 +224,15 @@ export const DEALS = [
   { task: 'Pose for a billboard endorsing {V}\'s "Totally Legit" energy drink', headline: '{H}\'S BIZARRE BILLBOARD BAFFLES CITY' },
 ];
 
+// The clubs' cases as the map labels a club mission (the cases themselves: src/nightclub/cases/).
+// A club mission plays the first case she hasn't solved (any, once she's solved them all).
+export const CLUB_CASE_LABELS = {
+  squirt: { name: 'Super Squirt', theme: 'drugs', risk: 'Super Squirt',
+    blurb: 'Someone is pushing a new drug, Super Squirt, through the club. Find out who, and where it comes from.' },
+  blackmail: { name: 'The Polaroid Racket', theme: 'blackmail', risk: 'Blackmail',
+    blurb: 'Councillors are being drugged and photographed in the club\'s VIP. Find out who is taking the pictures, and who is paying for them.' },
+};
+
 // Videos for the wall TV in the capture room. Put files in assets/video/ (MP4 H.264 or WebM plays
 // everywhere) and list their file names here. 'any' clips play in every venue; add a venue name
 // key (e.g. 'Nightclub': ['nightclub_villain.mp4']) for venue-specific ones. One is picked at random.

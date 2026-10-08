@@ -7,14 +7,14 @@ import { BLACKMAIL } from './cases/blackmail.js';
 export const CLUB_CASES = { squirt: SQUIRT, blackmail: BLACKMAIL };
 
 /**
- * The case for this visit: the zone's own (unless it's solved already), else one she hasn't
- * solved yet (any, once she's solved them all). `state` = the save (its solved cases).
+ * The case for this visit: the zone's own (the map labels a club mission with it), else one she
+ * hasn't solved yet (any, once she's solved them all). `state` = the save (its solved cases).
  */
 export function pickCase(zone, state = null) {
   const own = CLUB_CASES[zone?.clubCase];
   const solved = (c) => !!state?.cases?.[c.id]?.solved;
-  if (own && !solved(own)) return own;
-  if (!state) return own || SQUIRT;
+  if (own) return own;
+  if (!state) return SQUIRT;
   const open = Object.values(CLUB_CASES).filter((c) => !solved(c));
   const pool = open.length ? open : Object.values(CLUB_CASES);
   return pool[Math.floor(Math.random() * pool.length)];

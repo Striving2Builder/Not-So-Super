@@ -1,9 +1,9 @@
 # Nightclub v3: 3D infiltration clubs
 
-Status: design agreed with the user over five brainstorm rounds, 2026-10-07; **built the same day,
-opt-in with `?club=v3`** (see "Built so far" at the end). Supersedes the 2D detective clubs
-([nightclub-2d.md](nightclub-2d.md), built in `src/nightclub/`, still the default until v3 has been
-played on the iPad). Art specs per batch: [nightclub-assets.md](nightclub-assets.md).
+Status: design agreed with the user over five brainstorm rounds, 2026-10-07; **built the same day
+and made the default** (see "Built so far" at the end). Supersedes the 2D detective clubs
+([nightclub-2d.md](nightclub-2d.md), built in `src/nightclub/`), which stay as the fallback until
+they're deleted. Art specs per batch: [nightclub-assets.md](nightclub-assets.md).
 
 ## Why the change
 - The 2D side-scroll walk (v2) has the right vibe but no game loop and no danger, and every visit
@@ -380,10 +380,14 @@ first; the blackmail case is next. The accusation, case board and map leads carr
 - Numpad dance tuning: grid size, speed curve, how many misses end it.
 - How long the paparazzi target is; whether undercover is chosen per visit or set by the case.
 
-## Built so far (2026-10-07, opt-in: `?club=v3`)
+## Built so far (2026-10-07, the default)
 Every section above is in, first pass. Club zones (special or night, at a club venue) open the 3D
-club with `?club=v3`; without it they play the 2D club as before.
-- **Try it:** `?club=v3`. Test params: `&club3room=rave|mezzanine|pit|centre|tunnel` (main room),
+club. **The 2D club is the fallback until it's deleted:** `?club=v2` plays it, and so does any
+device the 3D club can't start on (`game.startZone` catches the failure and opens the 2D club
+instead of dropping her back in the sky). `?club=v1` still brings back the premade 3D clubs. The
+map labels each club mission with the case it will play: the first one she hasn't solved
+(`CLUB_CASE_LABELS` in data.js; the zone's `clubCase` is the case).
+- **Test params:** `&club3room=rave|mezzanine|pit|centre|tunnel` (main room),
   `&club3seed=N` (the plan), `&club3case=squirt|blackmail`, `&club3event=redcarpet|paparazzi|raid|firealarm|fight|none`,
   `&club3under=0|1` (skip the "how do you go in?" question), `&club3wake=vip|office|storage|floor`.
 - **Code** (`src/club3d/`, a Special3D zone; the systems are mixins, the mode is the conductor):
@@ -415,6 +419,5 @@ club with `?club=v3`; without it they play the 2D club as before.
   ~137 calls / 169k tris / 246 dancers.
 - **Not yet / next:** the iPad test (fps, memory: the club scene stays in GPU memory under a
   back-room fight), the user's dance clips and sedation clip, music tracks, more VIP hosts per case,
-  tuning (guard gain `GUARD_GAIN`, Talker rates in cast.js, DROP timings in events.js), the
-  overworld still labels night club zones as Super Squirt even when a visit plays the blackmail
-  case, then make v3 the default and retire v2.
+  tuning (guard gain `GUARD_GAIN`, Talker rates in cast.js, DROP timings in events.js), then
+  delete v2 (`src/nightclub/` minus the cases and close-up data, which v3 shares).

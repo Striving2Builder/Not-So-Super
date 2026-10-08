@@ -95,7 +95,7 @@ the `day_1` look, the patrol-view composition, the vice district, street light t
 blocking + thick ink + S-shield, the close-up face, the climb and glide poses, the brawler sprites, the
 dive landing's structure.
 
-**Nightclub (2026-10-07):** the 3D infiltration clubs (v3) are built and opt-in with `?club=v3`: [design/nightclub.md](../design/nightclub.md) ("Built so far" lists the modules, test params and the harness `tools/shots/club3d.js`). The 2D detective clubs (v2, [design/nightclub-2d.md](../design/nightclub-2d.md)) stay the default until the user plays v3 on the iPad. Also game-wide: full capture plays a forced clip (3 loops, tap = sound, 3 taps skip) and a lost street fight is a capture too.
+**Nightclub (2026-10-07):** the 3D infiltration clubs (v3) are built and are the default: [design/nightclub.md](../design/nightclub.md) ("Built so far" lists the modules, test params and the harness `tools/shots/club3d.js`). The 2D detective clubs (v2, [design/nightclub-2d.md](../design/nightclub-2d.md)) are the fallback until deleted: `?club=v2`, or automatically when the 3D club can't start. Also game-wide: full capture plays a forced clip (3 loops, tap = sound, 3 taps skip) and a lost street fight is a capture too. Waiting on: the user's iPad test of the 3D club.
 dodging guard flashlight cones; user refs: foggy club, laser beams, DJ booth, backlit crowd).
 
 ## Merged in the round 7–9 thread (2026-10-03/04)

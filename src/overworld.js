@@ -1,7 +1,7 @@
 // Flying patrol over the procedural city, drawn in 2.5D: every point is projected with a
 // straight-down perspective camera, so rooftops grow and lean away from screen centre.
 import { BLOCK, ROAD, LOT } from './city.js';
-import { DISTRICTS, STREET_CRIMES, CASES, VENUES, THEMES, BOSSES, HERO, NIGHT_DISTRICTS, ASYLUM } from './data.js';
+import { DISTRICTS, STREET_CRIMES, CASES, VENUES, THEMES, BOSSES, HERO, NIGHT_DISTRICTS, ASYLUM, CLUB_CASE_LABELS } from './data.js';
 import { drawHeroTop } from './art.js'; // placeholder art until her model loads
 import { clamp, lerp, pick, chance, rand, dist, rgba, easeOut, easeInOut, fmtClock, fmtTime, wobble, $ } from './util.js';
 import { loadClub, preloadClub } from './clubzone.js';
@@ -399,8 +399,7 @@ export class Overworld {
       });
     } else if (night) {
       Object.assign(z, nightCaseFields());
-      // the detective clubs play their own cases (Super Squirt for now; blackmail and others to come)
-      if (this.g.newClubs) Object.assign(z, { theme: 'drugs', clubCase: 'squirt', name: `Super Squirt at ${/^The /.test(z.venue) ? z.venue : 'the ' + z.venue}`, risk: 'Night · Super Squirt', blurb: 'Someone is pushing a new drug, Super Squirt, through the club. Find out who, and where it comes from.' });
+      if (this.g.newClubs) this.clubCase(z, 'Night · ');
     } else if (kind === 'case') {
       Object.assign(z, {
         mode: 'investigate', def, name: def.name, reward: def.reward, lockKey: 'Investigations', ttl: rand(160, 230),
@@ -414,10 +413,19 @@ export class Overworld {
         lockKey: venueName, ttl: rand(220, 300), color: boss ? '#ff3030' : '#ff3fb8', glyph: boss ? 'B' : '★', risk: 'CAPTURE',
         blurb: `${THEMES[theme].name} operation inside the ${venueName}${boss ? `, run by ${boss}` : ''}. Traps everywhere.`,
       });
+      if (this.g.newClubs && (VENUES[venueName]?.club || VENUES[venueName]?.kind === 'club')) this.clubCase(z, '');
     }
     this.zones.push(z);
     if (!initial && !this.attract && kind !== 'street') toast(`New ${z.mode === 'nightcase' ? 'night case' : kind === 'case' ? 'investigation' : 'special zone'}: ${z.name} (${DISTRICTS[z.district].name})`, 'info');
     return z;
+  }
+
+  /** A club mission plays one of the clubs' cases: label it with the one it will play. */
+  clubCase(z, riskPrefix) {
+    const st = this.g.state, ids = Object.keys(CLUB_CASE_LABELS), open = ids.filter((k) => !st?.cases?.[k]?.solved);
+    const id = open[0] || pick(ids), L = CLUB_CASE_LABELS[id];
+    Object.assign(z, { clubCase: id, theme: L.theme, name: `${L.name} at ${/^The /.test(z.venue) ? z.venue : 'the ' + z.venue}`, risk: riskPrefix + L.risk, blurb: L.blurb, boss: null });
+    if (z.mode === 'special') Object.assign(z, { glyph: '★', color: '#ff3fb8' }); // (no boss: not the ☠ icon)
   }
 
   removeZone(z) { this.zones = this.zones.filter((q) => q !== z); }

@@ -89,29 +89,33 @@ game.gfxFailed = () => {
 };
 
 // ---------------------------------------------------------------- zone flow
-// the detective nightclubs are the default since 2026-10-05; ?club=v1 brings back the premade 3D clubs,
-// ?club=v3 plays the 3D infiltration clubs (docs/design/nightclub.md; opt-in until they reach parity)
-const NEW_CLUBS = !/[?&]club=v1(&|$)/.test(location.search);
-const CLUBS_3D = /[?&]club=v3(&|$)/.test(location.search);
-game.newClubs = NEW_CLUBS; // the overworld skips loading the premade club buildings
+// Club missions play the 3D infiltration club (docs/design/nightclub.md), the default since
+// 2026-10-07. The 2D detective club is its fallback until it's deleted: ?club=v2 plays it, and so
+// does any device the 3D club can't start on. ?club=v1 brings back the premade 3D clubs.
+const CLUB_VERSION = (/[?&]club=(v[123])(&|$)/.exec(location.search) || [])[1] || 'v3';
+game.newClubs = CLUB_VERSION !== 'v1'; // the overworld skips loading the premade club buildings
 
 /** Which game mode plays a zone. */
 function modeFor(z) {
-  // the detective nightclub redesign (docs/design/nightclub-2d.md)
   const clubVenue = VENUES[z.venue]?.club || VENUES[z.venue]?.kind === 'club';
-  if (CLUBS_3D && (z.mode === 'special' || z.mode === 'nightcase') && clubVenue) return 'club3';
-  if (NEW_CLUBS && (z.mode === 'special' || z.mode === 'nightcase') && clubVenue) return 'nightclub';
+  if (clubVenue && (z.mode === 'special' || z.mode === 'nightcase')) {
+    if (CLUB_VERSION === 'v3') return 'club3'; // (no WebGL: startZone falls back to the 2D club)
+    if (CLUB_VERSION === 'v2') return 'nightclub';
+  }
   if (z.mode === 'special' && VENUES[z.venue]?.club) return 'club';  // raid inside a premade club
   return { brawl: 'brawler', investigate: 'investigate', special: 'special', nightcase: 'nightcase', asylum: 'asylum' }[z.mode];
 }
 
 game.startZone = (z) => {
-  try { game.setMode(modeFor(z), { zone: z }); } catch (e) {
-    // (a 3D zone without a WebGL context, out of memory…): back to the sky, not a frozen half-scene
+  const mode = modeFor(z);
+  try { game.setMode(mode, { zone: z }); } catch (e) {
+    // (a 3D zone without a WebGL context, out of memory…): not a frozen half-scene. The 3D club
+    // falls back to the 2D one; anything else goes back to the sky.
     console.error(e);
-    toast("Couldn't open that scene. Try again in a moment.", 'bad');
     try { game.mode.exit?.(); } catch (e2) { /* half-entered */ }
     game.mode = null;
+    if (mode === 'club3') { try { game.setMode('nightclub', { zone: z }); game.commentary.onZoneStart(z); return; } catch (e3) { console.error(e3); game.mode = null; } }
+    toast("Couldn't open that scene. Try again in a moment.", 'bad');
     game.setMode('overworld', { returnFrom: z });
     return;
   }
