@@ -114,7 +114,16 @@ game.startZone = (z) => {
     console.error(e);
     try { game.mode.exit?.(); } catch (e2) { /* half-entered */ }
     game.mode = null;
-    if (mode === 'club3') { try { game.setMode('nightclub', { zone: z }); game.commentary.onZoneStart(z); return; } catch (e3) { console.error(e3); game.mode = null; } }
+    if (mode === 'club3') {
+      // (say why, so a device test can report it: the 2D club is a stopgap, not the game)
+      const why = String((e && (e.message || e)) || 'unknown').slice(0, 160);
+      try { localStorage.setItem('supergirl-club3-fail', JSON.stringify({ why, build: BUILD, at: new Date().toISOString() })); } catch (e4) { /* private mode */ }
+      try {
+        game.setMode('nightclub', { zone: z }); game.commentary.onZoneStart(z);
+        dialog({ title: '3D club failed to start', text: `This device fell back to the 2D club.<br><br><small>${why.replace(/</g, '&lt;')}<br>${BUILD}</small>` });
+        return;
+      } catch (e3) { console.error(e3); game.mode = null; }
+    }
     toast("Couldn't open that scene. Try again in a moment.", 'bad');
     game.setMode('overworld', { returnFrom: z });
     return;
