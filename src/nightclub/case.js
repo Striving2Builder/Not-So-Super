@@ -1,10 +1,11 @@
 // The detective nightclubs' case engine: which case a club visit plays, the clues found so far, the
 // case board's lines and the leads a solved case puts on the map. Cases are data
-// (src/nightclub/cases/*.js): Super Squirt and the Polaroid Racket.
+// (src/nightclub/cases/*.js): Super Squirt, the Polaroid Racket and the Earworm.
 import { SQUIRT } from './cases/squirt.js';
 import { BLACKMAIL } from './cases/blackmail.js';
+import { EARWORM } from './cases/earworm.js';
 
-export const CLUB_CASES = { squirt: SQUIRT, blackmail: BLACKMAIL };
+export const CLUB_CASES = { squirt: SQUIRT, blackmail: BLACKMAIL, earworm: EARWORM };
 
 /**
  * The case for this visit: the zone's own (the map labels a club mission with it), else one she

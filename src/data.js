@@ -231,6 +231,8 @@ export const CLUB_CASE_LABELS = {
     blurb: 'Someone is pushing a new drug, Super Squirt, through the club. Find out who, and where it comes from.' },
   blackmail: { name: 'The Polaroid Racket', theme: 'blackmail', risk: 'Blackmail',
     blurb: 'Councillors are being drugged and photographed in the club\'s VIP. Find out who is taking the pictures, and who is paying for them.' },
+  earworm: { name: 'The Earworm', theme: 'hypnosis', risk: 'Mind control',
+    blurb: 'Clubbers are walking out blank-eyed, humming a song nobody can name. Find out what the music is doing to them, and who wants it.' },
 };
 
 // Videos for the wall TV in the capture room. Put files in assets/video/ (MP4 H.264 or WebM plays
