@@ -3,7 +3,7 @@
 // caption on its own for a moment, so the flow never depends on the files being there.
 import { mediaFolders, isImage } from './media.js';
 import { UI } from './ui.js';
-import { pick, $ } from './util.js';
+import { cycle, $ } from './util.js';
 
 /**
  * @param folder    assets/video/<folder>/ to pick a clip from
@@ -19,7 +19,7 @@ import { pick, $ } from './util.js';
 export async function playCutscene({ folder, src, caption = '', maxSecs = 12, holdSecs = 3.2, tapSkips = false, loops = 1, skipTaps = 1, untilTap = false }) {
   const el = $('cutscene');
   if (!el) return;
-  const url = src || pick((await mediaFolders())[folder] || []) || null;
+  const url = src || cycle(`clips:${folder}`, (await mediaFolders())[folder] || []) || null;
   const video = el.querySelector('video'), img = el.querySelector('img');
   const skipEl = el.querySelector('.cs-skip'), skipText = skipEl.textContent;
   el.querySelector('.cs-cap').innerHTML = caption;
@@ -82,11 +82,11 @@ export async function playScreenScene({ screens, folder, caption = '', lockSecs 
   const el = $('cutscene');
   if (!el || !screens || !screens.length) return;
   const [{ loadScreen, drawScreen }, folders] = await Promise.all([import('./greenscreen.js'), mediaFolders()]);
-  const scr = await loadScreen(pick(screens));
+  const scr = await loadScreen(cycle(`screens:${screens[0].replace(/[^/]*$/, '')}`, screens));
   if (!scr) return;
   const pool = [].concat(folder).map((f) => (folders[f] || []).filter((u) => !isImage(u))).find((l) => l.length) || [];
   const url = pool;
-  const clip = pick(url) || null;
+  const clip = cycle(`clips:${[].concat(folder).join(',')}`, url) || null;
   const lock = clip ? lockSecs : 0;
   const cv = document.createElement('canvas');
   cv.className = 'cs-screen';

@@ -4,6 +4,33 @@ export const rand = (a = 0, b = 1) => a + Math.random() * (b - a);
 export const randi = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
 export const pick = (a) => a[Math.floor(Math.random() * a.length)];
 export const chance = (p) => Math.random() < p;
+
+/**
+ * pick(), but every item gets its turn: a shuffled deck per `key`, dealt one at a time and
+ * reshuffled when it runs out (never the same one twice in a row across the reshuffle). The deck
+ * is kept in localStorage, so the rotation carries on across visits and reloads; items added or
+ * removed from `list` join or leave it.
+ */
+export function cycle(key, list) {
+  if (!list || !list.length) return undefined;
+  if (list.length === 1) return list[0];
+  const K = `sg-cycle:${key}`;
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(K)); } catch (e) { /* private mode */ }
+  let deck = (d && Array.isArray(d.deck) ? d.deck : []).filter((u) => list.includes(u));
+  const last = d && d.last;
+  if (!deck.length) {
+    deck = shuffle(list.slice());
+    if (deck[0] === last) deck.push(deck.shift());
+  } else {
+    // new files since the deck was dealt go in at random spots
+    const seen = new Set(d.all || []);
+    for (const u of list) if (!seen.has(u) && !deck.includes(u)) deck.splice(Math.floor(Math.random() * (deck.length + 1)), 0, u);
+  }
+  const out = deck.shift();
+  try { localStorage.setItem(K, JSON.stringify({ deck, last: out, all: list })); } catch (e) { /* private mode */ }
+  return out;
+}
 export const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
 export const $ = (id) => document.getElementById(id);
 export const easeOut = (t) => 1 - Math.pow(1 - t, 3);
