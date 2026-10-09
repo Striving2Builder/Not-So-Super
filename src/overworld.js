@@ -357,10 +357,10 @@ export class Overworld {
   // ------------------------------------------------------------------ zones
   maintainZones(initial = false) {
     const counts = { street: 0, case: 0, special: 0 };
-    for (const z of this.zones) if (!z.lead && z.kind in counts && !z.stashJob) counts[z.kind]++; // leads are extra, beyond the quota
+    for (const z of this.zones) if (!z.lead && z.kind in counts && !z.stashJob && !z.storyId) counts[z.kind]++; // leads and the story clubs are extra, beyond the quota
     // Always keep one club raid (premade 3D club) somewhere on the map.
     const clubs = Object.keys(VENUES).filter((v) => VENUES[v].club);
-    if (clubs.length && !this.zones.some((z) => z.mode === 'special' && VENUES[z.venue]?.club)) { this.spawn('special', initial, pick(clubs)); return; }
+    if (clubs.length && !this.zones.some((z) => z.mode === 'special' && VENUES[z.venue]?.club && !z.storyId)) { this.spawn('special', initial, pick(clubs)); return; }
     // ...and the asylum (its own zone type, src/asylum.js)
     if (!this.zones.some((z) => z.mode === 'asylum') && this.spawn('asylum', initial)) return;
     for (const k of ['street', 'case', 'special']) {
@@ -422,8 +422,9 @@ export class Overworld {
   }
 
   /** A club mission plays one of the clubs' cases: label it with the one it will play. */
-  clubCase(z, riskPrefix) {
-    const st = this.g.state, ids = Object.keys(CLUB_CASE_LABELS), open = ids.filter((k) => !st?.cases?.[k]?.solved);
+  clubCase(z, riskPrefix, forced = null) {
+    const st = this.g.state, ids = forced ? [forced] : Object.keys(CLUB_CASE_LABELS).filter((k) => !CLUB_CASE_LABELS[k].club);
+    const open = ids.filter((k) => !st?.cases?.[k]?.solved);
     // (a case already waiting on the map isn't offered twice while there are others to play)
     const listed = new Set(this.zones.map((q) => q.clubCase).filter(Boolean));
     const fresh = open.filter((k) => !listed.has(k));
@@ -442,6 +443,22 @@ export class Overworld {
     for (const L of st.leads) if (!this.zones.some((z) => z.leadId === L.id)) this.spawnLead(L);
   }
 
+  /** The story clubs (CLUB_CASE_LABELS with a `club`): each keeps its own spot on the map until its case is solved. */
+  ensureStoryClubs() {
+    const st = this.g.state;
+    if (!st || this.attract || !this.g.newClubs) return;
+    for (const [id, L] of Object.entries(CLUB_CASE_LABELS)) {
+      if (!L.club || st.cases?.[id]?.solved || this.zones.some((z) => z.storyId === id)) continue;
+      const z = this.spawn('special', true, L.venue);
+      if (!z) continue;
+      // placed once, then saved: the club is in the same street after a reload
+      const spots = (st.storyClubs = st.storyClubs || {}), at = spots[id];
+      if (at) { z.x = at.x; z.y = at.y; z.district = at.district; } else { spots[id] = { x: z.x, y: z.y, district: z.district }; st.save(); }
+      this.clubCase(z, '', id);
+      Object.assign(z, { storyId: id, ttl: Infinity, color: L.color || '#ff3fb8', glyph: '♛' });
+    }
+  }
+
   spawnLead(L) {
     const z = this.spawn(L.kind, true, L.venue || undefined);
     if (!z) return;
@@ -455,7 +472,7 @@ export class Overworld {
   update(dt) {
     this.t += dt;
     const g = this.g, h = this.hero, st = g.state, inp = g.input, city = g.city;
-    if ((this.leadT = (this.leadT || 0) - dt) <= 0) { this.leadT = 1; this.ensureLeads(); }
+    if ((this.leadT = (this.leadT || 0) - dt) <= 0) { this.leadT = 1; this.ensureLeads(); this.ensureStoryClubs(); }
     city.updateTraffic(dt);
     this.updateParticles(dt);
 
@@ -693,7 +710,7 @@ export class Overworld {
     const key = document.body.classList.contains('touch') ? 'DIVE' : 'SPACE';
     const html = lock
       ? `🔒 <b>${z.name}</b> — locked by your deal for ${fmtTime(lock)}`
-      : `<b>${key}</b> to dive: <b>${z.name}</b> · ${DISTRICTS[z.district].name}<span class="risk" style="background:${rc}33;color:${rc}">${z.risk}</span><br><small>${z.blurb || ''} Reward +${z.reward} · ${z.leadId ? 'Case lead' : `${fmtTime(z.ttl - z.t)} left`}</small>`;
+      : `<b>${key}</b> to dive: <b>${z.name}</b> · ${DISTRICTS[z.district].name}<span class="risk" style="background:${rc}33;color:${rc}">${z.risk}</span><br><small>${z.blurb || ''} Reward +${z.reward} · ${z.leadId ? 'Case lead' : z.storyId ? 'Open until solved' : `${fmtTime(z.ttl - z.t)} left`}</small>`;
     if (el._html !== html) { el.innerHTML = html; el._html = html; }
     el.classList.add('on');
   }
