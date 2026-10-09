@@ -26,3 +26,5 @@ assets/nightclub/incoming/
 
 # Local secrets (API keys): never committed
 .env
+
+.claude/settings.local.json
