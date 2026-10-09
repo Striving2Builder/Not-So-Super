@@ -1,7 +1,7 @@
 # Act 1: The Puzzle Maker
 
-Status: draft 3, 2026-10-09. Nothing here is built. **(user)** marks the user's own calls: from the
-outline, or from the answers to draft 1. Everything else is a proposal. Open questions are at the end.
+Status: built 2026-10-09 (see "Built so far" at the end). **(user)** marks the user's own calls: from
+the outline, or from the answers to the drafts. Everything else was a proposal the user accepted.
 
 ## The act in one paragraph
 Supergirl is the city's hero, saving the day as usual. Then a new drug starts showing up in the
@@ -281,6 +281,60 @@ placeholders: the existing Polaroid frames for "real", and the same frames stamp
 knockoff tell (a tube-top overlay keyed from `assets/SGCostume/`) for "impostor". No Blender work for
 this.
 
-## Open questions for the user
-1. **The hotel building:** restyle the lair's spike into the hotel (keeps its silhouette), or give the
-   lair district a new hotel-shaped tower like the red-light district's "red hotel" landmark?
+## Built so far (2026-10-09)
+**The act** (`src/act/`): `act1.js` is the data (lieutenants and their facts about the Puzzle Maker,
+the gates, the beats, the mocking lines, the seals' and emitters' riddles, Kell's experiments, the
+trails); `act.js` the runtime (`game.act`, state in `state.act`, saved); `spot.js` the Supergirl or
+Impostor call and the placeholder fakes.
+- **Gates** count in `main.js endZone` (any win): clubs (any club mission), `Warehouse` raids, the
+  asylum, wins in the factory and entertainment districts. Fakes = Polaroids called right.
+- **Unmasking:** a club case's confession (`club3d/casework.js solveCase`) or any win of its mission
+  shows the UNMASKED panel: the lieutenant's line, their fact about him, a Seal Key. The Impostor is
+  unmasked by catching her in a sighting. Case → lieutenant: squirt/blackmail → Lenny Gold, halo →
+  Bianca Rook, flashpoint → Roxy Flash, auction → Marcus Vane, earworm → Madame Mesmer.
+- **Trails:** from City Guardian on, ~35% of new investigations, night cases, asylum visits and
+  warehouse raids carry a lieutenant's trail (their initial on the marker): two steps of story each.
+- **Beats** on the rank-ups (start, 60, 150, 225 the billboard riddle, 300), each once, when she's
+  flying and nothing else is up. The 13th floor opens once every gate is met and stays open.
+- **Polaroids:** after Local Hero they turn up whatever her reputation (a little slower above 0), 60%
+  fakes; the call; right about a fake = +4 and a jigsaw piece; a fake called real is pinned to the
+  board ("Look again").
+- **Sightings:** from City Guardian on, every 150–210 s, minus 20 s per lieutenant unmasked (min 100):
+  a "Supergirl" marker that runs (640 u/s: faster than cruising, slower than a boost). DIVE close = +12
+  (and the Impostor's unmasking, first time); she gets away after 75 s = −6.
+- **The act board:** MAP → Act board, or the pause menu.
+
+**The hotel tower** (`landmarks3d.js` spike): the lair landmark, always on the block nearest the lair
+seed (`city.js`), with SLUTTY LITTLE / RED MINI SKIRT in neon on its base, HOTEL blades, green,
+purple and red slits and lit rooms. Floor 13's green band (`city3d.js hotelBand`) shows once the act
+opens it; the marker ("13") is at its foot.
+
+**Floor 13** (`src/hotel/`): `plan.js` generates the building (lobby, main hall, four wings of six rooms,
+four Screening Rooms, the ballroom), `art.js` the textures, posters and keyed costumes, `hotel.js` the
+zone (ClubZone, like the asylum), `kell.js` Dr Kell, `ballroom.js` the boss.
+- 18 posters per visit from frames of the hand-checked clips (`club3d/clips.js`), half made fakes.
+- Each wing: a note with its seal's answer, two traps (jigsaw bait → the struggle; fail = Kell is
+  sent after her), the rest dressing (the Wardrobe's beds hold the user's costume flat-lays).
+- Seals: a Seal Key (unmasked lieutenants minus seals set) and the riddle; wrong = a trap. Seals are
+  saved in the act and survive leaving (the elevator) and wipes.
+- Kell: patrols the halls' graph, 1.0 s charge (0.7 tagged), ray = memory wipe: a captive clip, a
+  random room, doors shut, notes forgotten, −3 rep and one experiment (high / tagged 60 s / X-ray
+  scrambled 60 s / struggles hard 90 s). A punch from behind downs him for 6 s.
+- Ballroom: 18 masked guests + 4 impostors; the Puzzle Maker's costume is rolled once per game, the
+  other guests differ from him in at least two of the facts she has. Wrong guest = a struggle (fail =
+  the stage). Then four emitters (reach 7 m), each with a guard and a riddle; the kryptonite meter
+  fills near live ones; 100 = the stage. Stage: heckles, a shame clip struggle (hard, never easier),
+  −4 rep per failure, repeat until free. The takedown → Kell caught → `act.complete()` (+100, the
+  front page, ACT 1 COMPLETE).
+
+**Placeholders** until the user's art lands: the impostor (a real frame with one colour swapped:
+hair, cape or suit), the lieutenants' and Kell's looks (procedural NPCs), the Puzzle Maker (a masked
+NPC; the Riddler model in `assets/Enemy Characters/` isn't wired).
+
+**Testing:** `?act=local` / `?act=guardian` (start at that rank), `?act=lair` (every gate met: the
+floor is open), `?act=boss` (and every seal set). `node tools/shots/act.js [--flows ...]` plays the
+board, a trail, a Polaroid call, an unmasking, a sighting, the tower, the floor, Kell's wipe, a seal
+and the ballroom (`shots/act/act/`).
+
+**Tuning knobs:** `GATES` (act1.js), `SIGHT` and `STRAY_FAKE` (act.js), `KELL` (kell.js), `B` (ballroom.js),
+`POSTERS` (hotel.js).

@@ -3,12 +3,12 @@
 // story beats on the rank-ups, runs the Polaroid calls and the impostor sightings, opens the hotel's
 // 13th floor once every gate is met, and shows it all on the act board. State lives in
 // state.act (saved with the game). game.act is the one instance; the overworld ticks it.
-import { ACT1, LIEUTENANTS, MASQ, GATES, BEATS } from './act1.js';
+import { ACT1, LIEUTENANTS, MASQ, GATES, BEATS, TRAILS } from './act1.js';
 import { spotCall, impostorize, fakeStrength } from './spot.js';
 import { makePolaroid } from '../polaroids.js';
 import { showNewspaper } from '../newspaper.js';
 import { playScreenScene } from '../cutscene.js';
-import { BILLBOARDS, DISTRICTS, HERO, VENUES } from '../data.js';
+import { BILLBOARDS, CLUB_CASE_LABELS, DISTRICTS, HERO, VENUES } from '../data.js';
 import { dialog, toast, openModal, closeModal, UI } from '../ui.js';
 import { comic } from '../comic.js';
 import { sfx } from '../sfx.js';
@@ -37,7 +37,7 @@ function freshAct() {
   for (const [k, M] of Object.entries(MASQ)) pm[k] = pick(M.values);
   return {
     id: ACT1.id, counts: { clubs: 0, warehouses: 0, asylum: 0, factory: 0, entertainment: 0 },
-    unmasked: {}, fakes: 0, unsorted: 0, beats: {}, lairOpen: false, done: false, pm, seals: {}, posterBest: 0, caught: 0,
+    unmasked: {}, trails: {}, fakes: 0, unsorted: 0, beats: {}, lairOpen: false, done: false, pm, seals: {}, posterBest: 0, caught: 0,
   };
 }
 
@@ -105,7 +105,39 @@ export class Act {
     if (zone.district === 'factory' || zone.def?.setting === 'factory') c.factory++;
     if (zone.district === 'entertainment') c.entertainment++;
     this.g.state.save();
+    if (zone.thread && !zone.leadId) await this.trailStep(zone.thread);
     if (zone.clubCase) await this.onCaseSolved(zone.clubCase);
+  }
+
+  // ------------------------------------------------------------------ the henchmen's trails
+  /**
+   * From City Guardian on, some ordinary missions carry a lieutenant's trail (called by the
+   * overworld for each mission it rolls): two steps each, then their own case.
+   */
+  tagZone(z) {
+    const A = this.A;
+    if (!A || A.done || !A.beats.guardian || !chance(0.35)) return;
+    const ok = z.mode === 'investigate' || z.mode === 'nightcase' || z.mode === 'asylum' || (z.mode === 'special' && z.venue === 'Warehouse');
+    if (!ok) return;
+    A.trails = A.trails || {};
+    const l = pick(LIEUTENANTS.filter((q) => !A.unmasked[q.id] && (A.trails[q.id] || 0) < 2));
+    if (!l) return;
+    z.thread = l.id;
+    z.name = `${l.name}'s trail: ${z.name}`;
+    z.glyph = l.name[0];
+    z.blurb = `${(A.trails[l.id] || 0) ? 'A raid' : 'A rumour'} on the trail of ${l.name}, ${l.alias}. ${z.blurb || ''}`;
+  }
+
+  async trailStep(id) {
+    const A = this.A, l = LIEUTENANTS.find((q) => q.id === id);
+    A.trails = A.trails || {};
+    const n = A.trails[id] = Math.min(2, (A.trails[id] || 0) + 1);
+    this.g.state.save();
+    const next = n < 2 ? 'Another mission on the trail will turn up on the map.'
+      : l.cases.length ? `Now their own case: ${l.cases.map((c) => `<b>${CLUB_CASE_LABELS[c]?.name || c}</b>`).join(' or ')}. Their confession unmasks them.`
+        : 'She will be out posing for the photographers soon: watch the map for a "Supergirl" sighting.';
+    if (n >= 2 && id === 'impostor') this.sightT = Math.min(this.sightT, 8);
+    await dialog({ title: `${l.name}'s trail · ${n}/2`, text: `${TRAILS[id][n - 1]}<span class="hint">${next}</span>` });
   }
 
   /** A club case solved (in the club, right after the confession): its lieutenant is unmasked. */
@@ -352,7 +384,7 @@ export class Act {
       return `<div class="ab-lt${on ? ' on' : ''}" data-i="${i}" style="--r:${[-2, 1.5, -1, 2, -1.5, 1][i]}deg">
         <i class="cb-pin"></i><div class="ab-ph"></div>
         <b>${on ? esc(l.name) : '???'}</b><small>${on ? esc(cap(l.alias)) : esc(l.runs)}</small>
-        ${on ? `<p>${MASQ[l.fact].say(A.pm[l.fact])}</p><span class="ab-stamp">UNMASKED</span>` : `<p class="dim">${l.cases.length ? 'Solve their club case.' : 'Catch her in the act: a "Supergirl" sighting on the map.'}</p>`}
+        ${on ? `<p>${MASQ[l.fact].say(A.pm[l.fact])}</p><span class="ab-stamp">UNMASKED</span>` : `<p class="dim">Trail ${(A.trails || {})[l.id] || 0}/2 · ${l.cases.length ? 'then solve their club case.' : 'then catch her: a "Supergirl" sighting.'}</p>`}
       </div>`;
     }).join('');
     const rows = this.gates().map((r) => `<div class="ab-gate${r.have >= r.need ? ' ok' : ''}"><span>${r.have >= r.need ? '✓' : '•'} ${esc(r.label)}</span><b>${Math.min(r.have, r.need)}/${r.need}</b></div>`).join('');

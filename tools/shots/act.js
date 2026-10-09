@@ -23,7 +23,7 @@ const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] :
 const LABEL = arg('--label', 'act'), PORT = +arg('--port', 8882), FLOWS = arg('--flows', 'all');
 const W = +arg('--w', 844), H = +arg('--h', 390);
 const OUT = path.join(ROOT, 'shots', LABEL, 'act');
-const ALL = ['board', 'polaroid', 'unmask', 'sighting', 'tower', 'hotel', 'kell', 'seal', 'ballroom'];
+const ALL = ['board', 'trail', 'polaroid', 'unmask', 'sighting', 'tower', 'hotel', 'kell', 'seal', 'ballroom'];
 const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
 
 (async () => {
@@ -99,6 +99,22 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     await V.page.waitForTimeout(900);
     await V.shot('board');
     await V.press('.ab-x');
+    return V;
+  });
+
+  await flow('trail', async () => {
+    const V = await game('act=guardian&flight=2d');
+    await V.through(() => window.__game.state.act?.beats?.guardian && !document.querySelector('#modal-root .modal-back'), 60000);
+    const name = await V.page.evaluate(() => {
+      const g = window.__game, ow = g.overworld; let z = null;
+      for (let i = 0; i < 40 && !(z && z.thread); i++) { if (z) ow.removeZone(z); z = ow.spawn('case', true); const r = Math.random; Math.random = () => 0.1; g.act.tagZone(z); Math.random = r; }
+      window.__tz = z; return z.name;
+    });
+    V.page.evaluate(() => window.__game.act.onZoneWin(window.__tz));
+    await V.page.waitForSelector('#modal-root .modal-back', { timeout: 5000 });
+    await V.shot('trail_step');
+    await V.through(() => !document.querySelector('#modal-root .modal-back'), 8000);
+    report.trail = { name, trails: await V.page.evaluate(() => window.__game.state.act.trails) };
     return V;
   });
 

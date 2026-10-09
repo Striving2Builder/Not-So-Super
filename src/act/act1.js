@@ -130,3 +130,17 @@ export const HECKLES = [
   ['Again?!', 'Encore! Encore!', 'Some Girl of Steel!', 'Get her a chair!'],
   ['She LIKES it up there!', 'Third time\'s the charm!', 'Somebody frame this!', 'Best show in town!'],
 ];
+
+/**
+ * Each lieutenant's trail through the ordinary missions (act.js tagZone): a rumour (an
+ * investigation), then a raid (a warehouse, a factory, the asylum, a night case), then their own
+ * case, whose confession unmasks them. The Impostor's trail ends with her next sighting.
+ */
+export const TRAILS = {
+  fixer: ['A bartender talks: Lenny Gold\'s money moves through every club on the strip, in envelopes with a jigsaw piece inside.', 'Ledgers in a back room: payments to "V.", "S.", "C." and "V.", every one routed through Lenny Gold. Four buyers, one bookkeeper.'],
+  queen: ['The dealers on the corner call their boss the Queen. Gold drug, gold nails, a club called the Hive.', 'Crates of jars labelled HONEY, stamped Helix Labs, bound for Pier 9. The Queen\'s seal on every lid.'],
+  roxy: ['A paparazzo\'s memory card: shots of you, each with a time and a place written down before you got there.', 'A call sheet for Flashpoint Live. Tonight\'s guest: "S.G." Roxy Flash has saved her a seat.'],
+  curator: ['A collector brags about a private auction at the Gilded Cage: "Lot one is a tape of the Girl of Steel."', 'An invoice from the Curator: "Preview tape, to be screened on Floor 13." Marcus Vane signs with a jigsaw piece.'],
+  mesmer: ['Clubbers humming the same tune, eyes glazed. Somebody says "Madame" plays it at three in the morning.', 'Sheet music with one tone circled in red: "for the dosed only". Madame Mesmer\'s handwriting.'],
+  impostor: ['A costume shop sold a dozen Supergirl outfits to one buyer, cash. Tube tops, vinyl skirts, cheap boots.', 'A dressing room: wigs on stands, a tube top on the chair, a schedule of "appearances". She\'s out tonight.'],
+};

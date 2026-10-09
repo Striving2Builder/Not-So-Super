@@ -362,9 +362,9 @@ export class Overworld {
     const clubs = Object.keys(VENUES).filter((v) => VENUES[v].club);
     if (clubs.length && !this.zones.some((z) => z.mode === 'special' && VENUES[z.venue]?.club && !z.storyId)) { this.spawn('special', initial, pick(clubs)); return; }
     // ...and the asylum (its own zone type, src/asylum.js)
-    if (!this.zones.some((z) => z.mode === 'asylum') && this.spawn('asylum', initial)) return;
+    if (!this.zones.some((z) => z.mode === 'asylum')) { const z = this.spawn('asylum', initial); if (z) { if (!this.attract) this.g.act?.tagZone(z); return; } }
     for (const k of ['street', 'case', 'special']) {
-      if (counts[k] < TARGET[k]) { this.spawn(k, initial); return; }
+      if (counts[k] < TARGET[k]) { const z = this.spawn(k, initial); if (z && !this.attract) this.g.act?.tagZone(z); return; } // (the act: a lieutenant's trail, sometimes)
     }
   }
 
