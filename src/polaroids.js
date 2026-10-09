@@ -166,7 +166,7 @@ function stepStrays(ow, st, dt) {
   const strays = ow.zones.filter((z) => z.polaroid);
   const act = ow.g.act?.straysOn() ? ow.g.act : null; // the act's frame-up: they turn up whatever her reputation, most of them fakes
   if (st.rep >= 0 && !act) { ow.strayT = rand(...STRAYS.every) * 0.5; return; }
-  ow.strayT = (ow.strayT ?? rand(...STRAYS.every) * 0.5) - dt * (st.rep < -50 ? 1.6 : 1);
+  ow.strayT = (ow.strayT ?? rand(...STRAYS.every) * 0.5) - dt * (st.rep < -50 ? 1.6 : st.rep < 0 ? 1 : 0.7); // (the act's, at a good reputation: a little slower)
   if (ow.strayT > 0 || strays.length >= STRAYS.max) return;
   ow.strayT = rand(...STRAYS.every);
   const h = ow.hero, cands = ow.g.city.blocks.filter((b) => {

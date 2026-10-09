@@ -147,6 +147,8 @@ export class Act {
   update(dt, ow) {
     const A = this.A, st = this.g.state;
     if (!A || ow.attract) return;
+    const band = ow.view3d?.city3?.hotelBand;
+    if (band) band.visible = !!A.lairOpen; // the hotel's 13th floor, lit
     if (!A.done) {
       for (const b of BEATS) if (!A.beats[b.id] && !this.queue.some((q) => q.beat === b) && st.rep >= b.rep) this.queue.push({ beat: b });
       if (!A.lairOpen && A.beats.guardian && this.gatesMet()) { A.lairOpen = true; st.save(); this.queue.push({ lair: true }); }

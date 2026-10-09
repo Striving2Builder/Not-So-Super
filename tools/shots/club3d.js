@@ -44,7 +44,7 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
     page.on('pageerror', (e) => errors.push(String(e.stack || e)));
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     const modal = () => page.evaluate(() => { const el = [...document.querySelectorAll('#modal-root .modal-back')].pop(); if (!el) return null; return { text: el.innerText.slice(0, 240).replace(/\s+/g, ' '), opts: [...el.querySelectorAll('.opt')].map((b) => b.innerText.replace(/\s+/g, ' ').trim()) }; });
-    const clickTop = (idx) => page.evaluate((idx) => { const el = [...document.querySelectorAll('#modal-root .modal-back')].pop(); if (!el) return; const o = el.querySelectorAll('.opt'); if (o.length) o[Math.max(0, Math.min(o.length - 1, idx))].click(); else el.click(); }, idx);
+    const clickTop = (idx) => page.evaluate((idx) => { const el = [...document.querySelectorAll('#modal-root .modal-back')].pop(); if (!el) return; const o = el.querySelectorAll('.opt'); if (o.length) o[Math.max(0, Math.min(o.length - 1, idx))].click(); else (el.querySelector('button') || el).click(); }, idx); // (the act's panels have plain buttons)
     const V = {
       page, errors,
       shot: (n) => page.screenshot({ path: path.join(OUT, `${n}.png`) }),

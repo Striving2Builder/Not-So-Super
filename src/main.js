@@ -11,6 +11,7 @@ import { NightCase } from './nightcase.js';
 import { AsylumZone } from './asylum.js';
 import { Nightclub } from './nightclub/nightclub.js';
 import { Club3D } from './club3d/club3d.js';
+import { HotelZone } from './hotel/hotel.js';
 import { showNewspaper } from './newspaper.js';
 import { HERO, DISTRICTS, THEMES, DEALS, BOSSES, VENUES, BILLBOARDS, CAPTURE_VIDEOS } from './data.js';
 import { UI, dialog, toast } from './ui.js';
@@ -45,6 +46,7 @@ game.modes = {
   asylum: new AsylumZone(game),
   nightclub: new Nightclub(game),
   club3: new Club3D(game),
+  hotel: new HotelZone(game), // the act's boss floor (src/hotel/)
 };
 game.overworld = game.modes.overworld;
 game.act = new Act(game); // the story (docs/design/act1.md)
@@ -62,6 +64,7 @@ function resize() {
   game.modes.nightcase.resize();
   game.modes.asylum.resize();
   game.modes.club3.resize();
+  game.modes.hotel.resize();
 }
 addEventListener('resize', resize);
 settings.onChange(() => resize()); // resolution follows the graphics profile
@@ -105,7 +108,7 @@ function modeFor(z) {
     if (CLUB_VERSION === 'v2') return 'nightclub';
   }
   if (z.mode === 'special' && VENUES[z.venue]?.club) return 'club';  // raid inside a premade club
-  return { brawl: 'brawler', investigate: 'investigate', special: 'special', nightcase: 'nightcase', asylum: 'asylum' }[z.mode];
+  return { brawl: 'brawler', investigate: 'investigate', special: 'special', nightcase: 'nightcase', asylum: 'asylum', hotel: 'hotel' }[z.mode];
 }
 
 game.startZone = (z) => {

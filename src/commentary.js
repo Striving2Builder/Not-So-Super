@@ -67,6 +67,7 @@ const ZONE_OPEN = {
   vice: ['Meanwhile, inside {V}… a sinister {T} plot unfolds!', 'Behind the velvet rope of {V}… VILLAINY!', 'Deep inside {V}… a trap awaits!'],
   asylum: ['Behind the walls of {V}… nobody hears you scream.', 'Meanwhile, at {V}… the case of {T}!', 'The lights flicker at {V}. Somebody here is hiding something…'],
   nightcase: ['Meanwhile, after hours at {V}… the case of {T}!', 'Midnight at {V}. The music is loud, the secrets louder…', '{V} after dark… somebody here knows something!'],
+  hotel: ['Thirteen floors up… the Puzzle Maker is expecting her.', 'Floor 13. Neon, velvet, and a man with a kryptonite ray.', 'The elevator doors open on the 13th floor. Every face on the walls is hers.'],
 };
 const THUG_TAUNT = ['Get her, boys!', 'It\'s the cape! Get her!', 'Ha! Just one girl!', 'Nobody messes with our turf!', 'You picked the wrong street, sister!'];
 const THUG_TAUNT_FRAUD = ['Relax boys, it\'s just the FAKE one!', 'Ha! The fraud showed up!', 'This\'ll be easy!'];

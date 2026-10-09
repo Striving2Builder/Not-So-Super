@@ -23,7 +23,7 @@ const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] :
 const LABEL = arg('--label', 'act'), PORT = +arg('--port', 8882), FLOWS = arg('--flows', 'all');
 const W = +arg('--w', 844), H = +arg('--h', 390);
 const OUT = path.join(ROOT, 'shots', LABEL, 'act');
-const ALL = ['board', 'polaroid', 'unmask', 'sighting', 'hotel', 'ballroom'];
+const ALL = ['board', 'polaroid', 'unmask', 'sighting', 'tower', 'hotel', 'kell', 'seal', 'ballroom'];
 const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
 
 (async () => {
@@ -153,6 +153,40 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     return V;
   });
 
+  await flow('probe', async () => {
+    const V = await game('act=lair');
+    await V.through(() => window.__game.overworld.zones.some((z) => z.hotel) && !document.querySelector('#modal-root .modal-back'), 60000);
+    report.probe = await V.page.evaluate(() => {
+      const g = window.__game, ow = g.overworld, lm = ow.view3d.city3.landmarks.find((l) => l.hotel), z = ow.zones.find((q) => q.hotel);
+      const blk = g.city.blocks.find((b) => b.hotel);
+      return { lm: [lm.x, lm.y, lm.o.x, lm.o.y, lm.o.w, lm.o.d, lm.o.h3], zone: [z.x, z.y], blk: [blk.bx, blk.by, blk.x0, blk.y0], boxes: blk.b.filter((o) => o.kind === 'box').map((o) => [o.x, o.y, o.w, o.d, !!o.landmark]), hero: [ow.hero.x, ow.hero.y] };
+    });
+    return V;
+  });
+
+  await flow('tower', async () => {
+    const V = await game('act=lair');
+    await V.through(() => window.__game.overworld.zones.some((z) => z.hotel) && !document.querySelector('#modal-root .modal-back'), 60000);
+    // night, south of the tower, facing it, then fly in
+    await V.page.evaluate(() => {
+      const g = window.__game, ow = g.overworld, lm = ow.view3d.city3.landmarks.find((l) => l.hotel);
+      g.state.clock = 21 * 60;
+      Object.assign(ow.hero, { x: lm.x + 60, y: lm.y + 1100, z: 150, band: 0, ang: -Math.PI / 2, vx: 0, vy: 0, speed: 0 });
+      ow.cam.x = ow.hero.x; ow.cam.y = ow.hero.y; if (ow.view3d) ow.view3d.cam.yaw = ow.hero.ang;
+    });
+    await V.page.waitForTimeout(1500);
+    await V.shot('tower_1_far');
+    await V.page.keyboard.down('KeyW'); await V.page.waitForTimeout(1100); await V.page.keyboard.up('KeyW');
+    await V.page.waitForTimeout(600);
+    await V.shot('tower_2_near');
+    report.towerProbe = await V.page.evaluate(() => {
+      const ow = window.__game.overworld, lm = ow.view3d.city3.landmarks.find((l) => l.hotel), P = ow.view3d.projector();
+      const band = ow.view3d.city3.hotelBand;
+      return { hero: [ow.hero.x, ow.hero.y, ow.hero.z, ow.hero.ang], lm: [lm.x, lm.y], top: P.proj(lm.x, lm.y, 340), base: P.proj(lm.x, lm.y, 0), band: band && [band.position.x, band.position.y, band.position.z, band.visible], cam: ow.view3d.cam.cam.position.toArray().map(Math.round) };
+    });
+    return V;
+  });
+
   await flow('hotel', async () => {
     const V = await game('act=lair');
     await V.through(() => window.__game.overworld.zones.some((z) => z.hotel) && !document.querySelector('#modal-root .modal-back'), 60000);
@@ -167,8 +201,10 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
       await V.page.waitForTimeout(1200);
       await V.shot(`hotel_${i + 1}_${spot.name}`);
     }
+    report.hotelMem = await V.page.evaluate(() => ({ heap: Math.round((performance.memory?.usedJSHeapSize || 0) / 1e6), posters: window.__game.mode.posters.filter((p) => p.canvas).length, info: window.__game.mode.renderer.info.memory }));
+    console.log('mem', JSON.stringify(report.hotelMem));
     // a poster call
-    await V.page.evaluate(() => window.__game.mode.examinePoster(window.__game.mode.posters[0]));
+    V.page.evaluate(() => { const m = window.__game.mode; m.examinePoster(m.posters.find((p) => p.canvas) || m.posters[0]); });
     await V.page.waitForSelector('.spot', { timeout: 20000 }).catch(() => {});
     await V.page.waitForTimeout(400);
     await V.shot('hotel_poster');
@@ -176,6 +212,50 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     await V.shot('hotel_poster_called');
     await V.press('.spot-b');
     report.hotel = { fps: await V.page.evaluate(() => new Promise((res) => { let n = 0; const t0 = performance.now(); const tick = () => { n++; if (performance.now() - t0 < 2000) requestAnimationFrame(tick); else res(n / 2); }; requestAnimationFrame(tick); })) };
+    return V;
+  });
+
+  /** Into the hotel (act=lair), past the arrival; resolves the helper bag. */
+  async function hotel(query = 'act=lair') {
+    const V = await game(query);
+    await V.through(() => window.__game.overworld.zones.some((z) => z.hotel) && !document.querySelector('#modal-root .modal-back'), 60000);
+    await V.page.evaluate(() => { const g = window.__game, z = g.overworld.zones.find((q) => q.hotel); g.startZone(z); });
+    await V.page.waitForFunction(() => { const m = window.__game.mode; return window.__game.modeName === 'hotel' && m.scene && !m.warming; }, null, { timeout: 120000 });
+    await V.page.waitForTimeout(1500);
+    await V.through(() => !document.querySelector('#modal-root .modal-back'), 8000);
+    return V;
+  }
+
+  await flow('kell', async () => {
+    const V = await hotel();
+    // Kell three metres in front of her, looking at her: he charges, fires, she's wiped
+    await V.page.evaluate(() => {
+      const m = window.__game.mode, k = m.kell, h = m.hero.position;
+      m.grace = 0; m.hero.position.set(0, 0, -8); m.hero.rotation.y = Math.PI;
+      k.mesh.position.set(0, 0, -11); k.mesh.rotation.y = 0; k.path = [];
+    });
+    await V.page.waitForTimeout(500);
+    await V.shot('kell_charge');
+    await V.page.waitForFunction(() => window.__game.mode.wiping, null, { timeout: 8000 });
+    await V.page.waitForTimeout(800);
+    await V.shot('kell_zap');
+    await V.through(() => !window.__game.mode.wiping, 30000);
+    await V.page.waitForTimeout(800);
+    await V.shot('kell_woke');
+    report.kell = await V.page.evaluate(() => { const m = window.__game.mode; return { wipes: m.wipes, room: m.wokeIn?.num, doorsOpen: m.doors.filter((d) => d.open).length, exp: [m.tagT, m.xrayLockT, m.sensT].map(Math.round) }; });
+    return V;
+  });
+
+  await flow('seal', async () => {
+    const V = await hotel();
+    await V.page.evaluate(() => { const m = window.__game.mode, o = m.sealObjs[0]; m.hero.position.copy(o.pos).add({ x: o.pos.x < 0 ? 1.2 : -1.2, y: 0, z: 0 }); m.run ? 0 : 0; m.setSeal(o); });
+    await V.page.waitForSelector('#modal-root .modal-back', { timeout: 5000 });
+    await V.shot('seal_riddle');
+    const ans = await V.page.evaluate(async () => { const { SEALS } = await import('/src/act/act1.js'); return SEALS[window.__game.mode.sealObjs[0].i].a; });
+    await V.page.evaluate((ans) => { const el = [...document.querySelectorAll('#modal-root .modal-back')].pop(); [...el.querySelectorAll('.opt')].find((b) => b.innerText.includes(ans)).click(); }, ans);
+    await V.page.waitForTimeout(800);
+    await V.shot('seal_set');
+    report.seal = await V.page.evaluate(() => ({ set: window.__game.mode.sealCount(), saved: JSON.parse(localStorage.getItem('sg-city-patrol-v1')).act.seals }));
     return V;
   });
 

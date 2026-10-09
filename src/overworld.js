@@ -357,7 +357,7 @@ export class Overworld {
   // ------------------------------------------------------------------ zones
   maintainZones(initial = false) {
     const counts = { street: 0, case: 0, special: 0 };
-    for (const z of this.zones) if (!z.lead && z.kind in counts && !z.stashJob && !z.storyId) counts[z.kind]++; // leads and the story clubs are extra, beyond the quota
+    for (const z of this.zones) if (!z.lead && z.kind in counts && !z.stashJob && !z.storyId && !z.hotel) counts[z.kind]++; // leads, the story clubs and the act's hotel are extra, beyond the quota
     // Always keep one club raid (premade 3D club) somewhere on the map.
     const clubs = Object.keys(VENUES).filter((v) => VENUES[v].club);
     if (clubs.length && !this.zones.some((z) => z.mode === 'special' && VENUES[z.venue]?.club && !z.storyId)) { this.spawn('special', initial, pick(clubs)); return; }
@@ -713,7 +713,7 @@ export class Overworld {
     const key = document.body.classList.contains('touch') ? 'DIVE' : 'SPACE';
     const html = lock
       ? `🔒 <b>${z.name}</b> — locked by your deal for ${fmtTime(lock)}`
-      : `<b>${key}</b> to dive: <b>${z.name}</b> · ${DISTRICTS[z.district].name}<span class="risk" style="background:${rc}33;color:${rc}">${z.risk}</span><br><small>${z.blurb || ''} Reward +${z.reward} · ${z.leadId ? 'Case lead' : z.storyId ? 'Open until solved' : `${fmtTime(z.ttl - z.t)} left`}</small>`;
+      : `<b>${key}</b> to dive: <b>${z.name}</b> · ${DISTRICTS[z.district].name}<span class="risk" style="background:${rc}33;color:${rc}">${z.risk}</span><br><small>${z.blurb || ''} Reward +${z.reward} · ${z.leadId ? 'Case lead' : z.hotel ? 'The act boss' : z.storyId ? 'Open until solved' : `${fmtTime(z.ttl - z.t)} left`}</small>`;
     if (el._html !== html) { el.innerHTML = html; el._html = html; }
     el.classList.add('on');
   }
