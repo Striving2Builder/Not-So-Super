@@ -1,7 +1,7 @@
 // Full-screen cutscenes: a random clip (video or still) from an assets/video/<folder>/, with a caption,
 // tap/click/key to skip. The game pauses while it plays. With no clips in the folder it shows the
 // caption on its own for a moment, so the flow never depends on the files being there.
-import { mediaFolders, isImage } from './media.js';
+import { mediaFolders, isImage, keepLooping } from './media.js';
 import { UI } from './ui.js';
 import { cycle, $ } from './util.js';
 
@@ -9,14 +9,15 @@ import { cycle, $ } from './util.js';
  * @param folder    assets/video/<folder>/ to pick a clip from
  * @param src       one file to play instead of a folder (the game intro)
  * @param caption   HTML over the bottom of the screen
- * @param maxSecs   cut videos off after this long; 0 plays until the clip ends
+ * @param maxSecs   cut videos off after this long (the clip loops until then); 0: no timer
  * @param tapSkips  a tap always ends it (otherwise the first tap turns sound on)
- * @param loops     play the clip this many times through (the forced capture clip: 3)
+ * @param loops     end after the clip has played this many times through (the forced capture clip: 3)
  * @param skipTaps  taps it takes to skip (after the sound tap); a counter shows what's left
  * @param untilTap  loop the clip (or hold the still) until the player skips it: no timer, no loop count
+ * @param once      play the clip a single time and end with it (the game intro); everything else loops
  * @returns Promise that resolves when it's over
  */
-export async function playCutscene({ folder, src, caption = '', maxSecs = 12, holdSecs = 3.2, tapSkips = false, loops = 1, skipTaps = 1, untilTap = false }) {
+export async function playCutscene({ folder, src, caption = '', maxSecs = 12, holdSecs = 3.2, tapSkips = false, loops = 0, skipTaps = 1, untilTap = false, once = false }) {
   const el = $('cutscene');
   if (!el) return;
   const url = src || cycle(`clips:${folder}`, (await mediaFolders())[folder] || []) || null;
@@ -27,14 +28,14 @@ export async function playCutscene({ folder, src, caption = '', maxSecs = 12, ho
   el.classList.add('on');
   UI.open++;
   return new Promise((resolve) => {
-    let done = false, timer = null, played = 0, taps = 0;
+    let done = false, timer = null, alive = null, played = 0, lastT = 0, taps = 0;
     const end = () => {
       if (done) return;
       done = true;
-      clearTimeout(timer);
+      clearTimeout(timer); clearInterval(alive);
       removeEventListener('keydown', key, true);
       el.removeEventListener('click', onClick);
-      video.pause(); video.loop = false; video.onended = null; video.removeAttribute('src'); video.load();
+      video.pause(); video.loop = false; video.onended = video.ontimeupdate = video.onerror = null; video.removeAttribute('src'); video.load();
       img.removeAttribute('src');
       skipEl.textContent = skipText;
       el.classList.remove('on');
@@ -54,12 +55,21 @@ export async function playCutscene({ folder, src, caption = '', maxSecs = 12, ho
     left();
     if (url && !isImage(url)) {
       el.classList.remove('still');
-      video.loop = untilTap;
+      // The browser loops it (a rewind + play() from 'ended' can be refused on iOS and freeze on the
+      // last frame); a pass is counted when the playhead jumps back to the start.
+      video.loop = !once;
       video.src = url;
-      video.onended = () => { if (++played < loops) { video.currentTime = 0; video.play().catch(() => {}); } else end(); };
-      video.onerror = () => { timer = setTimeout(end, holdSecs * 1000); }; // missing file: caption only
-      video.play().catch(() => { video.muted = true; video.play().catch(() => {}); }); // sound if allowed
-      if (maxSecs > 0 && loops <= 1 && !untilTap) timer = setTimeout(end, maxSecs * 1000);
+      video.onended = () => end();
+      video.ontimeupdate = () => {
+        const t = video.currentTime;
+        if (t < lastT - 0.5 && loops > 0 && !untilTap && ++played >= loops) end();
+        lastT = t;
+      };
+      video.onerror = () => { clearInterval(alive); timer = setTimeout(end, holdSecs * 1000); }; // missing file: caption only
+      const go = () => video.play().catch(() => { video.muted = true; return video.play(); }); // sound if allowed
+      go().catch(() => {});
+      alive = setInterval(() => keepLooping(video, go), 600); // paused under it or hung on the last frame: back on
+      if (maxSecs > 0 && !loops && !untilTap) timer = setTimeout(end, maxSecs * 1000);
     } else {
       el.classList.add('still');
       if (url) img.src = url;
@@ -98,7 +108,7 @@ export async function playScreenScene({ screens, folder, caption = '', lockSecs 
   const video = el.querySelector('video');
   return new Promise((resolve) => {
     const t0 = performance.now();
-    let done = false, raf = 0;
+    let done = false, raf = 0, kick = 0;
     const elapsed = () => (performance.now() - t0) / 1000;
     const end = () => {
       if (done) return;
@@ -106,7 +116,7 @@ export async function playScreenScene({ screens, folder, caption = '', lockSecs 
       cancelAnimationFrame(raf);
       removeEventListener('keydown', key, true);
       el.removeEventListener('click', tap);
-      video.pause(); video.loop = false; video.removeAttribute('src'); video.load();
+      video.pause(); video.loop = false; video.onerror = null; video.removeAttribute('src'); video.load();
       cv.remove(); skipEl.textContent = skipText;
       el.classList.remove('on', 'bare', 'screen');
       UI.open = Math.max(0, UI.open - 1);
@@ -132,6 +142,10 @@ export async function playScreenScene({ screens, folder, caption = '', lockSecs 
       ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
       drawScreen(ctx, scr, source && source.readyState >= 2 ? source : null, 0, 0, w, h);
       const t = elapsed();
+      // paused under it or hung on the last frame: back on
+      if (clip && !failed && t - kick > 0.6) {
+        kick = t; keepLooping(video, () => video.play().catch(() => { video.muted = true; return video.play(); }).then(() => { source = video; }));
+      }
       skipEl.textContent = t < lock ? `🔒 ${Math.ceil(lock - t)}s` : 'tap to continue';
       if ((!clip || failed) && t >= holdSecs) return end();
       if (untilTap && clip && !failed) { raf = requestAnimationFrame(frame); return; }

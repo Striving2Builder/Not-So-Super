@@ -4,7 +4,7 @@
 // Green-screen clips (assets/video/ClubDance/) are keyed in the shader, so a clip shot on green
 // stands in the room's light instead of on a green card.
 import * as THREE from 'three';
-import { mediaFolders } from '../media.js';
+import { mediaFolders, keepLooping } from '../media.js';
 import { pick } from '../util.js';
 
 export class ClubVideo {
@@ -17,6 +17,7 @@ export class ClubVideo {
     this.tex.colorSpace = THREE.SRGBColorSpace;
     this.tex.minFilter = THREE.LinearFilter; this.tex.generateMipmaps = false;
     this.src = null; this.keyed = false;
+    this.manual = false; this.kickT = -1e9; // manual: a scene drives play/pause itself (the VIP dance)
     this.folders = mediaFolders();
   }
 
@@ -40,6 +41,12 @@ export class ClubVideo {
   resume() { if (this.el.src) this.el.play().catch(() => { /* the screens stay dark */ }); }
   pause() { this.el.pause(); }
   get ready() { return this.el.readyState >= 2; }
+
+  /** The screens loop: paused under it (a stall, iOS) or hung on the last frame, it's started again. */
+  keepAlive(t) {
+    if (this.manual || !this.src || t - this.kickT < 0.6) return;
+    this.kickT = t; keepLooping(this.el);
+  }
 
   dispose() {
     this.el.pause(); this.el.removeAttribute('src'); this.el.load(); this.el.remove();
@@ -117,6 +124,7 @@ void main(){
 
 /** Per frame: feed the screens the clock, whether the video has a frame yet and if it's keyed. */
 export function tickScreens(mats, video, t, flash = 0) {
+  video.keepAlive(t);
   const ready = video.ready ? 1 : 0;
   for (const m of mats) {
     const U = m.userData.screen;

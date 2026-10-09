@@ -5,7 +5,7 @@ import { drawHumanoid, pose, HERO_LOOK, npcLook, glow, portrait } from './art.js
 import { pick, shuffle, fitScene, $ } from './util.js';
 import { dialog, toast, banner } from './ui.js';
 import { sfx } from './sfx.js';
-import { mediaFolders } from './media.js';
+import { mediaFolders, keepLooping } from './media.js';
 import * as THREE from 'three';
 import { heroReady, HeroSprite } from './hero3d.js';
 
@@ -150,6 +150,9 @@ export class Captured {
   update(dt) {
     if (this.done) return;
     this.t += dt;
+    // the wall TV loops: paused under it or hung on the last frame, back on
+    const v = this.video;
+    if (v && this.t - (this.kickT || 0) > 0.6) { this.kickT = this.t; keepLooping(v, () => v.play().catch(() => { v.muted = true; return v.play(); })); }
     // The villain gloats from the wall TV now and then.
     this.tauntT = (this.tauntT ?? 3) - dt;
     if (this.tauntT <= 0 && !this.busy) {

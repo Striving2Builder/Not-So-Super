@@ -148,6 +148,7 @@ export const vipMethods = {
   danceGame() {
     return new Promise((resolve) => {
       const g = this.g, inp = g.input;
+      this.video.manual = true; // the clip plays only while she taps right
       this.video.show(DANCE.folder, { keyed: true }).then(() => this.video.el.play().catch(() => {}));
       this.video.pause();
       const view = danceView(this.video, DANCE.plate);
@@ -195,6 +196,7 @@ export const vipMethods = {
         removeEventListener('keydown', kb, true);
         document.body.classList.remove('c3-flat');
         this.sub = null;
+        this.video.manual = false;
         this.video.show('ClubDJ', { extra: ['assets/nightclub/plates/set_main.mp4'] });
         this.setupControls(); this.envHud();
         g.input.setStick(true);

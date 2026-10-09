@@ -425,7 +425,7 @@ if (game.h > game.w) $('rotate-hint').textContent = 'Tip: rotate your phone to l
 showTitle();
 requestAnimationFrame(frame);
 // Opening titles. The city is already behind it; a tap or a key skips to the title screen.
-playCutscene({ src: 'assets/Intro Video.mp4', maxSecs: 0, tapSkips: true });
+playCutscene({ src: 'assets/Intro Video.mp4', maxSecs: 0, tapSkips: true, once: true });
 // iOS killed the last visit for memory (it reloads the tab): lighter graphics from here on, once
 if (crashedLastTime() && settings.afterCrash()) setTimeout(() => toast('The browser ran out of memory last time, so graphics are now on Battery saver. You can change this in the pause menu.', 'info'), 1500);
 
