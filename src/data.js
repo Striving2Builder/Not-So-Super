@@ -93,7 +93,8 @@ export const ASYLUM = {
 // assets/video/<folders[0]>/ (falling back to the next folder) keyed into a green-screen
 // billboard still: red-light ones for fights in the vice districts, downtown ones elsewhere.
 export const BILLBOARDS = {
-  folders: ['Billboards', 'SG_Captured_Game'],
+  folders: ['Billboards', 'SG_Captured_Game'], // a lost fight
+  humiliation: 'SG_Humiliation_Game',          // she takes the deal that costs reputation
   vice: ['redlight', 'naughty', 'nightclub'],
   rld: [2, 4, 6, 8, 10].map((n) => `assets/billboards/rld/sg-mix-${String(n).padStart(2, '0')}.webp`),
   downtown: [

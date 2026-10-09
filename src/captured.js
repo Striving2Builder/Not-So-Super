@@ -105,9 +105,12 @@ export class Captured {
     const v = document.createElement('video');
     v.src = url;
     v.loop = true;
+    v.setAttribute('loop', '');
     v.playsInline = true;           // iOS: play inside the page, not fullscreen
     v.setAttribute('playsinline', '');
     v.preload = 'auto';
+    // `loop` is dropped the first time a clip with sound plays (iOS). Start it again from the end.
+    v.onended = () => { v.currentTime = 0; v.play().catch(() => { v.muted = true; v.play().catch(() => {}); }); };
     // Try with sound first (the player has tapped plenty by now); fall back to muted autoplay.
     v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
     this.video = v;

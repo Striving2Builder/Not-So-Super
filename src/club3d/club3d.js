@@ -15,7 +15,7 @@ import { hallMats, makeClubKit, buildHall, buildShow, stepTiles, buildKit } from
 import { buildRoom, buildAlley } from './rooms.js';
 import { dressHall } from './dressing.js';
 import { ClubCrowd, placeCrowd } from './crowd.js';
-import { ClubVideo, tickScreens } from './video.js';
+import { ClubVideo, showDJ, tickScreens } from './video.js';
 import { stashFromEnvelope } from '../polaroids.js';
 import { dangerMethods } from './danger.js';
 import { ClubMusic } from './music.js';
@@ -119,7 +119,7 @@ export class Club3D extends Special3D {
     for (const s of this.roomA.vip?.seats || []) people.push({ x: s.x, z: s.z, pose: 'sit', rot: 0, y: 0, fixed: true });
     people.push(...(this.extraPeople || []));
     this.crowd = new ClubCrowd(this, plan, people, { near: Q.near });
-    this.video.show('ClubDJ', { extra: ['assets/nightclub/plates/set_main.mp4'] });
+    showDJ(this.video);
   }
 
   buildLights() {

@@ -33,6 +33,10 @@ export function keepLooping(v, play = () => v.play()) {
   if (!v || !v.getAttribute('src')) return;
   const t = v.currentTime, was = lastT.get(v);
   lastT.set(v, t);
-  if (v.paused) { if (!v.ended) play().catch(() => {}); return; }
+  if (v.paused) {
+    if (v.ended && !v.loop) return; // a one-shot that's done
+    if (v.ended) v.currentTime = 0; // set to loop, but the browser let it end (iOS, a first play with sound)
+    play().catch(() => {}); return;
+  }
   if (v.loop && t === was && v.duration && t >= v.duration - 0.3) v.currentTime = 0; // hung on the last frame
 }

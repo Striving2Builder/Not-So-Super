@@ -12,7 +12,7 @@ import { playScreenScene } from '../cutscene.js';
 import { BILLBOARDS, DEALS, DISTRICTS, HERO } from '../data.js';
 import { pick, clamp } from '../util.js';
 import * as THREE from 'three';
-import { screenMat } from './video.js';
+import { screenMat, showDJ } from './video.js';
 import { INTOX_HAZE } from '../state.js';
 
 // the back-room screen's clips: the first folder with any (the dance clip until the others are filled)
@@ -93,19 +93,22 @@ export const officeMethods = {
   },
 
   /**
-   * Per frame (from stepCast): what the one shared video plays follows where she is. The office's
-   * CCTV shows her own dance once she's danced; the restroom mirror, when she's dosed, shows a
-   * hallucination (her, dancing); everywhere else the DJ loop. Plus the live CCTV feeds.
+   * Per frame (from stepCast): what the one shared video plays follows where she is. In the back
+   * office the monitors play SG_Office_Game, unless the owner still has her dance on the recorder.
+   * The restroom mirror, when she's dosed, shows a hallucination; the dark room plays its own
+   * clips; everywhere else the DJ loop. Plus the live CCTV feeds.
    */
   officeVideo() {
     const q = this.room, inOffice = q === this.plan.byKind.office;
     const halluc = q === this.plan.byKind.restroom && this.g.state.intox >= INTOX_HAZE;
     const dq = this.plan.byKind.dark, h = this.hero.position;
     const backroom = dq && (q === dq || Math.hypot(h.x - dq.door.x, h.z - dq.door.z) < 6);
-    const want = inOffice ? (!this.cctvDead && (this.envelope || []).some((c) => c.id === 'dance') ? 'dance' : 'dj') : halluc ? 'mirror' : backroom ? 'backroom' : 'dj';
+    const dance = inOffice && !this.cctvDead && (this.envelope || []).some((c) => c.id === 'dance');
+    const want = inOffice ? (dance ? 'dance' : 'office') : halluc ? 'mirror' : backroom ? 'backroom' : 'dj';
     if (want !== this.videoWant) {
       this.videoWant = want;
-      if (want === 'dj') this.video.show('ClubDJ', { extra: ['assets/nightclub/plates/set_main.mp4'] });
+      if (want === 'dj') showDJ(this.video);
+      else if (want === 'office') this.video.show(['SG_Office_Game', 'ClubDJ'], { extra: ['assets/nightclub/plates/set_main.mp4'], deal: true });
       else if (want === 'backroom') this.video.show(BACKROOM, { keyed: { ClubDance: true } });
       else this.video.show('ClubDance', { keyed: true });
       this.mirrorOn(want === 'mirror');
@@ -214,6 +217,8 @@ export const officeMethods = {
       st.addRep(-8, 'An embarrassing deal');
       st.lockouts[zone.lockKey] = 180;
       await showNewspaper({ tabloid: true, photo: 'deal', rep: -8, headline: deal.headline.replaceAll('{H}', HERO.toUpperCase()).replaceAll('{V}', B.name.toUpperCase()), sub: `Fans baffled as ${HERO} agrees to ${task.charAt(0).toLowerCase() + task.slice(1)}`, body: ['Nobody knows why the city\'s favourite heroine would do such a thing. Insiders whisper about "some photos".'] });
+      const dealVice = BILLBOARDS.vice.includes(zone.district);
+      await playScreenScene({ screens: dealVice ? BILLBOARDS.rld : BILLBOARDS.downtown, folder: BILLBOARDS.humiliation, untilTap: true, holdSecs: 4, caption: `By morning, the billboards in ${DISTRICTS[zone.district]?.name || 'the city'} are playing the deal…` });
     }
     await dialog({ speaker: B.name, text: '"Now get out of my club." Two bouncers walk you to the door.' });
     banner('THROWN OUT', 'The case stays open', '#ff3fb8');

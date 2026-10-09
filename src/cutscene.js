@@ -6,6 +6,21 @@ import { UI } from './ui.js';
 import { cycle, $ } from './util.js';
 
 /**
+ * Keep a clip repeating. The `loop` attribute is not enough: the first play of a clip with sound
+ * (iOS, and the shared cutscene element after the intro) runs to the end and stops. `ended`
+ * starts it again; if that play is blocked, it retries muted.
+ */
+function holdLoop(video) {
+  video.loop = true;
+  video.setAttribute('loop', '');
+  video.onended = () => {
+    if (!video.loop) return;
+    video.currentTime = 0;
+    video.play().catch(() => { video.muted = true; video.play().catch(() => {}); });
+  };
+}
+
+/**
  * @param folder    assets/video/<folder>/ to pick a clip from
  * @param src       one file to play instead of a folder (the game intro)
  * @param caption   HTML over the bottom of the screen
@@ -35,7 +50,7 @@ export async function playCutscene({ folder, src, caption = '', maxSecs = 12, ho
       clearTimeout(timer); clearInterval(alive);
       removeEventListener('keydown', key, true);
       el.removeEventListener('click', onClick);
-      video.pause(); video.loop = false; video.onended = video.ontimeupdate = video.onerror = null; video.removeAttribute('src'); video.load();
+      video.pause(); video.loop = false; video.removeAttribute('loop'); video.onended = video.ontimeupdate = video.onerror = null; video.removeAttribute('src'); video.load();
       img.removeAttribute('src');
       skipEl.textContent = skipText;
       el.classList.remove('on');
@@ -55,14 +70,15 @@ export async function playCutscene({ folder, src, caption = '', maxSecs = 12, ho
     left();
     if (url && !isImage(url)) {
       el.classList.remove('still');
-      // The browser loops it (a rewind + play() from 'ended' can be refused on iOS and freeze on the
-      // last frame); a pass is counted when the playhead jumps back to the start.
-      video.loop = !once;
       video.src = url;
-      video.onended = () => end();
+      if (once) { video.loop = false; video.removeAttribute('loop'); } else holdLoop(video);
+      // A pass ends with the browser wrapping it (the playhead jumps back to the start) or, when it
+      // ignored `loop` (the first play of a clip with sound, iOS), with `ended`: we start it again.
+      const pass = () => loops > 0 && !untilTap && ++played >= loops;
+      video.onended = () => { if (once || pass()) return end(); lastT = 0; video.currentTime = 0; go().catch(() => {}); };
       video.ontimeupdate = () => {
         const t = video.currentTime;
-        if (t < lastT - 0.5 && loops > 0 && !untilTap && ++played >= loops) end();
+        if (t < lastT - 0.5 && pass()) end();
         lastT = t;
       };
       video.onerror = () => { clearInterval(alive); timer = setTimeout(end, holdSecs * 1000); }; // missing file: caption only
@@ -116,7 +132,7 @@ export async function playScreenScene({ screens, folder, caption = '', lockSecs 
       cancelAnimationFrame(raf);
       removeEventListener('keydown', key, true);
       el.removeEventListener('click', tap);
-      video.pause(); video.loop = false; video.onerror = null; video.removeAttribute('src'); video.load();
+      video.pause(); video.loop = false; video.removeAttribute('loop'); video.onended = video.onerror = null; video.removeAttribute('src'); video.load();
       cv.remove(); skipEl.textContent = skipText;
       el.classList.remove('on', 'bare', 'screen');
       UI.open = Math.max(0, UI.open - 1);
@@ -129,7 +145,7 @@ export async function playScreenScene({ screens, folder, caption = '', lockSecs 
     let source = null, failed = false;
     if (clip) {
       video.src = clip;
-      video.loop = true; // a clip shorter than the lock repeats until it's served; untilTap never turns this off
+      holdLoop(video); // shorter than the lock, and an untilTap scene, both repeat; the first play included
       video.onerror = () => { source = null; failed = true; };
       video.play().then(() => { source = video; }).catch(() => { video.muted = true; video.play().then(() => { source = video; }).catch(() => {}); });
     }
@@ -150,7 +166,7 @@ export async function playScreenScene({ screens, folder, caption = '', lockSecs 
       if ((!clip || failed) && t >= holdSecs) return end();
       if (untilTap && clip && !failed) { raf = requestAnimationFrame(frame); return; }
       if ((clip && !video.loop && video.ended) || t >= Math.max(maxSecs, lock)) return end();
-      if (clip && t >= lock && lock > 0) video.loop = false; // served: let it finish on its own
+      if (clip && t >= lock && lock > 0) { video.loop = false; video.removeAttribute('loop'); } // served: let it finish on its own
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);

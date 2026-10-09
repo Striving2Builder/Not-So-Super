@@ -60,6 +60,9 @@ Drag the screen to turn the camera in 3D zones. Add `?touch=1` to the URL to tes
   - `SG_Intox_Game/`: plays in that corner while she's intoxicated (the meter is in the warning range).
   - `SG_Roof_Game/`: plays when she perches.
   - `SG_Captured_Game/`: loops on the capture-room TV (nightclubs and venues) and plays inside the green-screen billboards when she loses a street fight.
+  - `SG_Humiliation_Game/`: plays inside those same billboards after she takes a deal that costs reputation (the capture ultimatum, and the club owner's blackmail). It loops until she taps out.
+  - `SG_Office_Game/`: plays on the back-office monitors while she's in that room (the 3D nightclub). If the owner still has her dance on the recorder, that recording plays instead until she wipes it. One clip loops while she stays; the next visit deals the next clip.
+  - `SG_DJ_Game/`: plays on the main-room screens (the DJ wall and the TVs) along with the clips already in `ClubDJ/`. One of them loops while she stays on the floor.
   - `SG_Asylum_Game/`: plays inside the cell TV's green screen after she's sedated, looping until she taps out.
   - Tuning (folders, hot districts, cooldowns, clip length) is `CITY_FEED` in `src/data.js`; players can switch the feed off in the pause menu.
   - Keep each file under 100 MB (GitHub's limit); short, compressed 720p clips load fastest on phones.
