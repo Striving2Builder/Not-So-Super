@@ -15,7 +15,7 @@ import { hallMats, makeClubKit, buildHall, buildShow, stepTiles, buildKit } from
 import { buildRoom, buildAlley } from './rooms.js';
 import { dressHall } from './dressing.js';
 import { ClubCrowd, placeCrowd } from './crowd.js';
-import { ClubVideo, showDJ, tickScreens } from './video.js';
+import { ClubVideo, tickScreens } from './video.js';
 import { stashFromEnvelope } from '../polaroids.js';
 import { dangerMethods } from './danger.js';
 import { ClubMusic } from './music.js';
@@ -33,11 +33,12 @@ import { closeupMethods } from './closeup.js';
 import { undercoverMethods } from './undercover.js';
 import { quickMethods } from './quick.js';
 import { feelMethods } from './feel.js';
+import { storyMethods, DIFF } from './story.js';
+import { pressMethods } from './press.js';
 import { INTOX_HAZE } from '../state.js';
 
 const SPEED = 4.6;          // her walk (m/s); a packed crowd slows her by up to 40%
 const IDLE_FACE = 1.5;      // seconds standing still before she turns to the viewer
-const GUARD_GAIN = 0.7;     // how fast a bouncer who sees her raises the alert, vs the base zones'
 // follow camera: [pitch, distance] in the open and inside the crowd
 const CAM_OPEN = [0.7, 7.4], CAM_CROWD = [0.5, 5.0];
 
@@ -62,13 +63,16 @@ export class Club3D extends Special3D {
     const q = new URLSearchParams(location.search);
     const seed = +(q.get('club3seed') || 0) || Math.floor(Math.random() * 1e9);
     Object.assign(this, VISIT());
-    this.plan = makePlan(seed, q.get('club3room'));
-    this.exposure = 1.15; this.gradeTint = 0x05020c; this.gradeK = 0.5;
     this.startCase(zone);   // (the world is placed from the case and the event)
+    this.startStory();
+    // a story club's case brings its own venue: its main room, its name over the door
+    this.plan = makePlan(seed, q.get('club3room') || this.caseDef.room);
+    this.clubName = this.caseDef.club || zone.venue || 'the club';
+    this.exposure = 1.15; this.gradeTint = 0x05020c; this.gradeK = 0.5;
     this.pickEvent();
     // the zone is this case now (the HUD title, the commentary's captions, the front page)
     zone.theme = this.caseDef.theme || zone.theme;
-    zone.name = `${this.caseDef.title} at ${/^the /i.test(zone.venue || '') ? zone.venue : 'the ' + (zone.venue || 'club')}`;
+    zone.name = `${this.caseDef.title} at ${this.caseDef.club || /^the /i.test(this.clubName) ? this.clubName : 'the ' + this.clubName}`; // (a story club's name is its own: "at Flashpoint")
     super.enter({ zone });
     // after the base zone's reset: the camera's own state
     this.yaw = 0; this.camPD = [...CAM_OPEN]; this.camSnap = true; this.camPitch = null;
@@ -119,7 +123,7 @@ export class Club3D extends Special3D {
     for (const s of this.roomA.vip?.seats || []) people.push({ x: s.x, z: s.z, pose: 'sit', rot: 0, y: 0, fixed: true });
     people.push(...(this.extraPeople || []));
     this.crowd = new ClubCrowd(this, plan, people, { near: Q.near });
-    showDJ(this.video);
+    this.hallVideo();
   }
 
   buildLights() {
@@ -169,11 +173,13 @@ export class Club3D extends Special3D {
     $('hud-extra').innerHTML = `<div class="barlabel"><span>Guard alert</span></div><div class="bar"><i id="b-alert" class="b-alert"></i></div>
       <div class="barlabel"><span>Power</span></div><div class="bar"><i id="b-en" class="b-en"></i></div>
       <div class="barlabel" id="c3-env-l"><span>His envelope: 0</span></div>`;
+    this.storyHud();
     this.envHud?.();
   }
 
   announce() {
-    banner((this.zone.venue || 'THE CLUB').toUpperCase(), `${this.plan.name} · ${this.caseDef?.tagline || 'Work the club'}`, '#ff3fb8');
+    const hard = this.diff !== DIFF.normal ? ` · ${this.diff.name.toUpperCase()}` : '';
+    banner((this.clubName || 'THE CLUB').toUpperCase(), `${this.caseDef.club ? this.caseDef.title : this.plan.name}${hard} · ${this.caseDef?.tagline || 'Work the club'}`, '#ff3fb8');
     setTimeout(() => { if (!this.done) toast('Blend into the crowd: the bouncers can\'t pick you out of it. Hold DANCE to disappear.', 'info'); }, 1800);
   }
 
@@ -233,12 +239,13 @@ export class Club3D extends Special3D {
     this.stepCast(dt);
     this.stepChatter(dt);
     this.stepVices(dt);
+    this.stepStory(dt);
     this.stepIncidents(dt);
     const a0 = this.alert;
     this.updateGuards(dt);
     this.stepTorches(dt);
     this.stepInvestigate(dt);
-    if (this.alert > a0) this.alert = a0 + (this.alert - a0) * GUARD_GAIN; // (they're scanning a packed floor)
+    if (this.alert > a0) this.alert = a0 + (this.alert - a0) * this.diff.guardGain; // (they're scanning a packed floor)
     this.stepCoverRing(dt);
     this.stepTips();
     this.stepAlert(dt);
@@ -290,6 +297,7 @@ export class Club3D extends Special3D {
     let b = clamp((this.cover - 1) / 4, 0, 1) * (loud ? 0.35 : 1);
     if (this.undercover) b = Math.min(1, b * 1.4 + 0.15);
     if (this.g.state.intox >= INTOX_HAZE) b = Math.min(1, b + 0.15); // she fits right in
+    if (this.caseDef.highOnly && this.highEnough()) b = Math.min(1, b + 0.1); // (in the Hive, glowing is the dress code)
     return b;
   }
 
@@ -380,6 +388,7 @@ export class Club3D extends Special3D {
     if (!this.scene) return;
     this.hudObjectives();
     this.hudCast();
+    this.hudStory();
     const pr = $('prompt');
     if (this.near && !this.busy && !this.done && !this.quickOn) {
       const key = document.body.classList.contains('touch') ? 'USE' : 'E';
@@ -394,4 +403,4 @@ export class Club3D extends Special3D {
   }
 }
 
-Object.assign(Club3D.prototype, castMethods, eventMethods, powerMethods, chatterMethods, viceMethods, caseMethods, sedationMethods, vipMethods, officeMethods, brawlMethods, closeupMethods, undercoverMethods, quickMethods, feelMethods, dangerMethods);
+Object.assign(Club3D.prototype, castMethods, eventMethods, powerMethods, chatterMethods, viceMethods, caseMethods, sedationMethods, vipMethods, officeMethods, brawlMethods, closeupMethods, undercoverMethods, quickMethods, feelMethods, dangerMethods, storyMethods, pressMethods);

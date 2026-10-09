@@ -671,3 +671,29 @@ body.c3-flat #c3-tip { display: none; }
 .c3-clock { height: 8px; margin: 8px 0 2px; }
 /* the polaroid the owner slides across the desk */
 .c3-pol { display: block; width: min(44%, 170px); margin: 4px auto 8px; transform: rotate(-4deg); box-shadow: 0 6px 18px #000a; }
+/* the struggle (club3d/struggle.js): a clip of her held, full screen; turn the stick to break free */
+.c3-struggle { position: absolute; inset: 0; z-index: 59; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; overflow: hidden; }
+.c3-struggle video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.c3-struggle .st-tint { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 45%, rgba(0, 0, 0, .65)); pointer-events: none; }
+.c3-struggle.stall video { animation: st-shake .09s linear infinite; filter: saturate(.4) brightness(.75) sepia(.3) hue-rotate(-30deg); }
+.c3-struggle.stall .st-tint { background: radial-gradient(ellipse at center, rgba(255, 0, 40, .08) 35%, rgba(120, 0, 20, .7)); }
+.c3-struggle.won .st-tint { background: rgba(62, 224, 138, .25); }
+.c3-struggle.lost .st-tint { background: rgba(160, 0, 30, .45); }
+@keyframes st-shake { 0% { transform: translate(0, 0) scale(1.04); } 25% { transform: translate(-7px, 4px) scale(1.04) rotate(-.5deg); } 50% { transform: translate(6px, -5px) scale(1.04); } 75% { transform: translate(-4px, -3px) scale(1.04) rotate(.5deg); } 100% { transform: translate(5px, 5px) scale(1.04); } }
+.c3-struggle .st-top { position: absolute; left: 50%; top: calc(10px + var(--st)); transform: translateX(-50%); width: min(560px, 92vw); text-align: center; pointer-events: none; }
+.c3-struggle h2 { margin: 0; font: 400 34px/1 "Bangers", Impact, sans-serif; letter-spacing: .06em; color: #ffd84d; text-shadow: 3px 3px 0 #000, 0 0 12px #000; }
+.c3-struggle .st-text { margin-top: 4px; color: #fff; font-size: 14px; text-shadow: 0 1px 4px #000; }
+.c3-struggle .st-time { height: 8px; margin: 8px auto 0; width: 70%; background: rgba(0, 0, 0, .6); border: 2px solid #111; border-radius: 5px; overflow: hidden; }
+.c3-struggle .st-time i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #ff3a3a, #ffd84d); }
+.c3-struggle .st-pad { position: absolute; right: calc(24px + var(--sr)); bottom: calc(24px + var(--sb)); width: 120px; height: 120px; pointer-events: none; }
+.c3-struggle .st-pad svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.c3-struggle .st-track { fill: rgba(0, 0, 0, .55); stroke: rgba(255, 255, 255, .25); stroke-width: 10; }
+.c3-struggle .st-prog { fill: none; stroke: #3ee08a; stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset .08s linear; }
+.c3-struggle.stall .st-prog { stroke: #ff3a3a; }
+.c3-struggle .st-knob { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px #fff; }
+.c3-struggle .st-count { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 400 22px "Bangers", Impact, sans-serif; color: #fff; text-shadow: 2px 2px 0 #000; }
+.c3-struggle .st-hint { position: absolute; left: 50%; bottom: calc(28px + var(--sb)); transform: translateX(-50%); font: 400 26px "Bangers", Impact, sans-serif; letter-spacing: .08em; color: #fff; text-shadow: 3px 3px 0 #000; pointer-events: none; white-space: nowrap; }
+.c3-struggle.stall .st-hint { color: #ff5a6a; animation: st-shake .12s linear infinite; }
+/* the Hive's high meter: the band below the mark is "sober" (nothing opens up) */
+.c3-high { position: relative; }
+.c3-high u { position: absolute; top: -3px; bottom: -3px; width: 3px; margin-left: -1px; background: #fff; box-shadow: 0 0 4px #000; }

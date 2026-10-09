@@ -7,7 +7,9 @@
 import { playCutscene } from '../cutscene.js';
 import { mediaFolders } from '../media.js';
 import { polaroid } from '../nightclub/blackout.js';
-import { dialog, toast, qte, banner } from '../ui.js';
+import { dialog, toast, banner } from '../ui.js';
+import { struggle } from './struggle.js';
+import { CLIPS, nextClip } from './clips.js';
 import { sfx } from '../sfx.js';
 import { HERO } from '../data.js';
 import { $, fmtClock } from '../util.js';
@@ -80,10 +82,11 @@ export const sedationMethods = {
   async sedate(reason, { blackout = false } = {}) {
     if (this.done || this.sedating) return;
     this.sedating = true;
+    if (this.caseDef.clips?.trap) return this.storyTrap(reason, { blackout }); // (a story club: a trap and a struggle)
     this.sedations = (this.sedations || 0) + 1;
     this.addCard('sedated', blackout ? `${HERO}, passed out` : `${HERO}, sedated and dragged off`);
     this.setXray(false); this.setHearing(false);
-    if (this.sedations >= SEDATION.captureAt) {
+    if (this.sedations >= this.captureAt()) {
       this.done = true;
       this.g.endZone(this.zone, { outcome: 'captured', reason: `${reason} The third time, they don't let her wake up in the club: she's carried out the back.` });
       return;
@@ -98,7 +101,7 @@ export const sedationMethods = {
     await this.wake();
     this.sedating = false;
     this.busy = false;
-    const left = SEDATION.captureAt - this.sedations;
+    const left = this.captureAt() - this.sedations;
     if (left === 1) toast('One more time and they carry you out of here.', 'bad');
   },
 
@@ -126,7 +129,7 @@ export const sedationMethods = {
       this.officeOpen = true; this.openDoorOf('office');
       await dialog({ speaker: this.caseDef.boss?.name || 'The owner', text: `You wake tied to a chair in the back office. The owner is flicking through polaroids. <b>"Hold still. My best customer deserves a nice picture."</b>` });
       this.addCard('sedated', `${HERO}, tied to a chair in the office`);
-      const ok = await qte({ title: 'BREAK FREE!', text: 'The ropes are cheap. Your head is pounding.', label: 'STRAIN!', need: 12, time: 4 });
+      const ok = await struggle({ clip: nextClip(CLIPS.captive), title: 'BREAK FREE!', text: 'Tied to a chair in the office. The ropes are cheap; your head is pounding.', diff: this.diff.struggle });
       this.alert = ok ? 30 : 55;
       toast(ok ? 'The ropes snap. Everyone heard it.' : 'You tear free, loudly. The whole back corridor heard.', ok ? 'info' : 'bad');
     } else if (where === 'storage') {
@@ -142,6 +145,6 @@ export const sedationMethods = {
       st.addIntox(15);
       toast('You come to in a dark corner of the dance floor. Your head is swimming.', 'info');
     }
-    banner('YOU WAKE UP…', `${SEDATION.captureAt - this.sedations} more and you're carried out`, '#ff3fb8');
+    banner('YOU WAKE UP…', `${this.captureAt() - this.sedations} more and you're carried out`, '#ff3fb8');
   },
 };

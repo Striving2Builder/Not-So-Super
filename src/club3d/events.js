@@ -27,7 +27,8 @@ export const eventMethods = {
   /** Before the world is built: which event (if any) this visit has. ?club3event= forces one. */
   pickEvent() {
     const q = new URLSearchParams(location.search).get('club3event');
-    const id = EVENTS[q] ? q : q === 'none' ? null : Math.random() < 0.6 ? pick(Object.keys(EVENTS)) : null;
+    const pool = this.caseDef?.events || Object.keys(EVENTS); // (a story club rules some out: no paparazzi event at Flashpoint, its press never leaves)
+    const id = EVENTS[q] ? q : q === 'none' ? null : Math.random() < 0.6 ? pick(pool) : null;
     this.event = id ? { id, ...EVENTS[id], t: 0, phase: 0 } : null;
   },
 

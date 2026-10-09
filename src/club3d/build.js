@@ -210,7 +210,7 @@ export function buildHall(zn, plan, M, X, video) {
     zn.box(B.w - 0.2, 0.1, B.d - 0.3, B.x, 1.25, B.z, toon(V.accent[0], { emissive: V.accent[0], emissiveIntensity: 0.7 }), { collide: false });
     const front = tex(cnv(512, 96, (c) => {
       c.fillStyle = '#05040a'; c.fillRect(0, 0, 512, 96);
-      neonText(c, (zn.zone?.venue || 'CLUB').toUpperCase(), 256, 50, 56, hex(V.accent[0]), { maxW: 470 });
+      neonText(c, (zn.clubName || zn.zone?.venue || 'CLUB').toUpperCase(), 256, 50, 56, hex(V.accent[0]), { maxW: 470 });
     }));
     const fm = new THREE.Mesh(wallQ(B.x, 0.62, B.z + B.d / 2 + 0.02, B.w - 0.1, 1.1, 0), new THREE.MeshBasicMaterial({ map: front }));
     S.add(fm);
@@ -280,7 +280,7 @@ export function buildHall(zn, plan, M, X, video) {
     A.screens.push(tv.material);
   }
   // the venue's name, big, above the DJ wall
-  const name = (zn.zone?.venue || plan.name).toUpperCase();
+  const name = (zn.clubName || zn.zone?.venue || plan.name).toUpperCase();
   X.sign(0, Math.min(H - 0.7, (W.y ?? 0.9) + W.h + 0.75), -hd + 0.3, 0, 0.95, A.nameRect = X.atlas.add(1024, 160, (c) => { neonPath(c, '#ffe14d', 5, boltPath(c, 70, 80, 56)); neonText(c, name, 560, 84, 110, hex(V.accent[0]), { maxW: 860 }); }), V.accent[0], 0.5);
   // the Mezzanine's balcony ring (guards patrol it; the floor below stays the player's)
   if (V.balcony) {
@@ -314,7 +314,93 @@ export function buildHall(zn, plan, M, X, video) {
     zn.cyl(I.r, I.r + 0.3, 0.35, I.x, 0.17, I.z, M.black, true);
     X.glow.push(new THREE.RingGeometry(I.r + 0.25, I.r + 0.45, 40).rotateX(-Math.PI / 2).translate(I.x, 0.37, I.z), V.accent[0], 0.9);
   }
+  buildStoryHall(zn, plan, M, X, A);
   return A;
+}
+
+// ------------------------------------------------------------------ the story clubs' set pieces
+const PART_H = 3.0; // the Hive's partitions: over every head, under the camera's usual height
+
+/** The Hive's mirrored partitions, the Gilded Cage's booths and birdcages, Flashpoint's catwalk. */
+function buildStoryHall(zn, plan, M, X, A) {
+  const V = plan.V, S = zn.scene;
+  if (V.partitions) {
+    // honeycomb panels: amber hex cells over black glass, a neon edge along the top and the foot
+    const S2 = 256, cell = tex(cnv(S2, S2, (c) => {
+      c.fillStyle = '#0a0606'; c.fillRect(0, 0, S2, S2);
+      const r = 22, w = r * Math.sqrt(3);
+      for (let row = 0, y = 0; y < S2 + r; row++, y += r * 1.5) for (let x = (row % 2) * w / 2; x < S2 + w; x += w) {
+        c.beginPath();
+        for (let k = 0; k < 6; k++) { const a = Math.PI / 6 + (k * Math.PI) / 3; c.lineTo(x + Math.cos(a) * (r - 2), y + Math.sin(a) * (r - 2)); }
+        c.closePath(); c.fillStyle = Math.random() < 0.18 ? '#5a3208' : '#1c1008'; c.fill();
+        c.strokeStyle = '#ffb020'; c.globalAlpha = 0.5; c.lineWidth = 2; c.stroke(); c.globalAlpha = 1;
+      }
+    }), { repeat: true });
+    const pm = worldTile(toon(0xffffff, { map: cell, emissive: 0xffffff, emissiveMap: cell, emissiveIntensity: 0.55 }, { halftone: 0.3 }), 3);
+    for (const [x1, z1, x2, z2] of V.partitions) {
+      wallSeg(zn, x1, z1, x2, z2, PART_H, pm, M);
+      const len = Math.hypot(x2 - x1, z2 - z1), along = z1 === z2;
+      for (const y of [0.06, PART_H + 0.12]) X.glow.push(new THREE.BoxGeometry(along ? len : 0.5, 0.05, along ? 0.5 : len).translate((x1 + x2) / 2, y, (z1 + z2) / 2), y > 1 ? V.accent[0] : V.accent[1], 0.8);
+    }
+  }
+  if (V.booths) {
+    // the bidders' booths: gold-framed alcoves in the DJ wall, a velvet curtain across each
+    const gold = toon(0xc89a34, {}, { halftone: 0.3 });
+    const velvet = toon(0x7a0a22, { map: tex(cnv(128, 128, (c) => {
+      for (let x = 0; x < 128; x += 8) { const g = c.createLinearGradient(x, 0, x + 8, 0); g.addColorStop(0, '#3a0410'); g.addColorStop(0.5, '#a01838'); g.addColorStop(1, '#3a0410'); c.fillStyle = g; c.fillRect(x, 0, 8, 128); }
+    }), { repeat: true }) }, { halftone: 0.4 });
+    A.booths = [];
+    V.booths.forEach(([x, z], i) => {
+      for (const s of [-1, 1]) wallSeg(zn, x + s * 2.5, -V.hd, x + s * 2.5, z, 2.8, gold, M);
+      zn.box(5.2, 0.3, 0.3, x, 2.95, z, gold, { collide: false });
+      zn.box(4.8, 2.6, 0.12, x, 1.3, z, velvet, { wall: true });
+      X.sign(x, 3.5, z + 0.05, 0, 0.42, signRect(X, `BOOTH ${i + 1}`, '#ffc840', { w: 384, h: 100, size: 72 }), 0xffc840, 0.3);
+      X.pool(x, z + 1.2, 2, 0xffb060, 0.25);
+      A.booths.push({ x, z: z + 1.1, i });
+    });
+  }
+  if (V.cages) {
+    // gilded birdcages on plinths, a dancer in each (one is waiting empty, the door open)
+    const gold = 0xd8aa40;
+    A.cages = [];
+    V.cages.forEach(([x, z], i) => {
+      zn.cyl(1.25, 1.35, 0.6, x, 0.3, z, toon(0x2a1a08, {}, { halftone: 0.3 }), true);
+      for (const y of [0.62, 3.0]) X.prop(new THREE.TorusGeometry(1.15, 0.05, 6, 28).rotateX(Math.PI / 2).translate(x, y, z), gold);
+      X.prop(new THREE.ConeGeometry(1.2, 0.7, 16, 1, true).translate(x, 3.35, z), gold);
+      for (let k = 0; k < 14; k++) { const a = (k / 14) * TAU; if (i === 0 && k < 3) continue; X.prop(new THREE.CylinderGeometry(0.025, 0.025, 2.4, 4).translate(x + Math.cos(a) * 1.15, 1.8, z + Math.sin(a) * 1.15), gold); }
+      if (i) X.people.push({ x, z, rot: Math.PI, pose: 'dance', type: 'dress', fixed: true, y: 0.6 });
+      X.pool(x, z, 2.2, V.accent[i % 2], 0.35);
+      A.cages.push({ x, z, empty: i === 0 });
+    });
+  }
+  if (V.catwalk) {
+    const C = V.catwalk, St = V.stage, lit = toon(V.accent[1], { emissive: V.accent[1], emissiveIntensity: 0.6 });
+    const len = C.z1 - C.z0;
+    zn.box(C.w, C.h, len, C.x, C.h / 2, (C.z0 + C.z1) / 2, M.black, { collide: false });
+    zn.box(C.w - 0.3, 0.04, len, C.x, C.h + 0.02, (C.z0 + C.z1) / 2, toon(0xf2f2f2, {}, { halftone: 0.2 }), { collide: false });
+    for (const s of [-1, 1]) X.glow.push(new THREE.BoxGeometry(0.07, 0.07, len).translate(C.x + s * C.w / 2, C.h + 0.04, (C.z0 + C.z1) / 2), V.accent[1], 1);
+    // footlights along both edges
+    for (let z = C.z0 + 1; z < C.z1; z += 2) for (const s of [-1, 1]) X.bulb(C.x + s * (C.w / 2 + 0.05), C.h - 0.2, z, 0.35, 0xffffff);
+    zn.cyl(St.r, St.r + 0.1, C.h, St.x, C.h / 2, St.z, M.black, false);
+    zn.cyl(St.r - 0.1, St.r - 0.1, 0.05, St.x, C.h + 0.02, St.z, lit, false);
+    X.glow.push(new THREE.RingGeometry(St.r, St.r + 0.25, 48).rotateX(-Math.PI / 2).translate(St.x, C.h + 0.06, St.z), V.accent[0], 1);
+    // the ramp down off the far side
+    const r0 = St.z + St.r - 0.3, ramp = new THREE.Mesh(new THREE.PlaneGeometry(C.w, Math.hypot(C.ramp, C.h)), M.black);
+    ramp.rotation.x = -Math.PI / 2 + Math.atan2(C.h, C.ramp); ramp.position.set(C.x, C.h / 2, r0 + C.ramp / 2);
+    S.add(ramp); zn._static.push(ramp);
+    // the hot seat: a chair under a spotlight, a LIVE sign over it
+    A.hotSeat = { x: St.x, z: St.z - 0.6 };
+    zn.box(0.7, 0.5, 0.7, St.x, C.h + 0.25, St.z - 0.9, toon(0xf2f2f2, {}, { halftone: 0.3 }), { collide: false });
+    zn.box(0.7, 1.1, 0.12, St.x, C.h + 0.85, St.z - 1.25, toon(0xf2f2f2, {}, { halftone: 0.3 }), { collide: false });
+    X.pool(St.x, St.z, St.r + 0.5, 0xffffff, 0.35, C.h + 0.04);
+    X.sign(St.x, C.h + 3.6, St.z - 1.6, 0, 0.7, signRect(X, '● LIVE', '#ff2a4a', { w: 384, h: 110, size: 86 }), 0xff2a4a, 0.5);
+    // the press pit: a rope line, a riser of tripods
+    const P = V.press;
+    for (let x = -6; x <= 6; x += 1.5) X.prop(new THREE.CylinderGeometry(0.05, 0.08, 1.0, 6).translate(P.x + x, 0.5, P.z - 1.8), 0xc09a34);
+    X.prop(new THREE.BoxGeometry(12, 0.04, 0.04).translate(P.x, 0.92, P.z - 1.8), 0xa01030);
+    for (let x = -5; x <= 5; x += 2.5) X.prop(new THREE.CylinderGeometry(0.03, 0.03, 1.5, 4).translate(P.x + x, 0.75, P.z), 0x222222);
+    A.press = P;
+  }
 }
 
 // ------------------------------------------------------------------ the light show

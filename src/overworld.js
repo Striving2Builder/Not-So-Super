@@ -424,8 +424,12 @@ export class Overworld {
   /** A club mission plays one of the clubs' cases: label it with the one it will play. */
   clubCase(z, riskPrefix) {
     const st = this.g.state, ids = Object.keys(CLUB_CASE_LABELS), open = ids.filter((k) => !st?.cases?.[k]?.solved);
-    const id = open[0] || pick(ids), L = CLUB_CASE_LABELS[id];
-    Object.assign(z, { clubCase: id, theme: L.theme, name: `${L.name} at ${/^The /.test(z.venue) ? z.venue : 'the ' + z.venue}`, risk: riskPrefix + L.risk, blurb: L.blurb, boss: null });
+    // (a case already waiting on the map isn't offered twice while there are others to play)
+    const listed = new Set(this.zones.map((q) => q.clubCase).filter(Boolean));
+    const fresh = open.filter((k) => !listed.has(k));
+    const id = pick(fresh.length ? fresh : open.length ? open : ids), L = CLUB_CASE_LABELS[id];
+    const at = L.club || z.venue;
+    Object.assign(z, { clubCase: id, theme: L.theme, name: `${L.name} at ${L.club || /^The /.test(at) ? at : 'the ' + at}`, risk: riskPrefix + L.risk, blurb: L.blurb, boss: null });
     if (z.mode === 'special') Object.assign(z, { glyph: '★', color: '#ff3fb8' }); // (no boss: not the ☠ icon)
   }
 

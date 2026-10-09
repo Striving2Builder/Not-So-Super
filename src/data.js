@@ -226,7 +226,7 @@ export const DEALS = [
 ];
 
 // The clubs' cases as the map labels a club mission (the cases themselves: src/nightclub/cases/).
-// A club mission plays the first case she hasn't solved (any, once she's solved them all).
+// A club mission plays a case she hasn't solved, one not already on the map (any, once she's solved them all).
 export const CLUB_CASE_LABELS = {
   squirt: { name: 'Super Squirt', theme: 'drugs', risk: 'Super Squirt',
     blurb: 'Someone is pushing a new drug, Super Squirt, through the club. Find out who, and where it comes from.' },
@@ -234,6 +234,13 @@ export const CLUB_CASE_LABELS = {
     blurb: 'Councillors are being drugged and photographed in the club\'s VIP. Find out who is taking the pictures, and who is paying for them.' },
   earworm: { name: 'The Earworm', theme: 'hypnosis', risk: 'Mind control',
     blurb: 'Clubbers are walking out blank-eyed, humming a song nobody can name. Find out what the music is doing to them, and who wants it.' },
+  // the story clubs: each case has its own venue (club: the name on the map and over the DJ wall)
+  halo: { name: 'Halo', club: 'The Hive', theme: 'drugs', risk: 'Hard · Drugs',
+    blurb: 'A gold drug called Halo is all over the clubs, and the Hive only talks to people who are on it. Solve this one high.' },
+  auction: { name: 'The Auction', club: 'The Gilded Cage', theme: 'blackmail', risk: 'Blackmail',
+    blurb: 'Tonight the Gilded Cage auctions a tape of you. Find out who is selling it, who is buying, and where it goes.' },
+  flashpoint: { name: 'Flashpoint Live', club: 'Flashpoint', theme: 'extortion', risk: 'Hard · Paparazzi',
+    blurb: 'A gossip show traps celebrities on its hot seat and humiliates them live. Tonight\'s star is you. Stay out of the lenses.' },
 };
 
 // Videos for the wall TV in the capture room. Put files in assets/video/ (MP4 H.264 or WebM plays

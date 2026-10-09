@@ -12,7 +12,7 @@ import { playScreenScene } from '../cutscene.js';
 import { BILLBOARDS, DEALS, DISTRICTS, HERO } from '../data.js';
 import { pick, clamp } from '../util.js';
 import * as THREE from 'three';
-import { screenMat, showDJ } from './video.js';
+import { screenMat } from './video.js';
 import { INTOX_HAZE } from '../state.js';
 
 // the back-room screen's clips: the first folder with any (the dance clip until the others are filled)
@@ -107,7 +107,7 @@ export const officeMethods = {
     const want = inOffice ? (dance ? 'dance' : 'office') : halluc ? 'mirror' : backroom ? 'backroom' : 'dj';
     if (want !== this.videoWant) {
       this.videoWant = want;
-      if (want === 'dj') showDJ(this.video);
+      if (want === 'dj') this.hallVideo();
       else if (want === 'office') this.video.show(['SG_Office_Game', 'ClubDJ'], { extra: ['assets/nightclub/plates/set_main.mp4'], deal: true });
       else if (want === 'backroom') this.video.show(BACKROOM, { keyed: { ClubDance: true } });
       else this.video.show('ClubDance', { keyed: true });

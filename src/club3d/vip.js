@@ -12,7 +12,6 @@ import { tierOf } from '../commentary.js';
 import { HERO } from '../data.js';
 import { clamp } from '../util.js';
 import { scramble } from './cast.js';
-import { showDJ } from './video.js';
 
 // beats: a key lights every this many beats of the music; lose (more than `clean` misses) and the
 // table plays her dance back full screen, on loop, until she taps
@@ -198,7 +197,7 @@ export const vipMethods = {
         document.body.classList.remove('c3-flat');
         this.sub = null;
         this.video.manual = false;
-        showDJ(this.video);
+        this.hallVideo();
         this.setupControls(); this.envHud();
         g.input.setStick(true);
         resolve({ misses: S.misses, snap });

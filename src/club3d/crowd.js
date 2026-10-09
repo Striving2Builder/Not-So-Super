@@ -9,7 +9,7 @@
 // her down).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { floorY } from './plan.js';
+import { floorY, onCatwalk } from './plan.js';
 
 const TAU = Math.PI * 2;
 const SPACING = 0.7;      // closest two dancers stand
@@ -169,6 +169,7 @@ export function placeCrowd(plan, count, colliders, keepOut, rnd = Math.random) {
     const a = rnd() * TAU, d = Math.sqrt(rnd()) * (0.55 + 0.45 * rnd());
     const x = b[0] + Math.cos(a) * d * b[2], z = b[1] + Math.sin(a) * d * b[3];
     if (Math.abs(x) > V.hw - 1.2 || Math.abs(z) > V.hd - 1.2 || near(x, z)) continue;
+    if (onCatwalk(V, x, z, 0.5)) continue;
     if (colliders.some((c) => x > c.minX - 0.45 && x < c.maxX + 0.45 && z > c.minZ - 0.45 && z < c.maxZ + 0.45)) continue;
     if (keepOut.some(([kx, kz, kr]) => Math.hypot(x - kx, z - kz) < kr)) continue;
     const p = { x, z };

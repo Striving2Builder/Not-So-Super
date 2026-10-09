@@ -10,6 +10,7 @@ import { quality } from '../settings.js';
 import { npcLook } from '../art.js';
 import { clamp, $ } from '../util.js';
 import { comic } from '../comic.js';
+import { toast } from '../ui.js';
 import { DOOR_W, floorY } from './plan.js';
 import { INTOX_HAZE } from '../state.js';
 
@@ -37,7 +38,7 @@ export const castMethods = {
     this.doorOpen = true;
     this.npcs = [];
     // ---- bouncers
-    const routes = V.routes.slice(0, 4 + (this.event?.id === 'redcarpet' ? 1 : 0));
+    const routes = V.routes.slice(0, 4 + (this.diff?.guards || 0) + (this.event?.id === 'redcarpet' ? 1 : 0));
     routes.forEach((r) => this.addBouncer(r));
     for (const r of V.balconyRoutes || []) this.addBouncer(r, { y: V.balcony.y + 0.15 });
     // the VIP rope's bouncer paces in front of the door
@@ -124,6 +125,7 @@ export const castMethods = {
       this.addInter(alley.fight, 'Stop the courier', () => !this.fought?.alley, () => this.startBrawl('alley'));
     }
     this.placeEvent?.();
+    this.placeStory();
     this.makeTalkHud();
   },
 
@@ -218,7 +220,7 @@ export const castMethods = {
         const who = tk.npcs[Math.random() < 0.5 ? 0 : 1], text = fragment(this.book.clue(...tk.def.clue.split(':'))?.text || '…');
         const s = () => this.screenOf(who.position, 2.1);
         const p = s();
-        if (p) comic.say(this.hearing || d < TALK_R ? (st.intox >= INTOX_HAZE ? scramble(text, 0.35) : text) : '…', p.x, p.y, { kind: 'speech', ms: 2200, anchor: s });
+        if (p) comic.say(this.hearing || d < TALK_R ? (this.garbled() ? scramble(text, 0.35) : text) : '…', p.x, p.y, { kind: 'speech', ms: 2200, anchor: s });
       }
       const a = tk.done ? 0.15 : 0.6 + 0.3 * Math.sin(this.t * 3);
       tk.ring.material.opacity = a; tk.inner.material.opacity = tk.done ? 0.02 : 0.06 + 0.04 * Math.sin(this.t * 3);
@@ -241,11 +243,11 @@ export const castMethods = {
 
   async talkerDone(tk) {
     const st = this.g.state, c = this.book.clue(...tk.def.clue.split(':'));
-    if (st.intox >= INTOX_HAZE) {
-      // too high to make sense of it: she has to come back sober
+    if (this.garbled()) {
+      // too high to make sense of it: she has to come back sober (in the Hive: sober, they talk in code)
       tk.ev = 40;
       this.say(tk.pos, scramble(c.text.replace(/<[^>]+>/g, '').slice(0, 90), 0.4), { ms: 3400, speaker: tk.def.who });
-      toast('You\'re too far gone to make sense of it. Come back when your head\'s clearer.', 'bad');
+      toast(this.caseDef.highOnly ? `Sober, it's all code to you. They only talk straight to someone on ${this.caseDef.drugName}.` : 'You\'re too far gone to make sense of it. Come back when your head\'s clearer.', 'bad');
       return;
     }
     tk.done = true;

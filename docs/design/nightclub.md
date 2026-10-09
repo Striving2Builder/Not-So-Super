@@ -468,5 +468,32 @@ map labels each club mission with the case it will play: the first one she hasn'
   ~137 calls / 169k tris / 246 dancers.
 - **Not yet / next:** the iPad test (fps, memory: the club scene stays in GPU memory under a
   back-room fight; the second pass adds fill: mist, reflection, glow), the user's dance clips and
-  sedation clip, tuning on a device (guard gain `GUARD_GAIN`, Talker rates in cast.js, the drop),
+  sedation clip, tuning on a device (guard gain `DIFF` in story.js, Talker rates in cast.js, the drop),
   then delete v2 (`src/nightclub/` minus the cases and close-up data, which v3 shares).
+
+## The story clubs (2026-10-09)
+Three more venues, each its own main room built for one case, never rolled at random for another
+(`story: true` in plan.js; the case's `room` forces it, `club` names the venue on the map and over
+the DJ wall). The map offers any unsolved case not already on it (`clubCase` in overworld.js).
+
+| Club | Layout (`plan.js`) | Case (`src/nightclub/cases/`) | Difficulty | Its own rule |
+|---|---|---|---|---|
+| **The Hive** | `hive`: a honeycomb of dance pockets behind 3 m mirrored partitions (they block sight) | **Halo** (`halo.js`): Queen Bee's drones push a gold drug cooked at Helix Labs; ships from Pier 9 | Hard | `highOnly`: sober, every search spot / door / Talker / rumour is shut ("needs Halo"); high (≥30) it opens up and speech comes through clear. Keep the high up (it wears off) without passing out |
+| **The Gilded Cage** | `gilded`: a gold ballroom, 4 bidders' booths behind velvet in the DJ wall, gilded birdcages with dancers | **The Auction** (`auction.js`): the Curator auctions a tape of Supergirl; Lionel Strand bids; the heliport at 4 AM | Normal | the booths: X-ray peeks unseen, pulling the curtain is a clue + alert (booth 4's photographer adds a card) |
+| **Flashpoint** | `runway`: a raised catwalk from the DJ to a round stage (the hot seat), press pit, four wall screens | **Flashpoint Live** (`flashpoint.js`): Roxy Flash humiliates celebrities live; Dmitri Volk's book; the Grand Arena finale | Hard | the press (`press.js`): 5 photographers hunt her; a clear shot = scandal (×2.2 on the catwalk, ×0.45 in Kara's coat, none hidden in the crowd); 100 = the hot seat |
+
+- **Difficulty** (`DIFF` in story.js): normal = the original clubs (guard gain 0.7, carried out on
+  the 3rd capture, 4 bouncer routes). Hard: guard gain 1.0, carried out on the 2nd, 2 more routes,
+  the hard struggle.
+- **The struggle** (`struggle.js`): a clip of her held plays full screen; the player turns the
+  stick round and round (touch: circle a thumb anywhere; keys: roll WASD/arrows). Only turning one
+  way counts. Stop and she slumps: the clip freezes and shakes red, the grip slips back. Normal 3
+  turns / hard 5 in 12 s. Used for every capture in a story club (`storyTrap`: free = back on her
+  feet, alert 45, doesn't count; not free = a humiliation clip "on every screen", a card, −4 rep,
+  wake somewhere else, and counts toward being carried out), Flashpoint's hot seat, and the office
+  wake-up in every club (it replaced the tap-mash QTE there).
+- **Clips** (`clips.js`): the story clubs play only the clips listed there, each checked frame by
+  frame at full size (in costume, nothing sexual). The other files in those folders are not played
+  by this code; the rest of the game's wiring of the folders is unchanged.
+- **Test params:** `&club3case=halo|auction|flashpoint` (brings its own room); harness flows
+  `struggle`, `gate` (halo), `booths` (auction), `hotseat` (flashpoint).

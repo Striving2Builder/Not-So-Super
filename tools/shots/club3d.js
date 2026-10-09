@@ -200,6 +200,18 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
       return out;
     });
     await flow('sedate', '&club3room=rave&club3seed=7&club3event=none&club3wake=vip', async (V) => {
+      // (a story club: every capture is a struggle; lose them all and she's carried out)
+      if (await V.page.evaluate(() => !!window.__game.mode.caseDef.clips?.trap)) {
+        for (let i = 0; i < 3 && await V.page.evaluate(() => window.__game.modeName === 'club3'); i++) {
+          await V.page.evaluate(() => window.__game.mode.foundOut('A bouncer clocks you.'));
+          await V.page.waitForFunction(() => window.__struggle || window.__game.modeName !== 'club3', null, { timeout: 20000 });
+          await V.page.evaluate(() => window.__struggle?.lose());
+          await V.through(() => window.__game.modeName !== 'club3' || (!window.__game.mode.sedating && !document.querySelector('#modal-root .modal-back') && !document.querySelector('#cutscene.on')), 60000);
+        }
+        await V.through(() => window.__game.modeName === 'captured', 60000);
+        await V.shot('flow_sedate_captured');
+        return { story: true, mode: await V.page.evaluate(() => window.__game.modeName) };
+      }
       await V.page.evaluate(() => window.__game.mode.foundOut('A bouncer clocks you.'));
       await V.page.waitForFunction(() => document.querySelector('#cutscene.on'), null, { timeout: 20000 });
       await V.page.waitForTimeout(1000); await V.shot('flow_sedate_clip');
@@ -262,6 +274,68 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
       await V.page.evaluate(() => { const m = window.__game.mode; m.grace = 0; const gd = m.guards.find((g) => !g.high && g !== m.ropeGuard), p = gd.mesh.position; m.hero.position.set(p.x + Math.sin(gd.mesh.rotation.y) * 4, 0, p.z + Math.cos(gd.mesh.rotation.y) * 4); m.camSnap = true; });
       await V.page.waitForTimeout(900); await V.shot('flow_quick_seen');
       return { open, closed, clues: await V.page.evaluate(() => window.__game.mode.book.count), tip: await V.page.evaluate(() => !!document.querySelector('#c3-tip.on')) };
+    });
+    // ---- the struggle (the office wake-up everywhere; every capture in a story club)
+    await flow('struggle', '&club3seed=7&club3event=none&club3wake=office', async (V) => {
+      const story = await V.page.evaluate(() => !!window.__game.mode.caseDef.clips?.trap);
+      if (story) await V.page.evaluate(() => { const m = window.__game.mode; m.run(() => m.sedate('A bouncer clocks you.')); });
+      else {
+        await V.page.evaluate(() => window.__game.mode.foundOut('A bouncer clocks you.'));
+        await V.through(() => !!document.querySelector('.c3-struggle'), 40000);
+      }
+      await V.page.waitForFunction(() => document.querySelector('.c3-struggle') && window.__struggle, null, { timeout: 20000 });
+      const trace = [];
+      for (let i = 0; i < 6; i++) { await V.page.waitForTimeout(250); trace.push(await V.page.evaluate(() => window.__struggle ? window.__struggle.state() : document.querySelector('.c3-struggle')?.className || 'gone')); }
+      const idle = trace[trace.length - 1];
+      if (!idle?.stalled) return { story, trace };
+      await V.shot('flow_struggle_stalled');
+      // turn the "stick": circles with a thumb on the screen
+      await V.page.mouse.move(W / 2 + 60, H / 2); await V.page.mouse.down();
+      for (let i = 0; i <= 40; i++) { const a = (i / 20) * Math.PI * 2; await V.page.mouse.move(W / 2 + Math.cos(a) * 60, H / 2 + Math.sin(a) * 60); }
+      const turning = await V.page.evaluate(() => window.__struggle?.state() || 'over');
+      await V.shot('flow_struggle_turning');
+      await V.page.mouse.up();
+      await V.page.evaluate(() => window.__struggle?.win());
+      await V.through(() => { const m = window.__game.mode; return !document.querySelector('.c3-struggle') && !m.sedating && !m.busy && !document.querySelector('#modal-root .modal-back'); }, 30000);
+      const after = await V.page.evaluate(() => ({ sedations: window.__game.mode.sedations, alert: Math.round(window.__game.mode.alert) }));
+      // and losing one: the humiliation clip, then she comes to somewhere else
+      let lost = null;
+      if (story) {
+        await V.page.evaluate(() => { const m = window.__game.mode; m.run(() => m.sedate('Again.')); });
+        await V.page.waitForFunction(() => window.__struggle, null, { timeout: 20000 });
+        await V.page.evaluate(() => window.__struggle.lose());
+        await V.page.waitForFunction(() => document.querySelector('#cutscene.on'), null, { timeout: 20000 });
+        await V.page.waitForTimeout(1200); await V.shot('flow_struggle_shame');
+        await V.through(() => { const m = window.__game.mode; return !m.sedating && !document.querySelector('#modal-root .modal-back') && !document.querySelector('#cutscene.on'); }, 40000);
+        lost = await V.page.evaluate(() => ({ sedations: window.__game.mode.sedations, mode: window.__game.modeName }));
+      }
+      return { story, idle, turning, after, lost };
+    });
+    // ---- the story clubs' own systems
+    if (CASE === 'flashpoint') await flow('hotseat', '&club3seed=7&club3event=none', async (V) => {
+      await V.page.evaluate(() => { const m = window.__game.mode; m.grace = 0; m.scandal = 99.5; const p = m.pap[0].m.position; m.hero.position.set(p.x, 0, p.z - 3); m.camSnap = true; });
+      await V.page.waitForFunction(() => window.__struggle, null, { timeout: 20000 });
+      await V.page.waitForTimeout(800); await V.shot('flow_hotseat');
+      await V.page.evaluate(() => window.__struggle.win());
+      await V.through(() => !window.__game.mode.sedating && !document.querySelector('.c3-struggle'), 20000);
+      await V.page.waitForTimeout(800); await V.shot('flow_hotseat_free');
+      return await V.page.evaluate(() => { const m = window.__game.mode; return { scandal: Math.round(m.scandal), y: +m.hero.position.y.toFixed(2), pap: m.pap.length }; });
+    });
+    if (CASE === 'auction') await flow('booths', '&club3seed=7&club3event=none', async (V) => {
+      await V.page.evaluate(() => { const m = window.__game.mode, b = m.hallA.booths[2]; m.hero.position.set(b.x, 0, b.z); m.camSnap = true; m.setXray(true); m.run(() => m.peekBooth(b, m.caseDef.booths[2])); });
+      await V.page.waitForTimeout(900); await V.shot('flow_booth_xray');
+      await V.through(() => !document.querySelector('#modal-root .modal-back') && !window.__game.mode.busy, 8000);
+      await V.page.evaluate(() => { const m = window.__game.mode, b = m.hallA.booths[3]; m.setXray(false); m.hero.position.set(b.x, 0, b.z); m.camSnap = true; m.run(() => m.peekBooth(b, m.caseDef.booths[3])); });
+      await V.page.waitForTimeout(600); await V.page.keyboard.press('1');
+      await V.through(() => !document.querySelector('#modal-root .modal-back') && !window.__game.mode.busy, 8000);
+      return await V.page.evaluate(() => { const m = window.__game.mode; return { found: [...m.book.found], alert: Math.round(m.alert), env: m.envelope.map((c) => c.id) }; });
+    });
+    if (CASE === 'halo') await flow('gate', '&club3seed=7&club3event=none', async (V) => {
+      const sober = await V.page.evaluate(() => { const m = window.__game.mode, o = m.inter.find((q) => q.base === 'Search the DJ booth'); m.g.state.intox = 0; o.act(); return { label: (m.stepStory(0), o.label), sub: !!m.sub }; });
+      await V.page.waitForTimeout(400);
+      const high = await V.page.evaluate(() => { const m = window.__game.mode, o = m.inter.find((q) => q.base === 'Search the DJ booth'); m.g.state.intox = 50; m.stepStory(0); o.act(); return { label: o.label, sub: !!m.sub, garbled: m.garbled() }; });
+      await V.page.waitForTimeout(900); await V.shot('flow_gate_high');
+      return { sober, high };
     });
     for (const ev of ['redcarpet', 'paparazzi', 'raid', 'firealarm', 'fight']) {
       await flow(`ev_${ev}`, `&club3room=rave&club3seed=7&club3event=${ev}`, async (V) => {
