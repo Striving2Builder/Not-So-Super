@@ -1,11 +1,11 @@
 // Video in the club's 3D set. One shared <video> (iOS: muted, inline, one decoder) feeds a
 // VideoTexture that every screen samples: the DJ's LED wall, the TVs ("DJ cam"), the office CCTV.
-// What it plays follows where she is: a DJ loop in the hall, her recorded dance on the CCTV.
+// What it plays follows where she is: a DJ loop in the hall (ClubDJ and SG_DJ_Game), her recorded dance on the CCTV.
 // Green-screen clips (assets/video/ClubDance/) are keyed in the shader, so a clip shot on green
 // stands in the room's light instead of on a green card.
 import * as THREE from 'three';
 import { mediaFolders } from '../media.js';
-import { pick } from '../util.js';
+import { cycle, pick } from '../util.js';
 
 export class ClubVideo {
   constructor() {
@@ -22,15 +22,21 @@ export class ClubVideo {
 
   /**
    * Play a clip from the first of `folders` that has any (or `extra` urls); keyed = it's on green
-   * (or { folder: true } for the folders that are).
+   * (or { folder: true } for the folders that are). `mix` plays every folder together (the main
+   * room: ClubDJ plus SG_DJ_Game). `deal` rotates through the pool, one clip each time she's sent
+   * back to it, instead of keeping the same loop.
    */
-  async show(folders, { keyed = false, extra = [], pin = null } = {}) {
+  async show(folders, { keyed = false, extra = [], pin = null, deal = false, mix = false } = {}) {
     const all = await this.folders;
-    const from = [].concat(folders).find((f) => (all[f] || []).length);
-    const list = (from && all[from]) || [];
-    if (typeof keyed === 'object') keyed = !!keyed[from];
-    const url = pin && list.includes(pin) ? pin : this.src && list.includes(this.src) ? this.src : pick(list.concat(extra));
-    this.keyed = keyed;
+    const names = [].concat(folders);
+    const from = names.find((f) => (all[f] || []).length);
+    const list = mix ? names.flatMap((f) => all[f] || []) : ((from && all[from]) || []);
+    let useKey = typeof keyed === 'object' ? !!(from && keyed[from]) : !!keyed;
+    const pool = list.length ? list : extra;
+    const url = pin && pool.includes(pin) ? pin : !deal && this.src && pool.includes(this.src) ? this.src : (deal ? cycle(`club:${mix ? names.join('+') : (from || 'extra')}`, pool) : pick(pool));
+    // sg_dance_01 is shot on green. The other ClubDance clips are full scenes, so keying them punches out the neon.
+    if (useKey && url && /\/ClubDance\//.test(url) && !/sg_dance_01/i.test(url)) useKey = false;
+    this.keyed = useKey;
     if (!url || url === this.src) { this.resume(); return; }
     this.src = url;
     this.el.src = url;
@@ -45,6 +51,12 @@ export class ClubVideo {
     this.el.pause(); this.el.removeAttribute('src'); this.el.load(); this.el.remove();
     this.tex.dispose();
   }
+}
+
+/** The main room's screens: the existing DJ loops, plus every clip in SG_DJ_Game. */
+export const DJ_CLIPS = ['ClubDJ', 'SG_DJ_Game'];
+export function showDJ(video) {
+  return video.show(DJ_CLIPS, { extra: ['assets/nightclub/plates/set_main.mp4'], mix: true });
 }
 
 /**

@@ -231,6 +231,11 @@ async function ultimatum(zone, villain) {
       sub: `Fans baffled as ${HERO} agrees to ${task.charAt(0).toLowerCase() + task.slice(1)}`,
       body: [`Nobody knows why the city's favorite heroine would do such a thing. Insiders whisper about "some kind of deal."`, `Meanwhile, ${zone.lockKey} owners across the city report a strange lack of superheroines on the premises.`],
     });
+    const vice = BILLBOARDS.vice.includes(zone.district);
+    await playScreenScene({
+      screens: vice ? BILLBOARDS.rld : BILLBOARDS.downtown, folder: BILLBOARDS.humiliation, untilTap: true, holdSecs: 4,
+      caption: `By morning, every billboard in ${DISTRICTS[zone.district]?.name || 'the city'} is playing the deal…`,
+    });
     toast(`You can't dive into ${zone.lockKey} zones for 3:00`, 'bad');
   }
 }
