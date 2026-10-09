@@ -29,6 +29,7 @@ export class GameState {
     this.photosLost = 0;    // polaroids of her in a club owner's safe (src/polaroids.js)
     this.stashVenue = null; // …which club
     this.stash = null;      // his deadline once he's holding enough: { t, venue, x, y, district }
+    this.act = null;        // the story so far (src/act/act.js)
   }
 
   get rank() {
@@ -91,7 +92,7 @@ export class GameState {
 
   save() {
     try {
-      localStorage.setItem(KEY, JSON.stringify({ seed: this.seed, rep: this.rep, stats: this.stats, clock: this.clock, lockouts: this.lockouts, leads: this.leads, leadsDone: this.leadsDone, cases: this.cases, photosLost: this.photosLost, stashVenue: this.stashVenue, stash: this.stash }));
+      localStorage.setItem(KEY, JSON.stringify({ seed: this.seed, rep: this.rep, stats: this.stats, clock: this.clock, lockouts: this.lockouts, leads: this.leads, leadsDone: this.leadsDone, cases: this.cases, photosLost: this.photosLost, stashVenue: this.stashVenue, stash: this.stash, act: this.act, storyClubs: this.storyClubs }));
     } catch (e) { /* storage unavailable (private mode etc.) */ }
   }
 
@@ -105,6 +106,7 @@ export class GameState {
       s.clock = d.clock ?? s.clock;
       s.lockouts = d.lockouts || {};
       s.leads = d.leads || []; s.leadsDone = d.leadsDone || []; s.cases = d.cases || {}; s.photosLost = d.photosLost || 0; s.stashVenue = d.stashVenue || null; s.stash = d.stash || null;
+      s.act = d.act || null; if (d.storyClubs) s.storyClubs = d.storyClubs;
       return s;
     } catch (e) { return null; }
   }

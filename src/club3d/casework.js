@@ -88,6 +88,7 @@ export const caseMethods = {
     banner('CASE SOLVED', 'Now get out: the exit, or the skylight', '#39ff6a');
     const where = (fresh.length ? fresh : leads).map((l) => `<div class="item"><b>${l.name}</b> · ${l.reward} REP<br>${l.blurb}</div>`).join('');
     await dialog({ title: how === 'confession' ? 'He folds' : 'Case solved', text: `${d.solvedText || ''} The distribution points are marked on your map:<div class="list">${where}</div><span class="hint">Get out with it: walk out the front, or fly out through the skylight over the dance floor.</span>` });
+    await this.g.act?.onCaseSolved(d.id); // the act: this case's lieutenant is unmasked
     this.alert = Math.max(this.alert, 35); // they know now
   },
 

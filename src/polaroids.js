@@ -43,7 +43,7 @@ function load(make) {
 }
 
 /** One frame of a clip (muted, inline), at a random point; null if the device won't give one. */
-async function frameOf(url) {
+export async function frameOf(url) {
   const v = document.createElement('video');
   v.muted = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.preload = 'auto';
   const ok = await load(() => { v.src = url; return v; });
@@ -164,7 +164,8 @@ async function sell(ow, st) {
 // ------------------------------------------------------------------ strays (rep below zero)
 function stepStrays(ow, st, dt) {
   const strays = ow.zones.filter((z) => z.polaroid);
-  if (st.rep >= 0) { ow.strayT = rand(...STRAYS.every) * 0.5; return; }
+  const act = ow.g.act?.straysOn() ? ow.g.act : null; // the act's frame-up: they turn up whatever her reputation, most of them fakes
+  if (st.rep >= 0 && !act) { ow.strayT = rand(...STRAYS.every) * 0.5; return; }
   ow.strayT = (ow.strayT ?? rand(...STRAYS.every) * 0.5) - dt * (st.rep < -50 ? 1.6 : 1);
   if (ow.strayT > 0 || strays.length >= STRAYS.max) return;
   ow.strayT = rand(...STRAYS.every);
@@ -176,6 +177,7 @@ function stepStrays(ow, st, dt) {
   if (!cands.length) return;
   const b = pick(cands);
   const z = { uid: ow.uid++, kind: 'polaroid', polaroid: true, district: b.d, t: 0, x: b.x0 + LOT / 2, y: b.y0 + LOT / 2, ttl: STRAYS.ttl, name: 'A polaroid of you', color: '#fff2c0', glyph: '📷', risk: 'Your secrets', reward: STRAYS.grab, lockKey: 'Polaroids', where: pick(WHERE), blurb: 'One of the club\'s polaroids of you is loose in the city. Grab it before somebody posts it.' };
+  if (act) Object.assign(z, { fake: act.strayFake(), name: 'A Polaroid of "you"', blurb: 'A Polaroid of "you" is loose in the city. Is it really you? Grab it before somebody posts it.' });
   ow.zones.push(z);
   toast(`📷 A polaroid of you turned up in ${DISTRICTS[b.d]?.name || 'the city'}. Get it before it goes online!`, 'bad');
 }
@@ -185,6 +187,7 @@ export async function grabPolaroid(ow, z) {
   const st = ow.g.state;
   ow.removeZone(z);
   sfx.pickup();
+  if (ow.g.act?.straysOn()) return ow.g.act.callPolaroid(z); // the act: Supergirl or Impostor?
   const pic = await makePolaroid();
   await dialog({ title: 'Got it', text: `${imgTag(pic)}It was ${z.where}. Nobody's posted it. Yet.` });
   st.addRep(STRAYS.grab, 'Got a polaroid back');

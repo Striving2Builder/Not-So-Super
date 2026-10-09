@@ -135,6 +135,8 @@ export const VENUES = {
   'Velvet Lounge':     { districts: ['naughty', 'redlight', 'nightclub'], themes: ['blackmail', 'hypnosis', 'intoxication', 'extortion'], vice: true, kind: 'premade', club: 'stripclub', bg: '#07050a', floor: '#2a1d22', wall: '#3a1a22', lights: [0xff3fb8, 0x9d4dff, 0xffc890] },
   'Ravenmoor Asylum':  { districts: ['suburb', 'farm', 'lair'], themes: [], vice: false, kind: 'asylum', asylum: true, bg: '#0a0d0c', floor: '#5a6660', wall: '#c8cfc4', lights: [0xdff5e8, 0xc8f0ff, 0xfff4d8] },
   'Underground Lair':  { districts: ['lair'], themes: ['mindcontrol', 'hypnosis', 'weapons', 'trafficking'], vice: true, kind: 'lair', bg: '#030805', floor: '#1a201c', wall: '#2a322c', lights: [0x39ff6a, 0xa0ff39, 0x39ffd0] },
+  // The act bosses' hotel (src/act/, src/hotel/): opened by the act, never rolled at random.
+  'Slutty Little Red Mini Skirt': { districts: ['lair'], themes: [], vice: true, kind: 'hotel', hotel: true, bg: '#07030a', floor: '#2a1420', wall: '#3a1a2a', lights: [0x39ff6a, 0xc050ff, 0xff2a5a] },
 };
 
 export const THEMES = {

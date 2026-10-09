@@ -26,6 +26,7 @@ import { settings, quality, autoTune, HERO_SKIN_LABELS } from './settings.js';
 import { perfHud } from './perfhud.js';
 import { gfxLost, crashedLastTime } from './gfx.js';
 import { BUILD } from './version.js';
+import { Act } from './act/act.js';
 
 loadHero();
 loadEnemies(); // guard and boss models for the 3D zones (procedural stand-ins until they arrive)
@@ -46,6 +47,7 @@ game.modes = {
   club3: new Club3D(game),
 };
 game.overworld = game.modes.overworld;
+game.act = new Act(game); // the story (docs/design/act1.md)
 game.commentary = new Commentary(game);
 window.__game = game; // handy for debugging from the console
 
@@ -150,6 +152,13 @@ game.endZone = async (zone, res) => {
   const st = game.state;
   game.overworld.removeZone(zone);
   if (res.outcome === 'captured') { await captureFlow(zone, res.reason); return; }
+  if (res.outcome === 'win' && zone.hotel) { // the act's boss: its own ending
+    await game.act.complete();
+    st.save();
+    game.setMode('overworld', { returnFrom: zone });
+    game.commentary.onZoneEnd('win');
+    return;
+  }
   if (res.outcome === 'win') {
     if (zone.leadId) { st.leads = st.leads.filter((l) => l.id !== zone.leadId); st.leadsDone.push(zone.leadId); } // a case lead, closed
     st.addRep(res.rep, 'Saved the day');
@@ -157,6 +166,7 @@ game.endZone = async (zone, res) => {
     if (zone.mode === 'investigate' || zone.mode === 'nightcase' || zone.mode === 'asylum') st.stats.cases++;
     if (zone.mode === 'special') st.stats.specials++;
     await showNewspaper({ ...victoryPaper(zone, res), rep: res.rep });
+    await game.act.onZoneWin(zone); // the act's goals (and a club case's lieutenant, if not unmasked in the club)
   } else if (res.outcome === 'lose') {
     st.addRep(res.rep, 'Mission failed');
     await dialog({ title: 'Mission failed', text: res.text || 'The crooks got away this time.' });
@@ -302,6 +312,7 @@ async function pauseMenu() {
       { label: `Graphics: ${settings.graphicsLabel}`, note: 'Battery saver: 30 fps, lighter clubs', value: 'g' },
       { label: `City feed videos: ${settings.cityFeed ? 'ON' : 'OFF'}`, note: 'Clips in the minimap corner', value: 'f' },
       { label: `Hero: ${HERO_SKIN_LABELS[settings.hero]}`, note: settings.hero === HERO_SKIN ? 'Supergirl / Classic / Ponytail costume' : 'Reload the page to change costume', value: 'v' },
+      ...(st.act || game.modeName === 'overworld' ? [{ label: 'Act board', note: 'Act 1: The Puzzle Maker', value: 'b' }] : []),
       { label: 'How to play', value: 'h' },
       ...(inMission ? [{ label: 'Abort mission', note: '−3 reputation', value: 'a', cls: 'bad' }] : []),
       ...(game.modeName === 'overworld' ? [{ label: 'Save & quit to title', value: 'q' }] : []),
@@ -313,6 +324,7 @@ async function pauseMenu() {
   if (v === 'f') { if (!settings.toggleCityFeed()) game.overworld.feed.stop(); return pauseMenu(); }
   if (v === 'v') { settings.cycleHero(); return pauseMenu(); }
   if (v === 'h') { await dialog({ title: 'How to play', text: HOWTO }); return pauseMenu(); }
+  if (v === 'b') { await game.act.openBoard(); return pauseMenu(); }
   if (v === 'a' && game.mode.abort) game.mode.abort();
   if (v === 'q') { st.save(); showTitle(); }
 }

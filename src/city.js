@@ -112,6 +112,11 @@ export class City {
   }
 
   buildBlocks() {
+    // the Villains' Lair block nearest its seed always holds the big building: the act's hotel tower
+    // (the district's landmark, landmarks3d.js) stands on it in every city
+    const ls = this.seeds.find((s) => s.type === 'lair'), dl = (b) => Math.hypot(b.bx + 0.5 - ls.x, b.by + 0.5 - ls.y);
+    const hotel = ls && this.blocks.filter((b) => b.d === 'lair' && !b.river).sort((a, b) => dl(a) - dl(b))[0];
+    if (hotel) hotel.hotel = true;
     for (const blk of this.blocks) {
       if (blk.river) { blk.flats.push({ t: 'rect', x: blk.x0, y: blk.y0, w: LOT, h: LOT, c: RIVER, river: true }); continue; }
       const r = new RNG((hash2(blk.bx, blk.by, this.seed + 7) * 4294967296) >>> 0);
@@ -361,7 +366,7 @@ const GEN = {
     const { x0, y0 } = blk;
     blk.flats.push({ t: 'rect', x: x0 + 4, y: y0 + 4, w: LOT - 8, h: LOT - 8, c: '#1e241f' });
     blk.flats.push({ t: 'hazard', x: x0 + 8, y: y0 + 8, w: LOT - 16, h: LOT - 16 });
-    if (r.chance(0.5)) {
+    if (!blk.hotel && r.chance(0.5)) {
       blk.b.push({ kind: 'round', x: x0 + LOT / 2, y: y0 + LOT / 2, rad: 48, h: 34, col: '#2a322c', dome: true, neon: '#39ff6a' });
       blk.b.push({ kind: 'box', x: x0 + 20, y: y0 + 20, w: 8, d: 8, h: 150, col: '#3a3a3a', antenna: true });
     } else {

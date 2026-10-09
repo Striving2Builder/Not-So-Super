@@ -102,17 +102,19 @@ export async function playCutscene({ folder, src, caption = '', maxSecs = 12, ho
  * and the flow carries on.
  * @param screens  still URLs to pick from (see greenscreen.js)
  * @param folder   assets/video/<folder>/ for the clip, or a list (the first folder with clips wins)
+ * @param clipUrl  one clip to play instead of a folder's
+ * @param image    a still (canvas or image) to show on the screen instead of a clip
  * @returns Promise that resolves when it's over
  */
-export async function playScreenScene({ screens, folder, caption = '', lockSecs = 0, maxSecs = 60, holdSecs = 3.5, untilTap = false }) {
+export async function playScreenScene({ screens, folder, clipUrl = null, image = null, caption = '', lockSecs = 0, maxSecs = 60, holdSecs = 3.5, untilTap = false }) {
   const el = $('cutscene');
   if (!el || !screens || !screens.length) return;
   const [{ loadScreen, drawScreen }, folders] = await Promise.all([import('./greenscreen.js'), mediaFolders()]);
   const scr = await loadScreen(cycle(`screens:${screens[0].replace(/[^/]*$/, '')}`, screens));
   if (!scr) return;
-  const pool = [].concat(folder).map((f) => (folders[f] || []).filter((u) => !isImage(u))).find((l) => l.length) || [];
+  const pool = [].concat(folder || []).map((f) => (folders[f] || []).filter((u) => !isImage(u))).find((l) => l.length) || [];
   const url = pool;
-  const clip = cycle(`clips:${[].concat(folder).join(',')}`, url) || null;
+  const clip = image ? null : clipUrl || cycle(`clips:${[].concat(folder || []).join(',')}`, url) || null;
   const lock = clip ? lockSecs : 0;
   const cv = document.createElement('canvas');
   cv.className = 'cs-screen';
@@ -156,13 +158,14 @@ export async function playScreenScene({ screens, folder, caption = '', lockSecs 
       const ctx = cv.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
-      drawScreen(ctx, scr, source && source.readyState >= 2 ? source : null, 0, 0, w, h);
+      drawScreen(ctx, scr, image || (source && source.readyState >= 2 ? source : null), 0, 0, w, h);
       const t = elapsed();
       // paused under it or hung on the last frame: back on
       if (clip && !failed && t - kick > 0.6) {
         kick = t; keepLooping(video, () => video.play().catch(() => { video.muted = true; return video.play(); }).then(() => { source = video; }));
       }
       skipEl.textContent = t < lock ? `🔒 ${Math.ceil(lock - t)}s` : 'tap to continue';
+      if (image) { if (!untilTap && t >= maxSecs) return end(); raf = requestAnimationFrame(frame); return; }
       if ((!clip || failed) && t >= holdSecs) return end();
       if (untilTap && clip && !failed) { raf = requestAnimationFrame(frame); return; }
       if ((clip && !video.loop && video.ended) || t >= Math.max(maxSecs, lock)) return end();
