@@ -489,7 +489,9 @@ the DJ wall). The map offers any unsolved case not already on it (`clubCase` in 
   stick round and round (touch: circle a thumb anywhere; keys: roll WASD/arrows). Only turning one
   way counts. Stop and she slumps: the clip freezes and shakes red, the grip slips back. Normal 3
   turns / hard 5 in 12 s. Used for every capture in a story club (`storyTrap`: free = back on her
-  feet, alert 45, doesn't count; not free = a humiliation clip "on every screen", a card, −4 rep,
+  feet where she was, and she throws them off (`shakeOff`, `SHAKE` in story.js: bouncers within 9 m
+  go down for 7 s, alert and scandal to 0, 6 s where nobody can pick her out, so she can get into
+  the crowd; before 2026-10-10 the bouncers who caught her caught her again at once), doesn't count; not free = a humiliation clip "on every screen", a card, −4 rep,
   wake somewhere else, and counts toward being carried out), Flashpoint's hot seat, and the office
   wake-up in every club (it replaced the tap-mash QTE there).
 - **Clips** (`clips.js`): the story clubs play only the clips listed there, each checked frame by

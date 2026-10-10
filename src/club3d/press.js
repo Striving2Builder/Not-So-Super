@@ -88,7 +88,7 @@ export const pressMethods = {
     const S = this.hallA.hotSeat || { x: 0, z: 0 };
     this.hero.position.set(S.x, 0, S.z + 0.4); this.hero.rotation.y = 0; this.camSnap = true;
     toast('"THERE SHE IS!" Roxy\'s crew grabs her out of the crowd.', 'bad');
-    await this.storyTrap('The cameras have her.');
-    this.scandal = 30;
+    const free = await this.storyTrap('The cameras have her.');
+    this.scandal = free ? 0 : 30;
   },
 };

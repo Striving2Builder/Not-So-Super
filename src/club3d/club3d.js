@@ -311,6 +311,7 @@ export class Club3D extends Special3D {
 
   /** Guards' sight goes through this: hidden in the crowd, or blinded by the strobe, they don't see her. */
   clearLOS(a, b) {
+    if (this.escapeT > 0) return false; // (she just threw them off: nobody can pick her out for a moment)
     if (this.strobe > 0 || this.blend >= (this.isTorch(a) ? 0.98 : 0.75) || this.event?.id === 'raid' && this.event.phase === 1) return false;
     // the VIP's rope bouncer is a gatekeeper, not an alarm: only someone in the VIP without leave alerts him
     if (this.ropeGuard && a === this.ropeGuard.mesh.position && !(this.room === this.plan.byKind.vip && !this.vipIn)) return false;
@@ -406,7 +407,7 @@ export class Club3D extends Special3D {
     } else pr.classList.remove('on');
     this.g.input.setButton('interact', { lit: !!this.near });
     this.g.input.setButton('dance', { toggled: this.dancing });
-    const sub = [this.dropHint(), this.blend >= 0.75 ? 'Hidden in the crowd' : this.blend > 0.3 ? 'In the crowd' : '', this.hearing && 'SUPER-HEARING', this.xray && 'X-RAY', this.dvision > 0 && 'DRUG-VISION'].filter(Boolean).join(' · ');
+    const sub = [this.escapeT > 0 && `SHAKE THEM OFF ${Math.ceil(this.escapeT)}`, this.dropHint(), this.blend >= 0.75 ? 'Hidden in the crowd' : this.blend > 0.3 ? 'In the crowd' : '', this.hearing && 'SUPER-HEARING', this.xray && 'X-RAY', this.dvision > 0 && 'DRUG-VISION'].filter(Boolean).join(' · ');
     $('hud-sub').textContent = sub || (this.room ? this.room.name : this.plan.name);
   }
 }

@@ -27,6 +27,11 @@ const TRAPS = {
   flashpoint: { title: 'THE HOT SEAT', text: 'Strapped into the chair under the lights. Two million people are watching.', shame: 'FLASHPOINT LIVE: the whole city is watching…' },
 };
 const TRAP_DEFAULT = { title: 'BREAK FREE!', text: 'They\'ve got her held tight.', shame: 'The club watches it on every screen…' };
+// breaking free: she throws off whoever had hold of her. Bouncers within `r` metres go down for
+// `daze` seconds; for `cover` seconds nobody (bouncers, paparazzi) can pick her out, so she can get
+// into the crowd. Without this the bouncers who caught her were still staring at her and she was
+// caught again the moment the struggle ended.
+export const SHAKE = { r: 9, daze: 7, cover: 6 };
 // the USE spots a sober hero can still work in the Hive: the ways to get high, the fights, the way out
 const SOBER_OK = /^(Order at the bar|Fly out|Check the first stall|Take the shot-off|Change into|Kick in|Take on|Stop the courier|Read the glowing)/;
 
@@ -34,7 +39,7 @@ export const storyMethods = {
   /** From enter(), once the case is known: its difficulty. */
   startStory() {
     this.diff = DIFF[this.caseDef.difficulty] || DIFF.normal;
-    this.scandal = 0; this.wallT = 20;
+    this.scandal = 0; this.wallT = 20; this.escapeT = 0;
   },
 
   captureAt() { return this.diff?.captureAt ?? 3; },
@@ -92,6 +97,7 @@ export const storyMethods = {
       for (const o of this.inter) if (o.gated) o.label = ok ? o.base : `${o.base} · needs ${d.drugName}`;
       if (ok && !this._highOnce) { this._highOnce = true; banner('THE HIVE OPENS UP', `${d.drugName} hits: now they'll talk to you`, '#ffb020'); }
     }
+    this.stepShake(dt);
     if (d.press) this.stepPress?.(dt);
     // the screens move on to the next clip now and then (the same clip all night is a dead screen)
     if (d.clips?.wall && this.videoWant === 'dj') {
@@ -135,12 +141,11 @@ export const storyMethods = {
     await clipsReady;
     const free = await struggle({ clip: nextClip(d.clips?.trap || CLIPS.captive), title: T.title, text: `${reason} ${T.text}`, diff: this.diff.struggle });
     if (free) {
-      this.alert = Math.max(this.alert, 45);
-      this.stunT = 0.8;
-      this.heroClip('getUp', 1.4);
-      banner('FREE!', 'Everyone saw that. Move.', '#3ee08a');
+      this.shakeOff();
+      this.heroClip('getUp', 1.0);
+      banner('FREE!', `They're down. Get into the crowd: ${SHAKE.cover}s`, '#3ee08a');
       this.sedating = false; this.busy = false;
-      return;
+      return true;
     }
     this.sedations = (this.sedations || 0) + 1;
     this.addCard('sedated', blackout ? `${HERO}, passed out` : `${HERO}, caught and held`);
@@ -154,6 +159,40 @@ export const storyMethods = {
     await this.wake();
     this.sedating = false; this.busy = false;
     if (this.captureAt() - this.sedations === 1) toast('One more time and they carry you out of here.', 'bad');
+    return false;
+  },
+
+  /** She broke free: the bouncers round her go down, everyone loses her for a few seconds (SHAKE). */
+  shakeOff() {
+    const h = this.hero.position;
+    this.alert = 0; this.escapeT = SHAKE.cover; this.scandal = 0;
+    const st = this.g.state;
+    st.intox = Math.min(st.intox, 80); // (a blackout she fought off mustn't take her down again the next frame)
+    this.crowd?.shove(h.x, h.z, 4, 1);
+    sfx.hit();
+    for (const gd of this.guards) {
+      if (gd.ko) continue;
+      // whoever was coming to look forgets where she went
+      if (gd.inv) { gd.route = gd.inv.saved.route; gd.wp = gd.inv.saved.wp; gd.inv = null; }
+      gd.lastSeen = null; gd.look = 0;
+      const m = gd.mesh;
+      if (gd.high || Math.hypot(m.position.x - h.x, m.position.z - h.z) > SHAKE.r) continue;
+      gd.ko = true; gd.dazed = this.t + SHAKE.daze; gd.cone.visible = false;
+      if (m.enemy) m.enemy.knockDown();
+      else { gd.y0 = m.position.y; m.rotation.x = -Math.PI / 2; m.position.y = gd.y0 + 0.15; }
+    }
+  },
+
+  /** The cover running out; dazed bouncers getting back up (and back on their rounds). */
+  stepShake(dt) {
+    if (this.escapeT > 0) this.escapeT = Math.max(0, this.escapeT - dt);
+    for (const gd of this.guards) {
+      if (!gd.dazed || this.t < gd.dazed) continue;
+      gd.dazed = 0; gd.ko = false; gd.look = 0; gd.cone.visible = !gd.away;
+      const m = gd.mesh, E = m.enemy;
+      if (E) { E.down = false; E.root.rotation.x = 0; E.root.position.y = E.floorY ?? 0; }
+      else { m.rotation.x = 0; m.position.y = gd.y0 ?? 0; }
+    }
   },
 
   /** The Gilded Cage's booths: X-ray sees through the velvet unseen; pulling it back, somebody sees you. */
