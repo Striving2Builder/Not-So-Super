@@ -8,13 +8,13 @@
 // the screens play it to the room.
 // Same shape as squirt.js: keys "<room kind>:<object id>", `cat` for the owner's confrontation
 // (deal = who runs the show, supply = who bankrolls it, drop = where the finale goes out).
-import { CLIPS } from '../../club3d/clips.js';
+import { CLIPS, joinClips } from '../../club3d/clips.js';
 
 export const FLASHPOINT = {
   id: 'flashpoint', title: 'Flashpoint Live', tagline: 'Stay out of the lenses. Find who runs the show.', theme: 'extortion',
   club: 'Flashpoint', room: 'runway', difficulty: 'hard',
   press: { n: 5, rate: 16, catwalk: 2.2, range: 8, fov: 0.9 },
-  clips: { wall: [...CLIPS.shame, ...CLIPS.press], trap: CLIPS.captive, shame: CLIPS.shame },
+  clips: { wall: joinClips('shame', 'press'), trap: CLIPS.captive, shame: CLIPS.shame },
   events: ['redcarpet', 'raid', 'firealarm', 'fight'],
   need: 8,
   rep: 40,

@@ -9,7 +9,7 @@ import { mediaFolders } from '../media.js';
 import { polaroid } from '../nightclub/blackout.js';
 import { dialog, toast, banner } from '../ui.js';
 import { struggle } from './struggle.js';
-import { CLIPS, nextClip } from './clips.js';
+import { CLIPS, clipsReady, nextClip } from './clips.js';
 import { sfx } from '../sfx.js';
 import { HERO } from '../data.js';
 import { $, fmtClock } from '../util.js';
@@ -129,6 +129,7 @@ export const sedationMethods = {
       this.officeOpen = true; this.openDoorOf('office');
       await dialog({ speaker: this.caseDef.boss?.name || 'The owner', text: `You wake tied to a chair in the back office. The owner is flicking through polaroids. <b>"Hold still. My best customer deserves a nice picture."</b>` });
       this.addCard('sedated', `${HERO}, tied to a chair in the office`);
+      await clipsReady;
       const ok = await struggle({ clip: nextClip(CLIPS.captive), title: 'BREAK FREE!', text: 'Tied to a chair in the office. The ropes are cheap; your head is pounding.', diff: this.diff.struggle });
       this.alert = ok ? 30 : 55;
       toast(ok ? 'The ropes snap. Everyone heard it.' : 'You tear free, loudly. The whole back corridor heard.', ok ? 'info' : 'bad');

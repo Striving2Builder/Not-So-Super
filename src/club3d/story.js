@@ -5,7 +5,7 @@
 // rule (highOnly: nothing in there opens up to a sober hero); the Gilded Cage's bidders' booths;
 // the screens playing the case's clips. Flashpoint's paparazzi live in press.js.
 import { struggle, STRUGGLE } from './struggle.js';
-import { CLIPS, nextClip } from './clips.js';
+import { CLIPS, clipsReady, nextClip } from './clips.js';
 import { showDJ } from './video.js';
 import { playCutscene } from '../cutscene.js';
 import { dialog, toast, banner } from '../ui.js';
@@ -53,9 +53,15 @@ export const storyMethods = {
 
   /** The hall's screens: the case's clips in a story club, the DJ loops everywhere else. */
   hallVideo() {
+    const go = () => {
+      const W = this.caseDef?.clips?.wall;
+      if (W?.length) return this.video.show([], { extra: W, deal: true });
+      return showDJ(this.video);
+    };
+    // the manifest arrives a moment after the module loads; switch onto the full wall once it has
     const W = this.caseDef?.clips?.wall;
-    if (W?.length) return this.video.show([], { extra: W, deal: true });
-    return showDJ(this.video);
+    if (W && !W.length) clipsReady.then(() => { if (!this.done && (!this.videoWant || this.videoWant === 'dj')) go(); });
+    return go();
   },
 
   /** From placeGameplay: the booths, the press, the Hive's gate on every USE spot. */
@@ -126,6 +132,7 @@ export const storyMethods = {
     if (this.heroModel) this.heroModel.play('defeated', { fade: 0.2 });
     sfx.trap();
     this.music.update(1, true);
+    await clipsReady;
     const free = await struggle({ clip: nextClip(d.clips?.trap || CLIPS.captive), title: T.title, text: `${reason} ${T.text}`, diff: this.diff.struggle });
     if (free) {
       this.alert = Math.max(this.alert, 45);

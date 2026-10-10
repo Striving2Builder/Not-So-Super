@@ -6,12 +6,12 @@
 // behind a curtain (X-ray: unseen; by hand: someone notices).
 // Same shape as squirt.js: keys "<room kind>:<object id>", `cat` for the owner's confrontation
 // (deal = who sells, supply = who buys, drop = where the tape goes), `v3` = 3D club only.
-import { CLIPS } from '../../club3d/clips.js';
+import { CLIPS, joinClips } from '../../club3d/clips.js';
 
 export const AUCTION = {
   id: 'auction', title: 'The Auction', tagline: 'Tonight\'s lot #1 is you. Stop the sale.', theme: 'blackmail',
   club: 'The Gilded Cage', room: 'gilded', difficulty: 'normal',
-  clips: { wall: [...CLIPS.shame, ...CLIPS.captive], trap: CLIPS.captive, shame: CLIPS.shame },
+  clips: { wall: joinClips('shame', 'captive'), trap: CLIPS.captive, shame: CLIPS.shame },
   events: ['redcarpet', 'paparazzi', 'raid', 'fight'],
   need: 8,
   rep: 30,

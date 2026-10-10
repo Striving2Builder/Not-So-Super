@@ -19,7 +19,7 @@ import { ballroomMethods } from './ballroom.js';
 import { ACT1, SEALS, EXPERIMENTS } from '../act/act1.js';
 import { spotCall, fakeStrength } from '../act/spot.js';
 import { struggle } from '../club3d/struggle.js';
-import { CLIPS, nextClip } from '../club3d/clips.js';
+import { CLIPS, clipsReady, nextClip } from '../club3d/clips.js';
 import { playCutscene } from '../cutscene.js';
 import { dialog, toast, banner, flash } from '../ui.js';
 import { sfx } from '../sfx.js';
@@ -345,7 +345,7 @@ export class HotelZone extends ClubZone {
     }
     // reading the room: a line of story, and in the Screening Rooms the film itself
     this.addInter(spot, wing === 'screening' ? 'Watch the screen' : wing === 'switchboard' ? 'Listen in on the phones' : 'Look around', () => true, async () => {
-      if (wing === 'screening') { await playCutscene({ src: nextClip(CLIPS.press), maxSecs: 9, caption: 'The film on the screen: you, on a loop.' }); return; }
+      if (wing === 'screening') { await clipsReady; await playCutscene({ src: nextClip(CLIPS.press), maxSecs: 9, caption: 'The film on the screen: you, on a loop.' }); return; }
       await dialog({ title: `Room ${r.num}`, text: wing === 'switchboard' ? `${look}<br><br>${pick(SWITCHBOARD)}` : look });
     });
   }
@@ -406,6 +406,7 @@ export class HotelZone extends ClubZone {
   /** The struggle over a held clip. Free: back on her feet. Not: the alarm, and Kell comes for her. */
   async trap({ title, text }) {
     sfx.trap(); flash('#ff3fb8');
+    await clipsReady;
     const free = await struggle({ clip: nextClip(CLIPS.captive), title, text, diff: this.sensT > 0 ? 'hard' : 'normal' });
     if (free) { sfx.win(); banner('FREE!', '', '#3ee08a'); this.grace = this.t + 1.2; return true; }
     sfx.alarm();
@@ -459,6 +460,7 @@ export class HotelZone extends ClubZone {
     this.g.state.intox = Math.min(this.g.state.intox, 60); // (passed out: she doesn't wake up passing out again)
     await new Promise((r) => setTimeout(r, 900));
     if (this.g.mode !== this) return;
+    await clipsReady;
     await playCutscene({ src: nextClip(CLIPS.captive), maxSecs: 10, caption: 'Kryptonite. Everything goes green… then nothing.' });
     if (this.g.mode !== this) return;
     this.wakeInRoom();

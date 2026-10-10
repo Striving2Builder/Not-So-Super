@@ -1,7 +1,7 @@
 // The LIVE feed in the club (docs/design/nightclub.md "Look and feel"): while she's intoxicated
 // (INTOX_HAZE, where the club's own effects start) the corner panel goes live with her, high, one
 // clip after another for as long as it lasts, and closes when she sobers up. The clips are the
-// checked ones from SG_Intox_Game (clips.js CLIPS.high), not the whole folder.
+// every clip in SG_Intox_Game (clips.js CLIPS.high).
 import { CLIPS } from './clips.js';
 import { INTOX_HAZE } from '../state.js';
 import { rand } from '../util.js';
