@@ -290,6 +290,11 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     await V.page.waitForTimeout(2000);
     await V.through(() => !document.querySelector('#modal-root .modal-back'), 8000);
     await V.shot('ballroom_fight');
+    // the emitters down, the takedown, the act's ending
+    await V.page.evaluate(() => { const m = window.__game.mode; for (const em of m.ball.emitters) { em.on = false; em.crystal.visible = false; } m.takedown(); });
+    const ended = await V.through(() => window.__game.modeName === 'overworld' && window.__game.state.act.done && !document.querySelector('#modal-root .modal-back'), 40000);
+    await V.shot('act_complete');
+    report.ballroomEnd = { ended, done: await V.page.evaluate(() => window.__game.state.act.done), hotelZone: await V.page.evaluate(() => window.__game.overworld.zones.some((z) => z.hotel)) };
     return V;
   });
 
