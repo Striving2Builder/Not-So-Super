@@ -61,7 +61,10 @@ export class GameState {
 
   locked(key) { return this.lockouts[key] || 0; }
 
-  /** @param vice {active:boolean, where?:string, rate?:number} — where the heroine is right now. */
+  /**
+   * @param vice {active:boolean, where?:string, rate?:number, drain?:boolean} — where the heroine is
+   * right now. drain: false where the meters don't cost reputation (a club case has its own costs).
+   */
   tick(dt, vice) {
     this.time += dt;
     this.clock = (this.clock + dt * 4) % 1440;
@@ -73,6 +76,7 @@ export class GameState {
     else this.vice = Math.max(0, this.vice - dt * 1.2);
     this.intox = Math.max(0, this.intox - dt * 0.7);
 
+    if (vice && vice.drain === false) return;
     let rate = 0;
     if (this.vice >= VICE_LIMIT) rate += 0.5;
     if (this.intox >= INTOX_LIMIT) rate += 0.35;

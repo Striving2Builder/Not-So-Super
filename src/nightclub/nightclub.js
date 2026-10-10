@@ -56,7 +56,7 @@ export class Nightclub {
       { id: 'leave', label: 'LEAVE', key: '⌫', slot: 2 },
     ]);
     this.hudPhotos();
-    g.vice = { active: false };
+    g.vice = { active: false, drain: false };
     banner(this.club.name.toUpperCase(), this.case.def.tagline, '#ff3fb8');
   }
 

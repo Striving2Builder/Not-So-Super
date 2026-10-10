@@ -193,7 +193,7 @@ export class Club3D extends Special3D {
     if (this.done || !this.scene) return;
     const g = this.g, inp = g.input, st = g.state, h = this.hero, plan = this.plan;
     this.t += dt; this.frameDt = dt;
-    g.vice = { active: true, where: this.zone.venue, rate: 1.2 };
+    g.vice = { active: false, drain: false }; // (no tabloid drain on a case: the club has its own costs)
     const B = (this.B = this.music.beat(this.t)); // (the lights and the crowd move with the track that's playing)
     this.room = roomAt(plan, h.position.x, h.position.z);
     this.stepEvents(dt);
