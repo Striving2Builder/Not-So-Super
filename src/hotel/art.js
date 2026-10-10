@@ -4,7 +4,7 @@
 // Wardrobe wing. Pure canvas: no files beyond the frames and the costume pictures.
 import * as THREE from 'three';
 import { toon } from '../look3d.js';
-import { CLIPS } from '../club3d/clips.js';
+import { CLIPS, clipsReady } from '../club3d/clips.js';
 import { frameOf } from '../polaroids.js';
 import { impostorize } from '../act/spot.js';
 import { pick, rand, shuffle } from '../util.js';
@@ -162,11 +162,13 @@ export function posterCanvas(frame, fake, k = 1) {
 }
 
 let framePool = null;
-/** A few frames from the hand-checked clips (club3d/clips.js), shared by every poster this visit. */
+/** A few frames from every activity folder (club3d/clips.js), shared by every poster this visit. */
 export function posterFrames(n = 5) {
   if (framePool) return framePool;
-  const urls = shuffle([...CLIPS.captive, ...CLIPS.press, ...CLIPS.high, ...CLIPS.shame]).slice(0, n);
-  framePool = Promise.all(urls.map((u) => frameOf(u).catch(() => null))).then((l) => l.filter(Boolean));
+  framePool = clipsReady.then(() => {
+    const urls = shuffle([...CLIPS.captive, ...CLIPS.press, ...CLIPS.high, ...CLIPS.shame]).slice(0, n);
+    return Promise.all(urls.map((u) => frameOf(u).catch(() => null))).then((l) => l.filter(Boolean));
+  });
   framePool.then((l) => { if (!l.length) framePool = null; }); // (offline / blocked: try again next visit)
   return framePool;
 }

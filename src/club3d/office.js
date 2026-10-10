@@ -15,8 +15,8 @@ import * as THREE from 'three';
 import { screenMat } from './video.js';
 import { INTOX_HAZE } from '../state.js';
 
-// the back-room screen's clips: the first folder with any (the dance clip until the others are filled)
-const BACKROOM = ['ClubBackroom', 'RDL', 'ClubDance'];
+// Dark-room screens: every clip in these folders (ClubDance only if both are still empty).
+const BACKROOM = ['ClubBackroom', 'SG_RLD_Game'];
 const STOLEN = new Set(['pill', 'drunk', 'sedated', 'fans', 'paparazzi', 'couch', 'photos']); // what the safe holds
 
 export const officeMethods = {
@@ -109,7 +109,7 @@ export const officeMethods = {
       this.videoWant = want;
       if (want === 'dj') this.hallVideo();
       else if (want === 'office') this.video.show(['SG_Office_Game', 'ClubDJ'], { extra: ['assets/nightclub/plates/set_main.mp4'], deal: true });
-      else if (want === 'backroom') this.video.show(BACKROOM, { keyed: { ClubDance: true } });
+      else if (want === 'backroom') this.video.show(BACKROOM, { mix: true, deal: true }).then(() => { if (!this.video.src) this.video.show('ClubDance', { keyed: true, deal: true }); });
       else this.video.show('ClubDance', { keyed: true });
       this.mirrorOn(want === 'mirror');
     }

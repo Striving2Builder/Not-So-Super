@@ -28,7 +28,7 @@ import { perfHud } from './perfhud.js';
 import { gfxLost, crashedLastTime } from './gfx.js';
 import { BUILD } from './version.js';
 import { Act } from './act/act.js';
-import { CLIPS, nextClip } from './club3d/clips.js';
+import { CLIPS, clipsReady, nextClip } from './club3d/clips.js';
 
 loadHero();
 loadEnemies(); // guard and boss models for the 3D zones (procedural stand-ins until they arrive)
@@ -217,6 +217,7 @@ game.endCapture = async (zone, escaped, villain) => {
 };
 
 async function ultimatum(zone, villain) {
+  await clipsReady;
   const st = game.state;
   const deal = pick(DEALS);
   const task = deal.task.replaceAll('{V}', villain);
@@ -236,7 +237,7 @@ async function ultimatum(zone, villain) {
       sub: `Villain ${villain} leaks video of the caped crusader tied to a chair`,
       body: [`The grainy clip, sent anonymously to every newsroom in the city, shows ${HERO} slumped in a chair beside a glowing green rock.`, `"Some hero," scoffed one commuter. City Hall declined to comment.`],
     });
-    // the footage itself, on the billboards (the checked captive clips: clips.js), until she taps
+    // the footage itself, on the billboards (every clip in the captured folder), until she taps
     const vice = BILLBOARDS.vice.includes(zone.district);
     await playScreenScene({
       screens: vice ? BILLBOARDS.rld : BILLBOARDS.downtown, clipUrl: nextClip(CLIPS.captive), untilTap: true, holdSecs: 4,

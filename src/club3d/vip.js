@@ -26,11 +26,11 @@ const SIZE = new THREE.Vector2();
 function danceView(video, plateUrl) {
   const plate = new THREE.TextureLoader().load(plateUrl);
   plate.colorSpace = THREE.SRGBColorSpace;
-  const U = { vid: { value: video.tex }, plate: { value: plate }, viewA: { value: 1 }, vidA: { value: 9 / 16 }, plateA: { value: 3.375 }, ready: { value: 0 } };
+  const U = { vid: { value: video.tex }, plate: { value: plate }, viewA: { value: 1 }, vidA: { value: 9 / 16 }, plateA: { value: 3.375 }, ready: { value: 0 }, keyed: { value: 1 } };
   const mat = new THREE.ShaderMaterial({
     uniforms: U, depthTest: false, depthWrite: false,
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
-    fragmentShader: `uniform sampler2D vid, plate; uniform float viewA, vidA, plateA, ready; varying vec2 vUv;
+    fragmentShader: `uniform sampler2D vid, plate; uniform float viewA, vidA, plateA, ready, keyed; varying vec2 vUv;
 void main(){
   vec2 pu = vUv - 0.5;
   if (viewA > plateA) pu.y *= plateA / viewA; else pu.x *= viewA / plateA;
@@ -42,8 +42,8 @@ void main(){
   if (vu.x >= 0.0 && vu.x <= 1.0 && vu.y >= 0.0 && vu.y <= 1.0) {
     vec3 v = texture2D(vid, vu).rgb;
     float g = v.g - max(v.r, v.b);
-    float a = (1.0 - smoothstep(0.06, 0.2, g)) * ready;
-    v.g = min(v.g, max(v.r, v.b) * 1.05);
+    float a = (1.0 - smoothstep(0.06, 0.2, g) * keyed) * ready;
+    v.g = mix(v.g, min(v.g, max(v.r, v.b) * 1.05), keyed);
     c = mix(c, v, a);
   }
   gl_FragColor = vec4(c, 1.0);
@@ -62,6 +62,7 @@ void main(){
       const el = video.el;
       U.ready.value = el.readyState >= 2 ? 1 : 0;
       if (el.videoWidth) U.vidA.value = el.videoWidth / el.videoHeight;
+      U.keyed.value = /sg_dance_01/i.test(el.currentSrc || el.src || '') ? 1 : 0; // only that one is shot on green; the other ClubDance clips are full scenes
       if (plate.image?.width) U.plateA.value = plate.image.width / plate.image.height;
       U.viewA.value = v.w / v.h;
       const size = r.getSize(SIZE);
@@ -149,7 +150,7 @@ export const vipMethods = {
     return new Promise((resolve) => {
       const g = this.g, inp = g.input;
       this.video.manual = true; // the clip plays only while she taps right
-      this.video.show(DANCE.folder, { keyed: true }).then(() => this.video.el.play().catch(() => {}));
+      this.video.show(DANCE.folder, { keyed: true, deal: true }).then(() => this.video.el.play().catch(() => {}));
       this.video.pause();
       const view = danceView(this.video, DANCE.plate);
       const S = { t: 0, played: 0, misses: 0, lit: -1, litT: 0, hitWin: false, pauseT: 0.6, flash: 0, hits: 0 };

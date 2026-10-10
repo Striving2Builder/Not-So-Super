@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { GUARD_RANGE, GUARD_FOV } from '../zonekit.js';
 import { LIEUTENANTS, MASQ, LOCKS, HECKLES, ACT1 } from '../act/act1.js';
 import { struggle } from '../club3d/struggle.js';
-import { CLIPS, nextClip } from '../club3d/clips.js';
+import { CLIPS, clipsReady, nextClip } from '../club3d/clips.js';
 import { dialog, toast, banner, flash } from '../ui.js';
 import { comic } from '../comic.js';
 import { sfx } from '../sfx.js';
@@ -93,6 +93,7 @@ export const ballroomMethods = {
     sfx.lose();
     const s = this.screenOf(g.mesh.position, 2.1);
     if (s) comic.say('Wrong piece, sweetheart!', s.x, s.y, { kind: 'shout', speaker: 'GUEST' });
+    await clipsReady;
     const free = await struggle({ clip: nextClip(CLIPS.captive), title: 'WRONG GUEST!', text: 'He grabs your wrists and the crowd closes in. Somewhere, the Puzzle Maker is laughing.', diff: this.sensT > 0 ? 'hard' : 'normal' });
     if (free) { banner('FREE!', 'Back into the crowd', '#3ee08a'); this.grace = this.t + 2; return; }
     await this.stageCapture('The crowd hands you up onto the stage.');
@@ -223,6 +224,7 @@ export const ballroomMethods = {
       this.heckle(HECKLES[tier]);
       await new Promise((r) => setTimeout(r, 1700));
       if (this.g.mode !== this) return;
+      await clipsReady;
       const free = await struggle({ clip: nextClip(CLIPS.shame), title: b.loops > 1 ? `ON STAGE · ${b.loops}` : 'ON STAGE', text: `${b.loops === 1 ? reason + ' ' : ''}"${pick(HECKLES[tier])}" The whole room is watching.`, diff: 'hard' });
       if (this.g.mode !== this) return;
       if (free) break;

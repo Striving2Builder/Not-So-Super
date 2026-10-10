@@ -78,8 +78,8 @@ export const ASYLUM = {
   venue: 'Ravenmoor Asylum',
   districts: ['suburb', 'farm', 'lair'],
   cellsPerSide: 3,        // padded cells on each side of each of the four wings
-  videoFolder: 'Asylum',  // full-screen clip as the syringe hits (caption only while that folder is empty)
-  // Back in her cell, a clip from assets/video/SG_Asylum_Game/ plays inside a green-screen TV still.
+  videoFolder: 'SG_Asylum_Game', // full-screen clip as the syringe hits (every file in the folder, in turn)
+  // Back in her cell, the next clip from that same folder plays inside a green-screen TV still.
   // It loops until she taps out. No clips yet → brief static, then she can move.
   tvFolder: 'SG_Asylum_Game',
   tvScreens: [
@@ -89,11 +89,11 @@ export const ASYLUM = {
   ].map((f) => `assets/asylum/tv/${f}.webp`),
   reward: 45,
 };
-// Losing a street fight: by morning the city's billboards are playing the footage. A clip from
-// assets/video/<folders[0]>/ (falling back to the next folder) keyed into a green-screen
-// billboard still: red-light ones for fights in the vice districts, downtown ones elsewhere.
+// Losing a street fight: by morning the city's billboards are playing the footage. Every clip in
+// `folders` is dealt in turn, keyed into a green-screen billboard still: red-light ones for fights
+// in the vice districts, downtown ones elsewhere.
 export const BILLBOARDS = {
-  folders: ['Billboards', 'SG_Captured_Game'], // a lost fight
+  folders: 'SG_Captured_Game', // a lost fight: every clip in the folder, in turn
   humiliation: 'SG_Humiliation_Game',          // she takes the deal that costs reputation
   vice: ['redlight', 'naughty', 'nightclub'],
   rld: [2, 4, 6, 8, 10].map((n) => `assets/billboards/rld/sg-mix-${String(n).padStart(2, '0')}.webp`),
