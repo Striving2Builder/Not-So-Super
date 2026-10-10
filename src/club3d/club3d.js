@@ -35,6 +35,8 @@ import { quickMethods } from './quick.js';
 import { feelMethods } from './feel.js';
 import { storyMethods, DIFF } from './story.js';
 import { pressMethods } from './press.js';
+import { backroomMethods } from './backrooms.js';
+import { clubFeedMethods } from './livefeed.js';
 import { INTOX_HAZE } from '../state.js';
 
 const SPEED = 4.6;          // her walk (m/s); a packed crowd slows her by up to 40%
@@ -56,6 +58,8 @@ const VISIT = () => ({
   stockOpen: false, stashFound: false, uvRead: false, powderTaken: false, shotDone: false,
   drinks: 0, drunkCard: false, predator: null, predatorDone: false, taps: [], offerOut: false, snapQueue: [],
   videoWant: null, cctvRT: null, extraPeople: [], snapped: new Set(), coverRing: null, tipQ: [], tipOn: false,
+  dosers: [], darkPanel: null, darkPanelGlow: null, darkPanelDone: false, darkTold: false,
+  dealer: null, dealerBought: false, dealerGone: false, stockTold: false, feedT: 0,
 });
 
 export class Club3D extends Special3D {
@@ -123,6 +127,7 @@ export class Club3D extends Special3D {
     for (const s of this.roomA.vip?.seats || []) people.push({ x: s.x, z: s.z, pose: 'sit', rot: 0, y: 0, fixed: true });
     people.push(...(this.extraPeople || []));
     this.crowd = new ClubCrowd(this, plan, people, { near: Q.near });
+    this.placeBackrooms();
     this.hallVideo();
   }
 
@@ -155,6 +160,7 @@ export class Club3D extends Special3D {
     this.cctvRT = null;
     this.endChatter?.();
     this.music?.stop();
+    this.endClubFeed();
     this.video?.dispose(); this.video = null;
     this.crowd?.dispose(); this.crowd = null; this.pw = null; this._castPos = null;
     document.body.classList.remove('c3-flat');
@@ -241,6 +247,8 @@ export class Club3D extends Special3D {
     this.stepVices(dt);
     this.stepStory(dt);
     this.stepIncidents(dt);
+    this.stepBackrooms(dt);
+    this.stepClubFeed(dt);
     const a0 = this.alert;
     this.updateGuards(dt);
     this.stepTorches(dt);
@@ -288,7 +296,7 @@ export class Club3D extends Special3D {
     Promise.resolve().then(fn).catch((e) => console.error(e)).finally(() => { this.busy = false; });
   }
 
-  onPaused() { this.music?.update(this.hearing ? 1 : 0, true); }
+  onPaused() { this.music?.update(this.hearing ? 1 : 0, true); this.g.overworld?.feed?.pause(); }
 
   /** How hidden she is: 0 in the open, 1 lost in the crowd (DANCE = fully). */
   computeBlend() {
@@ -403,4 +411,4 @@ export class Club3D extends Special3D {
   }
 }
 
-Object.assign(Club3D.prototype, castMethods, eventMethods, powerMethods, chatterMethods, viceMethods, caseMethods, sedationMethods, vipMethods, officeMethods, brawlMethods, closeupMethods, undercoverMethods, quickMethods, feelMethods, dangerMethods, storyMethods, pressMethods);
+Object.assign(Club3D.prototype, castMethods, eventMethods, powerMethods, chatterMethods, viceMethods, caseMethods, sedationMethods, vipMethods, officeMethods, brawlMethods, closeupMethods, undercoverMethods, quickMethods, feelMethods, dangerMethods, storyMethods, pressMethods, backroomMethods, clubFeedMethods);

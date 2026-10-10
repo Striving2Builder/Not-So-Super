@@ -30,11 +30,11 @@ export const officeMethods = {
   },
 
   async stockKeypad() {
-    const code = await keypad(this.uvRead ? `Stock room (${this.stockCode})` : 'Stock room: 4-digit code');
+    const code = await keypad(this.uvRead || this.stockTold ? `Stock room (${this.stockCode})` : 'Stock room: 4-digit code');
     if (code === null) return;
     if (code === this.stockCode) { this.stockOpen = true; this.openDoorOf('storage'); sfx.door(); toast('The stock room unlocks.', 'good'); return; }
     this.alert = Math.min(95, this.alert + 20); sfx.alarm();
-    toast(this.uvRead ? 'Wrong code.' : 'Wrong code. Somebody must have written it down somewhere…', 'bad');
+    toast(this.uvRead || this.stockTold ? 'Wrong code.' : 'Wrong code. Somebody must have written it down somewhere…', 'bad');
   },
 
   /** The stock room's stash: behind the beer crates (X-ray sees it; so does anyone who heard where). */

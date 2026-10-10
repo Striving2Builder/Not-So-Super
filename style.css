@@ -80,7 +80,11 @@ body.title-on #hud, body.title-on #btns, body.title-on #touch { display: none !i
    with the map shrunk to an inset in its corner. */
 #mapbox { position: relative; width: 128px; height: 128px; transition: width .35s ease, height .35s ease; }
 #minimap { position: absolute; right: 0; top: 0; width: 100%; height: 100%; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .3); background: #0a1020; cursor: pointer; z-index: 2; transition: width .35s ease, height .35s ease, top .35s ease, right .35s ease; }
-body:not([data-mode="overworld"]) #mapbox { display: none; }
+body:not([data-mode="overworld"]):not([data-mode="club3"]) #mapbox, body[data-mode="club3"] #mapbox:not(.feed-on) { display: none; }
+body[data-mode="club3"] #minimap { display: none; } /* (in the club the corner is only the LIVE feed, while she's high) */
+body[data-mode="club3"] { --feedH: calc(min(340px, 34vw) * 9 / 16); }
+body[data-mode="club3"]:has(#mapbox.feed-on) #objectives { top: calc(18px + var(--st) + var(--feedH)); }
+body[data-mode="club3"]:has(#mapbox.feed-on) #c3-tip { top: calc(82px + var(--st) + var(--feedH)); }
 #feed { position: absolute; inset: 0; border-radius: 12px; overflow: hidden; background: #000; border: 1px solid rgba(255, 255, 255, .35); box-shadow: 0 8px 30px rgba(0, 0, 0, .5); opacity: 0; pointer-events: none; transition: opacity .3s ease; cursor: pointer; }
 #feed video, #feed img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 #feed:not(.still) img, #feed.still video { display: none; }
@@ -288,6 +292,7 @@ body.title-on #title { display: flex; }
   #mapbox { width: 92px; height: 92px; }
   #mapbox.feed-on { width: min(250px, 40vw); height: calc(min(250px, 40vw) * 9 / 16); }
   #mapbox.feed-on #minimap { width: 46px; height: 46px; }
+  body[data-mode="club3"] { --feedH: calc(min(250px, 40vw) * 9 / 16); }
   .iconbtn { width: 36px; height: 36px; }
   #hud-top { padding: 4px 10px; min-width: 110px; }
   #hud-title { font-size: 12px; }

@@ -497,3 +497,20 @@ the DJ wall). The map offers any unsolved case not already on it (`clubCase` in 
   by this code; the rest of the game's wiring of the folders is unchanged.
 - **Test params:** `&club3case=halo|auction|flashpoint` (brings its own room); harness flows
   `struggle`, `gate` (halo), `booths` (auction), `hotseat` (flashpoint).
+
+## The back rooms' trouble and the LIVE feed (2026-10-09)
+- **Dark room** (`backrooms.js`): three of its dancers are dosers. While she's in there they drift up
+  to her; within 1.6 m for about 3 s, one acts: a dose in her drink (+14 intoxication, a `pill`
+  card) or a phone up close (−4 rep, a `fans` card), then he backs off for a while. X-ray marks
+  them in red (USE: expose one, he bolts, +3 rep when she's out) and shows the crew's **hidden
+  panel** in the back wall (USE with X-ray on): their kit, the phones (her `fans` card is gone), a
+  free unfound case clue, +4 rep.
+- **Alley dealer**: at the far end, besides the courier. Buy a bag (a rumour he lets slip, maybe a
+  photo from the fire escape), try one there (+18 intoxication; he gives the stock-room code), or
+  bust him (he whistles up the courier's fight; with that fought, he drops his stash: +4 rep).
+- **LIVE feed in the club** (`livefeed.js`): at INTOX_HAZE or more the corner panel shows, one clip
+  after another (4–8 s apart) from the checked `CLIPS.high` (SG_Intox_Game), until she sobers up.
+  The objectives and tips move down under it.
+- **The ultimatum** (`main.js`, after a capture): choice A now plays the footage on a billboard
+  (the checked `CLIPS.captive`) until she taps; after A or B the LIVE feed plays it again once
+  she's flying (`CLIPS.captive` / `CLIPS.shame`).

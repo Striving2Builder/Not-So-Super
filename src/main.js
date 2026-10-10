@@ -28,6 +28,7 @@ import { perfHud } from './perfhud.js';
 import { gfxLost, crashedLastTime } from './gfx.js';
 import { BUILD } from './version.js';
 import { Act } from './act/act.js';
+import { CLIPS, nextClip } from './club3d/clips.js';
 
 loadHero();
 loadEnemies(); // guard and boss models for the 3D zones (procedural stand-ins until they arrive)
@@ -235,6 +236,13 @@ async function ultimatum(zone, villain) {
       sub: `Villain ${villain} leaks video of the caped crusader tied to a chair`,
       body: [`The grainy clip, sent anonymously to every newsroom in the city, shows ${HERO} slumped in a chair beside a glowing green rock.`, `"Some hero," scoffed one commuter. City Hall declined to comment.`],
     });
+    // the footage itself, on the billboards (the checked captive clips: clips.js), until she taps
+    const vice = BILLBOARDS.vice.includes(zone.district);
+    await playScreenScene({
+      screens: vice ? BILLBOARDS.rld : BILLBOARDS.downtown, clipUrl: nextClip(CLIPS.captive), untilTap: true, holdSecs: 4,
+      caption: `By morning, every billboard in ${DISTRICTS[zone.district]?.name || 'the city'} is playing the footage…`,
+    });
+    afterUltimatum('leaked', CLIPS.captive, `LEAKED · ${zone.venue}`);
   } else {
     st.addRep(-8, 'Humiliating deal');
     st.lockouts[zone.lockKey] = 180;
@@ -250,7 +258,13 @@ async function ultimatum(zone, villain) {
       caption: `By morning, every billboard in ${DISTRICTS[zone.district]?.name || 'the city'} is playing the deal…`,
     });
     toast(`You can't dive into ${zone.lockKey} zones for 3:00`, 'bad');
+    afterUltimatum('deal', CLIPS.shame, `${HERO} · THE DEAL`);
   }
+}
+
+/** Back in the sky, the LIVE feed is playing it too (once she's flying again). */
+function afterUltimatum(cat, clips, where) {
+  setTimeout(() => { const f = game.overworld?.feed; if (f && game.modeName === 'overworld') { f.setList(cat, clips); f.play(cat, where, true); } }, 1200);
 }
 
 function victoryPaper(zone, res) {
