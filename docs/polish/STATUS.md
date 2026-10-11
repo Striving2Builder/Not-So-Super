@@ -1,5 +1,8 @@
 # Polish pass: status and handoff
 
+> **Round 11 (2026-10-11) is running: read [ROUND11.md](ROUND11.md) first.** It has the four tracks
+> (tech debt, the club loop, club variety, travel), the wow bar, the board and the director protocol.
+
 Read this first when picking the polish pass up in a new thread. Last updated 2026-10-04 (round 10
 critique + cloud handover). The companion docs are [BRIEF.md](BRIEF.md) (the builder brief),
 [CLOUD.md](CLOUD.md) (running a round as a cloud session), [ARCHITECTURE.md](ARCHITECTURE.md)
