@@ -23,7 +23,7 @@ const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] :
 const LABEL = arg('--label', 'act'), PORT = +arg('--port', 8882), FLOWS = arg('--flows', 'all');
 const W = +arg('--w', 844), H = +arg('--h', 390);
 const OUT = path.join(ROOT, 'shots', LABEL, 'act');
-const ALL = ['board', 'trail', 'polaroid', 'unmask', 'sighting', 'tower', 'hotel', 'kell', 'seal', 'ballroom'];
+const ALL = ['board', 'trail', 'gates', 'polaroid', 'unmask', 'sighting', 'tower', 'hotel', 'kell', 'seal', 'ballroom'];
 const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
 
 (async () => {
@@ -115,6 +115,24 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     await V.shot('trail_step');
     await V.through(() => !document.querySelector('#modal-root .modal-back'), 8000);
     report.trail = { name, trails: await V.page.evaluate(() => window.__game.state.act.trails) };
+    return V;
+  });
+
+  await flow('gates', async () => {
+    const V = await game('act=guardian&flight=2d');
+    await V.through(() => window.__game.state.act?.beats?.guardian && !document.querySelector('#modal-root .modal-back'), 60000);
+    const seen = await V.page.evaluate(() => {
+      const ow = window.__game.overworld;
+      for (let i = 0; i < 8; i++) ow.maintainZones(true); // (the 2.5 s ticks, at once)
+      const zs = ow.zones;
+      return {
+        warehouse: zs.filter((z) => z.venue === 'Warehouse').map((z) => z.name),
+        factory: zs.filter((z) => z.district === 'factory' || z.def?.setting === 'factory').map((z) => `${z.name} (${z.district})`),
+        short: window.__game.act.straysShort(),
+      };
+    });
+    report.gates = seen;
+    if (!seen.warehouse.length || !seen.factory.length || !seen.short) throw new Error(`gate missions missing: ${JSON.stringify(seen)}`);
     return V;
   });
 

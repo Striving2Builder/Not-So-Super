@@ -18,6 +18,7 @@ import { pick, rand, dist, clamp, chance } from '../util.js';
 
 const SIGHT = { first: 45, every: [150, 210], cut: 20, min: 100, ttl: 75, speed: 640, lazy: 260, catchRep: 12, lostRep: 6 };
 const STRAY_FAKE = 0.6;       // share of the city's Polaroids that are fakes, once the frame-up starts
+const STRAY_FAKE_SHORT = 0.75; // ...while the fakes gate is still short
 const POL_RECT = [14, 14, 232, 232]; // the photo inside a Polaroid (blackout.js polaroid())
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -92,6 +93,18 @@ export class Act {
   }
 
   gatesMet() { return this.gates().every((r) => r.have >= r.need); }
+
+  /**
+   * The gates the random rolls almost never offer (a warehouse raid is ~1 special in 10; the factory
+   * is one small district): from City Guardian on, the overworld keeps one of each on the map until
+   * it's met (overworld.js maintainZones).
+   */
+  gateMissions() {
+    const A = this.A;
+    if (!A || A.done || !A.beats.guardian) return [];
+    const c = A.counts;
+    return [c.warehouses < GATES.warehouses && 'warehouse', c.factory < GATES.factory && 'factory'].filter(Boolean);
+  }
   keys() { return Object.keys(this.A?.unmasked || {}).length; }
 
   /** A mission won (from main.js endZone): count it toward the gates; a club case unmasks. */
@@ -240,7 +253,9 @@ export class Act {
   // ------------------------------------------------------------------ Polaroids in the city
   /** After Local Hero, Polaroids turn up whatever her reputation (the frame-up): most are fakes. */
   straysOn() { const A = this.A; return !!(A && A.beats.local && !A.done); }
-  strayFake() { return chance(STRAY_FAKE); }
+  /** Until the fakes gate is met, Polaroids turn up faster and stay longer (polaroids.js stepStrays). */
+  straysShort() { return this.straysOn() && this.A.fakes < GATES.fakes; }
+  strayFake() { return chance(this.straysShort() ? STRAY_FAKE_SHORT : STRAY_FAKE); }
 
   /** She dove on a Polaroid: the call. Returns once it's settled. */
   async callPolaroid(z) {

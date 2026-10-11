@@ -287,7 +287,10 @@ the gates, the beats, the mocking lines, the seals' and emitters' riddles, Kell'
 trails); `act.js` the runtime (`game.act`, state in `state.act`, saved); `spot.js` the Supergirl or
 Impostor call and the placeholder fakes.
 - **Gates** count in `main.js endZone` (any win): clubs (any club mission), `Warehouse` raids, the
-  asylum, wins in the factory and entertainment districts. Fakes = Polaroids called right.
+  asylum, wins in the factory and entertainment districts. Fakes = Polaroids called right. From
+  City Guardian on, while those gates are short, the map always holds a Warehouse raid and a factory
+  job (a Sabotage case in the Factory district), outside the normal quota (`act.gateMissions`,
+  `overworld.js maintainZones`): the random rolls offered them too rarely (playtest 2026-10-11).
 - **Unmasking:** a club case's confession (`club3d/casework.js solveCase`) or any win of its mission
   shows the UNMASKED panel: the lieutenant's line, their fact about him, a Seal Key. The Impostor is
   unmasked by catching her in a sighting. Case → lieutenant: squirt/blackmail → Lenny Gold, halo →
@@ -298,7 +301,8 @@ Impostor call and the placeholder fakes.
   flying and nothing else is up. The 13th floor opens once every gate is met and stays open.
 - **Polaroids:** after Local Hero they turn up whatever her reputation (a little slower above 0), 60%
   fakes; the call; right about a fake = +4 and a jigsaw piece; a fake called real is pinned to the
-  board ("Look again").
+  board ("Look again"). Until 10 fakes are exposed: 75% fakes, about one every 35 s of flying, up to
+  3 at once, 100 s to reach each (`STRAYS.short` in polaroids.js).
 - **Sightings:** from City Guardian on, every 150–210 s, minus 20 s per lieutenant unmasked (min 100):
   a "Supergirl" marker that runs (640 u/s: faster than cruising, slower than a boost). DIVE close = +12
   (and the Impostor's unmasking, first time); she gets away after 75 s = −6.
@@ -336,5 +340,5 @@ floor is open), `?act=boss` (and every seal set). `node tools/shots/act.js [--fl
 board, a trail, a Polaroid call, an unmasking, a sighting, the tower, the floor, Kell's wipe, a seal
 and the ballroom (`shots/act/act/`).
 
-**Tuning knobs:** `GATES` (act1.js), `SIGHT` and `STRAY_FAKE` (act.js), `KELL` (kell.js), `B` (ballroom.js),
+**Tuning knobs:** `GATES` (act1.js), `SIGHT`, `STRAY_FAKE` and `STRAY_FAKE_SHORT` (act.js), `STRAYS.short` (polaroids.js), `KELL` (kell.js), `B` (ballroom.js),
 `POSTERS` (hotel.js).

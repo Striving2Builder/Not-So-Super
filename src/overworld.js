@@ -357,12 +357,23 @@ export class Overworld {
   // ------------------------------------------------------------------ zones
   maintainZones(initial = false) {
     const counts = { street: 0, case: 0, special: 0 };
-    for (const z of this.zones) if (!z.lead && z.kind in counts && !z.stashJob && !z.storyId && !z.hotel) counts[z.kind]++; // leads, the story clubs and the act's hotel are extra, beyond the quota
+    for (const z of this.zones) if (!z.lead && z.kind in counts && !z.stashJob && !z.storyId && !z.hotel && !z.actGate) counts[z.kind]++; // leads, the story clubs and the act's hotel and gate missions are extra, beyond the quota
     // Always keep one club raid (premade 3D club) somewhere on the map.
     const clubs = Object.keys(VENUES).filter((v) => VENUES[v].club);
     if (clubs.length && !this.zones.some((z) => z.mode === 'special' && VENUES[z.venue]?.club && !z.storyId)) { this.spawn('special', initial, pick(clubs)); return; }
     // ...and the asylum (its own zone type, src/asylum.js)
     if (!this.zones.some((z) => z.mode === 'asylum')) { const z = this.spawn('asylum', initial); if (z) { if (!this.attract) this.g.act?.tagZone(z); return; } }
+    // ...and, while the act still needs them, a warehouse raid and a factory job
+    if (!this.attract) for (const need of this.g.act?.gateMissions() || []) {
+      const isWarehouse = (z) => z.venue === 'Warehouse', isFactory = (z) => z.district === 'factory' || z.def?.setting === 'factory';
+      if (this.zones.some(need === 'warehouse' ? isWarehouse : isFactory)) continue;
+      const z = need === 'warehouse' ? this.spawn('special', initial, 'Warehouse')
+        : this.spawn('case', initial, undefined, undefined, { def: CASES.find((c) => c.id === 'sabotage'), districts: ['factory'] });
+      if (!z) continue;
+      Object.assign(z, { actGate: need, ttl: Math.max(z.ttl, 420), blurb: `${z.blurb} <b>The act board needs a ${need === 'warehouse' ? 'warehouse raid' : 'factory win'}.</b>` });
+      this.g.act.tagZone(z);
+      return;
+    }
     for (const k of ['street', 'case', 'special']) {
       if (counts[k] < TARGET[k]) { const z = this.spawn(k, initial); if (z && !this.attract) this.g.act?.tagZone(z); return; } // (the act: a lieutenant's trail, sometimes)
     }
@@ -370,15 +381,16 @@ export class Overworld {
 
   /** Create one incident of `kind` on the map; returns the zone (or null if there's no room). */
   /** `near` = {x, y, r}: only place it within r of that point (super-hearing). */
-  spawn(kind, initial, forceVenue, near) {
+  /** `only` = {def, districts}: a case of that def, in those districts (the act's gate missions). */
+  spawn(kind, initial, forceVenue, near, only) {
     const city = this.g.city, h = this.hero;
     // After dark, most cases are night cases inside the 3D clubs.
-    const night = kind === 'case' && this.g.state && this.g.state.isNight && chance(0.75);
+    const night = kind === 'case' && !only && this.g.state && this.g.state.isNight && chance(0.75);
     let def, districts, venueName;
     if (kind === 'asylum') districts = ASYLUM.districts;
     else if (kind === 'street') { def = pick(STREET_CRIMES); districts = def.districts; }
     else if (night) districts = NIGHT_DISTRICTS;
-    else if (kind === 'case') { def = pick(CASES); districts = def.districts; }
+    else if (kind === 'case') { def = only?.def || pick(CASES); districts = only?.districts || def.districts; }
     else { venueName = forceVenue || pick(Object.keys(VENUES).filter((v) => !VENUES[v].asylum && !VENUES[v].hotel)); def = VENUES[venueName]; districts = def.districts; }
     const cands = city.blocks.filter((b) => {
       if (b.river || (districts !== '*' && !districts.includes(b.d))) return false;

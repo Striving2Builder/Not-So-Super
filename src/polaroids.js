@@ -27,6 +27,7 @@ export const STRAYS = {
   ttl: 60,         // before somebody else finds it
   max: 2,          // on the map at once
   grab: 2, lost: 3, // rep for grabbing one / for one going online
+  short: { rate: 2.2, ttl: 100, max: 3 }, // the act, while the fakes gate is short: ~1 every 35 s, and longer to reach
 };
 
 const PLATES = ['main', 'bar', 'vip', 'lounge', 'dark', 'balcony', 'corridor'].map((p) => `assets/nightclub/plates/${p}.jpg`);
@@ -166,8 +167,9 @@ function stepStrays(ow, st, dt) {
   const strays = ow.zones.filter((z) => z.polaroid);
   const act = ow.g.act?.straysOn() ? ow.g.act : null; // the act's frame-up: they turn up whatever her reputation, most of them fakes
   if (st.rep >= 0 && !act) { ow.strayT = rand(...STRAYS.every) * 0.5; return; }
-  ow.strayT = (ow.strayT ?? rand(...STRAYS.every) * 0.5) - dt * (st.rep < -50 ? 1.6 : st.rep < 0 ? 1 : 0.7); // (the act's, at a good reputation: a little slower)
-  if (ow.strayT > 0 || strays.length >= STRAYS.max) return;
+  const short = act?.straysShort() ? STRAYS.short : null;
+  ow.strayT = (ow.strayT ?? rand(...STRAYS.every) * 0.5) - dt * (short ? short.rate : st.rep < -50 ? 1.6 : st.rep < 0 ? 1 : 0.7); // (the act's, at a good reputation: a little slower)
+  if (ow.strayT > 0 || strays.length >= (short ? short.max : STRAYS.max)) return;
   ow.strayT = rand(...STRAYS.every);
   const h = ow.hero, cands = ow.g.city.blocks.filter((b) => {
     if (b.river) return false;
@@ -176,7 +178,7 @@ function stepStrays(ow, st, dt) {
   });
   if (!cands.length) return;
   const b = pick(cands);
-  const z = { uid: ow.uid++, kind: 'polaroid', polaroid: true, district: b.d, t: 0, x: b.x0 + LOT / 2, y: b.y0 + LOT / 2, ttl: STRAYS.ttl, name: 'A polaroid of you', color: '#fff2c0', glyph: '📷', risk: 'Your secrets', reward: STRAYS.grab, lockKey: 'Polaroids', where: pick(WHERE), blurb: 'One of the club\'s polaroids of you is loose in the city. Grab it before somebody posts it.' };
+  const z = { uid: ow.uid++, kind: 'polaroid', polaroid: true, district: b.d, t: 0, x: b.x0 + LOT / 2, y: b.y0 + LOT / 2, ttl: short ? short.ttl : STRAYS.ttl, name: 'A polaroid of you', color: '#fff2c0', glyph: '📷', risk: 'Your secrets', reward: STRAYS.grab, lockKey: 'Polaroids', where: pick(WHERE), blurb: 'One of the club\'s polaroids of you is loose in the city. Grab it before somebody posts it.' };
   if (act) Object.assign(z, { fake: act.strayFake(), name: 'A Polaroid of "you"', blurb: 'A Polaroid of "you" is loose in the city. Is it really you? Grab it before somebody posts it.' });
   ow.zones.push(z);
   toast(`📷 A polaroid of you turned up in ${DISTRICTS[b.d]?.name || 'the city'}. Get it before it goes online!`, 'bad');
