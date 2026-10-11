@@ -58,6 +58,7 @@ export function buildLandmarks(list, S) {
     const o = lm.o, x0 = o.x * M, z0 = o.y * M, x1 = (o.x + o.w) * M, z1 = (o.y + o.d) * M;
     const p = { x0, z0, x1, z1, H, cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, S: Math.min(x1 - x0, z1 - z0), col, lit, seed: hash2(o.x | 0, o.y | 0, 5) };
     BUILD[lm.kind](B, S, p);
+    if (p.hotel) lm.hotel = { ...p.hotel, cx: p.cx, cz: p.cz, H };
     // the navigation mark: a thick crown band in the tower's signature colour, readable from altitude,
     // on the wall the tower has at that height (`p.nav`: a rect, or `p.navOct`: an octagon's radius;
     // one fixed square floated off the stepped tops and hung in the gap between the twin towers)
@@ -186,17 +187,36 @@ const BUILD = {
     for (const f of ['n', 's', 'e', 'w']) signQuad(B, S, 'GIRLS', '#ff6688', p.cx - q, p.cz - q, p.cx + q, p.cz + q, f, top + 1.5, 9, { out: -1.5, back: true });
     mast(B, p.cx, p.cz, top, top + 30, 0.4, '#ff2244');
   },
+  // the villain spike, and the act's hotel (docs/design/act1.md): its name in neon round the base,
+  // HOTEL blades on the corners, slits up the spike in the floor's green, purple and red, lit rooms
   spike(B, S, p) {
     const H = p.H, L = look(p.col, p.lit, STYLE.concrete, '#101512', STYLE.tar), s = p.S / 2;
+    const NEON = ['#39ff6a', '#c050ff', '#ff2a5a'];
     box(B, p.x0, p.z0, p.x1, p.z1, 0, 16, L, { ink: 1.2 });
     neonRing(B, p.x0, p.z0, p.x1, p.z1, 15.5, '#39ff6a', 0.6);
+    neonRing(B, p.x0, p.z0, p.x1, p.z1, 0.6, '#ff2a5a', 0.5);
+    for (const f of ['n', 's', 'e', 'w']) {
+      signQuad(B, S, 'SLUTTY LITTLE', '#c050ff', p.x0, p.z0, p.x1, p.z1, f, 8.6, 6);
+      signQuad(B, S, 'RED MINI SKIRT', '#ff2a5a', p.x0, p.z0, p.x1, p.z1, f, 1.8, 6);
+      bladeSign(B, S, 'HOTEL', '#39ff6a', p.x0, p.z0, p.x1, p.z1, f, 17, 22);
+    }
     const r = s * 0.8;
     prism(B, p.cx, p.cz, r * 1.41, r * 0.25, 16, H, 4, L, { rot: Math.PI / 4, ink: 1.4 });
     p.nav = sq(p, (r * 1.41 + (r * 0.25 - r * 1.41) * (H * 0.94 - 16) / (H - 16)) / 1.414);
+    p.hotel = { r, base: 16 }; // (city3d's Floor 13 band reads the spike's shape from here)
     for (const [x, z] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
-      // green slits up each corner of the spike
+      // neon slits up each corner of the spike
       const a = [p.cx + x * r * 1.41, p.cz + z * r * 1.41], b = [p.cx + x * r * 0.35, p.cz + z * r * 0.35];
-      for (let k = 0; k < 6; k++) { const t = 0.08 + k * 0.15; neonPost(B, a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, 16 + (H - 16) * t, 16 + (H - 16) * (t + 0.08), '#39ff6a', 0.6); }
+      for (let k = 0; k < 6; k++) { const t = 0.08 + k * 0.15; neonPost(B, a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, 16 + (H - 16) * t, 16 + (H - 16) * (t + 0.08), NEON[k % 3], 0.6); }
+    }
+    // lit hotel rooms: warm points along the middle of each face, a few per floor band
+    for (let y = 22; y < H * 0.82; y += 9) {
+      const t = (y - 16) / (H - 16), hs = (r + (r * 0.177 - r) * t) + 0.3;
+      for (const [fx, fz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (const k of [-0.5, 0, 0.5]) {
+        if (hash2(Math.round(y), Math.round(k * 4 + fx * 7 + fz * 13), p.seed * 1e6 | 0) < 0.45) continue;
+        const along = k * hs * 0.9, x = p.cx + fx * hs + (fz ? along : 0), z = p.cz + fz * hs + (fx ? along : 0);
+        lamp(B, x, y, z, 0.9, hash2(k * 9, y, 3) < 0.3 ? '#ff7ad0' : '#ffd890', KIND.neon);
+      }
     }
     lamp(B, p.cx, H + 5, p.cz, 5, '#39ff6a', KIND.neon);
     mast(B, p.cx, p.cz, H, H + 3, 0.6, null, '#101512');

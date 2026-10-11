@@ -5,13 +5,14 @@
 //   intoxicated (the bar is in the warning range) → a clip from the "intox" folder
 //   perching on a roof  → a clip from the "rooftop" folder
 //   other hot districts (Entertainment) → flying clips keep coming while she's there
+// Flying-in clips play once; the others loop until CITY_FEED.clipMax.
 // Clips are listed in assets/video/manifest.json (tools/build_video_manifest.js); what plays where
 // is tuned in CITY_FEED (data.js). With no clips on disk it simply never shows.
 import { CITY_FEED } from './data.js';
 import { INTOX_LIMIT } from './state.js';
 import { settings } from './settings.js';
 import { rand, shuffle, $ } from './util.js';
-import { mediaFolders, isImage as imageUrl } from './media.js';
+import { mediaFolders, isImage as imageUrl, keepLooping } from './media.js';
 
 export class CityFeed {
   constructor() {
@@ -75,16 +76,23 @@ export class CityFeed {
   }
 
   update(dt, districtName, intox = 0) {
-    this.t += dt;
-    if (this.playing) {
-      if (this.video.paused && this.playing.video) this.video.play().catch(() => {}); // resume after a pause
-      if (this.t - this.playing.start > (this.playing.video ? CITY_FEED.clipMax : CITY_FEED.imageSecs)) this.stop();
-      return;
-    }
+    if (this.tick(dt)) return;
     // Red Light, intoxication, and other hot districts: more clips for as long as that lasts
     const cat = this.clipCat(intox);
     if ((cat !== 'flying' || CITY_FEED.hot.includes(this.district)) && this.t - this.last > this.hotGap) this.play(cat, districtName, true);
   }
+
+  /** The clock, and the clip that's playing (kept looping, cut off at clipMax). True while one plays. */
+  tick(dt) {
+    this.t += dt;
+    if (!this.playing) return false;
+    if (this.playing.video && this.t - (this.kickT || 0) > 0.6) { this.kickT = this.t; keepLooping(this.video); } // resume after a pause; a loop that hangs on its last frame wraps
+    if (this.t - this.playing.start > (this.playing.video ? CITY_FEED.clipMax : CITY_FEED.imageSecs)) this.stop();
+    return true;
+  }
+
+  /** A clip set of the caller's own (e.g. the club's checked clips), played with play(cat). */
+  setList(cat, urls) { if (this.lists[cat] !== urls) { this.lists[cat] = urls; this.bags[cat] = null; } }
 
   /** Game paused (dialog, map): freeze the clip. */
   pause() { if (this.playing && this.playing.video) this.video.pause(); }
@@ -94,7 +102,7 @@ export class CityFeed {
     const url = this.next(cat);
     if (!url) return false;
     const isImage = imageUrl(url);
-    this.playing = { url, start: this.t, video: !isImage };
+    this.playing = { url, cat, start: this.t, video: !isImage };
     this.last = this.t;
     this.hotGap = rand(...CITY_FEED.hotGap);
     this.label.textContent = where || '';
@@ -105,6 +113,7 @@ export class CityFeed {
       this.img.removeAttribute('src');
       // with sound if the player turned it on (iOS may refuse outside a tap: then muted, badge says so)
       this.video.muted = !this.soundOn;
+      this.video.loop = cat !== 'flying'; // flying in plays once; the rest loop until clipMax
       this.video.src = url;
       this.video.play().catch(() => { this.video.muted = true; this.video.play().catch(() => {}); }).finally(() => this.showSound());
     }

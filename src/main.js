@@ -11,6 +11,7 @@ import { NightCase } from './nightcase.js';
 import { AsylumZone } from './asylum.js';
 import { Nightclub } from './nightclub/nightclub.js';
 import { Club3D } from './club3d/club3d.js';
+import { HotelZone } from './hotel/hotel.js';
 import { showNewspaper } from './newspaper.js';
 import { HERO, DISTRICTS, THEMES, DEALS, BOSSES, VENUES, BILLBOARDS, CAPTURE_VIDEOS } from './data.js';
 import { UI, dialog, toast } from './ui.js';
@@ -26,6 +27,8 @@ import { settings, quality, autoTune, HERO_SKIN_LABELS, HERO_LOOK_LABELS } from 
 import { perfHud } from './perfhud.js';
 import { gfxLost, crashedLastTime } from './gfx.js';
 import { BUILD } from './version.js';
+import { Act } from './act/act.js';
+import { CLIPS, clipsReady, nextClip } from './club3d/clips.js';
 
 loadHero();
 loadEnemies(); // guard and boss models for the 3D zones (procedural stand-ins until they arrive)
@@ -44,8 +47,10 @@ game.modes = {
   asylum: new AsylumZone(game),
   nightclub: new Nightclub(game),
   club3: new Club3D(game),
+  hotel: new HotelZone(game), // the act's boss floor (src/hotel/)
 };
 game.overworld = game.modes.overworld;
+game.act = new Act(game); // the story (docs/design/act1.md)
 game.commentary = new Commentary(game);
 window.__game = game; // handy for debugging from the console
 
@@ -60,6 +65,7 @@ function resize() {
   game.modes.nightcase.resize();
   game.modes.asylum.resize();
   game.modes.club3.resize();
+  game.modes.hotel.resize();
 }
 addEventListener('resize', resize);
 settings.onChange(() => resize()); // resolution follows the graphics profile
@@ -103,7 +109,7 @@ function modeFor(z) {
     if (CLUB_VERSION === 'v2') return 'nightclub';
   }
   if (z.mode === 'special' && VENUES[z.venue]?.club) return 'club';  // raid inside a premade club
-  return { brawl: 'brawler', investigate: 'investigate', special: 'special', nightcase: 'nightcase', asylum: 'asylum' }[z.mode];
+  return { brawl: 'brawler', investigate: 'investigate', special: 'special', nightcase: 'nightcase', asylum: 'asylum', hotel: 'hotel' }[z.mode];
 }
 
 game.startZone = (z) => {
@@ -150,6 +156,13 @@ game.endZone = async (zone, res) => {
   const st = game.state;
   game.overworld.removeZone(zone);
   if (res.outcome === 'captured') { await captureFlow(zone, res.reason); return; }
+  if (res.outcome === 'win' && zone.hotel) { // the act's boss: its own ending
+    await game.act.complete();
+    st.save();
+    game.setMode('overworld', { returnFrom: zone });
+    game.commentary.onZoneEnd('win');
+    return;
+  }
   if (res.outcome === 'win') {
     if (zone.leadId) { st.leads = st.leads.filter((l) => l.id !== zone.leadId); st.leadsDone.push(zone.leadId); } // a case lead, closed
     st.addRep(res.rep, 'Saved the day');
@@ -157,6 +170,7 @@ game.endZone = async (zone, res) => {
     if (zone.mode === 'investigate' || zone.mode === 'nightcase' || zone.mode === 'asylum') st.stats.cases++;
     if (zone.mode === 'special') st.stats.specials++;
     await showNewspaper({ ...victoryPaper(zone, res), rep: res.rep });
+    await game.act.onZoneWin(zone); // the act's goals (and a club case's lieutenant, if not unmasked in the club)
   } else if (res.outcome === 'lose') {
     st.addRep(res.rep, 'Mission failed');
     await dialog({ title: 'Mission failed', text: res.text || 'The crooks got away this time.' });
@@ -203,6 +217,7 @@ game.endCapture = async (zone, escaped, villain) => {
 };
 
 async function ultimatum(zone, villain) {
+  await clipsReady;
   const st = game.state;
   const deal = pick(DEALS);
   const task = deal.task.replaceAll('{V}', villain);
@@ -222,6 +237,13 @@ async function ultimatum(zone, villain) {
       sub: `Villain ${villain} leaks video of the caped crusader tied to a chair`,
       body: [`The grainy clip, sent anonymously to every newsroom in the city, shows ${HERO} slumped in a chair beside a glowing green rock.`, `"Some hero," scoffed one commuter. City Hall declined to comment.`],
     });
+    // the footage itself, on the billboards (every clip in the captured folder), until she taps
+    const vice = BILLBOARDS.vice.includes(zone.district);
+    await playScreenScene({
+      screens: vice ? BILLBOARDS.rld : BILLBOARDS.downtown, clipUrl: nextClip(CLIPS.captive), untilTap: true, holdSecs: 4,
+      caption: `By morning, every billboard in ${DISTRICTS[zone.district]?.name || 'the city'} is playing the footage…`,
+    });
+    afterUltimatum('leaked', CLIPS.captive, `LEAKED · ${zone.venue}`);
   } else {
     st.addRep(-8, 'Humiliating deal');
     st.lockouts[zone.lockKey] = 180;
@@ -237,7 +259,13 @@ async function ultimatum(zone, villain) {
       caption: `By morning, every billboard in ${DISTRICTS[zone.district]?.name || 'the city'} is playing the deal…`,
     });
     toast(`You can't dive into ${zone.lockKey} zones for 3:00`, 'bad');
+    afterUltimatum('deal', CLIPS.shame, `${HERO} · THE DEAL`);
   }
+}
+
+/** Back in the sky, the LIVE feed is playing it too (once she's flying again). */
+function afterUltimatum(cat, clips, where) {
+  setTimeout(() => { const f = game.overworld?.feed; if (f && game.modeName === 'overworld') { f.setList(cat, clips); f.play(cat, where, true); } }, 1200);
 }
 
 function victoryPaper(zone, res) {
@@ -303,6 +331,7 @@ async function pauseMenu() {
       { label: `City feed videos: ${settings.cityFeed ? 'ON' : 'OFF'}`, note: 'Clips in the minimap corner', value: 'f' },
       { label: `Hero: ${HERO_SKIN_LABELS[settings.hero]}`, note: settings.hero === HERO_SKIN ? 'Supergirl / Classic / Ponytail / Supergirl_Dark costume' : 'Reload the page to change costume', value: 'v' },
       { label: `Hero render: ${HERO_LOOK_LABELS[settings.heroLook]}`, note: settings.heroLook === HERO_LOOK ? 'Comic or realistic, for testing' : 'Reload the page to change render', value: 'l' },
+      ...(st.act || game.modeName === 'overworld' ? [{ label: 'Act board', note: 'Act 1: The Puzzle Maker', value: 'b' }] : []),
       { label: 'How to play', value: 'h' },
       ...(inMission ? [{ label: 'Abort mission', note: '−3 reputation', value: 'a', cls: 'bad' }] : []),
       ...(game.modeName === 'overworld' ? [{ label: 'Save & quit to title', value: 'q' }] : []),
@@ -315,6 +344,7 @@ async function pauseMenu() {
   if (v === 'v') { settings.cycleHero(); return pauseMenu(); }
   if (v === 'l') { settings.cycleHeroLook(); return pauseMenu(); }
   if (v === 'h') { await dialog({ title: 'How to play', text: HOWTO }); return pauseMenu(); }
+  if (v === 'b') { await game.act.openBoard(); return pauseMenu(); }
   if (v === 'a' && game.mode.abort) game.mode.abort();
   if (v === 'q') { st.save(); showTitle(); }
 }
@@ -432,7 +462,7 @@ if (game.h > game.w) $('rotate-hint').textContent = 'Tip: rotate your phone to l
 showTitle();
 requestAnimationFrame(frame);
 // Opening titles. The city is already behind it; a tap or a key skips to the title screen.
-playCutscene({ src: 'assets/Intro Video.mp4', maxSecs: 0, tapSkips: true });
+playCutscene({ src: 'assets/Intro Video.mp4', maxSecs: 0, tapSkips: true, once: true });
 // iOS killed the last visit for memory (it reloads the tab): lighter graphics from here on, once
 if (crashedLastTime() && settings.afterCrash()) setTimeout(() => toast('The browser ran out of memory last time, so graphics are now on Battery saver. You can change this in the pause menu.', 'info'), 1500);
 

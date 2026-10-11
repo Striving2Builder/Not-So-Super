@@ -76,7 +76,7 @@ export const chatterMethods = {
     const el = document.createElement('button');
     el.className = `c3b ${kind}`;
     const text = kind === 'offer' ? item.text : `"${this.rumourText(item)}"`;
-    el.innerHTML = `${kind === 'whisper' ? '<b>WHISPER</b>' : ''}<span>${st.intox >= INTOX_HAZE && kind !== 'offer' ? scramble(text, 0.25) : text}</span><small>${kind === 'offer' ? item.label : 'TAP TO NOTE'}</small>`;
+    el.innerHTML = `${kind === 'whisper' ? '<b>WHISPER</b>' : ''}<span>${this.garbled() && kind !== 'offer' ? scramble(text, 0.25) : text}</span><small>${kind === 'offer' ? item.label : 'TAP TO NOTE'}</small>`;
     p.talking = true;
     const b = { el, anchor, p, t: kind === 'whisper' ? 5.5 : 4.4, item, kind };
     el.addEventListener('pointerdown', (e) => {
@@ -84,7 +84,7 @@ export const chatterMethods = {
       if (b.gone) return;
       b.gone = true; el.classList.add('out');
       if (kind === 'offer') { this.offerOut = false; this.run(() => this.acceptOffer(item.id)); }
-      else if (st.intox >= INTOX_HAZE) toast('The words swim away before you can hold on to them.', 'bad');
+      else if (this.garbled()) toast(this.caseDef.highOnly ? `Sober, it sounds like nonsense. On ${this.caseDef.drugName} you'd get it.` : 'The words swim away before you can hold on to them.', 'bad');
       else this.noteRumour(item, kind === 'whisper');
     });
     this.chatLayer.appendChild(el);

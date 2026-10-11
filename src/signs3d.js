@@ -17,6 +17,7 @@ export const SIGN_WORDS = {
   financial: ['BANK', 'TRUST', 'EXCHANGE'],
   lair: ['DANGER', 'KEEP OUT'],
   docks: ['PIER 9', 'CARGO'],
+  hotel: ['SLUTTY LITTLE', 'RED MINI SKIRT'], // the act's hotel tower (landmarks3d.js spike), not a district
 };
 /** Upright (stacked-letter) blade signs. */
 const VERTICAL = ['HOTEL', 'BAR', 'CLUB', 'ROXY', 'JAZZ', 'CASINO', 'GIRLS', 'DINER', 'BIJOU', 'LIVE', 'XXX', 'VIP', 'LOUNGE', 'PALACE', 'NEWS', 'GLOBE'];

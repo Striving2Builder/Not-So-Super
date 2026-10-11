@@ -468,5 +468,51 @@ map labels each club mission with the case it will play: the first one she hasn'
   ~137 calls / 169k tris / 246 dancers.
 - **Not yet / next:** the iPad test (fps, memory: the club scene stays in GPU memory under a
   back-room fight; the second pass adds fill: mist, reflection, glow), the user's dance clips and
-  sedation clip, tuning on a device (guard gain `GUARD_GAIN`, Talker rates in cast.js, the drop),
+  sedation clip, tuning on a device (guard gain `DIFF` in story.js, Talker rates in cast.js, the drop),
   then delete v2 (`src/nightclub/` minus the cases and close-up data, which v3 shares).
+
+## The story clubs (2026-10-09)
+Three more venues, each its own main room built for one case, never rolled at random for another
+(`story: true` in plan.js; the case's `room` forces it, `club` names the venue on the map and over
+the DJ wall). The map offers any unsolved case not already on it (`clubCase` in overworld.js).
+
+| Club | Layout (`plan.js`) | Case (`src/nightclub/cases/`) | Difficulty | Its own rule |
+|---|---|---|---|---|
+| **The Hive** | `hive`: a honeycomb of dance pockets behind 3 m mirrored partitions (they block sight) | **Halo** (`halo.js`): Queen Bee's drones push a gold drug cooked at Helix Labs; ships from Pier 9 | Hard | `highOnly`: sober, every search spot / door / Talker / rumour is shut ("needs Halo"); high (≥30) it opens up and speech comes through clear. Keep the high up (it wears off) without passing out |
+| **The Gilded Cage** | `gilded`: a gold ballroom, 4 bidders' booths behind velvet in the DJ wall, gilded birdcages with dancers | **The Auction** (`auction.js`): the Curator auctions a tape of Supergirl; Lionel Strand bids; the heliport at 4 AM | Normal | the booths: X-ray peeks unseen, pulling the curtain is a clue + alert (booth 4's photographer adds a card) |
+| **Flashpoint** | `runway`: a raised catwalk from the DJ to a round stage (the hot seat), press pit, four wall screens | **Flashpoint Live** (`flashpoint.js`): Roxy Flash humiliates celebrities live; Dmitri Volk's book; the Grand Arena finale | Hard | the press (`press.js`): 5 photographers hunt her; a clear shot = scandal (×2.2 on the catwalk, ×0.45 in Kara's coat, none hidden in the crowd); 100 = the hot seat |
+
+- **Difficulty** (`DIFF` in story.js): normal = the original clubs (guard gain 0.7, carried out on
+  the 3rd capture, 4 bouncer routes). Hard: guard gain 1.0, carried out on the 2nd, 2 more routes,
+  the hard struggle.
+- **The struggle** (`struggle.js`): a clip of her held plays full screen; the player turns the
+  stick round and round (touch: circle a thumb anywhere; keys: roll WASD/arrows). Only turning one
+  way counts. Stop and she slumps: the clip freezes and shakes red, the grip slips back. Normal 3
+  turns / hard 5 in 12 s. Used for every capture in a story club (`storyTrap`: free = back on her
+  feet where she was, and she throws them off (`shakeOff`, `SHAKE` in story.js: bouncers within 9 m
+  go down for 7 s, alert and scandal to 0, 6 s where nobody can pick her out, so she can get into
+  the crowd; before 2026-10-10 the bouncers who caught her caught her again at once), doesn't count; not free = a humiliation clip "on every screen", a card, −4 rep,
+  wake somewhere else, and counts toward being carried out), Flashpoint's hot seat, and the office
+  wake-up in every club (it replaced the tap-mash QTE there).
+- **Clips** (`clips.js`): the story clubs play only the clips listed there, each checked frame by
+  frame at full size (in costume, nothing sexual). The other files in those folders are not played
+  by this code; the rest of the game's wiring of the folders is unchanged.
+- **Test params:** `&club3case=halo|auction|flashpoint` (brings its own room); harness flows
+  `struggle`, `gate` (halo), `booths` (auction), `hotseat` (flashpoint).
+
+## The back rooms' trouble and the LIVE feed (2026-10-09)
+- **Dark room** (`backrooms.js`): three of its dancers are dosers. While she's in there they drift up
+  to her; within 1.6 m for about 3 s, one acts: a dose in her drink (+14 intoxication, a `pill`
+  card) or a phone up close (−4 rep, a `fans` card), then he backs off for a while. X-ray marks
+  them in red (USE: expose one, he bolts, +3 rep when she's out) and shows the crew's **hidden
+  panel** in the back wall (USE with X-ray on): their kit, the phones (her `fans` card is gone), a
+  free unfound case clue, +4 rep.
+- **Alley dealer**: at the far end, besides the courier. Buy a bag (a rumour he lets slip, maybe a
+  photo from the fire escape), try one there (+18 intoxication; he gives the stock-room code), or
+  bust him (he whistles up the courier's fight; with that fought, he drops his stash: +4 rep).
+- **LIVE feed in the club** (`livefeed.js`): at INTOX_HAZE or more the corner panel shows, one clip
+  after another (4–8 s apart) from the checked `CLIPS.high` (SG_Intox_Game), until she sobers up.
+  The objectives and tips move down under it.
+- **The ultimatum** (`main.js`, after a capture): choice A now plays the footage on a billboard
+  (the checked `CLIPS.captive`) until she taps; after A or B the LIVE feed plays it again once
+  she's flying (`CLIPS.captive` / `CLIPS.shame`).

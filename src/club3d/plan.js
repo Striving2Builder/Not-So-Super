@@ -64,8 +64,49 @@ export const VARIANTS = {
     talkers: [[-6, 22], [8, -18], [-7, -4]], tvs: [[-10.5, 'W'], [10.5, 'E']],
     accent: [0xb04dff, 0xff2244], bg: 0x0a0610,
   },
+  // ---- the story clubs: each is one case's own venue (story: never picked at random for another case)
+  // The Hive (the Halo case): a honeycomb of dance pockets behind mirrored partitions, the DJ's
+  // pocket at the back; the partitions block sight, so it's corners and crowds all the way.
+  hive: {
+    name: 'The Hive', story: true, hw: 30, hd: 22, wallH: 6, doors: [-13.5, 0, 13.5],
+    booth: { x: 0, z: -18.6, w: 9, d: 2.6 }, wall: { w: 22, h: 7 },
+    floor: { x: 0, z: -8, w: 20, d: 12 }, bar: { wall: 'W', from: 2.5, to: 11 },
+    partitions: [[-11, -14, -11, -4], [11, -14, 11, -4], [-24, -2, -14, -2], [14, -2, 24, -2], [-6, 6, 6, 6], [-16, 6, -16, 13], [16, 6, 16, 13]],
+    crowd: [[0, -8, 9, 6, 1], [-20, -9, 7, 5, 0.7], [20, -9, 7, 5, 0.7], [-21, 9, 3.5, 3, 0.35], [22, 9, 4, 3, 0.35], [0, 1, 10, 3, 0.5], [0, 13, 5, 3, 0.2]],
+    routes: [[[-25, -18], [-25, 17]], [[25, 17], [25, -18]], [[-9, -16], [9, -16]], [[-8, 2], [8, 2]], [[12.5, 4], [12.5, 15]], [[-12.5, 15], [-12.5, 4]]],
+    talkers: [[-21, 9.5], [20, -9], [8, 12]], tvs: [[-7, 'W'], [7, 'E']],
+    accent: [0xffb020, 0xb04dff], bg: 0x140c06,
+  },
+  // The Gilded Cage (the Auction): a gold ballroom, the bidders' private booths behind velvet
+  // curtains along the DJ wall, dancers in gilded birdcages round the floor.
+  gilded: {
+    name: 'The Gilded Cage', story: true, hw: 32, hd: 21, wallH: 7, doors: [-13, 0, 13],
+    booth: { x: 0, z: -17.6, w: 9, d: 2.6 }, wall: { w: 21, h: 6.4, y: 1.2 },
+    floor: { x: 0, z: -4, w: 30, d: 16 }, bar: { wall: 'E', from: 2.5, to: 11 },
+    booths: [[-21, -17.4], [-14.5, -17.4], [14.5, -17.4], [21, -17.4]],
+    cages: [[-20, 3], [20, 3], [-10, 10], [10, 10]],
+    crowd: [[-9, -5, 9, 7, 1], [9, -5, 9, 7, 1], [0, 7, 16, 4, 0.4], [0, 15, 22, 4, 0.12]],
+    routes: [[[-28, -16], [-28, 17]], [[27, 17], [27, -16]], [[-11, -14], [11, -14]], [[-15, 14], [15, 14]], [[-5, 5], [5, 5]], [[-25, -9], [-14, -9]]],
+    talkers: [[-23, 10], [22, -9], [-9, -11.5]], tvs: [[-6.5, 'W'], [6.5, 'E']],
+    accent: [0xffc840, 0xff3a6a], bg: 0x140a08,
+  },
+  // Flashpoint (the paparazzi's club): a catwalk from the DJ down the middle of the floor to the
+  // round stage (the hot seat, where they put the night's star), the press pit beyond it, screens
+  // on every wall. The catwalk is the fast way through, and every lens is on it.
+  runway: {
+    name: 'Flashpoint', story: true, hw: 26, hd: 26, wallH: 7, doors: [-15, 0, 15],
+    booth: { x: 0, z: -22.6, w: 9, d: 2.6 }, wall: { w: 24, h: 7.2 },
+    floor: { x: 0, z: -6, w: 26, d: 22 }, bar: { wall: 'W', from: 3, to: 12 },
+    catwalk: { x: 0, z0: -21, z1: 4, w: 3.2, h: 0.9, ramp: 3 }, stage: { x: 0, z: 7, r: 3.4 },
+    press: { x: 0, z: 15.5 },
+    crowd: [[-7.5, -8, 5, 10, 1], [7.5, -8, 5, 10, 1], [-8, 6, 4, 4.5, 0.7], [8, 6, 4, 4.5, 0.7], [0, 18, 10, 3, 0.2]],
+    routes: [[[-22, -21], [-22, 21]], [[22, 21], [22, -21]], [[-12, 15.5], [12, 15.5]], [[-14, -12], [-4, -12]], [[4, -4], [14, -4]], [[14, -18], [4, -18]]],
+    talkers: [[-18, 9], [17, -13], [-12, -17]], tvs: [[-20.5, 'W'], [-7.5, 'W'], [7.5, 'E'], [20.5, 'E']],
+    accent: [0xff2a4a, 0x7fd0ff], bg: 0x12060a,
+  },
 };
-export const VARIANT_IDS = Object.keys(VARIANTS);
+/** The main rooms a visit can roll (the story clubs only ever host their own case). */
+export const VARIANT_IDS = Object.keys(VARIANTS).filter((k) => !VARIANTS[k].story);
 
 // Side rooms. lock: how the door opens (keycode = a 4-digit code, rope = the VIP rope, null = open);
 // brawl: getting caught in here starts a fight instead of a sedation.
@@ -123,10 +164,29 @@ export function roomAt(plan, x, z) {
 
 /** Floor height at a point: 0 everywhere but the Pit's sunken dance floor (with ramps round it). */
 export function floorY(plan, x, z) {
-  const P = plan.V.pit;
+  const V = plan.V, P = V.pit;
+  if (V.catwalk) return catwalkY(V, x, z);
   if (!P) return 0;
   const dx = Math.abs(x - P.x) - P.w / 2, dz = Math.abs(z - P.z) - P.d / 2;
   const out = Math.max(dx, dz); // ≤ 0 inside the pit's rim, negative = deeper in
   if (out >= 0) return 0;
   return -P.depth * Math.min(1, -out / P.ramp);
+}
+
+/** Flashpoint's catwalk and stage: raised, with a ramp down off the stage's far side toward the door. */
+function catwalkY(V, x, z) {
+  const C = V.catwalk, S = V.stage, dx = Math.abs(x - C.x);
+  if (Math.hypot(x - S.x, z - S.z) < S.r) return C.h;
+  if (dx < C.w / 2 && z >= C.z0 && z <= C.z1 + 0.5) return C.h;
+  const r0 = S.z + S.r - 0.3;
+  if (dx < C.w / 2 && z > r0 && z < r0 + C.ramp) return C.h * (1 - (z - r0) / C.ramp);
+  return 0;
+}
+
+/** On Flashpoint's catwalk or stage (the crowd keeps off it; the cameras love it). */
+export function onCatwalk(V, x, z, pad = 0) {
+  const C = V.catwalk, S = V.stage;
+  if (!C) return false;
+  if (Math.hypot(x - S.x, z - S.z) < S.r + pad) return true;
+  return Math.abs(x - C.x) < C.w / 2 + pad && z >= C.z0 - pad && z <= S.z + S.r + C.ramp + pad;
 }

@@ -16,6 +16,7 @@ import { heroReady, HeroSprite } from '../hero3d.js';
 import { clamp, wobble, shuffle, $ } from '../util.js';
 import { banner, toast, dialog, UI } from '../ui.js';
 import { sfx } from '../sfx.js';
+import { keepLooping } from '../media.js';
 
 const WALK = 520;          // plate px per second
 const REACH = 140;         // how close she must be to use a door or a spot
@@ -55,7 +56,7 @@ export class Nightclub {
       { id: 'leave', label: 'LEAVE', key: '⌫', slot: 2 },
     ]);
     this.hudPhotos();
-    g.vice = { active: false };
+    g.vice = { active: false, drain: false };
     banner(this.club.name.toUpperCase(), this.case.def.tagline, '#ff3fb8');
   }
 
@@ -101,6 +102,7 @@ export class Nightclub {
     if (this.view === 'closeup') { this.updateCloseup(); return; }
     if (this.view === 'set') {
       this.setT += dt;
+      if (this.video && this.setT % 0.6 < dt) keepLooping(this.video); // paused under it or hung on the last frame: back on
       if (this.setT > 8 || inp.pressed('interact') || inp.taps.length) { this.view = 'walk'; inp.taps.length = 0; this.setVideo(false); }
       return;
     }

@@ -29,6 +29,7 @@ export class GameState {
     this.photosLost = 0;    // polaroids of her in a club owner's safe (src/polaroids.js)
     this.stashVenue = null; // …which club
     this.stash = null;      // his deadline once he's holding enough: { t, venue, x, y, district }
+    this.act = null;        // the story so far (src/act/act.js)
   }
 
   get rank() {
@@ -60,7 +61,10 @@ export class GameState {
 
   locked(key) { return this.lockouts[key] || 0; }
 
-  /** @param vice {active:boolean, where?:string, rate?:number} — where the heroine is right now. */
+  /**
+   * @param vice {active:boolean, where?:string, rate?:number, drain?:boolean} — where the heroine is
+   * right now. drain: false where the meters don't cost reputation (a club case has its own costs).
+   */
   tick(dt, vice) {
     this.time += dt;
     this.clock = (this.clock + dt * 4) % 1440;
@@ -72,6 +76,7 @@ export class GameState {
     else this.vice = Math.max(0, this.vice - dt * 1.2);
     this.intox = Math.max(0, this.intox - dt * 0.7);
 
+    if (vice && vice.drain === false) return;
     let rate = 0;
     if (this.vice >= VICE_LIMIT) rate += 0.5;
     if (this.intox >= INTOX_LIMIT) rate += 0.35;
@@ -91,7 +96,7 @@ export class GameState {
 
   save() {
     try {
-      localStorage.setItem(KEY, JSON.stringify({ seed: this.seed, rep: this.rep, stats: this.stats, clock: this.clock, lockouts: this.lockouts, leads: this.leads, leadsDone: this.leadsDone, cases: this.cases, photosLost: this.photosLost, stashVenue: this.stashVenue, stash: this.stash }));
+      localStorage.setItem(KEY, JSON.stringify({ seed: this.seed, rep: this.rep, stats: this.stats, clock: this.clock, lockouts: this.lockouts, leads: this.leads, leadsDone: this.leadsDone, cases: this.cases, photosLost: this.photosLost, stashVenue: this.stashVenue, stash: this.stash, act: this.act, storyClubs: this.storyClubs }));
     } catch (e) { /* storage unavailable (private mode etc.) */ }
   }
 
@@ -105,6 +110,7 @@ export class GameState {
       s.clock = d.clock ?? s.clock;
       s.lockouts = d.lockouts || {};
       s.leads = d.leads || []; s.leadsDone = d.leadsDone || []; s.cases = d.cases || {}; s.photosLost = d.photosLost || 0; s.stashVenue = d.stashVenue || null; s.stash = d.stash || null;
+      s.act = d.act || null; if (d.storyClubs) s.storyClubs = d.storyClubs;
       return s;
     } catch (e) { return null; }
   }

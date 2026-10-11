@@ -69,6 +69,7 @@ export class City3D {
     this.lmMesh = new THREE.Mesh(LB.geometry(), this.lmMat);
     this.lmMesh.frustumCulled = false;
     scene.add(this.lmMesh, new THREE.Mesh(LB.inkGeometry(), this.look.ink));
+    this.hotelBand = hotelBand(this.landmarks, scene); // the act's hotel: Floor 13 lights up once it opens
     this.ground = cityGround(city, this.look.U, this.landmarks, tileRes >= 128); // lean tiles: a lighter plan too
     scene.add(this.ground);
     this.horizon = new Horizon(scene, this.look.U, [0, 0, city.coastX * M, city.H * M]);
@@ -210,4 +211,22 @@ export class City3D {
     this.ring.update(cam);
     this.street.update(cam);
   }
+}
+
+/**
+ * The hotel tower's 13th floor: a band of green light round the spike (a separate little mesh, off
+ * until the act opens the floor: act.js shows it). The spike is a square pyramid; the band hugs it.
+ */
+function hotelBand(landmarks, scene) {
+  const lm = landmarks.find((l) => l.hotel);
+  if (!lm) return null;
+  const { r, base, cx, cz, H } = lm.hotel, y = base + (H - base) * 0.3;
+  const hs = r + (r * 0.177 - r) * ((y - base) / (H - base));
+  const g = new THREE.CylinderGeometry(hs * 1.414 * 1.03, hs * 1.414 * 1.035, 3, 4, 1, true, Math.PI / 4);
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x39ff6a, toneMapped: false, side: THREE.DoubleSide, fog: false }));
+  m.position.set(cx, y, cz);
+  m.visible = false;
+  m.frustumCulled = false;
+  scene.add(m);
+  return m;
 }

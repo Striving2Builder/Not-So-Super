@@ -20,11 +20,10 @@ docs/references/
 /shots/
 # Agent worktrees for the polish passes
 .claude/worktrees/
-# Personal Claude Code settings (permissions)
-.claude/settings.local.json
-
 # Raw nightclub renders from the user (the stitched plates in assets/nightclub/plates/ are tracked)
 assets/nightclub/incoming/
 
 # Local secrets (API keys): never committed
 .env
+
+.claude/settings.local.json

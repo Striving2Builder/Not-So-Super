@@ -1,11 +1,17 @@
 // The detective nightclubs' case engine: which case a club visit plays, the clues found so far, the
 // case board's lines and the leads a solved case puts on the map. Cases are data
-// (src/nightclub/cases/*.js): Super Squirt, the Polaroid Racket and the Earworm.
+// (src/nightclub/cases/*.js): Super Squirt, the Polaroid Racket and the Earworm, plus the
+// three story clubs' (Halo at the Hive, the Auction at the Gilded Cage, Flashpoint Live).
 import { SQUIRT } from './cases/squirt.js';
 import { BLACKMAIL } from './cases/blackmail.js';
 import { EARWORM } from './cases/earworm.js';
+import { HALO } from './cases/halo.js';
+import { AUCTION } from './cases/auction.js';
+import { FLASHPOINT } from './cases/flashpoint.js';
 
-export const CLUB_CASES = { squirt: SQUIRT, blackmail: BLACKMAIL, earworm: EARWORM };
+export const CLUB_CASES = { squirt: SQUIRT, blackmail: BLACKMAIL, earworm: EARWORM, halo: HALO, auction: AUCTION, flashpoint: FLASHPOINT };
+/** The story clubs' cases: each plays only in its own venue (the 3D club; the 2D club never rolls them). */
+export const STORY_CASES = ['halo', 'auction', 'flashpoint'];
 
 /**
  * The case for this visit: the zone's own (the map labels a club mission with it), else one she
@@ -16,8 +22,9 @@ export function pickCase(zone, state = null) {
   const solved = (c) => !!state?.cases?.[c.id]?.solved;
   if (own) return own;
   if (!state) return SQUIRT;
-  const open = Object.values(CLUB_CASES).filter((c) => !solved(c));
-  const pool = open.length ? open : Object.values(CLUB_CASES);
+  const all = Object.values(CLUB_CASES).filter((c) => !STORY_CASES.includes(c.id));
+  const open = all.filter((c) => !solved(c));
+  const pool = open.length ? open : all;
   return pool[Math.floor(Math.random() * pool.length)];
 }
 

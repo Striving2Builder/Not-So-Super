@@ -78,8 +78,8 @@ export const ASYLUM = {
   venue: 'Ravenmoor Asylum',
   districts: ['suburb', 'farm', 'lair'],
   cellsPerSide: 3,        // padded cells on each side of each of the four wings
-  videoFolder: 'Asylum',  // full-screen clip as the syringe hits (caption only while that folder is empty)
-  // Back in her cell, a clip from assets/video/SG_Asylum_Game/ plays inside a green-screen TV still.
+  videoFolder: 'SG_Asylum_Game', // full-screen clip as the syringe hits (every file in the folder, in turn)
+  // Back in her cell, the next clip from that same folder plays inside a green-screen TV still.
   // It loops until she taps out. No clips yet → brief static, then she can move.
   tvFolder: 'SG_Asylum_Game',
   tvScreens: [
@@ -89,11 +89,11 @@ export const ASYLUM = {
   ].map((f) => `assets/asylum/tv/${f}.webp`),
   reward: 45,
 };
-// Losing a street fight: by morning the city's billboards are playing the footage. A clip from
-// assets/video/<folders[0]>/ (falling back to the next folder) keyed into a green-screen
-// billboard still: red-light ones for fights in the vice districts, downtown ones elsewhere.
+// Losing a street fight: by morning the city's billboards are playing the footage. Every clip in
+// `folders` is dealt in turn, keyed into a green-screen billboard still: red-light ones for fights
+// in the vice districts, downtown ones elsewhere.
 export const BILLBOARDS = {
-  folders: ['Billboards', 'SG_Captured_Game'], // a lost fight
+  folders: 'SG_Captured_Game', // a lost fight: every clip in the folder, in turn
   humiliation: 'SG_Humiliation_Game',          // she takes the deal that costs reputation
   vice: ['redlight', 'naughty', 'nightclub'],
   rld: [2, 4, 6, 8, 10].map((n) => `assets/billboards/rld/sg-mix-${String(n).padStart(2, '0')}.webp`),
@@ -135,6 +135,8 @@ export const VENUES = {
   'Velvet Lounge':     { districts: ['naughty', 'redlight', 'nightclub'], themes: ['blackmail', 'hypnosis', 'intoxication', 'extortion'], vice: true, kind: 'premade', club: 'stripclub', bg: '#07050a', floor: '#2a1d22', wall: '#3a1a22', lights: [0xff3fb8, 0x9d4dff, 0xffc890] },
   'Ravenmoor Asylum':  { districts: ['suburb', 'farm', 'lair'], themes: [], vice: false, kind: 'asylum', asylum: true, bg: '#0a0d0c', floor: '#5a6660', wall: '#c8cfc4', lights: [0xdff5e8, 0xc8f0ff, 0xfff4d8] },
   'Underground Lair':  { districts: ['lair'], themes: ['mindcontrol', 'hypnosis', 'weapons', 'trafficking'], vice: true, kind: 'lair', bg: '#030805', floor: '#1a201c', wall: '#2a322c', lights: [0x39ff6a, 0xa0ff39, 0x39ffd0] },
+  // The act bosses' hotel (src/act/, src/hotel/): opened by the act, never rolled at random.
+  'Slutty Little Red Mini Skirt': { districts: ['lair'], themes: [], vice: false, kind: 'hotel', hotel: true, bg: '#07030a', floor: '#2a1420', wall: '#3a1a2a', lights: [0x39ff6a, 0xc050ff, 0xff2a5a] },
 };
 
 export const THEMES = {
@@ -226,7 +228,8 @@ export const DEALS = [
 ];
 
 // The clubs' cases as the map labels a club mission (the cases themselves: src/nightclub/cases/).
-// A club mission plays the first case she hasn't solved (any, once she's solved them all).
+// A club mission plays one of the first three she hasn't solved, one not already on the map (any, once she's
+// solved them all). The story clubs (those with a `club`) aren't missions: each has its own spot on the map.
 export const CLUB_CASE_LABELS = {
   squirt: { name: 'Super Squirt', theme: 'drugs', risk: 'Super Squirt',
     blurb: 'Someone is pushing a new drug, Super Squirt, through the club. Find out who, and where it comes from.' },
@@ -234,6 +237,14 @@ export const CLUB_CASE_LABELS = {
     blurb: 'Councillors are being drugged and photographed in the club\'s VIP. Find out who is taking the pictures, and who is paying for them.' },
   earworm: { name: 'The Earworm', theme: 'hypnosis', risk: 'Mind control',
     blurb: 'Clubbers are walking out blank-eyed, humming a song nobody can name. Find out what the music is doing to them, and who wants it.' },
+  // the story clubs: each case has its own venue (club: the name on the map and over the DJ wall)
+  // venue: the club building on the map it lives in (its spot stays until the case is solved); color: its map marker
+  halo: { name: 'Halo', club: 'The Hive', venue: 'The Clubhouse', color: '#ffb020', theme: 'drugs', risk: 'Hard · Drugs',
+    blurb: 'A gold drug called Halo is all over the clubs, and the Hive only talks to people who are on it. Solve this one high.' },
+  auction: { name: 'The Auction', club: 'The Gilded Cage', venue: 'Velvet Lounge', color: '#ffd84d', theme: 'blackmail', risk: 'Blackmail',
+    blurb: 'Tonight the Gilded Cage auctions a tape of you. Find out who is selling it, who is buying, and where it goes.' },
+  flashpoint: { name: 'Flashpoint Live', club: 'Flashpoint', venue: 'Triangle Club', color: '#ff2a4a', theme: 'extortion', risk: 'Hard · Paparazzi',
+    blurb: 'A gossip show traps celebrities on its hot seat and humiliates them live. Tonight\'s star is you. Stay out of the lenses.' },
 };
 
 // Videos for the wall TV in the capture room. Put files in assets/video/ (MP4 H.264 or WebM plays

@@ -357,14 +357,14 @@ export class Overworld {
   // ------------------------------------------------------------------ zones
   maintainZones(initial = false) {
     const counts = { street: 0, case: 0, special: 0 };
-    for (const z of this.zones) if (!z.lead && z.kind in counts && !z.stashJob) counts[z.kind]++; // leads are extra, beyond the quota
+    for (const z of this.zones) if (!z.lead && z.kind in counts && !z.stashJob && !z.storyId && !z.hotel) counts[z.kind]++; // leads, the story clubs and the act's hotel are extra, beyond the quota
     // Always keep one club raid (premade 3D club) somewhere on the map.
     const clubs = Object.keys(VENUES).filter((v) => VENUES[v].club);
-    if (clubs.length && !this.zones.some((z) => z.mode === 'special' && VENUES[z.venue]?.club)) { this.spawn('special', initial, pick(clubs)); return; }
+    if (clubs.length && !this.zones.some((z) => z.mode === 'special' && VENUES[z.venue]?.club && !z.storyId)) { this.spawn('special', initial, pick(clubs)); return; }
     // ...and the asylum (its own zone type, src/asylum.js)
-    if (!this.zones.some((z) => z.mode === 'asylum') && this.spawn('asylum', initial)) return;
+    if (!this.zones.some((z) => z.mode === 'asylum')) { const z = this.spawn('asylum', initial); if (z) { if (!this.attract) this.g.act?.tagZone(z); return; } }
     for (const k of ['street', 'case', 'special']) {
-      if (counts[k] < TARGET[k]) { this.spawn(k, initial); return; }
+      if (counts[k] < TARGET[k]) { const z = this.spawn(k, initial); if (z && !this.attract) this.g.act?.tagZone(z); return; } // (the act: a lieutenant's trail, sometimes)
     }
   }
 
@@ -379,7 +379,7 @@ export class Overworld {
     else if (kind === 'street') { def = pick(STREET_CRIMES); districts = def.districts; }
     else if (night) districts = NIGHT_DISTRICTS;
     else if (kind === 'case') { def = pick(CASES); districts = def.districts; }
-    else { venueName = forceVenue || pick(Object.keys(VENUES).filter((v) => !VENUES[v].asylum)); def = VENUES[venueName]; districts = def.districts; }
+    else { venueName = forceVenue || pick(Object.keys(VENUES).filter((v) => !VENUES[v].asylum && !VENUES[v].hotel)); def = VENUES[venueName]; districts = def.districts; }
     const cands = city.blocks.filter((b) => {
       if (b.river || (districts !== '*' && !districts.includes(b.d))) return false;
       const cx = b.x0 + LOT / 2, cy = b.y0 + LOT / 2;
@@ -422,10 +422,15 @@ export class Overworld {
   }
 
   /** A club mission plays one of the clubs' cases: label it with the one it will play. */
-  clubCase(z, riskPrefix) {
-    const st = this.g.state, ids = Object.keys(CLUB_CASE_LABELS), open = ids.filter((k) => !st?.cases?.[k]?.solved);
-    const id = open[0] || pick(ids), L = CLUB_CASE_LABELS[id];
-    Object.assign(z, { clubCase: id, theme: L.theme, name: `${L.name} at ${/^The /.test(z.venue) ? z.venue : 'the ' + z.venue}`, risk: riskPrefix + L.risk, blurb: L.blurb, boss: null });
+  clubCase(z, riskPrefix, forced = null) {
+    const st = this.g.state, ids = forced ? [forced] : Object.keys(CLUB_CASE_LABELS).filter((k) => !CLUB_CASE_LABELS[k].club);
+    const open = ids.filter((k) => !st?.cases?.[k]?.solved);
+    // (a case already waiting on the map isn't offered twice while there are others to play)
+    const listed = new Set(this.zones.map((q) => q.clubCase).filter(Boolean));
+    const fresh = open.filter((k) => !listed.has(k));
+    const id = pick(fresh.length ? fresh : open.length ? open : ids), L = CLUB_CASE_LABELS[id];
+    const at = L.club || z.venue;
+    Object.assign(z, { clubCase: id, theme: L.theme, name: `${L.name} at ${L.club || /^The /.test(at) ? at : 'the ' + at}`, risk: riskPrefix + L.risk, blurb: L.blurb, boss: null });
     if (z.mode === 'special') Object.assign(z, { glyph: '★', color: '#ff3fb8' }); // (no boss: not the ☠ icon)
   }
 
@@ -436,6 +441,22 @@ export class Overworld {
     const st = this.g.state;
     if (!st || !st.leads || !st.leads.length || this.attract) return;
     for (const L of st.leads) if (!this.zones.some((z) => z.leadId === L.id)) this.spawnLead(L);
+  }
+
+  /** The story clubs (CLUB_CASE_LABELS with a `club`): each keeps its own spot on the map until its case is solved. */
+  ensureStoryClubs() {
+    const st = this.g.state;
+    if (!st || this.attract || !this.g.newClubs) return;
+    for (const [id, L] of Object.entries(CLUB_CASE_LABELS)) {
+      if (!L.club || st.cases?.[id]?.solved || this.zones.some((z) => z.storyId === id)) continue;
+      const z = this.spawn('special', true, L.venue);
+      if (!z) continue;
+      // placed once, then saved: the club is in the same street after a reload
+      const spots = (st.storyClubs = st.storyClubs || {}), at = spots[id];
+      if (at) { z.x = at.x; z.y = at.y; z.district = at.district; } else { spots[id] = { x: z.x, y: z.y, district: z.district }; st.save(); }
+      this.clubCase(z, '', id);
+      Object.assign(z, { storyId: id, ttl: Infinity, color: L.color || '#ff3fb8', glyph: '♛' });
+    }
   }
 
   spawnLead(L) {
@@ -451,7 +472,7 @@ export class Overworld {
   update(dt) {
     this.t += dt;
     const g = this.g, h = this.hero, st = g.state, inp = g.input, city = g.city;
-    if ((this.leadT = (this.leadT || 0) - dt) <= 0) { this.leadT = 1; this.ensureLeads(); }
+    if ((this.leadT = (this.leadT || 0) - dt) <= 0) { this.leadT = 1; this.ensureLeads(); this.ensureStoryClubs(); }
     city.updateTraffic(dt);
     this.updateParticles(dt);
 
@@ -569,6 +590,7 @@ export class Overworld {
     // --- zones
     if (!this.attract) {
       stepPolaroids(this, dt);
+      this.g.act?.update(dt, this); // the story: beats, impostor sightings, the hotel (src/act/act.js)
       for (const z of this.zones) {
         z.t += dt;
         if (z.mode === 'nightcase' && !st.isNight && z !== this.near) {
@@ -580,6 +602,7 @@ export class Overworld {
           this.removeZone(z);
           if (z.kind === 'street') st.addRep(-2, `${z.name} went unanswered`);
           else if (z.polaroid) strayLost(st, z);
+          else if (z.impostor) this.g.act?.sightingLost(z);
           else toast(`${z.name} has gone cold.`, 'info');
           break;
         }
@@ -668,6 +691,7 @@ export class Overworld {
     const z = this.near, st = this.g.state;
     if (!z) { toast('Fly over a crime marker to dive in', 'info'); return; }
     if (z.polaroid) { grabPolaroid(this, z); return; }
+    if (z.impostor) { this.g.act?.catchImpostor(this, z); return; }
     const lock = st.locked(z.lockKey);
     if (lock) { toast(`You promised to stay out of ${z.lockKey} zones for ${fmtTime(lock)}`, 'bad'); sfx.lose(); return; }
     this.diving = { z, t: 0, sx: this.hero.x, sy: this.hero.y, z0: this.hero.z, zoom0: this.zoom };
@@ -689,7 +713,7 @@ export class Overworld {
     const key = document.body.classList.contains('touch') ? 'DIVE' : 'SPACE';
     const html = lock
       ? `🔒 <b>${z.name}</b> — locked by your deal for ${fmtTime(lock)}`
-      : `<b>${key}</b> to dive: <b>${z.name}</b> · ${DISTRICTS[z.district].name}<span class="risk" style="background:${rc}33;color:${rc}">${z.risk}</span><br><small>${z.blurb || ''} Reward +${z.reward} · ${z.leadId ? 'Case lead' : `${fmtTime(z.ttl - z.t)} left`}</small>`;
+      : `<b>${key}</b> to dive: <b>${z.name}</b> · ${DISTRICTS[z.district].name}<span class="risk" style="background:${rc}33;color:${rc}">${z.risk}</span><br><small>${z.blurb || ''} Reward +${z.reward} · ${z.leadId ? 'Case lead' : z.hotel ? 'The act boss' : z.storyId ? 'Open until solved' : `${fmtTime(z.ttl - z.t)} left`}</small>`;
     if (el._html !== html) { el.innerHTML = html; el._html = html; }
     el.classList.add('on');
   }
@@ -756,7 +780,7 @@ export class Overworld {
     g.fillStyle = '#fff'; g.strokeStyle = '#d82630'; g.lineWidth = 3;
     g.beginPath(); g.arc(this.hero.x * m, this.hero.y * m, 7, 0, Math.PI * 2); g.fill(); g.stroke();
     const legend = Object.values(DISTRICTS).map((d) => `<span><i style="background:${d.map}"></i>${d.name}</span>`).join('');
-    const kinds = `<span><i style="background:#ffd23f"></i>Street crime</span><span><i style="background:#ff7a1a"></i>Fire</span><span><i style="background:#3fd0ff"></i>Investigation</span><span><i style="background:#b36bff"></i>Night case</span><span><i style="background:#ff3fb8"></i>Special zone</span><span><i style="background:#ff3030"></i>Boss</span><span><i style="background:#9fe8ff"></i>Asylum</span>`;
+    const kinds = `<span><i style="background:#ffd23f"></i>Street crime</span><span><i style="background:#ff7a1a"></i>Fire</span><span><i style="background:#3fd0ff"></i>Investigation</span><span><i style="background:#b36bff"></i>Night case</span><span><i style="background:#ff3fb8"></i>Special zone</span><span><i style="background:#ff3030"></i>Boss</span><span><i style="background:#9fe8ff"></i>Asylum</span><span><i style="background:#3fa0ff"></i>Impostor</span><span><i style="background:#fff2c0"></i>Polaroid</span><span><i style="background:#39ff6a"></i>The hotel</span>`;
     for (const e of this.events.markers()) {
       g.fillStyle = e.color; g.strokeStyle = '#000'; g.lineWidth = 2;
       g.fillRect(e.x * m - 6, e.y * m - 6, 12, 12); g.strokeRect(e.x * m - 6, e.y * m - 6, 12, 12);
@@ -773,13 +797,14 @@ export class Overworld {
     ].map((t) => ({ ...t, d: dist(t.x, t.y, h.x, h.y) })).sort((a, b) => a.d - b.d);
     const rows = targets.slice(0, 8).map((t, i) => `<button class="opt navto" data-i="${i}"><span class="k" style="background:${t.color}"></span><span class="l">${t.name}<small>${t.where} · ${Math.round(t.d / 10)}m${t.left > 0 && t.left < 9999 ? ` · ${fmtTime(t.left)} left` : ''}</small></span></button>`).join('');
     const auto = () => `Autopilot: ${settings.autopilot ? 'ON' : 'OFF'}`;
-    const el = openModal(`<h2>City Map</h2><p class="hint" style="margin:0 0 6px;opacity:.75;font-size:12px">Tap the map or an incident to set a waypoint. With autopilot on, she flies there whenever you let go of the stick.</p><div class="mapwrap"></div><div class="legend">${kinds}<span><i style="background:#6ff7ff"></i>In the air</span></div><h3 style="margin:12px 0 6px;font-size:13px">Nearest incidents</h3><div class="opts">${rows || '<small>Quiet night.</small>'}</div><div class="legend">${legend}</div><div class="opts" style="margin-top:12px"><button class="opt autop"><span class="k">A</span><span class="l">${auto()}</span></button>${this.nav.target ? '<button class="opt clearwp"><span class="k">X</span><span class="l">Clear waypoint</span></button>' : ''}<button class="opt closemap"><span class="k">M</span><span class="l">Close map</span></button></div>`);
+    const el = openModal(`<h2>City Map</h2><p class="hint" style="margin:0 0 6px;opacity:.75;font-size:12px">Tap the map or an incident to set a waypoint. With autopilot on, she flies there whenever you let go of the stick.</p><div class="mapwrap"></div><div class="legend">${kinds}<span><i style="background:#6ff7ff"></i>In the air</span></div><h3 style="margin:12px 0 6px;font-size:13px">Nearest incidents</h3><div class="opts">${rows || '<small>Quiet night.</small>'}</div><div class="legend">${legend}</div><div class="opts" style="margin-top:12px">${this.g.act?.A ? '<button class="opt actb"><span class="k">B</span><span class="l">Act board<small>The Puzzle Maker&#39;s web: lieutenants, goals, the jigsaw</small></span></button>' : ''}<button class="opt autop"><span class="k">A</span><span class="l">${auto()}</span></button>${this.nav.target ? '<button class="opt clearwp"><span class="k">X</span><span class="l">Clear waypoint</span></button>' : ''}<button class="opt closemap"><span class="k">M</span><span class="l">Close map</span></button></div>`);
     el.querySelector('.mapwrap').appendChild(c);
     const close = () => { removeEventListener('keydown', onKey, true); closeModal(el); };
     const setWaypoint = (t) => { this.nav.set(t); sfx.click(); toast(`🧭 Waypoint: ${t.name}${settings.autopilot ? ' (let go of the stick to fly there)' : ''}`, 'info'); close(); };
     const onKey = (e) => {
       if (['KeyM', 'Escape', 'Enter', 'Space'].includes(e.code)) { e.preventDefault(); e.stopPropagation(); close(); }
       if (e.code === 'KeyA') { e.preventDefault(); e.stopPropagation(); settings.toggleAutopilot(); el.querySelector('.autop .l').textContent = auto(); }
+      if (e.code === 'KeyB' && this.g.act?.A) { e.preventDefault(); e.stopPropagation(); close(); this.g.act.openBoard(); }
     };
     addEventListener('keydown', onKey, true);
     c.addEventListener('click', (e) => {
@@ -793,6 +818,7 @@ export class Overworld {
     el.querySelector('.autop').addEventListener('click', () => { settings.toggleAutopilot(); el.querySelector('.autop .l').textContent = auto(); });
     el.querySelector('.clearwp')?.addEventListener('click', () => { this.nav.clear(); close(); });
     el.querySelector('.closemap').addEventListener('click', close);
+    el.querySelector('.actb')?.addEventListener('click', () => { close(); this.g.act.openBoard(); });
     el.addEventListener('click', (e) => { if (e.target === el) close(); });
   }
 
