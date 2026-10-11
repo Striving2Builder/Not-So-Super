@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { HERO_LAYER } from './heropass3d.js';
 import { LOOK } from './look3d.js';
+import { HERO_SKIN, HERO_LOOK } from './settings.js';
 
 /**
  * segs × len: the spine (model metres, × her scale); w: half-width at collar / hem; arch: how far
@@ -28,6 +29,9 @@ const CAPE = {
   hoverW: 0.4,   // hover / slow: the hem fans this much wider and the edges curl less (a full cape hanging off her shoulders)
   dive: [0.3, 0.85], // dive (her feet up): length up, sideways sway / lift cut (it streams straight up along her body with the hair)
 };
+// Supergirl_Dark's cape is maroon like her skirt (the zones' cloth cape takes that from her atlas)
+if (HERO_SKIN === 'dark') Object.assign(CAPE, { outer: ['#94162a', '#6a0e1c'], inner: ['#7a1224', '#520a16'], floor: ['#5c0c1a', '#480814'] });
+if (HERO_LOOK === 'real') CAPE.inkW = 0; // no ink outline round it in the realistic render
 const C = CAPE.folds.length; // columns across the width
 
 /** World-space key light direction (the sun/moon), and its tint on the cape (dark at night). */

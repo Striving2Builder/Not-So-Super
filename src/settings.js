@@ -72,9 +72,12 @@ export const PROFILES = {
 };
 
 export const GRAPHICS_MODES = ['auto', 'high', 'saver'];
-/** Her costume variants (assets/models/: supergirl.glb, hero_classic.glb, hero_ponytail.glb), same rig. */
-export const HERO_SKINS = ['supergirl', 'classic', 'ponytail'];
-export const HERO_SKIN_LABELS = { supergirl: 'Supergirl', classic: 'Classic', ponytail: 'Ponytail' };
+/** Her costume variants (assets/models/, files per render in hero3d.js), same rig. */
+export const HERO_SKINS = ['supergirl', 'classic', 'ponytail', 'dark'];
+export const HERO_SKIN_LABELS = { supergirl: 'Supergirl', classic: 'Classic', ponytail: 'Ponytail', dark: 'Supergirl_Dark' };
+/** How her model is drawn: the comic cel look with ink, or realistic textures under plain PBR light. */
+export const HERO_LOOKS = ['comic', 'real'];
+export const HERO_LOOK_LABELS = { comic: 'Comic', real: 'Realistic' };
 
 let touch = null; // a phone doesn't stop being a phone: read the media query once
 const isTouch = () => { if (touch === null) touch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches; return touch; };
@@ -83,7 +86,7 @@ function read() {
   try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
 }
 function write() {
-  try { localStorage.setItem(KEY, JSON.stringify({ graphics: state.graphics, autoSlow: state.autoSlow, autopilot: state.autopilot, cityFeed: state.cityFeed, hero: state.hero })); } catch (e) { /* private mode */ }
+  try { localStorage.setItem(KEY, JSON.stringify({ graphics: state.graphics, autoSlow: state.autoSlow, autopilot: state.autopilot, cityFeed: state.cityFeed, hero: state.hero, heroLook: state.heroLook })); } catch (e) { /* private mode */ }
 }
 
 const saved = read();
@@ -93,7 +96,12 @@ const state = {
   autopilot: saved.autopilot !== false, // fly toward the waypoint while the stick is idle
   cityFeed: saved.cityFeed !== false,   // clips in the minimap corner
   hero: HERO_SKINS.includes(saved.hero) ? saved.hero : 'supergirl', // her costume model (read once at load)
+  heroLook: HERO_LOOKS.includes(saved.heroLook) ? saved.heroLook : 'comic',
 };
+const query = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+/** The costume / render this page load uses (?hero= / ?look= for tests, else the saved choice). */
+export const HERO_SKIN = HERO_SKINS.includes(query?.get('hero')) ? query.get('hero') : state.hero;
+export const HERO_LOOK = HERO_LOOKS.includes(query?.get('look')) ? query.get('look') : state.heroLook;
 const listeners = [];
 
 /**
@@ -127,6 +135,8 @@ export const settings = {
   /** The chosen costume; the model loads once at start, so a change applies after a reload. */
   get hero() { return state.hero; },
   cycleHero() { state.hero = HERO_SKINS[(HERO_SKINS.indexOf(state.hero) + 1) % HERO_SKINS.length]; write(); return state.hero; },
+  get heroLook() { return state.heroLook; },
+  cycleHeroLook() { state.heroLook = HERO_LOOKS[(HERO_LOOKS.indexOf(state.heroLook) + 1) % HERO_LOOKS.length]; write(); return state.heroLook; },
   onChange(fn) { listeners.push(fn); },
   /** After the browser killed the tab (out of memory): Auto drops to Battery saver, like a slow device. */
   afterCrash() {

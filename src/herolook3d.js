@@ -5,6 +5,7 @@
 // her hair as one blonde mass in three tones (the painted locks and shine kept on top).
 import * as THREE from 'three';
 import { comic, gradMap } from './look3d.js';
+import { HERO_SKIN } from './settings.js';
 
 /** Costume read: saturation, self-light (fraction of albedo), cyan-white rim (only the silhouette). */
 export const SUIT = { sat: 1.45, self: 0.32, rim: [0.62, 0.95, 1.0], rimK: [1.3, 2.4], rimEdge: [0.82, 0.92] }; // rimK: open sky / against dark walls; rimEdge: its fresnel band
@@ -20,6 +21,7 @@ const SKIN = { sat: 1.1, shade: [1.0, 0.86, 0.9], grey: 0.3, floor: 0.8, g: [0.5
  * it reads as its own shape over the red boots instead of one red mass with her legs.
  */
 const SKIRT = { uv: [0.283, 0.262, 0.79, 0.424], red: [0.69, 0.01, 0.016], shade: [0.42, 0.0, 0.03], hem: [0.284, 0.55] }; // red/shade: linear; hem: [v up to, darkness]
+if (HERO_SKIN === 'dark') Object.assign(SKIRT, { red: [0.2, 0.004, 0.012], shade: [0.09, 0.0, 0.012] }); // Supergirl_Dark: maroon
 /**
  * The scene's light on her (3D flight only; the sprites keep white): `tint` multiplies everything she
  * shows (time of day: full by day, warm at dusk, dim and blue at night, so she isn't a daylight sticker

@@ -7,17 +7,22 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { Cape, stripModelCape } from './cape.js';
-import { settings, HERO_SKINS } from './settings.js';
+import { HERO_SKIN, HERO_LOOK } from './settings.js';
 import { dressHero, inkHull } from './herolook3d.js';
 import { inkCharacter, LOOK } from './look3d.js';
 import { renderToCanvas } from './offscreen3d.js';
 
-// Her costume: the pause-menu choice, or ?hero=classic|ponytail (same rig and atlas layout, so the
-// clips, the cape and the flight shaders work on every variant).
-const HERO_FILES = { supergirl: 'supergirl.glb', classic: 'hero_classic.glb', ponytail: 'hero_ponytail.glb' };
-const qHero = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('hero') : null;
-export const HERO_SKIN = HERO_SKINS.includes(qHero) ? qHero : settings.hero;
-const MODEL_URL = 'assets/models/' + HERO_FILES[HERO_SKIN];
+// Her costume (pause menu, or ?hero=supergirl|classic|ponytail|dark) and render (pause menu, or
+// ?look=comic|real). Same rig and atlas layout in every file, so the clips, the cape and the flight
+// shaders work on every variant. Realistic: the original-texture models under their own PBR
+// materials, no cel look or ink (Classic and Ponytail use one file for both).
+const HERO_FILES = {
+  comic: { supergirl: 'supergirl.glb', classic: 'hero_classic.glb', ponytail: 'hero_ponytail.glb', dark: 'hero_dark.glb' },
+  real: { supergirl: 'supergirl_real.glb', classic: 'hero_classic.glb', ponytail: 'hero_ponytail.glb', dark: 'hero_dark_real.glb' },
+};
+export { HERO_SKIN, HERO_LOOK };
+export const HERO_COMIC = HERO_LOOK === 'comic';
+const MODEL_URL = 'assets/models/' + HERO_FILES[HERO_LOOK][HERO_SKIN];
 const ANIMS_URL = 'assets/models/supergirl_anims.glb';
 
 // Clips that should repeat; everything else plays once and holds its last frame.
@@ -190,7 +195,7 @@ export class HeroSprite {
     // + the inner ink hull (the callers ink her silhouette in 2D; this draws the lines inside it:
     // an arm across her body, the skirt over a leg), sized for the sprite in render()
     const look = { self: 0.18, rim: { value: 1.1 }, key: { value: key.position.clone().normalize() }, toneMapped: false };
-    inkHull(inkCharacter(dressHero(this.hero.root, look), { skip: [this.hero.cape.mesh] }));
+    if (HERO_COMIC) inkHull(inkCharacter(dressHero(this.hero.root, look), { skip: [this.hero.cape.mesh] }));
     this.pivot = new THREE.Group();
     this.pivot.add(this.hero.root);
     this.scene.add(this.pivot);

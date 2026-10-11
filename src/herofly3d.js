@@ -5,7 +5,7 @@
 // (herolook3d.js: pushed saturation, self-light, a cyan-white rim, so her red reads against a red
 // dusk sky and a night city alike); plus an inked contact shadow on the street or roof below her.
 import * as THREE from 'three';
-import { HeroModel, heroReady } from './hero3d.js';
+import { HeroModel, heroReady, HERO_COMIC } from './hero3d.js';
 import { inkCharacter } from './look3d.js';
 import { heroMaterial, inkHull, SUIT, HERO_LIGHT } from './herolook3d.js';
 import { HERO_LAYER } from './heropass3d.js';
@@ -80,12 +80,14 @@ export class FlyHero3D {
     this.model.root.scale.setScalar(POSE.scale);
     const cloth = this.model.cape.mesh;
     cloth.visible = false; // the ribbon cape replaces the cloth sheet in flight
-    this.model.root.traverse((o) => {
-      if (!o.isMesh || o === cloth || Array.isArray(o.material) || !o.material || o.material.isMeshBasicMaterial) return;
-      o.material = suitMaterial(o.material, SUIT.self);
-    });
-    inkCharacter(this.model.root, { skip: [cloth] }); // outlines (materials are already comic)
-    inkHull(this.model.root); // (no ink on eyeballs / teeth / face interior)
+    if (HERO_COMIC) {
+      this.model.root.traverse((o) => {
+        if (!o.isMesh || o === cloth || Array.isArray(o.material) || !o.material || o.material.isMeshBasicMaterial) return;
+        o.material = suitMaterial(o.material, SUIT.self);
+      });
+      inkCharacter(this.model.root, { skip: [cloth] }); // outlines (materials are already comic)
+      inkHull(this.model.root); // (no ink on eyeballs / teeth / face interior)
+    }
     // her own copy of the shared ink hull material, so its width can thin with distance (at phone
     // size the shared constant-px hull swallowed her silhouette); same program, own olW uniform
     const hulls = new Map();
@@ -220,6 +222,6 @@ export class FlyHero3D {
     const d = this.cape.eye.lengthSq() ? this.cape.eye.distanceTo(this.group.position) / this.size : LINE.near;
     const far = Math.min(1, Math.max(LINE.min, LINE.near / Math.max(1, d)));
     this.olW.value = LINE.hull * Math.min(1, Math.max(LINE.min, Math.sqrt(LINE.near / Math.max(1, d)))); // (gentler: the hull draws her inner lines too)
-    return [(LINE.ink[0] + (LINE.ink[1] - LINE.ink[0]) * k) * far, LINE.halo * night];
+    return [HERO_COMIC ? (LINE.ink[0] + (LINE.ink[1] - LINE.ink[0]) * k) * far : 0, LINE.halo * night];
   }
 }
