@@ -17,12 +17,12 @@ import { UI, dialog, toast } from './ui.js';
 import { sfx } from './sfx.js';
 import { ambience } from './ambience.js';
 import { $, pick, chance, fmtTime } from './util.js';
-import { loadHero, HERO_SKIN } from './hero3d.js';
+import { loadHero, HERO_SKIN, HERO_LOOK } from './hero3d.js';
 import { loadEnemies } from './enemies.js';
 import { playCutscene, playScreenScene } from './cutscene.js';
 import { comic } from './comic.js';
 import { Commentary } from './commentary.js';
-import { settings, quality, autoTune, HERO_SKIN_LABELS } from './settings.js';
+import { settings, quality, autoTune, HERO_SKIN_LABELS, HERO_LOOK_LABELS } from './settings.js';
 import { perfHud } from './perfhud.js';
 import { gfxLost, crashedLastTime } from './gfx.js';
 import { BUILD } from './version.js';
@@ -301,7 +301,8 @@ async function pauseMenu() {
       { label: `Comic commentary: ${comic.enabled ? 'ON' : 'OFF'}`, value: 'c' },
       { label: `Graphics: ${settings.graphicsLabel}`, note: 'Battery saver: 30 fps, lighter clubs', value: 'g' },
       { label: `City feed videos: ${settings.cityFeed ? 'ON' : 'OFF'}`, note: 'Clips in the minimap corner', value: 'f' },
-      { label: `Hero: ${HERO_SKIN_LABELS[settings.hero]}`, note: settings.hero === HERO_SKIN ? 'Supergirl / Classic / Ponytail costume' : 'Reload the page to change costume', value: 'v' },
+      { label: `Hero: ${HERO_SKIN_LABELS[settings.hero]}`, note: settings.hero === HERO_SKIN ? 'Supergirl / Classic / Ponytail / Supergirl_Dark costume' : 'Reload the page to change costume', value: 'v' },
+      { label: `Hero render: ${HERO_LOOK_LABELS[settings.heroLook]}`, note: settings.heroLook === HERO_LOOK ? 'Comic or realistic, for testing' : 'Reload the page to change render', value: 'l' },
       { label: 'How to play', value: 'h' },
       ...(inMission ? [{ label: 'Abort mission', note: '−3 reputation', value: 'a', cls: 'bad' }] : []),
       ...(game.modeName === 'overworld' ? [{ label: 'Save & quit to title', value: 'q' }] : []),
@@ -312,6 +313,7 @@ async function pauseMenu() {
   if (v === 'g') { settings.cycleGraphics(); return pauseMenu(); }
   if (v === 'f') { if (!settings.toggleCityFeed()) game.overworld.feed.stop(); return pauseMenu(); }
   if (v === 'v') { settings.cycleHero(); return pauseMenu(); }
+  if (v === 'l') { settings.cycleHeroLook(); return pauseMenu(); }
   if (v === 'h') { await dialog({ title: 'How to play', text: HOWTO }); return pauseMenu(); }
   if (v === 'a' && game.mode.abort) game.mode.abort();
   if (v === 'q') { st.save(); showTitle(); }

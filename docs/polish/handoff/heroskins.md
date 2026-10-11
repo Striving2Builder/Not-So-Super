@@ -32,3 +32,21 @@ Branch based on phase-2 b1af2f6. Blender 5.2 via blender-mcp.
 - Ponytail: faint outline of the old knee-trim V on the thighs; a tiny blue suit seam fleck at her left
   armpit; slight seam ring at the back of the neck (slimmed collar).
 - Gloss is painted (comic highlight) not a roughness map: the toon flight shader ignores roughness.
+
+## 2026-10-10: Supergirl_Dark, fuller bust, comic / realistic render
+- Fuller bust on every skin (`tools/heroskins/bust.py`: a displacement field in mesh space, masked off the
+  arms and the back, normals carried through its Jacobian; `reshape(path)` = import, bust, export in
+  place). Applied to supergirl.glb, hero_classic.glb, hero_ponytail.glb and the new files. Rest-pose push
+  5.1 cm (model units); Running / Jump / Flying poses checked in Blender, no tearing.
+- Supergirl_Dark (`dark`, label "Supergirl_Dark"): `tools/heroskins/dark_blender.py` + `paint_dark.py`.
+  Sky-blue suit, maroon skirt / cape / knee boots (gold V trim), bare thighs, long messy dirty-blonde hair,
+  red-rimmed teary eyes with mascara tracks (comic: gasping mouth). Comic file hero_dark.glb (supergirl.glb's
+  hair shell, made fuller and ragged), realistic hero_dark_real.glb (the original's hair cards, messier).
+  herolook3d's flat skirt red and capefly3d's ribbon cape take a maroon palette for `dark`.
+- Render switch: `settings.heroLook` comic | real (pause menu "Hero render", `?look=real`). Realistic loads
+  supergirl_real.glb (the original 9bdb0be model + bust) / hero_dark_real.glb (Classic / Ponytail: same file)
+  and skips the cel material, ink hulls, flight keyline and cape ink (hero3d `HERO_COMIC`). The 2D modes'
+  sprite post-ink (brawler / 2D flight) still applies.
+- Rebuild: `uv run --no-project --with numpy,pillow,scipy python tools/heroskins/paint_dark.py` (system
+  Python has no numpy here); Blender steps in the docstrings. Checks: hero lab `--query hero=dark&look=real`,
+  `shoot.js selfbuilt3d --only warehouse --query hero=dark[&look=real]` (no page errors).
