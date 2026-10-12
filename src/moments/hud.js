@@ -72,12 +72,13 @@ export function ping(ctx, x, y, t, col = '#9fdcff') {
 }
 
 /**
- * The moment's banner, centred under the HUD's top panel: an ink plate with the title, a clock and
- * up to two meters. b: { title, col, time (s left, or null), meters: [{ label, v 0..1, col, warn }] }.
- * top: px from the top (below #hud-top). Returns its height.
+ * The moment's banner, under the HUD's title panel, between the rep panel and the LIVE / minimap
+ * corner (never over either): an ink plate with the title, a clock and up to two meters.
+ * b: { title, col, time (s left, or null), meters: [{ label, v 0..1, col, warn }] }; at: bannerSpot().
  */
-export function banner(ctx, W, top, b, t) {
-  const meters = b.meters || [], w = Math.min(330, W * 0.42), x = W / 2 - w / 2;
+export function banner(ctx, at, b, t) {
+  const meters = b.meters || [], w = at.w, x = at.x, top = at.y;
+  if (w < 180) return 0; // (no room on this screen: the tags carry it)
   const h = 30 + meters.length * 15;
   ctx.save();
   ctx.lineJoin = 'round';
@@ -110,9 +111,15 @@ export function banner(ctx, W, top, b, t) {
   return h;
 }
 
-/** The screen's top band free of the HUD (below #hud-top): where the banner goes. */
-export function bannerTop(rects) {
-  let top = 56;
-  for (const r of rects) if (r.top < 40 && r.left < innerWidth * 0.62 && r.right > innerWidth * 0.38) top = Math.max(top, r.bottom + 6);
-  return top;
+let spot = null, spotT = 0;
+/** Where the banner goes: under #hud-top, between #hud-left and #mapbox (the LIVE panel grows there). Cached briefly. */
+export function bannerSpot(W) {
+  const now = performance.now();
+  if (spot && now - spotT < 300) return spot;
+  spotT = now;
+  const r = (id) => { const e = document.getElementById(id), b = e && e.getBoundingClientRect(); return b && b.width ? b : null; };
+  const L = r('hud-left'), T = r('hud-top'), R = r('mapbox');
+  const x0 = (L ? L.right : 0) + 10, x1 = (R ? R.left : W) - 10, w = Math.min(320, x1 - x0);
+  spot = { x: (x0 + x1) / 2 - w / 2, w, y: (T ? T.bottom : 50) + 6 };
+  return spot;
 }

@@ -6,14 +6,9 @@
 // It also owns the shared beats: the swoop (DIVE onto a moment's target), slow motion on a catch,
 // the burst / stinger / camera kick, and a timeline of what was offered and taken (harness: .log).
 import { Kit3D } from './kit3d.js';
-import { banner, bannerTop } from './hud.js';
+import { banner, bannerSpot } from './hud.js';
 import { AirMoment, drawAir3d, overlayAir } from './air3d.js';
 import { ImpostorChase } from './impostor.js';
-import { HelpCall } from './help.js';
-import { PolaroidScatter } from './scatter.js';
-import { CourierTail } from './tail.js';
-import { RiddleChain } from './riddle.js';
-import { NewsChopper } from './chopper.js';
 import { BLOCK, ROAD, LOT } from '../city.js';
 import { clamp, lerp, rand, dist } from '../util.js';
 import { comic } from '../comic.js';
@@ -32,14 +27,13 @@ export const DIRECTOR = {
   slow: { k: 0.25, hold: 0.42, ease: 0.3 }, // slow motion on a catch: time scale, real seconds held, eased back
 };
 
-/** What can come up: cooldown (s), group (shares a cooldown), gate, weight, maker. */
+/**
+ * What can come up: cooldown (s), group (shares a cooldown), gate, weight, maker. (Designed next, not
+ * built yet: a courier-van tail, Polaroids blowing off a roof, a super-hearing street rescue, a
+ * Puzzle Maker riddle chain, a news chopper: docs/polish/handoff/travel-r11.md.)
+ */
 const KINDS = {
   impostor: { big: true, ok: (c) => !!c.act?.sightingDue?.(), w: () => 9, make: (d, f) => ImpostorChase.offer(d, f) },
-  tail: { big: true, cool: 100, ok: (c) => c.rep >= 60, w: (c) => (c.gate ? 3.2 : 1.6), make: (d, f) => CourierTail.offer(d, f) },
-  riddle: { big: true, cool: 110, ok: (c) => c.riddles, w: () => 2.2, make: (d, f) => RiddleChain.offer(d, f) },
-  chopper: { big: true, cool: 130, ok: (c) => c.rep >= 60, w: () => 1.3, make: (d, f) => NewsChopper.offer(d, f) },
-  scatter: { cool: 75, ok: (c) => c.strays || c.rep < 0, w: (c) => (c.fakesShort ? 3 : 1.5), make: (d, f) => PolaroidScatter.offer(d, f) },
-  help: { cool: 45, ok: () => true, w: () => 2.2, make: (d, f) => HelpCall.offer(d, f) },
   faller: { cool: 60, ok: () => true, w: () => 1.4, make: (d, f) => AirMoment.offer(d, 'faller', f) },
   car: { cool: 60, group: 'car', ok: () => true, w: () => 1, make: (d, f) => AirMoment.offer(d, 'car', f) },
   getaway: { cool: 60, group: 'car', ok: (c) => c.night || c.rep >= 40, w: () => 1.1, make: (d, f) => AirMoment.offer(d, 'getaway', f) },
@@ -308,7 +302,7 @@ export class MomentDirector {
     overlayAir(this, ctx, P, W, H, view);
     const focus = this.live.filter((m) => !m.result && m.banner).sort((a, b) => (b.taken - a.taken) || (a.t - b.t))[0];
     const b = focus?.banner();
-    if (b) banner(ctx, W, bannerTop(view.hudRects()), b, this.ow.t);
+    if (b) banner(ctx, bannerSpot(W), b, this.ow.t);
   }
 
   /** The old 2D view: tags only. */

@@ -316,12 +316,13 @@ export class AirEvents {
     else if (why) toast(why, 'info');
   }
 
-  /** Speech bubble from the event's spot on screen (only when it's on screen). */
+  /** Speech bubble from the event's spot on screen (only when it's on screen; 3D or the 2D view). */
   say(e, text, kind, speaker) {
-    const V = this.ow.V;
-    if (!V) return;
-    const x = V.SX(e.x, e.z || 0), y = V.SY(e.y, e.z || 0);
-    if (x < 0 || y < 0 || x > V.W || y > V.H) return;
+    const v = this.ow.view3d, V = this.ow.V, W = this.g.w, H = this.g.h;
+    let x, y;
+    if (v && document.body.classList.contains('fly3d')) { const p = v.projector().proj(e.x, e.y, (e.z || 0) + 6); if (!p[2]) return; [x, y] = p; }
+    else if (V) { x = V.SX(e.x, e.z || 0); y = V.SY(e.y, e.z || 0); } else return;
+    if (x < 40 || y < 60 || x > W - 40 || y > H - 40) return;
     this.g.commentary.talk(text, x, y - 20, { kind, speaker });
   }
 

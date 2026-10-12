@@ -36,11 +36,6 @@ const SCENES = {
   heli: { clock: 17 * 60 + 50, band: 1 },
   rings: { clock: 10 * 60, band: 1 },
   kitten: { clock: 13 * 60, band: 1 },
-  help: { clock: 20 * 60 + 30, band: 1 },
-  scatter: { clock: 19 * 60 + 10, act: 'local', band: 1 },
-  tail: { clock: 22 * 60, act: 'guardian', band: 1 },
-  riddle: { clock: 16 * 60, act: 'lair', band: 1 },
-  chopper: { clock: 23 * 60 + 30, act: 'local', band: 1 },
 };
 
 // ------------------------------------------------------------------ the in-page player
@@ -155,8 +150,13 @@ async function playMoment(browser, kind, sc) {
     await page.evaluate(installBot);
     await page.evaluate((k) => { window.__bot.kind = k; }, kind);
     const t0 = Date.now();
-    // wait for the moment to be offered
-    await page.waitForFunction((k) => window.__game.overworld.moments.live.some((m) => m.kind === k), kind, { timeout: 30000 });
+    // wait for the moment to be offered (story-beat dialogs pause the game: keep clicking them through)
+    for (let i = 0; ; i++) {
+      await clearModals(page);
+      if (await page.evaluate((k) => window.__game.overworld.moments.live.some((m) => m.kind === k), kind)) break;
+      if (i > 120) throw new Error(`${kind} was never offered`);
+      await page.waitForTimeout(250);
+    }
     let n = 0, settled = null;
     while (Date.now() - t0 < (sc.wall || 150000)) {
       await clearModals(page);
