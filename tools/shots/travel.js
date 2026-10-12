@@ -126,7 +126,11 @@ async function newGame(browser, query) {
 async function clearModals(page) {
   return page.evaluate(() => {
     let n = 0;
-    for (const el of [...document.querySelectorAll('#modal-root .modal-back')].reverse()) { const b = el.querySelector('.opt, .spot-b, .um-go, .cb-close, button'); if (b) { b.click(); n++; } }
+    for (const el of [...document.querySelectorAll('#modal-root .modal-back')].reverse()) {
+      const b = el.querySelector('.opt, .spot-b, .um-go, .cb-close, button');
+      if (b) b.click(); else { (el.querySelector('.modal') || el).click(); el.click(); } // (a newspaper: tap to continue)
+      n++;
+    }
     const c = document.querySelector('#cutscene.on'); if (c) { for (let i = 0; i < 4; i++) c.click(); n++; }
     return n;
   });
@@ -145,7 +149,7 @@ async function playMoment(browser, kind, sc) {
     await page.evaluate(({ clock, band }) => {
       const g = window.__game, ow = g.overworld;
       g.state.clock = clock; ow.nav.clear(); ow.hero.band = band;
-      for (const z of [...ow.zones]) if (!z.storyId && !z.leadId && Math.hypot(z.x - ow.hero.x, z.y - ow.hero.y) < 900) ow.removeZone(z); // (a clear sky round her)
+      for (const z of [...ow.zones]) if (!z.storyId && !z.leadId && !z.impostor && Math.hypot(z.x - ow.hero.x, z.y - ow.hero.y) < 900) ow.removeZone(z); // (a clear sky round her)
     }, sc);
     await page.evaluate(installBot);
     await page.evaluate((k) => { window.__bot.kind = k; }, kind);
