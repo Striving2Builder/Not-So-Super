@@ -4,7 +4,9 @@
 //
 //   node tools/shots/shoot.js <area|all> [--label NAME] [--port 8120] [--only SCENARIO] [--query k=v&k2=v2]
 //   --query: extra URL parameters for every scenario (e.g. hero=ponytail)
-//   areas: flying premade3d selfbuilt3d brawler investigation nightlife
+///   areas: flying premade3d selfbuilt3d brawler investigation nightlife
+//   (premade3d keeps its name: it shoots the club venues that had premade 3D clubs, which now play the
+//   3D club, src/club3d/; tools/shots/club3d.js covers the club itself)
 //
 // FPS comes from software rendering (SwiftShader): compare runs against each other, not phones.
 const path = require('path');
@@ -51,7 +53,7 @@ const AREAS = {
     // midday: the clean, bright daytime read (cruise, then the patrol view)
     fly3d_day: { type: 'fly3d', plan: 'day' },
   },
-  premade3d: {
+  premade3d: { // the club venues: a raid there opens the 3D club
     triangle: Z3('special', 'Triangle Club', 'Madame Mesmer'),
     clubhouse: Z3('special', 'The Clubhouse', 'Mister Midas'),
     velvet: Z3('special', 'Velvet Lounge'),
@@ -60,7 +62,7 @@ const AREAS = {
     warehouse: Z3('special', 'Warehouse', 'Count Cashflow'),
     penthouse: Z3('special', 'Penthouse'),
     lair: Z3('special', 'Underground Lair', 'Doctor Dollar'),
-    asylum: Z3('asylum'),
+    asylum: { ...Z3('asylum'), clues: true }, // + a clue in its cell, and the X-ray scan
   },
   brawler: {
     street: { type: 'brawl' },
@@ -81,7 +83,7 @@ const AREAS = {
     dayfarm: { type: 'investigate', setting: 'poison' },
     dayfactory: { type: 'investigate', setting: 'sabotage' },
     dayinsider: { type: 'investigate', setting: 'insider', paint: 'office_2' },
-    nightcase: { ...Z3('nightcase', 'Triangle Club'), clues: true },
+    nightcase: Z3('nightcase', 'Triangle Club'), // a night case on the map: it plays the 3D club
   },
   nightlife: {
     nightclub: Z3('special', 'Nightclub'),
@@ -300,14 +302,21 @@ async function shootInvestigate(page, dir, name, setting, moments, paint) {
   return { shots, ...m };
 }
 
-// Night case: walk up to a piece of evidence, then look again with X-ray (clue marker, beam, scan).
+// Night case (the asylum): open the cell holding a piece of evidence and stand in its doorway, then
+// look again with X-ray (clue marker, the scan).
 async function shootNightClues(page, dir, name) {
   const out = [];
   const place = (i) => page.evaluate((i) => {
-    const m = window.__game.mode, o = m.clueObjs[i % m.clueObjs.length];
+    const m = window.__game.mode, list = m.clueObjs || [], o = list[i % list.length];
     if (!o) return false;
-    m.hero.position.set(o.pos.x, o.pos.y, o.pos.z + 2.6);
-    m.hero.rotation.y = Math.PI; m.yaw = 0;
+    const d = (m.doors || []).find((q) => q.cell.center.distanceTo(o.pos) < 2.4); // (the medicine cabinet is in the hub)
+    if (d) {
+      m.openDoor(d, true);
+      const p = d.cell.door.clone().lerp(d.cell.center, -0.5); // a step back into the hall
+      m.hero.position.set(p.x, 0, p.z);
+      m.hero.rotation.y = Math.atan2(d.cell.center.x - p.x, d.cell.center.z - p.z);
+    } else { m.hero.position.set(o.pos.x, o.pos.y, o.pos.z + 2.6); m.hero.rotation.y = Math.PI; }
+    m.yaw = m.hero.rotation.y - Math.PI; m._lastGood = null;
     return true;
   }, i);
   if (!(await place(0))) return out;

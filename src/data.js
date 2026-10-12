@@ -120,9 +120,11 @@ export const ASYLUM_BAIT = [
   { name: 'Patient File', desc: 'A thick file marked CONFIDENTIAL. It could be evidence… or a setup.' },
 ];
 
-// Special zones (3D third-person). One venue per special district.
+// Special zones (3D third-person). One venue per special district. A club venue (kind 'club' or
+// `club`) plays the 3D club (src/club3d/); the others play the code-built rooms (special3d.js:
+// bg, floor, wall, lights; nightlife.js for the nightlife kinds).
 export const VENUES = {
-  'Nightclub':         { districts: ['nightclub'], themes: ['drugs', 'intoxication', 'gang', 'blackmail', 'hypnosis'], vice: true, kind: 'club', bg: '#0c0716', floor: '#1b1428', wall: '#2c2142', lights: [0xff2fd0, 0x27e0ff, 0x9d4dff] },
+  'Nightclub':         { districts: ['nightclub'], themes: ['drugs', 'intoxication', 'gang', 'blackmail', 'hypnosis'], vice: true, kind: 'club', bg: '#0c0716', wall: '#2c2142' },
   'Warehouse':         { districts: ['warehouse', 'docks'], themes: ['weapons', 'drugs', 'trafficking', 'gang'], vice: true, kind: 'warehouse', bg: '#0b0c0e', floor: '#3a3a3c', wall: '#57524a', lights: [0xffd9a0, 0xfff2d0, 0x9fc8ff] },
   'Penthouse':         { districts: ['financial', 'downtown'], themes: ['blackmail', 'extortion', 'mindcontrol', 'intoxication'], vice: true, kind: 'penthouse', bg: '#050a18', floor: '#a8a296', wall: '#9fb8d8', lights: [0xfff1d6, 0x9fd0ff, 0xffd08a] },
   'High-Roller Suite': { districts: ['casino'], themes: ['extortion', 'blackmail', 'gang', 'hypnosis'], vice: false, kind: 'casino', bg: '#12060a', floor: '#5a1830', wall: '#3a1a24', lights: [0xffd84d, 0xff4d4d, 0xfff1c0] },
