@@ -31,7 +31,9 @@ const TRAP_DEFAULT = { title: 'BREAK FREE!', text: 'They\'ve got her held tight.
 // `daze` seconds; for `cover` seconds nobody (bouncers, paparazzi) can pick her out, so she can get
 // into the crowd. Without this the bouncers who caught her were still staring at her and she was
 // caught again the moment the struggle ended.
-export const SHAKE = { r: 9, daze: 7, cover: 6 };
+// `again`: caught again this soon after breaking free, she doesn't land back in the same spot: she
+// bolts through the crowd to the far side of the floor (no dead end: the same lock never replays).
+export const SHAKE = { r: 9, daze: 7, cover: 6, again: 30 };
 // the USE spots a sober hero can still work in the Hive: the ways to get high, the fights, the way out
 const SOBER_OK = /^(Order at the bar|Fly out|Check the first stall|Take the shot-off|Change into|Kick in|Take on|Stop the courier|Read the glowing)/;
 
@@ -139,11 +141,17 @@ export const storyMethods = {
     sfx.trap();
     this.music.update(1, true);
     await clipsReady;
-    const free = await struggle({ clip: nextClip(d.clips?.trap || CLIPS.captive), title: T.title, text: `${reason} ${T.text}`, diff: this.diff.struggle });
+    const left = this.captureAt() - (this.sedations || 0);
+    const stakes = left <= 1 ? '<b>Lose this one and they carry you out.</b>' : 'Lose it and the whole club watches. You come to somewhere else.';
+    const again = this.t - (this.freeAt ?? -999) < SHAKE.again;
+    const free = await struggle({ clip: nextClip(d.clips?.trap || CLIPS.captive), title: T.title, text: `${reason} ${T.text}<br>${stakes}`, diff: this.diff.struggle });
     if (free) {
       this.shakeOff();
+      if (again) this.slipAway();
       this.heroClip('getUp', 1.0);
-      banner('FREE!', `They're down. Get into the crowd: ${SHAKE.cover}s`, '#3ee08a');
+      banner('FREE!', again ? 'You bolt through the crowd to the far side' : `They're down. Get into the crowd: ${SHAKE.cover}s`, '#3ee08a');
+      this.freeAt = this.t;
+      this.kick?.(0.8);
       this.sedating = false; this.busy = false;
       return true;
     }
@@ -170,17 +178,33 @@ export const storyMethods = {
     st.intox = Math.min(st.intox, 80); // (a blackout she fought off mustn't take her down again the next frame)
     this.crowd?.shove(h.x, h.z, 4, 1);
     sfx.hit();
+    this.resetGuardMinds?.(); // (whoever was coming to look forgets where she went: stealth.js)
     for (const gd of this.guards) {
       if (gd.ko) continue;
-      // whoever was coming to look forgets where she went
-      if (gd.inv) { gd.route = gd.inv.saved.route; gd.wp = gd.inv.saved.wp; gd.inv = null; }
-      gd.lastSeen = null; gd.look = 0;
+      gd.look = 0;
       const m = gd.mesh;
       if (gd.high || Math.hypot(m.position.x - h.x, m.position.z - h.z) > SHAKE.r) continue;
       gd.ko = true; gd.dazed = this.t + SHAKE.daze; gd.cone.visible = false;
       if (m.enemy) m.enemy.knockDown();
       else { gd.y0 = m.position.y; m.rotation.x = -Math.PI / 2; m.position.y = gd.y0 + 0.15; }
     }
+  },
+
+  /** Caught twice running: she breaks for it and comes out of the crowd on the far side of the floor. */
+  slipAway() {
+    const V = this.plan.V, h = this.hero.position;
+    let best = null, bd = -1;
+    for (const [x, z, rx, rz, w] of V.crowd || []) {
+      if (w < 0.3 || Math.abs(x) > V.hw - 2 || Math.abs(z) > V.hd - 2) continue;
+      for (const sx of [-0.5, 0, 0.5]) {
+        const px = x + sx * rx, pz = z, d = Math.hypot(px - h.x, pz - h.z);
+        if (d > bd && !this.colliders.some((c) => !c.disabled && px > c.minX - 0.5 && px < c.maxX + 0.5 && pz > c.minZ - 0.5 && pz < c.maxZ + 0.5)) { bd = d; best = { x: px, z: pz }; }
+      }
+    }
+    if (!best) return;
+    h.set(best.x, h.y, best.z); this.camSnap = true;
+    this.escapeT = Math.max(this.escapeT, SHAKE.cover + 2);
+    this.crowd?.shove(best.x, best.z, 3, 0.6);
   },
 
   /** The cover running out; dazed bouncers getting back up (and back on their rounds). */

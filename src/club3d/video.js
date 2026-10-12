@@ -71,16 +71,19 @@ export function showDJ(video) {
  * tiled twice across (wide walls show two mirrored copies instead of one stretched one); fit:
  * the plane's aspect, to pillarbox a clip of another shape instead of stretching it;
  * `keyed` (a uniform, flipped live) turns green to the screen's dark `bg`.
+ * `cam` (0..1, cctv.js) cuts it over to the security feed on her: camMap (the feed, camLive 0 = snow),
+ * ovMap (its burnt-in text), pillarboxed by planeA (the plane's aspect) with hazard stripes either side.
  */
 export function screenMat(video, { led = false, scan = false, mirror = false, bright = 1, bg = 0x05040a, fit = 0 } = {}) {
   const U = {
     map: { value: video.tex }, ready: { value: 0 }, keyed: { value: 0 }, t: { value: 0 }, bright: { value: bright },
     bg: { value: new THREE.Color(bg) }, flash: { value: 0 }, fitA: { value: fit }, vidA: { value: 16 / 9 },
+    cam: { value: 0 }, camMap: { value: video.tex }, ovMap: { value: null }, camLive: { value: 0 }, camA: { value: 16 / 9 }, planeA: { value: fit || 16 / 9 },
   };
   const m = new THREE.ShaderMaterial({
     uniforms: U,
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform sampler2D map; uniform float ready, keyed, t, bright, flash, fitA, vidA; uniform vec3 bg; varying vec2 vUv;
+    fragmentShader: `uniform sampler2D map, camMap, ovMap; uniform float ready, keyed, t, bright, flash, fitA, vidA, cam, camLive, camA, planeA; uniform vec3 bg; varying vec2 vUv;
 float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 void main(){
   vec2 uv = vUv;
@@ -94,6 +97,30 @@ void main(){
   c.g = mix(c.g, min(c.g, max(c.r, c.b) * 1.05), keyed);
   c = mix(bg, c, a * inside);
   c *= ready;
+  if (cam > 0.001) {
+    // security has her: the feed in the middle (its own shape), hazard stripes either side
+    float fw = min(1.0, camA / planeA);
+    vec2 fu = vec2((vUv.x - 0.5) / fw + 0.5, vUv.y);
+    float inF = step(0.0, fu.x) * step(fu.x, 1.0);
+    vec2 fc = clamp(fu, 0.0, 1.0);
+    float l = dot(texture2D(camMap, fc).rgb, vec3(0.3, 0.59, 0.11));
+    vec3 cc = vec3(0.62, 1.0, 0.72) * (0.05 + pow(l, 0.8) * 1.35);
+    cc = mix(vec3(h(floor(fc * vec2(170.0, 96.0)) + fract(t * 13.0)) * 0.42), cc, camLive);
+    cc *= 0.84 + 0.16 * sin(fc.y * 300.0 + t * 10.0);
+    cc += (h(fc * vec2(330.0, 190.0) + fract(t * 7.0)) - 0.5) * 0.12;
+    vec4 ov = texture2D(ovMap, fc);
+    cc = mix(cc, ov.rgb, ov.a);
+    float dotR = length((fc - vec2(0.075, 0.885)) * vec2(camA, 1.0));
+    cc = mix(cc, vec3(1.0, 0.08, 0.12), (1.0 - smoothstep(0.03, 0.038, dotR)) * step(0.45, fract(t * 1.3)));
+    float stripe = step(0.5, fract((vUv.x * planeA + vUv.y) * 1.4 - t * 0.8));
+    vec3 hz = mix(vec3(0.07, 0.0, 0.02), vec3(0.95, 0.07, 0.12), stripe) * (0.7 + 0.3 * sin(t * 8.0));
+    float ex = min(fc.x, 1.0 - fc.x) * fw * planeA, ey = min(fc.y, 1.0 - fc.y);
+    vec3 camC = mix(hz, cc, inF);
+    camC = mix(camC, vec3(1.0, 0.1, 0.14), inF * (1.0 - step(0.04, min(ex, ey))));
+    // the cut: row by row, at random, a glitch rather than a fade
+    float k = step(h(vec2(floor(vUv.y * 22.0), floor(t * 18.0))) * 0.98, cam);
+    c = mix(c, camC * 1.1, k);
+  }
   ${led ? 'vec2 cell = fract(vUv * vec2(260.0, 72.0)); c *= 0.55 + 0.45 * smoothstep(0.5, 0.2, length(cell - 0.5));' : ''}
   ${scan ? 'c = vec3(dot(c, vec3(0.3, 0.59, 0.11))) * vec3(0.75, 1.05, 0.85); c *= 0.8 + 0.2 * sin(vUv.y * 360.0 + t * 8.0); c += (h(vUv * 300.0 + t) - 0.5) * 0.12;' : ''}
   c = c * bright + flash;
@@ -115,16 +142,18 @@ export function reflectMat(video, { reach = 1, from = 0, mirror = true, bright =
   const U = {
     map: { value: video.tex }, ready: { value: 0 }, keyed: { value: 0 }, t: { value: 0 }, bright: { value: bright },
     bg: { value: new THREE.Color(0) }, flash: { value: 0 }, fitA: { value: 0 }, vidA: { value: 16 / 9 }, reach: { value: reach }, from: { value: from },
+    cam: { value: 0 },
   };
   const m = new THREE.ShaderMaterial({
     uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform sampler2D map; uniform float ready, t, bright, flash, reach, from; varying vec2 vUv;
+    fragmentShader: `uniform sampler2D map; uniform float ready, t, bright, flash, reach, from, cam; varying vec2 vUv;
 void main(){
   float d = 1.0 - vUv.y;                       // 0 at the wall → 1 at the far edge
   vec2 uv = vec2(vUv.x + 0.004 * sin(vUv.y * 70.0 + t * 1.7) * d, d * reach - from);
   ${mirror ? 'uv.x *= 2.0; if (uv.x > 1.0) uv.x = 2.0 - uv.x;' : ''}
   vec3 c = texture2D(map, clamp(uv, 0.0, 1.0)).rgb * ready * step(0.0, uv.y) * step(uv.y, 1.0);
+  c = mix(c, vec3(0.9, 0.06, 0.1) * (0.6 + 0.4 * sin(t * 8.0)), cam * 0.85); // (the wall's gone to the security feed: red in the floor)
   float k = (1.0 - d) * (1.0 - d) * smoothstep(0.0, 0.06, vUv.x) * smoothstep(1.0, 0.94, vUv.x);
   gl_FragColor = vec4((c * bright + flash * 0.3) * k, 1.0);
   #include <colorspace_fragment>

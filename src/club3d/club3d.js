@@ -37,12 +37,18 @@ import { storyMethods, DIFF } from './story.js';
 import { pressMethods } from './press.js';
 import { backroomMethods } from './backrooms.js';
 import { clubFeedMethods } from './livefeed.js';
+import { stealthMethods } from './stealth.js';
+import { tensionMethods } from './tension.js';
+import { cctvMethods } from './cctv.js';
+import { selfTalkMethods } from './selftalk.js';
 import { INTOX_HAZE } from '../state.js';
 
 const SPEED = 4.6;          // her walk (m/s); a packed crowd slows her by up to 40%
 const IDLE_FACE = 1.5;      // seconds standing still before she turns to the viewer
-// follow camera: [pitch, distance] in the open and inside the crowd
-const CAM_OPEN = [0.7, 7.4], CAM_CROWD = [0.5, 5.0];
+// follow camera: [pitch, distance] in the open and inside the crowd (round 11: closer on her;
+// the bouncers she can't see get arrows at the screen's edge instead, stealth.js)
+const CAM_OPEN = [0.62, 6.2], CAM_CROWD = [0.45, 4.4];
+const FOV = 58;
 
 const tmpC = new THREE.Color(), tmpA = new THREE.Color(), tmpB = new THREE.Color();
 
@@ -60,6 +66,10 @@ const VISIT = () => ({
   videoWant: null, cctvRT: null, extraPeople: [], snapped: new Set(), coverRing: null, tipQ: [], tipOn: false,
   dosers: [], darkPanel: null, darkPanelGlow: null, darkPanelDone: false, darkTold: false,
   dealer: null, dealerBought: false, dealerGone: false, stockTold: false, feedT: 0,
+  // round 11: the bouncers' heads, the tension, the screens on her, her own voice
+  lastKnown: null, threat: 0, slowT: 0, slowK: 1, kickK: 0, kickAt: -9, pulseAt: -9, _hbN: null, _susQ: 0, wasHot: false, closeAt: -99,
+  cctvK: 0, cctvWant: false, cctvHold: 0, cctvT: 0, camRT: null, camCam: null, camPos: null, camFed: false, _camMats: null, _camOn: false,
+  talkTier: 0, thinkT: 18, takeTarget: null, freeAt: -999,
 });
 
 export class Club3D extends Special3D {
@@ -152,6 +162,8 @@ export class Club3D extends Special3D {
   }
 
   exit() {
+    if (this.xray) this.setXray(false);
+    document.body.classList.remove('c3-xray');
     if (this.envelope && this.g.state) stashFromEnvelope(this.g.state, this.envelope, this.zone?.venue);
     this.closeOverlays?.();
     this.closeQuick?.(null);
@@ -159,6 +171,7 @@ export class Club3D extends Special3D {
     for (const rt of this.cctvRT || []) rt.dispose();
     this.cctvRT = null;
     this.endChatter?.();
+    this.endThreats(); this.endTension(); this.endCctv();
     this.music?.stop();
     this.endClubFeed();
     this.video?.dispose(); this.video = null;
@@ -192,8 +205,10 @@ export class Club3D extends Special3D {
   // ---------------------------------------------------------------- update
   update(dt) {
     if (this.warming) return;
-    this.music.update(this.hearing ? 1 : 0, false); // (the beat goes on under a close-up, the dance, a fight)
+    // (the beat goes on under a close-up, the dance, a fight; danger muffles it round her)
+    this.music.update(this.hearing ? 1 : this.sub ? 0 : this.tensionMuffle(), false);
     if (this.sub) { this.sub.update(dt); return; } // a fight in a back room, the VIP dance, a close-up
+    dt *= this.timeScale(dt); // (a close call's beat of slow motion)
     if (this.done && this.keepAnimating && this.heroModel) this.heroModel.update(dt);
     if (this.scene) for (const e of this.cast) e.update(dt);
     if (this.done || !this.scene) return;
@@ -249,23 +264,26 @@ export class Club3D extends Special3D {
     this.stepIncidents(dt);
     this.stepBackrooms(dt);
     this.stepClubFeed(dt);
-    const a0 = this.alert;
-    this.updateGuards(dt);
+    this.updateGuards(dt); // (stealth.js: what's in each bouncer's head; the difficulty is in their rates)
     this.stepTorches(dt);
-    this.stepInvestigate(dt);
-    if (this.alert > a0) this.alert = a0 + (this.alert - a0) * this.diff.guardGain; // (they're scanning a packed floor)
+    this.stepTension(dt);
+    this.stepCctv(dt);
+    this.stepXrayGlow();
+    this.stepSelfTalk(dt);
     this.stepCoverRing(dt);
     this.stepTips();
     this.stepAlert(dt);
     if (this.checkFailures()) return;
     this.stepQuick();
-    // interactables
+    // interactables (a bouncer's back within reach comes first: it won't stay there)
     let best = null, bd = 1.9;
     for (const o of this.inter) {
       if (!o.can()) continue;
       const d = Math.hypot(o.pos.x - h.position.x, o.pos.z - h.position.z);
       if (d < (o.r || bd) && d < bd + (o.r ? o.r : 0)) { bd = d; best = o; }
     }
+    this.takeTarget = !this.busy && !this.quickOn ? this.takedownTarget() : null;
+    if (this.takeTarget) best = this.takeInter || (this.takeInter = { label: 'Take him down', act: () => this.takeTarget && this.takedown(this.takeTarget) });
     this.near = best;
     if (best && inp.pressed('interact') && !this.busy && !this.quickOn) this.run(() => best.act());
     if (inp.pressed('notes') && !this.busy) this.run(() => this.caseBoard());
@@ -282,7 +300,7 @@ export class Club3D extends Special3D {
     tmpA.setHSL(hue, 1, 0.55); tmpB.setHSL((hue + 0.45) % 1, 1, 0.55);
     const flash = drop ? (Math.floor(this.t * 12) % 2 ? 1 : 0) : 0;
     this.flashK = flash;
-    this.crowd.light(tmpA, tmpB, 0.85 + 0.5 * B.pulse, flash, this.scene.fog);
+    this.crowd.light(tmpA, tmpB, (0.85 + 0.5 * B.pulse) * (this.xray ? 0.35 : 1), flash, this.scene.fog); // (X-ray: the crowd sinks into the dark)
     this.plights.forEach((l, i) => { l.color.copy(i ? tmpB : tmpA); l.intensity = (drop ? (flash ? 120 : 4) : 18 + 26 * B.pulse); });
     this.dressStep(this.t, dt, B, drop, flash, tmpA, tmpB);
     tickScreens(this.screens, this.video, this.t, flash * 0.4);
@@ -369,13 +387,18 @@ export class Club3D extends Special3D {
     const tz = h.z - 1.4 - (this.moving || 0) * 0.6, tx = h.x;
     la.x += (tx - la.x) * Math.min(1, dt * 5); la.z += (tz - la.z) * Math.min(1, dt * 5); la.y = h.y;
     this.cam.lookAt(la.x, la.y + 0.7, la.z);
+    // a punch (made, a takedown): the lens snaps in and eases out, the frame jolts
+    const kk = this.kickK ? this.kickK * Math.exp(-Math.max(0, this.t - this.kickAt) * 5) : 0;
+    if (kk > 0.01) { const j = 0.09 * kk; this.cam.position.x += (Math.random() - 0.5) * j; this.cam.position.y += (Math.random() - 0.5) * j; }
+    let fov = FOV - 7 * kk;
     if (st.intox > 30) {
       const ik = (st.intox - 30) / 70;
       this.cam.rotation.z += Math.sin(this.t * 1.3) * 0.07 * ik;
-      this.cam.fov = 58 + Math.sin(this.t * 0.9) * 5 * ik;
-      this.cam.updateProjectionMatrix();
-    } else if (this.cam.fov !== 58) { this.cam.fov = 58; this.cam.updateProjectionMatrix(); }
+      fov += Math.sin(this.t * 0.9) * 5 * ik;
+    }
+    if (Math.abs(this.cam.fov - fov) > 0.01) { this.cam.fov = fov; this.cam.updateProjectionMatrix(); }
     if (this.shadows) this.shadows.update();
+    this.renderCctv(); // (the security camera's picture first: the frame's own draw stays the last)
     this.renderer.render(this.scene, this.cam);
     this.afterRender?.();
   }
@@ -393,6 +416,7 @@ export class Club3D extends Special3D {
     const al = $('b-alert'), en = $('b-en');
     if (al) { al.style.width = this.alert + '%'; al.parentElement.classList.toggle('warn', this.alert > 60); }
     if (en) en.style.width = this.en + '%';
+    this.hudThreats();
     if (this.sub) { this.sub.hud?.(); return; }
     if (!this.scene) return;
     this.hudObjectives();
@@ -412,4 +436,5 @@ export class Club3D extends Special3D {
   }
 }
 
-Object.assign(Club3D.prototype, castMethods, eventMethods, powerMethods, chatterMethods, viceMethods, caseMethods, sedationMethods, vipMethods, officeMethods, brawlMethods, closeupMethods, undercoverMethods, quickMethods, feelMethods, dangerMethods, storyMethods, pressMethods, backroomMethods, clubFeedMethods);
+Object.assign(Club3D.prototype, castMethods, eventMethods, powerMethods, chatterMethods, viceMethods, caseMethods, sedationMethods, vipMethods, officeMethods, brawlMethods, closeupMethods, undercoverMethods, quickMethods, feelMethods, dangerMethods, storyMethods, pressMethods, backroomMethods, clubFeedMethods,
+  stealthMethods, tensionMethods, cctvMethods, selfTalkMethods);

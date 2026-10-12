@@ -32,6 +32,7 @@ function torchBeam() {
   beam.position.set(0.25, 1.35, 0.3);
   const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
   bulb.position.copy(beam.position);
+  beam.userData.noX = bulb.userData.noX = true; // (X-ray glows the man, not his torch)
   return [beam, bulb];
 }
 
@@ -49,11 +50,11 @@ export const dangerMethods = {
     }
   },
 
-  /** After updateGuards: the torch guards stop now and then and swing the beam across the floor. */
+  /** After updateGuards: the torch guards stop now and then and swing the beam across the floor (only on their rounds). */
   stepTorches(dt) {
     for (const gd of this.guards) {
       if (!gd.torch || gd.ko) continue;
-      if (gd.seeing) { gd.phase = 'walk'; gd.phaseT = rand(...DANGER.walk); continue; }
+      if (gd.seeing || (gd.st && gd.st !== 'calm')) { gd.phase = 'walk'; gd.phaseT = rand(...DANGER.walk); gd.look = 0; continue; }
       gd.phaseT -= dt;
       if (gd.phase === 'walk' && gd.phaseT <= 0 && gd.look <= 0) { gd.phase = 'sweep'; gd.phaseT = rand(...DANGER.sweep); gd.base = gd.mesh.rotation.y; gd.sw = 0; }
       if (gd.phase === 'sweep') {
