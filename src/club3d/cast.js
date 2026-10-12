@@ -227,6 +227,7 @@ export const castMethods = {
       tk.ring.material.color.set(tk.sus > 60 ? 0xff3a3a : tk.done ? 0x888888 : 0xffd84d);
     }
     this.nearTalker = near && nd < HEAR_R + 1 ? near : null;
+    this.talkHud = near && (nd < TALK_R + 1.5 || (this.hearing && nd < HEAR_R)) ? near : null; // (the bars only once she's working them)
     if (!near) return;
     let ev = 0, su = 0;
     if (nd < TALK_R) { const inn = nd < TALK_IN; ev = inn ? 13 : 8; su = inn ? 15 : 6.5; }
@@ -266,7 +267,7 @@ export const castMethods = {
   },
 
   hudCast() {
-    const el = $('c3-talk'), tk = this.nearTalker;
+    const el = $('c3-talk'), tk = this.talkHud;
     if (!el) return;
     if (!tk || this.done) { el.classList.remove('on'); return; }
     const p = this.screenOf({ x: tk.pos.x, y: floorY(this.plan, tk.pos.x, tk.pos.z), z: tk.pos.z }, 2.7);

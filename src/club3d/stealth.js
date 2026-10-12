@@ -9,7 +9,7 @@
 // and with X-ray every bouncer glows through the walls in his state's colour, labelled.
 // Mixed into Club3D.prototype; it replaces guards3d's updateGuards for the club.
 import * as THREE from 'three';
-import { GUARD_RANGE, GUARD_FOV } from '../zonekit.js';
+import { GUARD_RANGE, GUARD_FOV, segHitsBox } from '../zonekit.js';
 import { comic } from '../comic.js';
 import { toast, avoidHud } from '../ui.js';
 import { sfx } from '../sfx.js';
@@ -21,12 +21,13 @@ export const STEALTH = {
   rate: [30, 10],       // "?" per second at the cone's edge, + per metre closer
   stare: 25,            // at this much he stops walking and stares
   hold: 1.1,            // s he keeps the "?" after losing sight of her
-  fade: 14, fadeSearch: 5,
+  fade: 14, fadeSearch: 7,
+  close: 1.7, closeRate: 22, // a searching bouncer this close finds her in the crowd unless she dances
   spotAlert: 50,        // the floor's alert the moment he makes her
   chase: [24, 34],      // alert per second while a bouncer who's made her can see her (normal, hard)
-  grab: 1.3,            // an alerted bouncer this close (and seeing her for grabT) grabs her
-  grabT: 0.45,
-  speed: { walk: 1.7, slow: 0.8, search: 2.1, chase: 2.6 },
+  grab: 1.2,            // an alerted bouncer this close (and seeing her for grabT) grabs her
+  grabT: 0.6,
+  speed: { walk: 1.7, slow: 0.8, search: 2.1, chase: 2.3 },
   look: 3.2, giveUp: 9, // s looking round the spot / trying to get there
   lose: 1.6,            // s an alerted bouncer keeps coming after he's lost sight of her
   radio: 24,            // m: an alerted bouncer calls the nearest other one this close
@@ -79,10 +80,15 @@ export const stealthMethods = {
       gd.t += dt;
       const dx = h.x - m.position.x, dz = h.z - m.position.z, d = Math.hypot(dx, dz);
       const fx = Math.sin(m.rotation.y), fz = Math.cos(m.rotation.y);
-      if (this.t > this.grace && !gd.away && d < R && d > 0.01 && (dx * fx + dz * fz) / d > cosF && this.clearLOS(m.position, h)) {
+      const inCone = this.t > this.grace && !gd.away && d < R && d > 0.01 && (dx * fx + dz * fz) / d > cosF;
+      if (inCone && this.clearLOS(m.position, h)) {
         gd.seeing = true; gd.lastSeen = { x: h.x, z: h.z }; gd.sawT = this.t; gd.holdT = S.hold;
         this.lastKnown = { x: h.x, z: h.z };
         if (gd.st !== 'alert') gd.sus = Math.min(100, gd.sus + (S.rate[0] + (R - d) * S.rate[1]) * vis * odd * rateK * (gd.st === 'search' ? 1.5 : 1) * dt);
+      } else if (gd.st === 'search' && inCone && d < S.close && !this.dancing && !this.strobe && !this.escapeT && !this.wallBetween(m.position, h)) {
+        // he's searching right on top of her: hidden in the crowd isn't enough up close, dancing is
+        gd.holdT = S.hold; gd.lastSeen = { x: h.x, z: h.z };
+        gd.sus = Math.min(100, gd.sus + S.closeRate * rateK * dt);
       } else {
         gd.holdT -= dt;
         if (gd.holdT <= 0 && gd.st !== 'alert') gd.sus = Math.max(0, gd.sus - (gd.st === 'search' ? S.fadeSearch : S.fade) * dt);
@@ -165,6 +171,12 @@ export const stealthMethods = {
     else if (gd.st === 'sus' && gd.lastSeen) turnTo(m, Math.atan2(gd.lastSeen.x - m.position.x, gd.lastSeen.z - m.position.z), dt * 3);
     if (E) { if (moved) E.play('walk', { speed: 1.2 * sp / S.speed.walk }); else E.play(gd.st === 'calm' && !gd.seeing ? 'idle' : 'combatIdle'); }
     else if (m.legs) { const s = moved ? Math.sin(gd.t * 8 * sp / S.speed.walk) * 0.4 : 0; m.legs[0].rotation.x = s; m.legs[1].rotation.x = -s; }
+  },
+
+  /** A wall (or a shut door) between two points (the crowd doesn't count). */
+  wallBetween(a, b) {
+    for (const c of this.colliders) if (c.wall && !c.disabled && segHitsBox(a.x, a.z, b.x, b.z, c)) return true;
+    return false;
   },
 
   startSearch(gd, at, line) {

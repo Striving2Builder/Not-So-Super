@@ -74,6 +74,31 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
       gl: () => page.evaluate(() => { const r = window.__game.mode.renderer.info.render; return { calls: r.calls, tris: r.triangles }; }),
       /** Put her somewhere (the camera follows at once) and let it settle. */
       async put(x, z, ms = 1300) { await page.evaluate(([x, z]) => { const m = window.__game.mode; m.hero.position.set(x, 0, z); m.camSnap = true; m.still = 0; }, [x, z]); await page.waitForTimeout(ms); },
+      /** Let `secs` of GAME time pass (SwiftShader runs ~5 fps and the game clamps dt to 50 ms: game time is ~1/4 of real time). */
+      async gwait(secs, maxMs = 60000) {
+        const t0 = await page.evaluate(() => window.__game.mode.t || 0);
+        await page.waitForFunction((t) => (window.__game.mode.t || 0) >= t || window.__game.modeName !== 'club3', t0 + secs, { timeout: maxMs, polling: 50 }).catch(() => {});
+      },
+      /** The on-screen stick, as a thumb would push it (x right, y down; 0.7 = a sneak, 1 = a run). null lets go. */
+      stick: (x, y) => page.evaluate(([x, y]) => { const s = window.__game.input.stick; if (x === null) { s.id = null; s.x = s.y = 0; } else { s.id = 777; s.x = x; s.y = y; } }, [x, y]),
+      /** A frame for a strip: shots/<label>/strips/<dir>/fNN_<game ms>.png */
+      async strip(dir, n) {
+        const d = path.join(ROOT, 'shots', LABEL, 'strips', dir);
+        fs.mkdirSync(d, { recursive: true });
+        const ms = await page.evaluate(() => Math.round((window.__game.mode.t || 0) * 1000));
+        await page.screenshot({ path: path.join(d, `f${String(n).padStart(2, '0')}_${ms}.png`) });
+      },
+      /** Pin bouncer i at (x, z) facing rot (he stands there on his round); the others go blind (posed strips). */
+      pin: (i, x, z, rot, blindOthers = true) => page.evaluate(([i, x, z, rot, blind]) => {
+        const m = window.__game.mode, gd = m.guards[i], p = gd.mesh.position.clone();
+        p.set(x, p.y, z); gd.route = [p]; gd.wp = 0; gd.mesh.position.set(x, gd.mesh.position.y, z); gd.mesh.rotation.y = rot;
+        gd.torch = false;
+        if (blind) for (const q of m.guards) if (q !== gd) q.away = true;
+        m.grace = 0; m.dropT = 999;
+        return { st: gd.st, sus: gd.sus };
+      }, [i, x, z, rot, blindOthers]),
+      /** The bouncers' heads: [state, sus, seeing] each. */
+      minds: () => page.evaluate(() => window.__game.mode.guards.map((g) => `${g.st}:${Math.round(g.sus || 0)}${g.seeing ? '*' : ''}`).join(' ')),
     };
     await page.goto(`http://localhost:${PORT}/?flight=2d&club=v3&club3under=0&club3case=${CASE}${query}`);
     await page.waitForFunction(() => window.__game && document.querySelector('#btn-new'), null, { timeout: 30000 });
@@ -310,6 +335,140 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
         lost = await V.page.evaluate(() => ({ sedations: window.__game.mode.sedations, mode: window.__game.modeName }));
       }
       return { story, idle, turning, after, lost };
+    });
+    // ---- round 11 (the club loop): the bouncers' "?", being made, the X-ray read, the struggle on a
+    // thumb, caught and free, and a compressed loop. Each writes a strip (shots/<label>/strips/<flow>/).
+    // Rave, seed 7: open floor at (11, 17), seven dancers 3 m north of it at (11, 14).
+    await flow('stealth', '&club3room=rave&club3seed=7&club3event=none', async (V) => {
+      const P = V.page, log = [];
+      await V.put(11, 17, 300);
+      await P.evaluate(() => { const m = window.__game.mode; m.hero.rotation.y = Math.PI; });
+      await V.pin(3, 11, 10.3, 0);
+      await V.gwait(0.15); await V.strip('stealth', 1); log.push(await V.minds());
+      const sus = () => P.evaluate(() => window.__game.mode.guards[3].sus);
+      const st = () => P.evaluate(() => window.__game.mode.guards[3].st);
+      await P.waitForFunction(() => window.__game.mode.guards[3].sus >= 22, null, { timeout: 30000, polling: 30 });
+      await V.strip('stealth', 2); log.push(await V.minds());
+      // she sneaks (a light push on the stick: not a run) up into the dancers between them
+      await V.stick(0, -0.72);
+      await V.gwait(0.45); await V.strip('stealth', 3); log.push(await V.minds());
+      await P.waitForFunction(() => window.__game.mode.blend >= 0.75 || window.__game.mode.hero.position.z < 13.6, null, { timeout: 30000, polling: 30 }).catch(() => {});
+      await V.stick(null);
+      await P.keyboard.down('KeyG'); // and dances: lost in it
+      await V.gwait(0.5); await V.strip('stealth', 4); log.push(await V.minds());
+      await V.gwait(1.6); await V.strip('stealth', 5); log.push(await V.minds());
+      await V.gwait(1.8); await V.strip('stealth', 6); log.push(await V.minds());
+      await P.waitForFunction(() => window.__game.mode.guards[3].st === 'calm' || window.__game.mode.guards[3].st === 'alert', null, { timeout: 90000, polling: 30 }).catch(() => {});
+      await V.gwait(0.25); await V.strip('stealth', 7); log.push(await V.minds());
+      await V.gwait(1.4); await V.strip('stealth', 8); log.push(await V.minds());
+      await P.keyboard.up('KeyG');
+      await V.shot('loop_closecall');
+      return { log, final: await st(), sus: Math.round(await sus()), closeAt: await P.evaluate(() => window.__game.mode.closeAt) };
+    });
+    await flow('spot', '&club3room=rave&club3seed=7&club3event=none', async (V) => {
+      // made: the "!", the radio, the screens cut to her; she runs for the crowd; lost them
+      const P = V.page, log = [];
+      await V.put(11, 17, 300);
+      await P.evaluate(() => { const m = window.__game.mode; m.hero.rotation.y = Math.PI; });
+      await V.pin(3, 11, 11.0, 0);
+      await P.waitForFunction(() => window.__game.mode.guards[3].sus >= 62, null, { timeout: 30000, polling: 30 });
+      await V.strip('spot', 1); log.push(await V.minds());
+      await P.waitForFunction(() => window.__game.mode.guards[3].st === 'alert', null, { timeout: 30000, polling: 30 });
+      await V.gwait(0.1); await V.strip('spot', 2); log.push(await V.minds());
+      // she breaks for the dancers to the west (a run: they can see her go)
+      await V.stick(-0.95, -0.3);
+      await V.gwait(0.55); await V.strip('spot', 3); await V.shot('loop_spotted'); log.push(await V.minds());
+      await V.gwait(0.55); await V.strip('spot', 4); log.push(await V.minds());
+      await P.waitForFunction(() => window.__game.mode.blend >= 0.75 || window.__game.mode.hero.position.x < 4, null, { timeout: 30000, polling: 30 }).catch(() => {});
+      await V.stick(null); await P.keyboard.down('KeyG');
+      await V.gwait(0.6); await V.strip('spot', 5); await V.shot('loop_cctv_wall'); log.push(await V.minds());
+      await V.gwait(2.0); await V.strip('spot', 6); log.push(await V.minds());
+      await P.waitForFunction(() => !window.__game.mode.wasHot || window.__game.modeName !== 'club3', null, { timeout: 120000, polling: 30 }).catch(() => {});
+      await V.gwait(0.15); await V.strip('spot', 7); await V.shot('loop_lostthem'); log.push(await V.minds());
+      await P.keyboard.up('KeyG');
+      return { log, mode: await P.evaluate(() => window.__game.modeName), cctv: await P.evaluate(() => ({ k: window.__game.mode.cctvK, fed: window.__game.mode.camFed, alert: Math.round(window.__game.mode.alert || 0) })) };
+    });
+    await flow('xrayread', '&club3room=rave&club3seed=7&club3event=none', async (V) => {
+      // X-ray as a detective read: the room goes dark, every bouncer glows in what he knows, labelled
+      const P = V.page, log = [];
+      const at = await P.evaluate(() => { const m = window.__game.mode, q = m.plan.byKind.office; return { x: q.door.x + (q.side === 'W' ? 4.5 : -4.5), z: q.door.z + 2.5, side: q.side }; });
+      await V.put(at.x, at.z, 600);
+      await P.evaluate((side) => {
+        const m = window.__game.mode; m.hero.rotation.y = side === 'W' ? -Math.PI / 2 : Math.PI / 2;
+        // a room in three states: one staring, one searching, the rest on their rounds
+        const g = m.guards.filter((q) => !q.high && q !== m.ropeGuard);
+        g[0].sus = 48; g[0].st = 'sus'; g[0].stT = 0; g[0].holdT = 30; g[0].lastSeen = { x: m.hero.position.x, z: m.hero.position.z };
+        m.startSearch(g[1], { x: m.hero.position.x + 4, z: m.hero.position.z - 3 }, null); g[1].sus = 70;
+      }, at.side);
+      await V.gwait(0.3); await V.strip('xrayread', 1);
+      await P.keyboard.press('KeyX');
+      await V.gwait(0.08); await V.strip('xrayread', 2);
+      await V.gwait(0.5); await V.strip('xrayread', 3); await V.shot('loop_xray_read');
+      await V.put(at.x + (at.side === 'W' ? -1.5 : 1.5), at.z - 6, 300);
+      await V.gwait(0.6); await V.strip('xrayread', 4); await V.shot('loop_xray_office');
+      await V.put(0, 6, 300);
+      await V.gwait(0.6); await V.strip('xrayread', 5); await V.shot('loop_xray_floor'); log.push(await V.minds());
+      await P.keyboard.press('KeyX');
+      await V.gwait(0.4); await V.strip('xrayread', 6);
+      return { log, en: await P.evaluate(() => Math.round(window.__game.mode.en)) };
+    });
+    await flow('touch', '&club3room=rave&club3seed=7&club3event=none', async (V) => {
+      // the hard struggle on a phone: a thumb lands, then draws circles at a human ~1.3 loops/s (the
+      // landing point is ON its circle), with a little wobble. It must win well inside the 12 s.
+      const P = V.page;
+      const res = P.evaluate(async () => { const { struggle } = await import('/src/club3d/struggle.js'); const { CLIPS, clipsReady, nextClip } = await import('/src/club3d/clips.js'); await clipsReady; const t0 = performance.now(); const ok = await struggle({ clip: nextClip(CLIPS.captive), title: 'BREAK FREE!', text: 'A test on a thumb. <b>Lose this one and they carry you out.</b>', diff: 'hard' }); return { ok, secs: +((performance.now() - t0) / 1000).toFixed(1) }; });
+      await P.waitForFunction(() => window.__struggle, null, { timeout: 20000 });
+      await P.waitForTimeout(500); await V.shot('loop_struggle_hint'); await V.strip('touch', 1);
+      const cx = 560, cy = 230, r = 46, start = Date.now();
+      await P.mouse.move(cx + r, cy); await P.mouse.down();
+      let k = 0, shot = 2;
+      while (Date.now() - start < 9000) {
+        const s = await P.evaluate(() => window.__struggle && window.__struggle.state());
+        if (!s) break;
+        const a = ((Date.now() - start) / 1000) * 1.3 * Math.PI * 2, wob = 1 + 0.12 * Math.sin(a * 3.1);
+        await P.mouse.move(cx + Math.cos(a) * r * wob, cy + Math.sin(a) * r * wob);
+        if (++k % 40 === 0 && shot <= 4) await V.strip('touch', shot++);
+      }
+      await P.mouse.up();
+      const out = await res;
+      return out;
+    });
+    await flow('caught', '&club3case=auction&club3seed=7&club3event=none', async (V) => {
+      // a story club: made, grabbed, the struggle (won on a thumb), free: they're down, she's in the crowd
+      const P = V.page, log = [];
+      const spot = await P.evaluate(() => {
+        const m = window.__game.mode, D = m.crowd.people.filter((p) => p.pose === 'dance'), V = m.plan.V;
+        const cov = (x, z) => D.filter((p) => Math.hypot(p.hx - x, p.hz - z) < 1.7).length;
+        for (let z = V.hd - 3; z > 0; z -= 0.5) for (let x = -V.hw + 6; x < V.hw - 6; x += 1) if (cov(x, z) <= 1 && cov(x - 3, z - 2) >= 5) return { x, z };
+        return { x: 0, z: V.hd - 4 };
+      });
+      await V.put(spot.x, spot.z, 300);
+      await P.evaluate(() => { const m = window.__game.mode; m.hero.rotation.y = Math.PI; });
+      const gi = await P.evaluate(() => window.__game.mode.guards.findIndex((g) => !g.high && !g.torch && g !== window.__game.mode.ropeGuard));
+      await V.pin(gi, spot.x, spot.z - 4.5, 0);
+      await P.waitForFunction((i) => window.__game.mode.guards[i].st === 'alert', gi, { timeout: 30000, polling: 30 });
+      await V.gwait(0.3); await V.strip('caught', 1); log.push(await V.minds());
+      await P.waitForFunction(() => window.__struggle, null, { timeout: 30000, polling: 50 });
+      await P.waitForTimeout(700); await V.strip('caught', 2);
+      const cx = 560, cy = 230, r = 46, start = Date.now();
+      await P.mouse.move(cx + r, cy); await P.mouse.down();
+      let k = 0, n = 3;
+      while (Date.now() - start < 9000) {
+        const s = await P.evaluate(() => window.__struggle && window.__struggle.state());
+        if (!s) break;
+        const a = ((Date.now() - start) / 1000) * 1.3 * Math.PI * 2;
+        await P.mouse.move(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+        if (++k === 60 && n === 3) { await V.strip('caught', n++); }
+      }
+      await P.mouse.up();
+      await P.waitForTimeout(250); await V.strip('caught', 4);
+      await P.waitForFunction(() => !document.querySelector('.c3-struggle'), null, { timeout: 30000 });
+      await V.gwait(0.25); await V.strip('caught', 5); await V.shot('loop_free'); log.push(await V.minds());
+      await V.stick(-0.7, -0.45); await V.gwait(0.9); await V.strip('caught', 6);
+      await V.stick(null); await P.keyboard.down('KeyG');
+      await V.gwait(1.0); await V.strip('caught', 7); log.push(await V.minds());
+      await P.keyboard.up('KeyG');
+      return { log, sedations: await P.evaluate(() => window.__game.mode.sedations), freeAt: await P.evaluate(() => window.__game.mode.freeAt) };
     });
     // ---- the story clubs' own systems
     if (CASE === 'flashpoint') await flow('hotseat', '&club3seed=7&club3event=none', async (V) => {

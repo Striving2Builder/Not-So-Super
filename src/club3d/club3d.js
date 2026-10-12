@@ -47,7 +47,7 @@ const SPEED = 4.6;          // her walk (m/s); a packed crowd slows her by up to
 const IDLE_FACE = 1.5;      // seconds standing still before she turns to the viewer
 // follow camera: [pitch, distance] in the open and inside the crowd (round 11: closer on her;
 // the bouncers she can't see get arrows at the screen's edge instead, stealth.js)
-const CAM_OPEN = [0.62, 6.2], CAM_CROWD = [0.45, 4.4];
+const CAM_OPEN = [0.62, 6.2], CAM_CROWD = [0.45, 4.4], CAM_HUNT = [0.5, 7.0];
 const FOV = 58;
 
 const tmpC = new THREE.Color(), tmpA = new THREE.Color(), tmpB = new THREE.Color();
@@ -69,7 +69,7 @@ const VISIT = () => ({
   // round 11: the bouncers' heads, the tension, the screens on her, her own voice
   lastKnown: null, threat: 0, slowT: 0, slowK: 1, kickK: 0, kickAt: -9, pulseAt: -9, _hbN: null, _susQ: 0, wasHot: false, closeAt: -99,
   cctvK: 0, cctvWant: false, cctvHold: 0, cctvT: 0, camRT: null, camCam: null, camPos: null, camFed: false, _camMats: null, _camOn: false,
-  talkTier: 0, thinkT: 18, takeTarget: null, freeAt: -999,
+  talkTier: 0, thinkT: 18, takeTarget: null, freeAt: -999, huntK: 0,
 });
 
 export class Club3D extends Special3D {
@@ -366,9 +366,15 @@ export class Club3D extends Special3D {
       if (!this.sub.see3d) return;
     }
     const h = this.hero.position, st = this.g.state, dt = this.frameDt || 1 / 60;
-    // pitch + distance ease toward the crowd framing when she's in it
+    // pitch + distance ease toward the crowd framing when she's in it; hunted (a bouncer has made
+    // her, the screens are on her) it opens up: further back, aimed up the room, so the chase and the
+    // DJ wall showing her are both in frame
     const inCrowd = clamp((this.cover - 1) / 4, 0, 1) * (this.room ? 0.5 : 1);
-    const want = [CAM_OPEN[0] + (CAM_CROWD[0] - CAM_OPEN[0]) * inCrowd, CAM_OPEN[1] + (CAM_CROWD[1] - CAM_OPEN[1]) * inCrowd];
+    const hunted = !this.room && (this.cctvK > 0.3 || this.guards.some((gd) => gd.st === 'alert'));
+    this.huntK = clamp((this.huntK || 0) + (hunted ? dt * 1.4 : -dt * 0.7), 0, 1);
+    const hk = this.huntK * this.huntK * (3 - 2 * this.huntK);
+    let want = [CAM_OPEN[0] + (CAM_CROWD[0] - CAM_OPEN[0]) * inCrowd, CAM_OPEN[1] + (CAM_CROWD[1] - CAM_OPEN[1]) * inCrowd];
+    if (hk > 0) want = [want[0] + (CAM_HUNT[0] - want[0]) * hk, want[1] + (CAM_HUNT[1] - want[1]) * hk];
     const k = 1 - Math.pow(0.02, dt);
     this.camPD[0] += (want[0] - this.camPD[0]) * k * 0.6; this.camPD[1] += (want[1] - this.camPD[1]) * k * 0.6;
     // walls between her and the camera: tip up toward top-down (rooms have no ceilings)
@@ -384,9 +390,9 @@ export class Club3D extends Special3D {
     if (this.camSnap === undefined || this.camSnap) { this.cam.position.copy(wantPos); this.camSnap = false; }
     else this.cam.position.lerp(wantPos, Math.max(0.1, 1 - Math.pow(0.0008, dt)));
     const la = this._look || (this._look = h.clone());
-    const tz = h.z - 1.4 - (this.moving || 0) * 0.6, tx = h.x;
+    const tz = h.z - 1.4 - (this.moving || 0) * 0.6 - 2.2 * hk, tx = h.x;
     la.x += (tx - la.x) * Math.min(1, dt * 5); la.z += (tz - la.z) * Math.min(1, dt * 5); la.y = h.y;
-    this.cam.lookAt(la.x, la.y + 0.7, la.z);
+    this.cam.lookAt(la.x, la.y + 0.7 + 1.0 * hk, la.z);
     // a punch (made, a takedown): the lens snaps in and eases out, the frame jolts
     const kk = this.kickK ? this.kickK * Math.exp(-Math.max(0, this.t - this.kickAt) * 5) : 0;
     if (kk > 0.01) { const j = 0.09 * kk; this.cam.position.x += (Math.random() - 0.5) * j; this.cam.position.y += (Math.random() - 0.5) * j; }
