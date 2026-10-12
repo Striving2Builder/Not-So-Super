@@ -416,7 +416,7 @@ export class Kit3D {
     if (this.warmed) return;
     this.warmed = true;
     try {
-      for (const r of ['person:thief', 'car:runaway', 'heli:news', 'cat']) this.take(r).at(0, 0, -9999).hide();
+      for (const r of ['person:washer', 'car:runaway', 'heli:news', 'cat']) this.take(r).at(0, 0, -9999).hide();
       this.renderer.compile(this.scene, cam);
     } catch (e) { console.warn('moment kit warm-up', e); }
   }

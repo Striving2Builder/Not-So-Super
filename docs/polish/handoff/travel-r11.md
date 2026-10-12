@@ -1,42 +1,43 @@
 # Travel round 11 (track F, branch `worktree-agent-a4e919b8e12914483`, from phase-2 0cc680e)
 
 Brief: make the time between markers gameplay (a moment every ~20-40 s of commuting, in 3D, readable
-from the chase camera). Ports 8941-8949. Camera untouched; LIVE panel untouched.
+from the chase camera). Ports 8941-8949. Camera untouched; LIVE panel untouched. Wrapped up early
+(director's call): only what's built ships; nothing half-wired.
 
-## Finding
-In the 3D flight (the default) none of the old air events (window-washer, cars, helicopter, hoops,
-kitten) or the tabloid drones were drawn at all: only edge chips and minimap dots.
+## Shipped (in the default game)
+- **The moment director** (`src/moments/director.js`): one offer per 20-40 s of commuting (first after
+  9-14 s), placed ahead of her / toward her waypoint, clear of incident markers; max 2 live, 1
+  story-sized; none while she's arriving at her waypoint, sooner on long trips; rank / act gates and
+  cooldowns per kind; timeline `.log` (offered / taken / won / lost / expired). It now schedules the
+  old air events and the act's impostor sightings (their own timers are gone). `?moment=<kind>`
+  calls one up; `?moments=off` turns offers off (A/B only: it also stops sightings).
+- **The old air events drawn in 3D at last** (`src/moments/air3d.js`; before: only chips and minimap
+  dots): window-washer on his rig (ropes, hang / flail poses, a landing ring), runaway / getaway cars
+  (exhaust, flashers), the helicopter (spinning, smoke, rotor), the hoop course (glowing inked hoops),
+  the kitten on its roof, the tabloid drones + flashes. Tags, CATCH! lock-ons, ▲/▼ height hints and a
+  banner (title, clock, meter) under the title panel, clear of her and the LIVE panel.
+- **The impostor sighting as a rooftop chase** (`src/moments/impostor.js`): her own model in a knockoff
+  (teal / hot pink, no cape) posing for 3 camera drones on a low roof; she bolts and rocket-hops roof to
+  roof; drop to skim, DIVE = a swoop tackle (slow-mo, burst, FOV kick = the boost's, sparks), the wig
+  flies off, then the act's catch + UNMASKED. Fly through a drone: SMASH (+1). Flashes add heat.
+- **Catch juice for every air event** (`celebrate()`): slow motion 0.25× for ~0.7 s, burst at the spot,
+  the boost's own FOV punch, sparks, an ink ring; synth stingers (`flightaudio.js sting()`).
+- Kit (`kit3d.js`, `actors3d.js`, `hud.js`, `base.js`): pooled, built once; hidden = no draws.
 
-## Done (WIP, not wired into the game yet)
-- `src/moments/actors3d.js`: merged vertex-coloured geometry: comic figures with baked pose frames
-  (run cycle, flail, hang, fall, cheer), car / getaway / van, news chopper + rotor, drone, kitten,
-  stroller, wig, window-washer rig, Polaroid card + Puzzle Maker "?" canvases.
-- `src/moments/kit3d.js`: pooled kit (built once, lazily; hidden = no draws): cel material + a
-  screen-constant ink hull (plain + instanced), instanced drones / cards / hoops, additive glow points
-  (flashes, sparks) + smoke puffs (1 draw each), ground ring decals, moment beams, "?" sprite,
-  spotlight cone, ropes; `warm()` precompiles once; `dispose()` frees only the kit's own resources.
-- `src/moments/hud.js`: overlay tags, lock-on reticle + DIVE!, the moment banner (title, clock, meters).
-- `src/moments/base.js`: Moment base class (update / draw3d / overlay / draw2d / diveTarget / banner).
-- `src/moments/director.js`: pacing (first 9-14 s, then 20-40 s of commuting; max 2 live, 1 story-sized;
-  no offers while arriving at the waypoint; sooner on long trips), eligibility by rank + act state,
-  placement ahead / toward the waypoint, clear of markers; the swoop (DIVE onto a target), slow-mo,
-  `celebrate()` (burst, kick = the boost's own FOV punch, sparks, stinger); timeline `.log`;
-  `?moment=<kind>` (harness), `?moments=off` (A/B).
-- `src/moments/air3d.js`: 3D views of the old air events + the tabloid drones, their tags / banners,
-  and `AirMoment` (an air event in the director's schedule).
+## Hooks outside my files
+`flight3d.js`: 3 one-liners (slow-mo × its dt, `moments.render3d`, `moments.overlay`).
+`overworld.js` (mine): director, swoop, DIVE routing / prompt, waypoint, minimap ping, 2D draw.
+`act.js` (sightings, mine): `sightingDue()` / `spawnSighting()`; the act keeps its clock + catch flow.
 
-## In progress / next
-1. Moments: impostor rooftop chase (her model, recoloured; poses for drones, rocket-hops roof to roof;
-   drop to skim, DIVE = swoop tackle, slow-mo, the wig flies off), help (super-hearing ping → swoop
-   rescue of a purse snatcher / runaway pram), Polaroid scatter (catch the cards before the street;
-   one is called in the act's Supergirl-or-Impostor screen), courier van tail (reveals a raid:
-   trail + warehouse gate), riddle chain (billboard riddle → landmark "?" against the clock), news
-   chopper (break line of sight or fly at it to blind it).
-2. Hooks: overworld (director, swoop, slow-mo dt, tryDive/prompt, markers, 2D draw), flight3d (3 tiny:
-   render3d, overlay, slow-mo dt), airevents (director schedules; 3D heights; outcome), act
-   (sightingDue / spawnSighting), flightaudio (stingers).
-3. Harness `tools/shots/travel.js` (per-moment strips, commute run + timeline), perf A/B, critic pack.
+## Checks
+travel.js: faller, rings, impostor played to a win, 0 page errors. Perf: see the report (flybench A/B).
 
-## Perf baseline (r11F-base, SwiftShader, before any change)
-fly3d.js: skim 13.6 fps / 56 calls / 70k tris, cruise 10.1 / 81 / 92k, high 12.4 / 67 / 82k
-(3D/2D ratios 0.99 / 1.12 / 1.16). shoot.js flying: shots/r11F-base/flying/.
+## Next (designed, not built)
+1. Critic pack: `node tools/shots/travel.js --label r11F-1 --port 8943` (stills + strips per kind) and
+   `--commute --secs 180 --every 6` (commute strip + timeline). The bot's framing hides some targets
+   (it parks under the washer): give it an approach shot before the catch.
+2. More moments (kit pieces exist): courier-van tail (reveals a raid: trail + warehouse gate),
+   Polaroids blowing off a roof (catch them; one goes to the Supergirl-or-Impostor call), a
+   super-hearing street rescue (swoop a purse snatcher / runaway pram), a Puzzle Maker riddle chain
+   (billboard riddle → landmark "?" against the clock), a news chopper (break line of sight / blind it).
+3. Check the impostor's knockoff colours at full size; a jet-pack mesh; her hop pose.
