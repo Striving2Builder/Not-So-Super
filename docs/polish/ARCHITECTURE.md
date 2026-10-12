@@ -13,10 +13,11 @@ src/
   flight/                 the overworld: overworld, city, cityart, sky, atmosphere, airspace,
                           airevents, paparazzi, flight, flightaudio, nav, cityfeed
   three/                  shared 3D engine: special3d (zone base), look3d, hero3d, cape, enemies
-  zones/                  3D zone types + their sets: clubzone, clubgeo, clubmood, venues3d,
-                          nightlife, asylum, nightcase; the 2D detective club (nightclub/) and the
-                          3D infiltration club (club3d/: one module per system, mixed into a
-                          Special3D zone; see docs/design/nightclub.md "Built so far")
+  zones/                  3D zone types + their sets: venues3d, nightlife (+ nl*.js), clubzone +
+                          clubgeo (the engine for generated buildings), asylum + nightcase, hotel/;
+                          the 3D infiltration club (club3d/: one module per system, mixed into a
+                          Special3D zone; see docs/design/nightclub.md "Built so far") and its case
+                          data and art (nightclub/: cases/, case.js, scenes.js, rooms.js, blackout.js)
   brawl/                  side-scroller: brawler, brawlsprite, brawlstage, art (2D humanoids)
   investigate/            crime scenes: investigate, crimescene, evidenceart, casefile, leads
 tools/                    dev-only scripts (Blender export, slimming, harness in tools/shots)
@@ -35,6 +36,18 @@ these folders, and its imports should make sense from there.
   context at all → 3D flight drops to 2D via `Overworld.drop3D`, a 3D zone is left).
 - Zones load behind the LOADING card over several frames (brawler `load()`, investigation's one
   bake frame, Special3D `warmUp()` compileAsync); city3d trims near builds/tiles (`KEEP`).
+
+## Zones: which mode plays a mission (main.js `modeFor`)
+- A club venue (`VENUES[v].club` or kind `'club'`: Nightclub, Triangle Club, The Clubhouse, Velvet
+  Lounge) plays the 3D infiltration club (`club3`, src/club3d/), a raid or a night case alike. If it
+  can't start (no WebGL, out of memory), `supergirl-club3-fail` goes to localStorage (device tests
+  read it), a toast says so and she's back in the sky. (The 2D club and the premade GLB clubs were
+  removed in round 11.)
+- Other venues play Special3D's code-built rooms (`special`: rooms3d/venues3d, nightlife for the
+  Gentlemen's Club, Red Light Den, High-Roller Suite).
+- `clubzone.js` (ClubZone) is the engine for a zone with a building of its own: BVH collision,
+  walkable-floor scan, slice plane, loading bar. The asylum (`asylum`, via nightcase.js's detective
+  layer) and the hotel's 13th floor (`hotel`) generate theirs.
 
 ## Audio
 - `sfx.js` (core): one AudioContext + master bus. `sfx.<name>()` plays a recorded voice from

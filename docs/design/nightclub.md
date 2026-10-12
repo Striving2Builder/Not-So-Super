@@ -2,8 +2,8 @@
 
 Status: design agreed with the user over five brainstorm rounds, 2026-10-07; **built the same day
 and made the default** (see "Built so far" at the end). Supersedes the 2D detective clubs
-([nightclub-2d.md](nightclub-2d.md), built in `src/nightclub/`), which stay as the fallback until
-they're deleted. Art specs per batch: [nightclub-assets.md](nightclub-assets.md).
+([nightclub-2d.md](nightclub-2d.md)), whose code was deleted in round 11 (2026-10-11; `src/nightclub/`
+keeps what this club shares: the cases, the close-ups, the plates, the polaroid). Art specs per batch: [nightclub-assets.md](nightclub-assets.md).
 
 ## Why the change
 - The 2D side-scroll walk (v2) has the right vibe but no game loop and no danger, and every visit
@@ -38,7 +38,7 @@ fail state.
 | Need | Existing code | Change |
 |---|---|---|
 | Mission loop, guards, alert, energy, X-ray, items, capture | `special3d.js`, `guards3d.js` | new club floor plan; Talkers, bubbles, events added |
-| 3D club decor: LED wall, DJ booth, truss, mirror ball, lasers | `nightlife.js`, `nlclub.js`, `nlkit.js`, `nlroom.js` | scale up to the big hall; LED wall → video wall |
+| 3D club decor: LED wall, DJ booth, truss, mirror ball, lasers | `nightlife.js`, `nlclub.js` (removed in round 11), `nlkit.js`, `nlroom.js` | scale up to the big hall; LED wall → video wall |
 | Crowd, posed to the beat, instanced (6 draw calls) | `nlcrowd.js` | silhouette shading + rim; density map; parting/bumps |
 | Silhouette dancer sheet | `nightclub/crowd.js`, `assets/nightclub/dancers.png` | far crowd as billboards behind the 3D crowd |
 | Comic look (cel, ink, rim) | `look3d.js` | none |
@@ -53,8 +53,8 @@ fail state.
 | Side-scroll fights | `brawler.js`, `brawlstage.js` | a "club interior" style: restroom, dark room |
 | Super-hearing (rings while perched) | `overworld.js` | the same rings, in the club |
 
-Routing: `modeFor()` in `main.js` already sends club zones to the new mode behind a flag
-(`NEW_CLUBS`); v3 gets its own flag the same way and stays opt-in until it reaches parity.
+Routing: `modeFor()` in `main.js` sends every club zone (a raid or a night case at a club venue)
+to this mode (`club3`); the version flags (`?club=v1|v2`) went with the old clubs in round 11.
 
 ## Camera and controls
 - **Follow camera** at a fixed angle that never rotates and always looks toward the back (video)
@@ -316,7 +316,8 @@ loop).
 | Restroom | the mirror | a hallucination clip when dosed |
 | Storage | an open loading dock | docks / pier images |
 
-The DJ wall is `nlclub.js`'s LED wall turned into a video plane. `greenscreen.js` keys and warps
+The DJ wall is `nlclub.js`'s LED wall turned into a video plane (club3d/build.js; the code-built
+Nightclub itself was removed in round 11). `greenscreen.js` keys and warps
 video into a painted still in 2D; v3 needs the same keying into a 3D wall texture.
 
 ## Cases
@@ -425,9 +426,9 @@ What the first pass was missing (the review: a thin crowd, a plain room on phone
 
 ## Built so far (2026-10-07, the default)
 Every section above is in, first pass. Club zones (special or night, at a club venue) open the 3D
-club. **The 2D club is the fallback until it's deleted:** `?club=v2` plays it, and so does any
-device the 3D club can't start on (`game.startZone` catches the failure and opens the 2D club
-instead of dropping her back in the sky). `?club=v1` still brings back the premade 3D clubs. The
+club. If it can't start on a device, `game.startZone` records why in localStorage
+(`supergirl-club3-fail`), says so in a toast and drops her back in the sky; the 2D club (the old
+fallback) and the premade 3D clubs (`?club=v1`) were removed in round 11 (2026-10-11). The
 map labels each club mission with the case it will play: the first one she hasn't solved
 (`CLUB_CASE_LABELS` in data.js; the zone's `clubCase` is the case).
 - **Test params:** `&club3room=rave|mezzanine|pit|centre|tunnel` (main room),
@@ -468,8 +469,9 @@ map labels each club mission with the case it will play: the first one she hasn'
   ~137 calls / 169k tris / 246 dancers.
 - **Not yet / next:** the iPad test (fps, memory: the club scene stays in GPU memory under a
   back-room fight; the second pass adds fill: mist, reflection, glow), the user's dance clips and
-  sedation clip, tuning on a device (guard gain `DIFF` in story.js, Talker rates in cast.js, the drop),
-  then delete v2 (`src/nightclub/` minus the cases and close-up data, which v3 shares).
+  sedation clip, tuning on a device (guard gain `DIFF` in story.js, Talker rates in cast.js, the drop).
+  (v2 was deleted in round 11: `src/nightclub/` keeps the cases, the close-up data, the plates' path
+  and the polaroid, which this club shares.)
 
 ## The story clubs (2026-10-09)
 Three more venues, each its own main room built for one case, never rolled at random for another

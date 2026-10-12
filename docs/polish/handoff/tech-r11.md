@@ -20,10 +20,15 @@ Branch `worktree-agent-a047ac9311b1f985f` (from phase-2 0cc680e). Brief: docs/po
 - Tools deleted: shots/{nightclub,clubcase,clubreach}.js, nightclub/layoutcheck.mjs, bake_clubs.js,
   bake.html, slim_clubs.js, export_club.py, tools/package(-lock).json (only bake/slim used them).
 
+- Docs: README, ARCHITECTURE.md (+ "Zones" routing note), nightclub.md / nightclub-2d.md status,
+  CLOUD.md (clubreach.js gone). Harness (shoot.js): premade3d keeps its name (it already shot the 3D
+  club, mode club3); investigation/nightcase was failing (club3 has no clueObjs): now a plain night
+  club case; the clue + X-ray shots moved to selfbuilt3d/asylum (opens the clue's cell first).
+- Also: the Nightclub venue drops floor/lights (it only plays the 3D club now).
+
 ## In progress / next
-- Comments: special3d.js, look3d.js done; README, ARCHITECTURE.md, nightclub.md "Built so far",
-  CLOUD.md (clubreach.js), shoot.js premade3d note (it already shot club3, not v1).
-- After-run: shoot.js ×6 areas + club3d.js + act.js with `--label r11T-after`, ports 8911–8913.
+- After-run: shoot.js ×6 areas + club3d.js + act.js with `--label r11T-after`, ports 8911–8913;
+  the new asylum/nightcase shots on the frozen baseline as r11T-before2/3 (port 8914).
 - Regression pack shots/r11T-pack/ (≥12 before/after pairs: club, flight, asylum, hotel) + pack.md.
 - Assets now unreferenced → handoff list (never delete under assets/).
 
