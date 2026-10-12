@@ -83,7 +83,8 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
     await page.click('#btn-new');
     await page.waitForTimeout(500);
     await V.through(() => !document.querySelector('#modal-root .modal-back'), 5000);
-    await page.evaluate(() => { const g = window.__game; g.setMode('overworld'); g.startZone(g.overworld.spawn('special', true, 'Nightclub')); });
+    // (an empty map first: spawn() finds no free block in a small, crowded nightclub district)
+    await page.evaluate(() => { const g = window.__game, ow = g.overworld; g.setMode('overworld'); ow.zones = []; g.startZone(ow.spawn('special', true, 'Nightclub')); });
     await page.waitForFunction(() => window.__game.modeName === 'club3' && !window.__game.mode.warming, null, { timeout: 60000 });
     await page.waitForTimeout(1500);
     await V.through(() => !document.querySelector('#modal-root .modal-back'), 5000);

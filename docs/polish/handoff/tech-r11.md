@@ -1,37 +1,44 @@
-# Tech debt, round 11 (track T): remove the 2D club (v2) and the premade clubs (v1)
-Branch `worktree-agent-a047ac9311b1f985f` (from phase-2 0cc680e). Brief: docs/polish/ROUND11.md (T).
+# Tech debt, round 11 (track T): the 2D club (v2) and the premade clubs (v1) are gone
+Branch `worktree-agent-a047ac9311b1f985f` (from phase-2 0cc680e). Brief: docs/polish/ROUND11.md (T). Done.
 
-## Done (WIP commit 1)
-- main.js: no more `?club=`, `CLUB_VERSION`, `game.newClubs`, modes `club` / `nightcase` / `nightclub`.
-  Club venues (special or night case) → `club3`. 3D club fails to start → `supergirl-club3-fail` in
-  localStorage + toast "Couldn't open the club…" + back to the sky (was: the 2D club).
-- Fixed: a night club case's front page said "undefined, undefined, exposed as…" (victoryPaper).
-- clubzone.js: only the ClubZone engine the asylum + hotel use (loading bar, shader warm-up,
-  planLayout/walkFloor, placeItems, BVH collide/LOS/camera, slice plane). Gone: CLUBS, loadClub,
-  preloadClub, decode queue, material simplify, mergeStatic use, raid layout, ClubMood.
-- nightcase.js: NightCase = the asylum's detective base (+ nightCaseFields for map night cases).
-  Gone: the premade-club layout (clue props, containers, witness, chalk, tents, beams).
-- Deleted: clubmood.js, clubdress.js, nlclub.js (code-built Nightclub decor: only ?club=v1 reached
-  it), nightclub/{nightclub,stage,intox,crowd,layout}.js. Trimmed: nightclub/blackout.js → polaroid,
-  nightclub/rooms.js → PLATE.dir, clubgeo.js (− mergeStatic, packFloor, unpackFloor).
-- data.js: premade venues keep everything read (`club: true` flag, bg, wall, themes…; − floor,
-  lights); NIGHT_CASES → name + crime; NIGHT_JOBS gone. settings.js: − clubTex/clubCache/
-  clubMaterials/clubLights/heroSprite. overworld.js: − club preloading, − newClubs checks.
-- Tools deleted: shots/{nightclub,clubcase,clubreach}.js, nightclub/layoutcheck.mjs, bake_clubs.js,
-  bake.html, slim_clubs.js, export_club.py, tools/package(-lock).json (only bake/slim used them).
-
-- Docs: README, ARCHITECTURE.md (+ "Zones" routing note), nightclub.md / nightclub-2d.md status,
-  CLOUD.md (clubreach.js gone). Harness (shoot.js): premade3d keeps its name (it already shot the 3D
-  club, mode club3); investigation/nightcase was failing (club3 has no clueObjs): now a plain night
-  club case; the clue + X-ray shots moved to selfbuilt3d/asylum (opens the clue's cell first).
-- Also: the Nightclub venue drops floor/lights (it only plays the 3D club now).
-
-## In progress / next
-- After-run: shoot.js ×6 areas + club3d.js + act.js with `--label r11T-after`, ports 8911–8913;
-  the new asylum/nightcase shots on the frozen baseline as r11T-before2/3 (port 8914).
-- Regression pack shots/r11T-pack/ (≥12 before/after pairs: club, flight, asylum, hotel) + pack.md.
-- Assets now unreferenced → handoff list (never delete under assets/).
+## Done
+- main.js: club venues (raid or night case) → `club3`, nothing else; no `?club=`, `CLUB_VERSION`,
+  `game.newClubs`, modes `club`/`nightcase`/`nightclub`. 3D club can't start → `supergirl-club3-fail`
+  in localStorage + toast "Couldn't open the club…" + back to the sky (was: the 2D club + a dialog).
+  Fixed: a night club case's front page read "undefined, undefined, exposed as…" (now the raid paper).
+- clubzone.js = the engine the asylum + hotel stand on (BVH collision, floor scan, slice plane,
+  loading bar, placeItems). nightcase.js = the asylum's detective layer + nightCaseFields.
+- Deleted (src): clubmood, clubdress, nlclub (code-built Nightclub: only ?club=v1 reached it),
+  nightclub/{nightclub,stage,intox,crowd,layout}. Trimmed: blackout.js → polaroid, nightclub/rooms.js
+  → PLATE.dir, clubgeo.js (− mergeStatic/packFloor/unpackFloor), data.js (club venues: `club: true`,
+  − floor/lights; NIGHT_CASES → name+crime; − NIGHT_JOBS), settings.js (− clubTex/clubCache/
+  clubMaterials/clubLights/heroSprite), overworld.js (− club preloading, − newClubs).
+- Deleted (tools): shots/{nightclub,clubcase,clubreach}.js, nightclub/layoutcheck.mjs, bake_clubs.js,
+  bake.html, slim_clubs.js, export_club.py, package(-lock).json. Harness: shoot.js nightcase (failing
+  at 0cc680e) → a plain night club case; clue + X-ray shots → the asylum; club3d.js clears the map
+  before spawning its club (spawn() could return null in a crowded nightclub district: a flake).
+- Docs: README, ARCHITECTURE.md ("Zones" routing), nightclub.md / -2d.md, CLOUD.md.
 
 ## Numbers
-- Baseline `shots/r11T-before` (frozen copy of 0cc680e): every area ran; premade3d = club3 (mode club3).
-- Startup JS: 161 → 153 modules reachable from main.js, 2,480,534 → 2,300,245 bytes (−180 KB).
+- 18 files deleted; src 36,942 → 33,788 lines. Startup JS (static graph from main.js): 161 → 153
+  modules, 2,480,534 → 2,300,381 bytes (−176 KB).
+- Harness r11T-before (frozen 0cc680e) vs r11T-after: shoot.js 6 areas 0 → 0 page errors, failed
+  scenarios 1 → 0; club3d.js 0 → 0 errors, 5 rooms + 16 flows pass; act.js 11 flows, 0 → 0. Club
+  rooms' calls/tris ±1%; fps noisy (other builders, a machine sleep mid-run; no render code changed).
+- Regression pack: shots/r11T-pack/ (23 before/after pairs + pack.md).
+
+## Assets the user can delete (unreferenced now; 28.08 MB) — never deleted by T
+- assets/clubs/: triangle.glb 4.75 MB, triangle.lite.glb 4.75, clubhouse.glb 7.83, clubhouse.lite.glb
+  3.81, stripclub.glb 3.67, stripclub.lite.glb 1.83, triangle/clubhouse/stripclub.json 0.06,
+  replacements/ (10 PNGs) 0.77.
+- assets/nightclub/plates/entrance.jpg 0.44 MB, set_main.jpg 0.17 MB (the 2D club's; set_main.mp4 stays).
+- Local only (gitignored): assets/models/3D Nightclubs/ (raw club .blends, ~1.8 GB) if still on disk.
+
+## Next (round 2)
+- Split overworld.js (1,103 lines), brawler.js (911); watch special3d.js (791), buildings3d.js (759).
+- When files may move: rename for what they are now (clubzone → building zone, NightCase → the
+  asylum's, src/nightclub/ → club3d data, `this.club` → `this.building`, venue kind 'premade' → 'club').
+- Zone mode 'nightcase' = a club mission after dark: could be a flag; a real club-case front page.
+- Dead one-liners: frameSize (brawlsprite.js), venueLight (venues3d.js); randi (util.js) kept for V.
+- Harness: premade3d → `clubs`; nightcase duplicates it (pin a story club); club3d.js's `club=v3` is
+  ignored now. Director docs: STATUS.md club line, BRIEF.md ownership rows.
