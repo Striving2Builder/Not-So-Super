@@ -106,6 +106,11 @@ export class MomentDirector {
     if (this.off) return;
     const flying = !ow.diving && ow.rising === null && !h.perch && !this.sw;
     if (flying) this.flyT += dt;
+    // a story sighting that's due goes up at once (the act's own clock paces those)
+    if ((this.sightTry = (this.sightTry || 0) - dt) <= 0 && !ow.diving && ow.rising === null && !this.sw && !this.live.some((m) => m.big && !m.result) && this.g.act?.sightingDue?.()) {
+      this.sightTry = 1; // (no roof ahead: try again in a second)
+      this.offer('impostor', false);
+    }
     // ?moment=<kind>: the harness (and a tester) can call one up on demand
     if (this.forceKind && !this.forced && this.flyT > 1.2) { this.forced = true; this.force(this.forceKind); }
     // the commute clock: time flying with nothing on (or only an offer she's ignoring)
@@ -121,8 +126,8 @@ export class MomentDirector {
     else this.quiet = this.gap - 3; // nothing could be placed here: try again in a few seconds
   }
 
-  /** Offer one moment (a weighted pick among the eligible kinds); forceKind skips the gates. */
-  offer(forceKind = null) {
+  /** Offer one moment (a weighted pick among the eligible kinds); forceKind skips the gates (near = a test's close placement). */
+  offer(forceKind = null, near = !!forceKind) {
     const c = this.ctx(), bigLive = this.live.some((m) => m.big && !m.result), cands = [];
     for (const [k, K] of Object.entries(KINDS)) {
       if (forceKind) { if (k !== forceKind) continue; } else {
@@ -141,7 +146,7 @@ export class MomentDirector {
       for (; i < cands.length - 1; i++) { r -= cands[i][1]; if (r <= 0) break; }
       const [k] = cands.splice(i, 1)[0];
       let m = null;
-      try { m = KINDS[k].make(this, !!forceKind); } catch (e) { console.error(e); }
+      try { m = KINDS[k].make(this, near); } catch (e) { console.error(e); }
       if (m) { this.add(m); return m; }
     }
     return null;

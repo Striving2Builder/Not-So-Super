@@ -36,6 +36,7 @@ export class AirMoment extends Moment {
   }
 
   marker() { return null; } // (AirEvents.markers() lists it)
+  draw2d() {}               // (and draws it in the 2D view)
   abandon() {}
 
   banner() {

@@ -715,6 +715,7 @@ export class Overworld {
       return;
     }
     if (z.polaroid) { grabPolaroid(this, z); return; }
+    if (z.impostor) { this.g.act?.catchImpostor(this, z); return; } // (only when something hands her in as `near`: her chase has its own DIVE range)
     const lock = st.locked(z.lockKey);
     if (lock) { toast(`You promised to stay out of ${z.lockKey} zones for ${fmtTime(lock)}`, 'bad'); sfx.lose(); return; }
     this.diving = { z, t: 0, sx: this.hero.x, sy: this.hero.y, z0: this.hero.z, zoom0: this.zoom };
