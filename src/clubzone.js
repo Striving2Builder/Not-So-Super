@@ -1,247 +1,16 @@
-// Club Raid: a special zone that takes place inside a premade 3D club (converted from .blend by
-// tools/export_club.py). Reuses the whole Special3D toolkit (heroine, guards, informant, items,
-// X-ray, boss, capture) but swaps the generated rooms for a real building:
-//   * capsule-vs-BVH collision against the actual club geometry (with step-up onto stages)
-//   * the floor is scanned for walkable spots, and gameplay is placed on it automatically
+// The club engine: a Special3D zone played inside a building of its own instead of the code-built
+// venue rooms. The asylum (asylum.js) and the hotel's 13th floor (hotel/) generate theirs
+// (loadBuilding). Reuses the whole Special3D toolkit (heroine, guards, items, X-ray, capture) with:
+//   * capsule-vs-BVH collision against the building's geometry (with step-up onto stages)
+//   * the floor scanned for walkable spots, and gameplay placed only where she can walk
 //   * a clipping plane slices the building just above her head so the camera sees into the room
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { Special3D, CAM_DIST, CAM_PITCHES } from './special3d.js';
-import { VENUES, THEMES, INTOX_ITEMS, BAIT_ITEMS, FIRST_NAMES, HERO } from './data.js';
+import { INTOX_ITEMS, BAIT_ITEMS, HERO } from './data.js';
 import { pick, shuffle, chance, rand, $ } from './util.js';
-import { dialog, toast, banner } from './ui.js';
-import { npcLook, portrait } from './art.js';
+import { toast } from './ui.js';
 import { sfx } from './sfx.js';
-import { quality } from './settings.js';
-import { STEP, DOWN, capsulePush, buildCollider, scanFloor, unpackFloor, mergeStatic, reachableFloor } from './clubgeo.js';
-import { ClubMood } from './clubmood.js';
-import { captureEmitters, dropMeshes, texAverage } from './clubdress.js';
-
-// Premade clubs. Add more by exporting another .blend with tools/export_club.py, then run
-// tools/bake_clubs.js to make the lite (512 px textures) copy and bake the walkable floor.
-export const CLUBS = {
-  triangle: { file: 'assets/clubs/triangle.glb', lite: 'assets/clubs/triangle.lite.glb', meta: 'assets/clubs/triangle.json' },
-  clubhouse: { file: 'assets/clubs/clubhouse.glb', lite: 'assets/clubs/clubhouse.lite.glb', meta: 'assets/clubs/clubhouse.json' },
-  stripclub: { file: 'assets/clubs/stripclub.glb', lite: 'assets/clubs/stripclub.lite.glb', meta: 'assets/clubs/stripclub.json' },
-};
-
-const draco = new DRACOLoader().setDecoderPath('vendor/three/addons/libs/draco/gltf/');
-
-// A club embeds up to ~360 images. GLTFLoader starts decoding them all in one go, which freezes
-// the page for up to a second on slow devices, fatal to a background preload mid-flight. So image
-// decodes go through a queue: background loads a few at a time, yielding to the frame loop between
-// them; the club the player is waiting on (loadClub) at full speed; evicted clubs not at all.
-const BACKGROUND_DECODES = 4;
-let urgentId = null;
-let decoding = 0;
-const decodeQueue = []; // { e: entry, run(), skip() }
-function pumpDecodes() {
-  for (let i = 0; i < decodeQueue.length;) {
-    const job = decodeQueue[i];
-    if (job.e.cancelled) { decodeQueue.splice(i, 1); job.skip(); continue; }
-    if (job.e.id !== urgentId && decoding >= BACKGROUND_DECODES) { i++; continue; }
-    decodeQueue.splice(i, 1);
-    decoding++;
-    job.run().finally(() => { decoding--; setTimeout(pumpDecodes, 0); });
-  }
-}
-
-/** A GLTFLoader for one club load, with its image decodes routed through the queue. */
-function loaderFor(e) {
-  return new GLTFLoader().setDRACOLoader(draco).register((parser) => {
-    const load = parser.loadImageSource.bind(parser);
-    parser.loadImageSource = (index, imgLoader) => new Promise((resolve, reject) => {
-      decodeQueue.push({
-        e,
-        run: () => load(index, imgLoader).then(resolve, reject),
-        skip: () => resolve(new THREE.Texture()), // evicted: the scene is about to be disposed anyway
-      });
-      pumpDecodes();
-    });
-    return { name: 'queued_image_decode' };
-  });
-}
-
-// Loading happens in two stages so the slow parts can overlap with flying:
-//   fetch  — download + decode the model (async; safe to start mid-flight)   → preloadClub()
-//   ready  — build the BVH collider and floor (synchronous; done on entry)     → loadClub()
-// Entries are keyed by club + texture variant and evicted (GPU memory freed) beyond the
-// profile's clubCache limit, oldest first, never the club being played.
-const entries = new Map(); // id → { key, fetch: Promise, ready: Promise|null, used, cancelled, stage, progress }
-let activeId = null;
-
-function variantId(key) {
-  const q = quality();
-  return `${key}:${q.clubTex}:${q.clubMaterials}`;
-}
-
-function entryFor(key) {
-  const id = variantId(key);
-  let e = entries.get(id);
-  if (!e) {
-    const q = quality(), def = CLUBS[key];
-    const file = q.clubTex === 'lite' && def.lite ? def.lite : def.file;
-    e = { id, key, ready: null, used: 0, cancelled: false, stage: 'Downloading', progress: 0 };
-    const onProgress = (ev) => { if (ev.total) e.progress = ev.loaded / ev.total; };
-    e.fetch = Promise.all([loaderFor(e).loadAsync(file, onProgress), fetch(def.meta).then((r) => r.json())]).then(([gltf, meta]) => {
-      const scene = gltf.scene;
-      const swapped = new Map(); // materials are shared between meshes: simplify each one once
-      const simple = (m) => { if (!swapped.has(m)) swapped.set(m, simplify(m, q.clubMaterials)); return swapped.get(m); };
-      scene.traverse((o) => {
-        if (!o.isMesh) return;
-        o.frustumCulled = true;
-        if (q.clubMaterials !== 'full') o.material = Array.isArray(o.material) ? o.material.map(simple) : simple(o.material);
-      });
-      dropMeshes(scene, key);
-      scene.userData.emitters = captureEmitters(scene); // where the neon is, before merging blurs it
-      collapseDetail(scene, q.clubMaterials);
-      scene.userData.chunks = mergeStatic(scene); // hundreds of props → a few dozen draw calls
-      e.stage = 'Building the club';
-      return { scene, meta };
-    });
-    e.fetch.catch(() => entries.delete(id)); // let a failed download be retried
-    entries.set(id, e);
-    evict();
-  }
-  e.used = performance.now();
-  return e;
-}
-
-/** Loading stage/progress of a club, for the loading bar. */
-export function clubProgress(key) { const e = entries.get(variantId(key)); return e ? { stage: e.stage, progress: e.progress } : null; }
-
-/** Start downloading/decoding a club in the background (no-op if it's already on its way). */
-export function preloadClub(key) { if (CLUBS[key]) entryFor(key); }
-
-/** A club ready to play: scene, metadata, BVH collider and walkable floor. */
-export function loadClub(key) {
-  const e = entryFor(key);
-  urgentId = e.id; // the player is waiting: decode this club at full speed
-  pumpDecodes();
-  if (!e.ready) {
-    e.ready = e.fetch.then(({ scene, meta }) => {
-      const collider = buildCollider(scene);
-      // floor baked offline by tools/bake_clubs.js; scan at runtime for clubs that weren't baked
-      const { floor, mainY } = meta.floor ? unpackFloor(meta) : scanFloor(scene, collider);
-      return { scene, meta, collider, floor, mainY, box: new THREE.Box3().setFromObject(scene) };
-    });
-    e.ready.catch(() => entries.delete(e.id));
-  }
-  return e.ready;
-}
-
-/**
- * Cheaper stand-in for an exported material. 'standard': physical extras (glass transmission,
- * clearcoat, sheen) go, which also removes the extra transmission render pass. 'lambert': simple
- * diffuse lighting without normal/roughness maps: far fewer and cheaper shaders.
- */
-function simplify(m, level) {
-  if (!m || !m.isMeshStandardMaterial || (level === 'standard' && !m.isMeshPhysicalMaterial)) return m;
-  const glass = m.transmission > 0;
-  const common = {
-    name: m.name, color: m.color, map: m.map, emissive: m.emissive, emissiveMap: m.emissiveMap,
-    emissiveIntensity: m.emissiveIntensity, alphaMap: m.alphaMap, aoMap: m.aoMap,
-    side: m.side, alphaTest: m.alphaTest, vertexColors: m.vertexColors,
-    transparent: m.transparent || glass, opacity: glass ? Math.min(m.opacity, 0.3) : m.opacity,
-    depthWrite: glass ? false : m.depthWrite,
-  };
-  const s = level === 'lambert'
-    ? new THREE.MeshLambertMaterial(common)
-    : new THREE.MeshStandardMaterial({ ...common, roughness: m.roughness, metalness: m.metalness, roughnessMap: m.roughnessMap, metalnessMap: m.metalnessMap, normalMap: m.normalMap, normalScale: m.normalScale });
-  s.userData.solid = !(m.transparent && m.opacity < 0.35); // collision follows the original material
-  m.dispose();
-  return s;
-}
-
-/**
- * Small props (bottles, glasses, ashtrays, cables…) each come with their own material: over a
- * hundred materials per club, so over a hundred draw calls even after merging. At the game's
- * camera distance their textures are a few pixels wide, so they trade them for a flat colour (the
- * texture's average, in a vertex colour) and all share one material, merging into a single mesh
- * per block. Plain untextured surfaces of any size join them. Glass, cut-outs and neon keep theirs.
- */
-const DETAIL = 0.8; // m: props smaller than this lose their texture
-function collapseDetail(scene, level) {
-  scene.updateMatrixWorld(true);
-  const avg = new Map(), shared = new Map(), box = new THREE.Box3(), used = new Set(), dropped = new Set();
-  const plainMat = (side, glass) => {
-    const key = side + (glass ? 'g' : '');
-    if (!shared.has(key)) {
-      const opts = { vertexColors: true, side, name: glass ? 'club-detail-glass' : 'club-detail' };
-      if (glass) Object.assign(opts, { transparent: true, opacity: 0.45, depthWrite: false });
-      const m = level === 'lambert' ? new THREE.MeshLambertMaterial(opts) : new THREE.MeshStandardMaterial({ ...opts, roughness: glass ? 0.2 : 0.75, metalness: 0.05 });
-      m.userData.solid = !glass;
-      shared.set(key, m);
-    }
-    return shared.get(key);
-  };
-  scene.traverse((o) => {
-    if (!o.isMesh || Array.isArray(o.material)) return;
-    const m = o.material;
-    used.add(m);
-    if (!m.isMeshStandardMaterial && !m.isMeshLambertMaterial) return;
-    if (m.alphaTest > 0 || m.alphaMap) return; // cut-outs (leaves, fringes) need their texture
-    if (m.emissive && m.emissive.getHex() !== 0) return; // neon: keeps its glow
-    const glass = m.transparent || m.transmission > 0, textured = !!m.map;
-    if (textured || glass) { // (big untextured glass: windows, one material anyway)
-      box.setFromObject(o);
-      if (box.getSize(new THREE.Vector3()).length() > DETAIL) return;
-    }
-    const g = o.geometry.clone();
-    const col = m.color.clone();
-    if (textured) col.multiply(texAverage(m.map));
-    // untextured white (doors, plinths, the pole stage) blows out under club lights: tone it down
-    const lum = col.r * 0.3 + col.g * 0.59 + col.b * 0.11;
-    if (lum > 0.45) col.multiplyScalar(0.45 / lum);
-    const n = g.attributes.position.count, arr = new Float32Array(n * 3), old = g.attributes.color;
-    for (let i = 0; i < n; i++) {
-      const k = old ? [old.getX(i), old.getY(i), old.getZ(i)] : [1, 1, 1];
-      arr[i * 3] = col.r * k[0]; arr[i * 3 + 1] = col.g * k[1]; arr[i * 3 + 2] = col.b * k[2];
-    }
-    for (const a of Object.keys(g.attributes)) if (a !== 'position' && a !== 'normal') g.deleteAttribute(a);
-    if (!g.attributes.normal) g.computeVertexNormals();
-    g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
-    o.geometry = g; // (the original may be shared with other meshes: mergeStatic disposes it)
-    o.material = plainMat(m.side, glass);
-    dropped.add(m);
-  });
-  // free the textures nothing uses any more (a phone's memory is what runs out first)
-  const still = new Set();
-  scene.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) still.add(m); });
-  const keepTex = new Set();
-  for (const m of still) for (const v of Object.values(m)) if (v && v.isTexture) keepTex.add(v);
-  for (const m of dropped) {
-    if (still.has(m)) continue;
-    for (const v of Object.values(m)) if (v && v.isTexture && !keepTex.has(v)) v.dispose();
-    m.dispose();
-  }
-}
-
-function evict() {
-  const limit = quality().clubCache;
-  const loaded = [...entries.values()].sort((a, b) => a.used - b.used);
-  for (const e of loaded) {
-    if (entries.size <= limit) break;
-    if (e.id === activeId) continue;
-    entries.delete(e.id);
-    e.cancelled = true;
-    pumpDecodes(); // drop its queued decodes
-    e.fetch.then(({ scene }) => disposeScene(scene)).catch(() => {});
-    if (e.ready) e.ready.then(({ collider }) => collider.geometry.dispose()).catch(() => {});
-  }
-}
-
-function disposeScene(scene) {
-  scene.traverse((o) => {
-    if (!o.isMesh) return;
-    o.geometry.dispose();
-    for (const m of [].concat(o.material)) {
-      for (const v of Object.values(m)) if (v && v.isTexture) v.dispose();
-      m.dispose();
-    }
-  });
-}
+import { STEP, DOWN, capsulePush, reachableFloor } from './clubgeo.js';
 
 export class ClubZone extends Special3D {
   enter(p) {
@@ -253,15 +22,12 @@ export class ClubZone extends Special3D {
     document.body.classList.add('three');
     $('hud-title').textContent = zone.name;
     $('hud-sub').textContent = 'Loading the club…';
-    const key = VENUES[zone.venue].club;
-    activeId = key ? variantId(key) : null;
     this.warming = true;
-    this.showLoading(key);
-    this.loadBuilding(key).then((club) => {
+    this.showLoading();
+    this.loadBuilding().then((club) => {
       if (this.g.mode !== this || this.done) return;
       this.club = club;
       super.enter(p);
-      if (this.mood) this.mood.update(0); // rim the cast now, so their shaders warm up with the club's
       return this.warmShaders().then(() => { this.warming = false; this.busy = false; });
     }).catch((e) => {
       console.error(e);
@@ -273,16 +39,16 @@ export class ClubZone extends Special3D {
 
   warmUp() {} // (Special3D's: here warmShaders runs once the building has loaded)
 
-  /** The building to play in: a premade club by default (the asylum generates its own). */
-  loadBuilding(key) { return loadClub(key); }
+  /** The building to play in: a Promise of { scene, collider, floor, mainY, box, … } (each zone generates its own). */
+  loadBuilding() { return Promise.reject(new Error('this zone has no building')); }
 
   /**
-   * Compile every shader the club needs before the first frame. Done lazily, the first frame
+   * Compile every shader the building needs before the first frame. Done lazily, the first frame
    * compiles hundreds of programs one after another and freezes for seconds on a slow device;
    * compileAsync lets the driver build them in parallel while the loading bar stays up.
    */
   warmShaders() {
-    this.busy = true; // no input while the club is still invisible
+    this.busy = true; // no input while the building is still invisible
     this.setClip(); // clipping planes are part of each shader: compile with the same set
     if (this._loading) this._loading.warming = true;
     const r = this.renderer;
@@ -290,7 +56,7 @@ export class ClubZone extends Special3D {
     return compiled.then(() => this.uploadTextures());
   }
 
-  /** Push the club's textures to the GPU a few at a time (else the first frame uploads them all). */
+  /** Push the building's textures to the GPU a few at a time (else the first frame uploads them all). */
   uploadTextures() {
     const r = this.renderer, todo = new Set();
     this.scene.traverse((o) => {
@@ -309,17 +75,16 @@ export class ClubZone extends Special3D {
     });
   }
 
-  showLoading(key) {
+  /** The loading bar: building the scene, then warming up its shaders. */
+  showLoading() {
     const el = $('club-loading');
     if (!el) return;
     el.classList.add('on');
     const L = (this._loading = { warming: false });
     const tick = () => {
       if (this._loading !== L) return;
-      const p = L.warming ? { stage: 'Warming up', progress: 1 } : (key && clubProgress(key)) || { stage: key ? 'Downloading' : 'Building the scene', progress: key ? 0 : 1 };
-      const frac = p.stage === 'Downloading' ? 0.6 * p.progress : p.stage === 'Warming up' ? 0.9 : 0.75;
-      el.querySelector('.lbl').textContent = p.stage + '…';
-      el.querySelector('i').style.width = Math.round(frac * 100) + '%';
+      el.querySelector('.lbl').textContent = L.warming ? 'Warming up…' : 'Building the scene…';
+      el.querySelector('i').style.width = L.warming ? '90%' : '75%';
       requestAnimationFrame(tick);
     };
     tick();
@@ -334,61 +99,31 @@ export class ClubZone extends Special3D {
   update(dt) {
     if (this.warming) return;
     super.update(dt);
-    if (this.mood && this.scene) this.mood.update(dt);
   }
 
   // the camera isn't placed until the first real frame, so markers would land in the wrong spot
   hud() { if (!this.warming) super.hud(); }
 
   // ------------------------------------------------------------------ world
-  buildWorld() {
-    const c = this.club, S = this.scene;
-    this.wallMat = null;
-    S.add(c.scene);
-    // lighting, haze, grade, light pools/beams, contact shadows, rim light (clubmood.js)
-    this.mood = new ClubMood(this, VENUES[this.zone.venue].club);
-    this.placeClubGameplay();
-  }
-
   detachShared() {
-    activeId = null;
-    urgentId = null; // back to flying: further loads are background preloads
-    if (this.mood) { this.mood.dispose(); this.mood = null; }
     if (this.club && this.scene) this.scene.remove(this.club.scene); // keep the cached building alive
     if (this.renderer) this.renderer.clippingPlanes = [];
   }
 
   spawnPoint() { return { pos: this.spawn.clone(), heading: this.spawnHeading }; }
 
-  // (a boss close to the entrance in a small club only confronts her once she's well inside)
-  bossTrigger(h) { return this.boss && h.position.distanceTo(this.boss.position) < Math.min(7, this.far(this.boss.position) * 0.6); }
-
   // ------------------------------------------------------------------ placement
   onMain(p) { return Math.abs(p.y - this.club.mainY) < 0.3; }
 
-  /** Raid layout: informant, guards, temptations/bait, evidence, captives, boss. */
-  placeClubGameplay() {
-    const z = this.zone, th = this.theme;
-    this.planLayout();
-    this.placeInformant();
-    this.placeGuards(Math.min(5, 2 + (z.boss ? 1 : 0) + (th.extraGuards || 0) + (chance(0.5) ? 1 : 0)));
-    this.placeItems(4 + (th.extraTraps || 0));
-    th.evidence.forEach((name) => this.placeEvidence(name, th.mind ? 'Smash' : 'Secure'));
-    this.placeCaptives(th.captives || 0);
-    if (z.boss) this.placeBoss();
-  }
-
-  // ---- layout building blocks (shared by raids and night cases)
-
-  /** Spawn at the entrance end, exit ring, and a spot-picker that keeps things apart. */
+  /** Spawn at the entrance end, the exit ring, and the floor she can walk to from there (walkFloor). */
   planLayout() {
     const c = this.club, all = c.floor;
-    this.near = (p, r) => all.filter((q) => q.distanceToSquared(p) < r * r).length;
+    const near = (p, r) => all.filter((q) => q.distanceToSquared(p) < r * r).length;
     const cz = (c.box.min.z + c.box.max.z) / 2, cx = (c.box.min.x + c.box.max.x) / 2;
-    const open = all.filter((p) => this.onMain(p) && this.near(p, 2.5) >= 14);
+    const open = all.filter((p) => this.onMain(p) && near(p, 2.5) >= 14);
     open.sort((a, b) => Math.abs(b.z - cz) - Math.abs(a.z - cz));
-    // Spawn toward the entrance end, facing into the club, on the first spot where the normal
-    // camera angle behind her is clear AND the camera hangs over the club's own floor (the very
+    // Spawn toward the entrance end, facing into the building, on the first spot where the normal
+    // camera angle behind her is clear AND the camera hangs over the building's own floor (the very
     // end is often right against the outside wall: the camera either squashes into her back or
     // floats outside, looking down on sliced-open walls).
     const facing = (p) => Math.atan2(cx - p.x, cz - p.z);
@@ -401,98 +136,19 @@ export class ClubZone extends Special3D {
     };
     this.spawn = (open.slice(0, 120).find(camClear) || open[0] || all[0]).clone();
     this.spawnHeading = facing(this.spawn);
-    // Everything below is placed only where she can walk from the entrance: the scanned floor also
-    // holds stage tops, risers and bar tops a step too high to climb (items used to land there).
-    // Same spawn every visit (the pick above is deterministic), so the flood fill is done once per club.
+    // Gameplay is placed only where she can walk from the entrance: the scanned floor also holds
+    // stage tops, risers and bar tops a step too high to climb (items used to land there).
+    // Same spawn every visit (the pick above is deterministic), so the flood fill is done once per building.
     if (!c.reach || !c.reach.from.equals(this.spawn)) c.reach = { from: this.spawn.clone(), floor: reachableFloor(c.collider, all, this.spawn) };
-    const floor = c.reach.floor.length >= 20 ? c.reach.floor : all;
-    this.walkFloor = floor;
-    this.near = (p, r) => floor.filter((q) => q.distanceToSquared(p) < r * r).length;
-    this.far = (p) => p.distanceTo(this.spawn);
-    this.maxD = Math.max(...floor.map(this.far));
-    const used = [this.spawn];
-    /**
-     * Random floor spot passing `test`, at least `gap` metres from everything placed so far. When
-     * nothing passes and `prefer` is given (small clubs, crowded by earlier placements): squeeze the
-     * gap before giving up on `test`, then take the free spot scoring highest on `prefer`.
-     */
-    this.choose = (test, gap = 3, prefer = null) => {
-      const free = (p, g) => used.every((u) => u.distanceTo(p) > g);
-      let p = null;
-      for (let g = gap; !p && g >= 1; g = prefer ? g / 2 : 0) p = shuffle(floor.filter((q) => test(q) && free(q, g)))[0];
-      if (!p && prefer) for (const q of floor) if (free(q, 1) && (!p || prefer(q) > prefer(p))) p = q;
-      p = p || pick(floor);
-      used.push(p);
-      return p.clone();
-    };
+    this.walkFloor = c.reach.floor.length >= 20 ? c.reach.floor : all;
     this.exitRing = new THREE.Mesh(new THREE.RingGeometry(1.1, 1.5, 32), new THREE.MeshBasicMaterial({ color: 0x3ee08a, transparent: true, opacity: 0.25, side: THREE.DoubleSide }));
     this.exitRing.rotation.x = -Math.PI / 2;
     this.exitRing.position.set(this.spawn.x, this.spawn.y + 0.04, this.spawn.z);
     this.scene.add(this.exitRing);
   }
 
-  faceSpawn(obj) { obj.rotation.y = Math.atan2(this.spawn.x - obj.position.x, this.spawn.z - obj.position.z); }
-
-  placeNPC(look, test, gap) {
-    const mesh = this.makeNPC(look);
-    mesh.position.copy(this.choose(test, gap));
-    this.faceSpawn(mesh);
-    return mesh;
-  }
-
-  placeInformant(label = 'Talk to the informant') {
-    const look = npcLook('civilian');
-    const mesh = this.placeNPC(look, (p) => this.onMain(p) && this.far(p) > 8 && this.far(p) < this.maxD * 0.55 && this.near(p, 2) >= 8);
-    this.informant = { mesh, look, name: `${pick(FIRST_NAMES)} "${pick(['Whispers', 'Ears', 'Lucky', 'Two-Tone', 'Canary'])}"`, works: pick(['charm', 'press']), burned: false };
-    this.addInter(mesh.position, label, () => true, () => this.talkInformant(), 'informant');
-  }
-
   /**
-   * Patrolling guards between two points on one level with a clear line between them. The WHOLE
-   * route keeps well clear of where she arrives (vision reaches 7.5 m), so nobody walks into the
-   * entrance and spots her before she's taken a step. Small clubs can't manage that, so they
-   * keep the farthest-back route found (with shorter legs) rather than dropping guards.
-   */
-  placeGuards(n) {
-    const floor = this.walkFloor;
-    const seg = new THREE.Line3(), q = new THREE.Vector3();
-    const routeGap = (a, b) => { seg.set(a, b); return seg.closestPointToPoint(this.spawn, true, q).distanceTo(this.spawn); };
-    const SAFE = 13;
-    const minLeg = Math.min(6, this.maxD * 0.35);
-    for (let i = 0; i < n; i++) {
-      let route = null, best = -1;
-      for (let tries = 0; tries < 40 && best < SAFE; tries++) {
-        const a = pick(floor);
-        if (this.far(a) < Math.min(SAFE, this.maxD * 0.5) || this.far(a) <= best) continue;
-        // cheap tests first; raycast only until one clear partner turns up (testing every
-        // candidate cost seconds on slow devices). Farthest-from-her partners are tried first.
-        const bs = floor
-          .filter((b) => Math.abs(b.y - a.y) < 0.2 && a.distanceTo(b) > minLeg && a.distanceTo(b) < 14)
-          .map((b) => ({ b, gap: routeGap(a, b) }))
-          .filter((c) => c.gap > best)
-          .sort((x, y) => y.gap - x.gap || Math.random() - 0.5);
-        const hit = bs.slice(0, 60).find((c) => this.lineClear(a, c.b));
-        if (!hit) continue;
-        best = hit.gap;
-        const b = hit.b;
-        // start at the end nearer her, walking away, so the first look is at the far wall
-        route = this.far(a) <= this.far(b) ? [a.clone(), b.clone()] : [b.clone(), a.clone()];
-      }
-      if (!route) continue;
-      const mesh = this.makeGuard();
-      mesh.position.copy(route[0]);
-      mesh.rotation.y = Math.atan2(route[1].x - route[0].x, route[1].z - route[0].z);
-      const cone = new THREE.Mesh(
-        new THREE.CircleGeometry(7.5, 24, -Math.PI / 2 - 0.525, 1.05).rotateX(-Math.PI / 2),
-        new THREE.MeshBasicMaterial({ color: 0xffe040, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }));
-      cone.position.y = 0.06;
-      mesh.add(cone);
-      this.guards.push({ mesh, cone, route, wp: 1, ko: false, look: 0, seeing: false, t: rand(0, 3) });
-    }
-  }
-
-  /**
-   * Temptations (intoxicating) and bait (maybe a trap) on table tops / the bar.
+   * Temptations (intoxicating) and bait (maybe a trap) on table tops / counters.
    * `onTake(it)` runs after a temptation is taken (night cases hide notes under drinks).
    */
   placeItems(n, { onTake, intox = INTOX_ITEMS, bait: baitPool = BAIT_ITEMS } = {}) {
@@ -517,45 +173,8 @@ export class ClubZone extends Special3D {
     }
   }
 
-  /** Glowing evidence deep in the club; its beacon shows once the informant talks (X-ray shows it anyway). */
-  placeEvidence(name, verb) {
-    const p = this.choose((q) => this.far(q) > this.maxD * 0.55, 8);
-    const glowMesh = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.45), new THREE.MeshLambertMaterial({ color: 0x39ff6a, emissive: 0x39ff6a, emissiveIntensity: 0.7 }));
-    glowMesh.position.set(p.x, p.y + 0.25, p.z);
-    this.scene.add(glowMesh);
-    const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3, 6), new THREE.MeshBasicMaterial({ color: 0x39ff6a, transparent: true, opacity: 0.6, depthTest: false }));
-    beacon.position.set(p.x, p.y + 1.6, p.z); beacon.renderOrder = 12; beacon.visible = false;
-    this.scene.add(beacon); this.hidden.push(beacon);
-    const e = { name, mesh: glowMesh, done: false, beacon };
-    this.evidence.push(e);
-    this.addInter(new THREE.Vector3(p.x, 0, p.z), `${verb}: ${name}`, () => !e.done, () => this.secureEvidence(e), 'evidence');
-  }
-
-  /** People held in cages toward the back. */
-  placeCaptives(n) {
-    for (let i = 0; i < n; i++) {
-      const p = this.choose((q) => this.far(q) > this.maxD * 0.5 && this.near(q, 1.5) >= 7, 4);
-      const person = this.makeNPC(npcLook('civilian'));
-      person.position.copy(p);
-      this.faceSpawn(person);
-      const cage = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.3, 1.4), new THREE.MeshBasicMaterial({ color: 0x999999, wireframe: true }));
-      cage.position.set(p.x, p.y + 1.15, p.z); this.scene.add(cage);
-      this.colliders.push({ minX: p.x - 0.7, maxX: p.x + 0.7, minZ: p.z - 0.7, maxZ: p.z + 0.7, mesh: cage });
-      const cap = { person, cage, freed: false, x: p.x, z: p.z };
-      this.captives.push(cap);
-      // (interact from any side: the cage's own collider keeps her ~1 m from its centre)
-      this.addInter(new THREE.Vector3(p.x, 0, p.z), this.theme.mind ? 'Snap them out of the trance' : 'Break open the cage', () => !cap.freed, () => this.freeClubCaptive(cap), 'captive');
-    }
-  }
-
-  placeBoss() {
-    const b = (this.boss = this.makeBoss());
-    b.position.copy(this.choose((q) => this.far(q) > this.maxD * 0.75, 5, this.far));
-    this.faceSpawn(b);
-  }
-
   /**
-   * Table tops / bar counters: upward-facing surfaces 0.55–1.25 m above a floor spot she can walk
+   * Table tops / counters: upward-facing surfaces 0.55–1.25 m above a floor spot she can walk
    * to within arm's reach (1.3 m; she interacts within 2 m). The middle of a stage or riser is too
    * far from any floor she can stand on, so nothing lands there.
    */
@@ -576,21 +195,10 @@ export class ClubZone extends Special3D {
     return shuffle(out);
   }
 
-  lineClear(a, b) {
-    const ray = new THREE.Raycaster(); ray.firstHitOnly = true;
-    for (const hgt of [0.5, 1.3]) {
-      const from = new THREE.Vector3(a.x, a.y + hgt, a.z), to = new THREE.Vector3(b.x, b.y + hgt, b.z);
-      const d = from.distanceTo(to);
-      ray.set(from, to.sub(from).normalize()); ray.far = d;
-      if (ray.intersectObject(this.club.collider)[0]) return false;
-    }
-    return true;
-  }
-
   // ------------------------------------------------------------------ physics
   collide(p, r) {
     super.collide(p, r);                       // cages and other dynamic boxes
-    capsulePush(this.club.collider, p, r);     // the club itself
+    capsulePush(this.club.collider, p, r);     // the building itself
     // grounding: snap to the floor below (steps up to STEP). No floor there (an open doorway to
     // nowhere, a gap in the model) → treat it as a wall and stay where she last stood.
     const ray = this._gray || (this._gray = new THREE.Raycaster());
@@ -614,43 +222,6 @@ export class ClubZone extends Special3D {
   }
 
   // ------------------------------------------------------------------ story
-  async talkInformant() {
-    const inf = this.informant;
-    if (this.hasCode) {
-      await dialog({ speaker: inf.name, portrait: portrait(inf.look), text: '"I already told you where to look. Now beat it before they see us."' });
-      return;
-    }
-    const hint = inf.works === 'charm' ? 'They keep glancing toward the back, guilt written all over their face.' : 'They\'re sweating and eyeing every exit. A coward.';
-    const v = await dialog({
-      speaker: `Informant · ${inf.name}`, portrait: portrait(inf.look),
-      text: `"Psst. Hero. The whole ${this.theme.name.toLowerCase()} racket runs through this club. I know where they stash the goods… but talk ain't cheap in here."<span class="hint">${hint}</span>`,
-      options: [
-        { label: '"Have a drink with me first." — Accept the drink', note: '+25 intoxication, guaranteed tip', value: 'drink', cls: 'risky' },
-        { label: 'Appeal to their conscience', value: 'charm', disabled: inf.burned },
-        { label: 'Pin them against the wall', value: 'press', disabled: inf.burned },
-        { label: 'Walk away', value: null },
-      ],
-    });
-    if (!v) return;
-    if (v === 'drink') { sfx.drink(); this.g.state.addIntox(25); toast('🥴 Intoxication +25', 'bad'); }
-    else if (v !== inf.works) {
-      inf.burned = true;
-      this.alert = Math.min(99, this.alert + 30);
-      sfx.alarm();
-      await dialog({ speaker: inf.name, text: '"Hey! Keep it down!" Heads turn toward you.<span class="hint">Guard alert +30. They\'ll only talk over a drink now.</span>' });
-      return;
-    }
-    this.hasCode = true;
-    for (const e of this.evidence) { e.beacon.visible = true; this.hidden = this.hidden.filter((h) => h !== e.beacon); }
-    sfx.pickup();
-    await dialog({ speaker: inf.name, portrait: portrait(inf.look), text: `"Alright, alright. The ${this.theme.evidence[0].toLowerCase()} is at the back of the club. Look for the green glow."${this.captives.length ? ' "And… they\'ve got people locked up back there."' : ''}` });
-  }
-
-  async secureEvidence(e) {
-    await super.secureEvidence(e);
-    if (e.done) { e.beacon.visible = false; this.hidden = this.hidden.filter((h) => h !== e.beacon); }
-  }
-
   freeClubCaptive(c) {
     c.freed = true;
     c.cage.visible = false;
@@ -669,17 +240,6 @@ export class ClubZone extends Special3D {
       p.legs[0].rotation.x = Math.sin(t * 12) * 0.6; p.legs[1].rotation.x = -Math.sin(t * 12) * 0.6;
     });
   }
-
-  objectives() {
-    const ev = this.evidence.every((e) => e.done), cap = this.captives.every((c) => c.freed);
-    const list = [{ t: 'Get a tip from the informant', done: this.hasCode, target: this.informant.mesh.position }];
-    if (this.zone.boss) list.push({ t: `Take down ${this.zone.boss}`, done: this.bossDone, target: this.boss.position });
-    list.push({ t: `${this.theme.verb}${this.captives.length ? ` (${this.captives.filter((c) => c.freed).length}/${this.captives.length} captives freed)` : ''}`, done: ev && cap, target: (this.evidence.find((e) => !e.done) || {}).mesh?.position || (this.captives.find((c) => !c.freed) || {}).person?.position });
-    list.push({ t: 'Escape through the entrance', done: false, target: this.exitRing.position, final: true });
-    return list;
-  }
-
-  allDone() { return this.hasCode && this.bossDone && this.evidence.every((e) => e.done) && this.captives.every((c) => c.freed); }
 
   /** Pull the camera in when a booth, wall or pillar (below the slice plane) blocks the view. */
   cameraReach(h, off) {
@@ -704,7 +264,6 @@ export class ClubZone extends Special3D {
     if (!this._clip) this._clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), y);
     this._clip.constant = y;
     this.renderer.clippingPlanes = [this._clip];
-    if (this.mood) this.mood.cull(y);
   }
 
   render() {

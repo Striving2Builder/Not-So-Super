@@ -1,4 +1,4 @@
-// Close-up investigation scenes in the detective nightclubs: per room kind, the user's render and
+// Close-up investigation scenes in the clubs (club3d/closeup.js): per room kind, the user's render and
 // WHERE its objects are (x, y, r as fractions of the image's width/height). WHAT an object means is
 // the case's business (src/nightclub/cases/*.js: clue text, items, drinks), so another case
 // (e.g. blackmail) reuses the same rooms and objects with its own story.

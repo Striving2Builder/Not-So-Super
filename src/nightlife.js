@@ -1,25 +1,23 @@
-// Nightlife venues built in code: the Nightclub, Gentlemen's Club, Red Light Den and High-Roller
-// Suite. Entry points the zone calls: furnish (decor + show set-up), per-frame update, dispose.
-// (The premade clubs, Triangle / Clubhouse / Velvet Lounge, are models: see clubzone.js.)
+// Nightlife venues built in code: the Gentlemen's Club, Red Light Den and High-Roller Suite.
+// Entry points the zone calls: furnish (decor + show set-up), per-frame update, dispose.
+// (The club venues, the Nightclub among them, play the 3D club instead: src/club3d/.)
 //   nlkit.js    shared toolbox (neon canvas art, merged additive batches, sign atlas, bulbs, beat)
 //   nlroom.js   walls, floors, floor glow map, light rig
 //   nlcrowd.js  instanced patrons
-//   nlclub.js / nlgents.js / nlredlight.js / nlcasino.js   one venue each
+//   nlgents.js / nlredlight.js / nlcasino.js   one venue each
 import { makeKit, buildKit, beat } from './nlkit.js';
 import { toon } from './look3d.js';
 import { styleRoom, paintFloorGlow, officeProps, dressOffice } from './nlroom.js';
 import { buildCrowd, updateCrowd } from './nlcrowd.js';
-import { nightclub } from './nlclub.js';
 import { gentlemens } from './nlgents.js';
 import { redlight } from './nlredlight.js';
 import { casino } from './nlcasino.js';
 
-export const NIGHTLIFE_KINDS = new Set(['club', 'gentlemens', 'redlight', 'casino']);
+export const NIGHTLIFE_KINDS = new Set(['gentlemens', 'redlight', 'casino']);
 
 // Per venue: tempo of the show, the builder, the stock furniture's colours and what's on the
 // tables (bar venues).
 const VENUE = {
-  club: { bpm: 126, build: nightclub, sofa: 0x2a1a4a, table: 0x2a1a2a, dress: ['glass', 'candle', 'glass', 'bottle'] },
   gentlemens: { bpm: 100, build: gentlemens, sofa: 0x4a1040, table: 0x1a0a0a, dress: ['bucket', 'glass', 'candle', 'glass'] },
   redlight: { bpm: 96, build: redlight, sofa: 0x6a1020, table: 0x2a1a2a, dress: ['candle', 'glass', 'ashtray', 'bottle'] },
   casino: { bpm: 92, build: casino },

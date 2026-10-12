@@ -55,21 +55,20 @@ export const CASES = [
   { id: 'spiked',    name: 'Spiked Drinks',    districts: ['nightclub', 'entertainment', 'naughty', 'redlight'], setting: 'alley', reward: 22, crime: 'the spiked-drinks scandal' },
 ];
 
-// Night cases: 3D investigations inside the premade clubs (src/nightcase.js). They replace the
-// 2D scenes in nightlife districts after dark. `clueProps` are the evidence objects you search;
-// `captives` adds people to free (one of them becomes the witness); `extraTemptations` adds drinks.
+// Night cases: after dark, most cases on the map are club missions (src/nightcase.js
+// nightCaseFields) that play the 3D club; the map label and the case come from CLUB_CASE_LABELS.
+// `crime` still names the case on the front page.
 export const NIGHT_DISTRICTS = ['nightclub', 'entertainment', 'naughty', 'redlight', 'casino', 'warehouse', 'docks', 'lair'];
-export const NIGHT_JOBS = ['bouncer', 'bartender', 'club promoter', 'DJ', 'VIP host', 'club manager', 'coat-check attendant', 'regular customer', 'dealer'];
 export const NIGHT_CASES = {
-  trafficking:   { name: 'Trafficking Ring', crime: 'the trafficking ring', captives: 2, clueProps: ['Forged Passports', 'Cargo Manifest', 'Burner Phone'] },
-  humantraffic:  { name: 'Human Trafficking', crime: 'the human-trafficking pipeline', captives: 3, clueProps: ['Bus Tickets', 'Stack of Fake IDs', 'Ledger of Names'] },
-  drugs:         { name: 'Drug Ring', crime: "the club's drug ring", clueProps: ['Baggies Stash', 'Cash Envelope', 'Pager'] },
-  weapons:       { name: 'Secret Weapon Parts', crime: 'the smuggled weapon parts', clueProps: ['Machined Trigger Assembly', 'Blueprint Scraps', 'Crate Label'] },
-  gang:          { name: 'Gang Shakedown', crime: 'the gang shakedown', clueProps: ['Gang Colors', 'Protection Ledger', 'Brass Knuckles'] },
-  murder:        { name: 'Murder in the VIP Room', crime: 'the VIP-room murder', chalk: true, clueProps: ['Broken Glass', 'Torn Cufflink', 'Lipstick Note'] },
-  intoxication:  { name: 'Drug Intoxication', crime: 'the spiked-drink poisonings', extraTemptations: 2, clueProps: ['Vial of Powder', 'Pipette', 'Bar Tab'] },
-  blackmail:     { name: 'Blackmail', crime: 'the blackmail photos', clueProps: ['Photo Negatives', 'Hidden Camera', 'Ransom Letter'] },
-  captive:       { name: 'Captive Situation', crime: 'the hostage situation', captives: 2, clueProps: ['Zip Ties', 'Ransom Recording', 'Van Keys'] },
+  trafficking:   { name: 'Trafficking Ring', crime: 'the trafficking ring' },
+  humantraffic:  { name: 'Human Trafficking', crime: 'the human-trafficking pipeline' },
+  drugs:         { name: 'Drug Ring', crime: "the club's drug ring" },
+  weapons:       { name: 'Secret Weapon Parts', crime: 'the smuggled weapon parts' },
+  gang:          { name: 'Gang Shakedown', crime: 'the gang shakedown' },
+  murder:        { name: 'Murder in the VIP Room', crime: 'the VIP-room murder' },
+  intoxication:  { name: 'Drug Intoxication', crime: 'the spiked-drink poisonings' },
+  blackmail:     { name: 'Blackmail', crime: 'the blackmail photos' },
+  captive:       { name: 'Captive Situation', crime: 'the hostage situation' },
 };
 
 // The asylum (src/asylum.js): a 3D investigation in a cross of padded-cell corridors. Caught =
@@ -129,10 +128,12 @@ export const VENUES = {
   'High-Roller Suite': { districts: ['casino'], themes: ['extortion', 'blackmail', 'gang', 'hypnosis'], vice: false, kind: 'casino', bg: '#12060a', floor: '#5a1830', wall: '#3a1a24', lights: [0xffd84d, 0xff4d4d, 0xfff1c0] },
   'Red Light Den':     { districts: ['redlight'], themes: ['trafficking', 'blackmail', 'intoxication', 'drugs'], vice: true, kind: 'redlight', bg: '#12040a', floor: '#2a0e14', wall: '#4a1420', lights: [0xff2244, 0xff6688, 0xffaa33] },
   "Gentlemen's Club":  { districts: ['naughty'], themes: ['blackmail', 'hypnosis', 'extortion', 'intoxication'], vice: true, kind: 'gentlemens', bg: '#0e0610', floor: '#2a1430', wall: '#3d1a44', lights: [0xff44cc, 0xcc66ff, 0xffc890] },
-  // Premade clubs (see src/clubzone.js / tools/export_club.py). `club` = key in CLUBS.
-  'Triangle Club':     { districts: ['nightclub', 'entertainment', 'naughty'], themes: ['drugs', 'blackmail', 'trafficking', 'intoxication', 'gang'], vice: true, kind: 'premade', club: 'triangle', bg: '#0a0610', floor: '#2a1d33', wall: '#3a2a44', lights: [0xff5fd0, 0x7fd0ff, 0xffc890] },
-  'The Clubhouse':     { districts: ['warehouse', 'nightclub', 'lair'], themes: ['gang', 'weapons', 'drugs', 'extortion'], vice: true, kind: 'premade', club: 'clubhouse', bg: '#05070c', floor: '#1a1a20', wall: '#3a1a18', lights: [0x27e0ff, 0xff3030, 0xffc890] },
-  'Velvet Lounge':     { districts: ['naughty', 'redlight', 'nightclub'], themes: ['blackmail', 'hypnosis', 'intoxication', 'extortion'], vice: true, kind: 'premade', club: 'stripclub', bg: '#07050a', floor: '#2a1d22', wall: '#3a1a22', lights: [0xff3fb8, 0x9d4dff, 0xffc890] },
+  // The club venues (`club`): their missions (a raid, or a night case after dark) open the 3D club
+  // (src/club3d/), and the story clubs live in them (CLUB_CASE_LABELS). kind 'premade': they were
+  // premade 3D models once; the commentary still reads it as a nightlife venue.
+  'Triangle Club':     { districts: ['nightclub', 'entertainment', 'naughty'], themes: ['drugs', 'blackmail', 'trafficking', 'intoxication', 'gang'], vice: true, kind: 'premade', club: true, bg: '#0a0610', wall: '#3a2a44' },
+  'The Clubhouse':     { districts: ['warehouse', 'nightclub', 'lair'], themes: ['gang', 'weapons', 'drugs', 'extortion'], vice: true, kind: 'premade', club: true, bg: '#05070c', wall: '#3a1a18' },
+  'Velvet Lounge':     { districts: ['naughty', 'redlight', 'nightclub'], themes: ['blackmail', 'hypnosis', 'intoxication', 'extortion'], vice: true, kind: 'premade', club: true, bg: '#07050a', wall: '#3a1a22' },
   'Ravenmoor Asylum':  { districts: ['suburb', 'farm', 'lair'], themes: [], vice: false, kind: 'asylum', asylum: true, bg: '#0a0d0c', floor: '#5a6660', wall: '#c8cfc4', lights: [0xdff5e8, 0xc8f0ff, 0xfff4d8] },
   'Underground Lair':  { districts: ['lair'], themes: ['mindcontrol', 'hypnosis', 'weapons', 'trafficking'], vice: true, kind: 'lair', bg: '#030805', floor: '#1a201c', wall: '#2a322c', lights: [0x39ff6a, 0xa0ff39, 0x39ffd0] },
   // The act bosses' hotel (src/act/, src/hotel/): opened by the act, never rolled at random.

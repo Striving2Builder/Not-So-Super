@@ -332,7 +332,7 @@ function buildAsylum() {
       collider.material.side = THREE.DoubleSide; // walls/floors are single faces: rays must hit either side
       const { floor, mainY } = scanFloor(scene, collider);
       return {
-        scene, meta: { lights: [] }, collider, floor, mainY, box: new THREE.Box3().setFromObject(scene),
+        scene, collider, floor, mainY, box: new THREE.Box3().setFromObject(scene),
         M, cells: B.cells, routes: B.routes, entrance: B.entrance, cabinetPos: B.cabinetPos,
       };
     });

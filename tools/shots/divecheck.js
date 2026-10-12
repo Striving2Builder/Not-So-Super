@@ -1,7 +1,7 @@
 // Dive check on an iPad descriptor: from 3D flight, the real dive (tryDive → plunge → THUD panel →
 // startZone) into each kind of zone, logging the mode over time, the LOADING card, page errors and
 // console errors. Catches "can't get from flying into a zone" bugs that a direct startZone() skips.
-//   node tools/shots/divecheck.js [--browser webkit|chromium] [--port 8871] [--query club=v1]
+//   node tools/shots/divecheck.js [--browser webkit|chromium] [--port 8871] [--query k=v]
 // → prints one block per zone kind, and shots/divecheck/<browser>_<kind>.png 6 s after the dive.
 const path = require('path');
 const fs = require('fs');

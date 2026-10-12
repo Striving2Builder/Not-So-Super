@@ -1,6 +1,5 @@
-// Club geometry: the BVH collider, capsule collision and the walkable-floor scan for a premade
-// club. Pure three.js (no DOM, no game state) so tools/bake_clubs.js can run the exact same scan
-// offline and ship the result in the club's .json.
+// The club engine's geometry (clubzone.js): the BVH collider, capsule collision and the walkable-floor
+// scan for a zone's own building (the asylum, the hotel). Pure three.js (no DOM, no game state).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshBVH, acceleratedRaycast } from '../vendor/three-mesh-bvh/index.module.js';
@@ -43,7 +42,7 @@ export function buildCollider(scene) {
   scene.traverse((o) => {
     if (!o.isMesh) return;
     const m = Array.isArray(o.material) ? o.material[0] : o.material;
-    // light beams / see-through glass don't block movement (simplified materials remember the original)
+    // light beams / see-through glass don't block movement (a material can say so: userData.solid)
     if (m && (m.userData.solid !== undefined ? !m.userData.solid : m.transparent && m.opacity < 0.35)) return;
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', o.geometry.attributes.position.clone());
@@ -59,60 +58,6 @@ export function buildCollider(scene) {
   collider.updateMatrixWorld(true);
   return collider;
 }
-
-/**
- * Merge a club's static meshes into a few big ones: one per material per CELL-metre block per
- * storey band. The exports have hundreds of small meshes (755 in the Triangle Club), each its
- * own draw call; merged, a view costs one call per material in sight while the blocks still let
- * the camera cull what's behind it. Band-splitting keeps ceilings apart so they can be skipped
- * whole when they're above the slice plane. Returns the merged meshes (each with userData.minY).
- */
-const CELL = 14, BAND = 2.4;
-export function mergeStatic(scene) {
-  scene.updateMatrixWorld(true);
-  const groups = new Map(), drop = [], geos = new Set(), box = new THREE.Box3(), c = new THREE.Vector3();
-  scene.traverse((o) => {
-    if (!o.isMesh || o.isSkinnedMesh || o.isInstancedMesh || Array.isArray(o.material)) return;
-    const g0 = o.geometry;
-    if (Object.keys(g0.morphAttributes).length || g0.groups.length > 1) return;
-    const g = g0.clone().applyMatrix4(o.matrixWorld);
-    if (!g.index) g.setIndex([...Array(g.attributes.position.count).keys()]);
-    if (o.matrixWorld.determinant() < 0) { // mirrored: flip the winding back so faces point out
-      const ix = g.index.array;
-      for (let i = 0; i < ix.length; i += 3) { const t = ix[i + 1]; ix[i + 1] = ix[i + 2]; ix[i + 2] = t; }
-    }
-    // only geometry with the same attribute layout can share a buffer
-    const sig = Object.entries(g.attributes).map(([k, a]) => `${k}${a.itemSize}${a.normalized ? 'n' : ''}${a.array.constructor.name}`).sort().join(',');
-    g.computeBoundingBox();
-    box.copy(g.boundingBox).getCenter(c);
-    const key = `${o.material.uuid}|${sig}|${Math.floor(c.x / CELL)},${Math.floor(c.z / CELL)},${Math.floor(box.min.y / BAND)}`;
-    if (!groups.has(key)) groups.set(key, { mat: o.material, parts: [], order: o.renderOrder });
-    groups.get(key).parts.push(g);
-    drop.push(o);
-    geos.add(g0);
-  });
-  for (const o of drop) o.removeFromParent();
-  for (const g of geos) g.dispose();
-  const out = [];
-  for (const { mat, parts, order } of groups.values()) {
-    const merged = parts.length === 1 ? parts[0] : mergeGeometries(parts, false);
-    if (!merged) continue;
-    for (const p of parts) if (p !== merged) p.dispose();
-    merged.computeBoundingBox(); merged.computeBoundingSphere();
-    const m = new THREE.Mesh(merged, mat);
-    m.renderOrder = order;
-    m.matrixAutoUpdate = false; // static: never recompute its matrix
-    m.userData.minY = merged.boundingBox.min.y;
-    m.userData.maxY = merged.boundingBox.max.y;
-    scene.add(m);
-    out.push(m);
-  }
-  // drop the now-empty node hierarchy (matrix updates walk it every frame otherwise)
-  for (const ch of [...scene.children]) if (!out.includes(ch) && !hasMesh(ch)) ch.removeFromParent();
-  scene.updateMatrixWorld(true);
-  return out;
-}
-const hasMesh = (o) => { let y = false; o.traverse((c) => { if (c.isMesh) y = true; }); return y; };
 
 /** Most common height among points (the club's main floor). */
 function commonY(points) {
@@ -167,15 +112,6 @@ export function scanFloor(scene, collider) {
   const indoor = floor.filter((p) => p.indoor);
   if (indoor.length >= 60) floor.splice(0, floor.length, ...indoor);
   return { floor, mainY: commonY(floor) };
-}
-
-/** Compact JSON form of a floor scan (mm precision), and back. */
-export const packFloor = ({ floor, mainY }) => ({
-  mainY, floor: floor.map((p) => [+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3), p.indoor ? 1 : 0]),
-});
-export function unpackFloor(baked) {
-  const floor = baked.floor.map(([x, y, z, i]) => Object.assign(new THREE.Vector3(x, y, z), { indoor: !!i }));
-  return { floor, mainY: baked.mainY };
 }
 
 /**
