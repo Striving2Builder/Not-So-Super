@@ -112,6 +112,7 @@ export const LOOKS = {
   victim: { skin: '#f0c8a8', hair: '#8a3a1a', top: '#e05aa8', bottom: '#2a2440', shoes: '#c81e2a', long: true, skirt: true },
   mom: { skin: '#e8b48c', hair: '#2a1a10', top: '#3fb08a', bottom: '#2a3a5a', shoes: '#f0f0f0', long: true },
   promoter: { skin: '#c88a64', hair: '#121212', top: '#9a3fd8', bottom: '#141414', shoes: '#141414', cap: '#141414' },
+  impostor: { skin: '#f0c8a8', hair: '#f2d24a', top: '#2fb8b0', bottom: '#ff4fa8', shoes: '#ff4fa8', long: true, skirt: true }, // (until her model loads)
 };
 
 /** A car (runaway: orange; getaway: black; van: navy + a stripe). len ~4.4 m. */

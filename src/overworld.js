@@ -28,6 +28,7 @@ import { hash2 } from './rng.js';
 import { sfx } from './sfx.js';
 import { diveFx } from './divefx.js';
 import { stepPolaroids, grabPolaroid, strayLost } from './polaroids.js';
+import { MomentDirector } from './moments/director.js';
 
 const TILT = 0.2;    // oblique view: perspective centre sits this fraction of the screen below centre
 const PERCH_EVERY = 40; // seconds between super-hearing reveals
@@ -67,6 +68,7 @@ export class Overworld {
     this.paps = new Paparazzi(this);     // tabloid drones in vice districts at night
     this.nav = new Navigator();          // waypoint + autopilot
     this.feed = new CityFeed();          // clips in the minimap corner
+    this.moments = new MomentDirector(this); // what comes up between markers (src/moments/)
     this.frame = 0;
     this.kick = 0;                       // boost punch (0..1), widens the view for a beat
     this.view3d = flight3dEnabled() ? new Flight3D(this) : null; // 3D flight (default); ?flight=2d = top-down
@@ -89,6 +91,7 @@ export class Overworld {
     this.parts = [];
     this.district = null;
     this.events.reset();
+    this.moments.reset();
     this.paps.reset();
     this.feed.stop();
     this.nav.clear();
@@ -482,6 +485,7 @@ export class Overworld {
 
   // ------------------------------------------------------------------ update
   update(dt) {
+    dt *= this.moments.tick(dt); // (slow motion on a catch)
     this.t += dt;
     const g = this.g, h = this.hero, st = g.state, inp = g.input, city = g.city;
     if ((this.leadT = (this.leadT || 0) - dt) <= 0) { this.leadT = 1; this.ensureLeads(); this.ensureStoryClubs(); }
@@ -542,11 +546,13 @@ export class Overworld {
     }
     const boost = !this.attract && inp.down('boost');
     if (!this.attract) this.altitudeInput(inp, a);
-    const ev = stepFlight(h, h.perch ? { x: 0, y: 0 } : a, boost && !h.perch, dt, BANDS[h.band].speedMul);
-    if (this.rising === null) stepAltitude(h, dt);
+    // a moment's swoop (DIVE onto its target) drives her for a moment; otherwise she flies
+    const swoop = !this.attract && this.moments.swoop(dt);
+    const ev = swoop ? {} : stepFlight(h, h.perch ? { x: 0, y: 0 } : a, boost && !h.perch, dt, BANDS[h.band].speedMul);
+    if (this.rising === null && !swoop) stepAltitude(h, dt);
     this.camH += (h.z + camAbove(h.z) - this.camH) * Math.min(1, dt * 4);
     // perched = standing on the roof; rising out of a zone = the camera move owns her position
-    if (h.z < (this.view3d ? this.view3d.maxBuilding : 300) && !h.perch && this.rising === null) this.collideBuildings(h);
+    if (h.z < (this.view3d ? this.view3d.maxBuilding : 300) && !h.perch && this.rising === null && !swoop) this.collideBuildings(h);
     h.x = clamp(h.x, 0, city.W);
     h.y = clamp(h.y, 0, city.H);
     if (h.perch) this.updatePerch(dt);
@@ -623,7 +629,7 @@ export class Overworld {
       if (this.spawnT <= 0) { this.spawnT = 2.5; this.maintainZones(); }
     }
     let near = null, nd = NEAR_R;
-    for (const z of this.zones) { const dd = dist(z.x, z.y, h.x, h.y); if (dd < nd) { nd = dd; near = z; } }
+    for (const z of this.zones) { const dd = dist(z.x, z.y, h.x, h.y); if (dd < nd && !z.impostor) { nd = dd; near = z; } } // (the impostor: her chase has its own DIVE range)
     this.near = this.attract ? null : near;
     if (!this.attract) this.preloadNearbyClub(h);
     this.updatePrompt();
@@ -653,6 +659,7 @@ export class Overworld {
   updateCity(dt) {
     const h = this.hero, st = this.g.state;
     if (this.rising === null) this.events.update(dt);
+    this.moments.update(dt);
     this.paps.update(dt);
     // (announced once per session: helicopter emergencies borrow and return choppers)
     if (this.airspace.follow(h, st.rep >= 300 ? 2 : st.rep >= 150 ? 1 : 0) && !this.choppersAnnounced) {
@@ -667,7 +674,7 @@ export class Overworld {
       const lines = st.rep < 0 ? ['Hey! Watch it!', 'Show-off!', 'There goes trouble…'] : ['Look! Up in the sky!', "It's Supergirl!", "Mommy, look, she's flying!", "Go get 'em!"];
       this.g.commentary.talk(pick(lines), spot.x, spot.y, { kind: 'shout', speaker: 'CROWD', anchor: spot.anchor });
     }
-    const res = this.nav.update(h, (ref) => this.zones.includes(ref) || this.events.list.includes(ref));
+    const res = this.nav.update(h, (ref) => this.zones.includes(ref) || this.events.list.includes(ref) || this.moments.has(ref));
     if (res === 'arrived') toast(this.near ? "You're over the incident: DIVE!" : '🧭 Arrived at your waypoint', 'info');
     else if (res === 'gone') toast('🧭 Waypoint cleared: that incident is over', 'info');
   }
@@ -700,14 +707,19 @@ export class Overworld {
   }
 
   tryDive() {
+    if (this.moments.tryDive()) return; // a flight moment in range takes the DIVE (a swoop onto it)
     const z = this.near, st = this.g.state;
-    if (!z) { toast('Fly over a crime marker to dive in', 'info'); return; }
+    if (!z) {
+      const imp = this.zones.find((q) => q.impostor && dist(q.x, q.y, this.hero.x, this.hero.y) < 600);
+      toast(imp ? 'Get closer, down at rooftop height (▼), then DIVE' : 'Fly over a crime marker to dive in', 'info');
+      return;
+    }
     if (z.polaroid) { grabPolaroid(this, z); return; }
-    if (z.impostor) { this.g.act?.catchImpostor(this, z); return; }
     const lock = st.locked(z.lockKey);
     if (lock) { toast(`You promised to stay out of ${z.lockKey} zones for ${fmtTime(lock)}`, 'bad'); sfx.lose(); return; }
     this.diving = { z, t: 0, sx: this.hero.x, sy: this.hero.y, z0: this.hero.z, zoom0: this.zoom };
     this.events.abandon(); // someone else handles the airborne stuff while she's busy
+    this.moments.abandon();
     if (this.nav.target && this.nav.target.ref === z) this.nav.clear(); // reached it
     this.hero.perch = null;
     this.g.commentary.onDive(z); // spinning-emblem transition + sting
@@ -716,9 +728,15 @@ export class Overworld {
 
   updatePrompt() {
     const el = $('prompt');
-    const z = this.near;
-    this.g.input.setButton('dive', { lit: !!z });
-    if (this.view3d) this.g.input.buttons.dive?.classList.toggle('gone', !z || !!this.diving);
+    const z = this.near, md = !this.diving && !this.attract ? this.moments.diveTarget() : null;
+    this.g.input.setButton('dive', { lit: !!z || !!md });
+    if (this.view3d) this.g.input.buttons.dive?.classList.toggle('gone', (!z && !md) || !!this.diving);
+    if (md && !z) { // a flight moment in DIVE range: a short prompt (the target's own tag says what)
+      const key = document.body.classList.contains('touch') ? 'DIVE' : 'SPACE', html = `<b>${key}</b> ${md.label.replace(' ▼', '')} <small>· ${md.m.name}</small>`;
+      if (el._html !== html) { el.innerHTML = html; el._html = html; }
+      el.classList.add('on');
+      return;
+    }
     if (!z || this.diving) { el.classList.remove('on'); return; }
     const lock = this.g.state.locked(z.lockKey);
     const rc = z.risk === 'CAPTURE' ? '#ff3fb8' : z.risk === 'Traps' ? '#3fd0ff' : '#ffd23f';
@@ -763,6 +781,7 @@ export class Overworld {
     for (const e of this.events.markers()) {
       g.fillStyle = e.color; g.fillRect(ox + e.x * m - 2.5, oy + e.y * m - 2.5, 5, 5);
     }
+    this.moments.drawPings(g, ox, oy, m); // (a new moment pings on the map)
     if (this.nav.target) {
       const t = this.nav.target; g.strokeStyle = '#78ffc8'; g.lineWidth = 2;
       g.beginPath(); g.arc(ox + t.x * m, oy + t.y * m, 5, 0, Math.PI * 2); g.stroke();
@@ -1046,7 +1065,7 @@ export class Overworld {
     }
 
     // airborne events and tabloid drones
-    if (!this.attract) { this.events.drawAir(ctx, V); this.paps.draw(ctx, V); }
+    if (!this.attract) { this.events.drawAir(ctx, V); this.paps.draw(ctx, V); this.moments.draw2d(ctx, V); }
 
     // heroine
     const hs = k * P(h.z) * HS;

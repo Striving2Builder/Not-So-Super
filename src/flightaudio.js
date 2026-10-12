@@ -79,6 +79,45 @@ export class FlightAudio {
     if (n.pan && siren) n.pan.pan.setTargetAtTime(siren.pan, t, 0.2);
   }
 
+  /**
+   * A short musical stinger for the flight moments (src/moments/): 'alert' (something's up), 'ping'
+   * (super-hearing), 'spy' (the courier van), 'riddle' (the Puzzle Maker), 'swoop' (the plunge),
+   * 'catch' (got it), 'fail', 'smash' (a drone), 'tick' (the clock's last seconds), 'piece' (a riddle
+   * solved). Synthesized on the spot: nothing to download, nothing kept.
+   */
+  sting(name) {
+    const g = sfx.enabled && audioGraph();
+    if (!g) return;
+    const { ctx, out, noise } = g, t0 = ctx.currentTime + 0.01;
+    const tone = (f, at, dur, { type = 'triangle', vol = 0.18, to = 0, q = 0 } = {}) => {
+      const o = ctx.createOscillator(), a = ctx.createGain();
+      o.type = type; o.frequency.setValueAtTime(f, t0 + at);
+      if (to) o.frequency.exponentialRampToValueAtTime(to, t0 + at + dur);
+      if (q) { const v = ctx.createOscillator(), vg = ctx.createGain(); v.frequency.value = q; vg.gain.value = f * 0.02; v.connect(vg).connect(o.frequency); v.start(t0 + at); v.stop(t0 + at + dur + 0.05); }
+      a.gain.setValueAtTime(0.0001, t0 + at); a.gain.exponentialRampToValueAtTime(vol, t0 + at + 0.012); a.gain.exponentialRampToValueAtTime(0.0001, t0 + at + dur);
+      o.connect(a).connect(out); o.start(t0 + at); o.stop(t0 + at + dur + 0.05);
+    };
+    const hiss = (at, dur, { vol = 0.25, f = 1800, to = 0, type = 'bandpass' } = {}) => {
+      const s = ctx.createBufferSource(), fl = ctx.createBiquadFilter(), a = ctx.createGain();
+      s.buffer = noise; fl.type = type; fl.frequency.setValueAtTime(f, t0 + at); if (to) fl.frequency.exponentialRampToValueAtTime(to, t0 + at + dur);
+      a.gain.setValueAtTime(vol, t0 + at); a.gain.exponentialRampToValueAtTime(0.0001, t0 + at + dur);
+      s.connect(fl).connect(a).connect(out); s.start(t0 + at, Math.random() * 0.5); s.stop(t0 + at + dur + 0.05);
+    };
+    switch (name) {
+      case 'alert': tone(659, 0, 0.14, { type: 'square', vol: 0.07 }); tone(880, 0.11, 0.26, { type: 'square', vol: 0.08 }); hiss(0, 0.3, { vol: 0.12, f: 900, to: 3000 }); break;
+      case 'ping': tone(1320, 0, 0.6, { type: 'sine', vol: 0.16 }); tone(1320, 0.28, 0.5, { type: 'sine', vol: 0.06 }); tone(1320, 0.52, 0.4, { type: 'sine', vol: 0.025 }); break;
+      case 'spy': for (const [f, at] of [[110, 0], [110, 0.16], [131, 0.32], [98, 0.5]]) tone(f, at, 0.14, { type: 'sawtooth', vol: 0.1 }); hiss(0, 0.08, { vol: 0.1, f: 4000 }); break;
+      case 'riddle': [523, 622, 784, 740].forEach((f, i) => tone(f, i * 0.16, 0.5, { type: 'triangle', vol: 0.1, q: 6 })); tone(196, 0, 0.9, { type: 'sine', vol: 0.12 }); break;
+      case 'swoop': hiss(0, 0.45, { vol: 0.32, f: 600, to: 2600 }); tone(420, 0, 0.42, { type: 'sine', vol: 0.06, to: 140 }); break;
+      case 'catch': tone(90, 0, 0.35, { type: 'sine', vol: 0.4, to: 45 }); hiss(0, 0.12, { vol: 0.35, f: 2200, type: 'lowpass' }); [784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.08 + i * 0.06, 0.32, { vol: 0.12 })); break;
+      case 'fail': tone(392, 0, 0.3, { type: 'sawtooth', vol: 0.08, to: 370 }); tone(330, 0.26, 0.5, { type: 'sawtooth', vol: 0.08, to: 262 }); break;
+      case 'smash': hiss(0, 0.25, { vol: 0.4, f: 3000, type: 'highpass' }); tone(1800, 0, 0.18, { type: 'square', vol: 0.05, to: 600 }); tone(120, 0, 0.2, { type: 'sine', vol: 0.2, to: 60 }); break;
+      case 'tick': tone(1600, 0, 0.05, { type: 'square', vol: 0.05 }); break;
+      case 'piece': [988, 1319].forEach((f, i) => tone(f, i * 0.08, 0.3, { vol: 0.14 })); hiss(0, 0.1, { vol: 0.12, f: 5000 }); break;
+      default: break;
+    }
+  }
+
   /** Mute the loops without tearing them down (pause, map, dialogs). */
   silence() {
     const n = this.nodes;

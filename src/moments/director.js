@@ -294,6 +294,7 @@ export class MomentDirector {
   render3d(view, dt) {
     if (!this.kit || this.kit.scene !== view.scene) { this.kit?.dispose(); this.kit = new Kit3D(view.scene, view.renderer); }
     const kit = this.kit;
+    this.frameDt = dt;
     kit.begin(view.cam.cam);
     for (const m of this.live) { try { m.draw3d(kit, view); } catch (e) { console.error(e); m.result = m.result || 'lost'; } }
     drawAir3d(this, kit, view);
