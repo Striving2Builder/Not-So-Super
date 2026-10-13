@@ -105,11 +105,15 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
 ## Board
 | Track | Builder (agent / branch) | Round | Last critic (pairs better / vs HTML5 / feel / verdict) | State |
 |---|---|---|---|---|
-| T tech debt | (launching) | 1 | n/a | wave 1 |
-| L club loop | (launching) | 1 | baseline pending | wave 1 |
+| T tech debt | running (worktree, handoff `tech-r11.md`) | 1 | n/a | building since 2026-10-11 |
+| L club loop | running (worktree, handoff `loop-r11.md`) | 1 | baseline pending (from its `r11L-base` shots) | building since 2026-10-11 |
 | V club variety | (waits for T's merge) | 0 | baseline pending | wave 2 |
-| F travel | (launching) | 1 | baseline pending | wave 1 |
-| refs scout | (launching) | n/a | n/a | building `club3d` + `travel` pools |
+| F travel | running (worktree, handoff `travel-r11.md`) | 1 | baseline pending (from its `r11F-base` shots) | building since 2026-10-11 |
+| refs scout | running | n/a | n/a | building the `club3d` + `travel` pools |
+
+Worktrees: the round-11 builders are the newest `worktree-agent-*` branches in `git worktree list`
+(created 2026-10-11); a fresh thread resumes a track with a fresh builder pointed at that branch and its
+handoff file.
 
 ## Log
 - 2026-10-11: round planned. Wave 1 = T, L, F and the reference scout; V starts once T is merged (both
