@@ -10,3 +10,4 @@
 - Club beat/prompt timers must run on game time (`this.t`), not `setTimeout`: a harness screenshot costs seconds of real time and ran a 6 s answer window out before the key press (round 11 V).
 - `club3d.js` forces `&club3case=<--case>` unless the query brings one: generated cases use `&club3case=gen&club3gen=<seed>`; `&club3beat=9999` stops the crowd beats firing on their own timer (round 11 V).
 - `travel.js` full run can report "impostor was never offered" after the other moments; `--only impostor` offers and wins it (harness ordering, not the game; round 11).
+- club3d.js: all 5 rooms + flows + --gen in one run can crash the SwiftShader tab ("Target crashed") and take every later flow down with it; run --gen with `--rooms rave --flows none` (passes in isolation, 2026-10-13).
