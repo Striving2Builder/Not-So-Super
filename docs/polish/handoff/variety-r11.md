@@ -32,5 +32,14 @@ Branch `r11-variety` (from phase-2 a210550). Brief: docs/polish/ROUND11.md (V) +
 - The lookalike twist could show the knockoff on a club screen (act/spot.js `impostorize`).
 - Generated-case leads are `street` leads; give them proper venues later.
 
+- **Weakest point (seen in strips gen2/gen5):** the knot doesn't read at phone size. Near-camera dancers
+  hide it and the dancers can't hold phones up. Next: a closer camera during a beat, or pull the knot
+  members in front of the foreground (L owns crowd.js / the camera).
+
 ## Numbers
-- Base r11V-base (5 rooms, entrance + crowd): 2318 calls / 3.82M tris.
+- Base r11V-base (5 rooms, entrance + crowd): 2318 calls / 3.82M tris. r11V-1: 2336 / 3.82M (+0.8%,
+  hand-written case; noise). During a beat: about 190–233 calls vs 184–217 for the crowd view (one NPC +
+  one phone mesh, only while the beat runs).
+- r11V-1: 8 gen flows, 0 failed, 0 page errors (shots/r11V-1/club3d/gen*_*.png = 9 phone frames per seed;
+  strips/gen1..8.png + strips.md). r11V-reg: the 21 existing flows, 0 failed, 0 errors.
+- Best shots: gen8_3_headline, gen2_1_trap, gen3_1_push, gen5_8_snapper, gen1_9_paper.
