@@ -42,7 +42,7 @@ judging blind side-by-side against the AAA games, is wowed (the bar is below).
 | Track | Owns |
 |---|---|
 | T tech debt | `src/main.js` zone flow (club version switch, `modeFor`, `startZone` fallback); `src/clubzone.js` premade-club loading (the `ClubZone` base stays: the asylum and the hotel use it); `src/clubdress.js`, `src/clubmood.js`, `src/nightcase.js` if dead; `src/nightclub/*` except `cases/` and anything v3 imports; premade-only lines in `data.js`, `overworld.js`, `settings.js`, `special3d.js`; `tools/` scripts for the premade clubs; README and ARCHITECTURE.md |
-| L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | L-1 blind critic running (pairs: that worktree's `shots/blind/club3d-r11L-crit/`, report → `critiques/r11/L-1.md`) | **merged**: readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
+| L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | **L-1: NOT YET**: 0/8 pairs, vs AAA 2.5, vs HTML5 6, feel 5.5 (`critiques/r11/L-1.md`) | **merged**: readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
 | V club variety | `src/club3d/`: `plan.js`, `events.js`, `casework.js`, `chatter.js`, `backrooms.js`, `office.js`, `vip.js`, `rooms.js`, `build.js`, `dressing.js`, `vices.js`, `undercover.js`; `src/nightclub/cases/`; new `src/club3d/casegen.js` (+ data files); `CLUB_CASE_LABELS` in `data.js`; `clubCase` in `overworld.js` |
 | F travel | `src/overworld.js` (not the camera), `src/airevents.js`, `src/paparazzi.js`, `src/nav.js`, `src/flightmarks.js`, `src/flightfx3d.js`, `src/polaroids.js` strays, the sightings in `src/act/act.js`, `src/airspace.js`, `src/flightaudio.js`, new flight-moment files |
 | director | `style.css` (append per-track blocks headed `/* === r11 <track> === */`), `ui.js`, `comic.js`, `index.html`, `settings.js` (additive keys), `sfx.js` (additive), this file, STATUS.md |
@@ -107,15 +107,24 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
 |---|---|---|---|---|
 | T tech debt | `worktree-agent-a047ac9311b1f985f` | 1 done | n/a (regression pack `shots/r11T-pack/`) | **merged** (78030b3): v1 + v2 gone, -6,052 lines, -176 KB JS at startup, 0 errors in every area |
 | F travel | `worktree-agent-a4e919b8e12914483` | 1 done | not yet run | **merged** (a6f223a): moment director, air events in 3D, impostor rooftop chase |
-| L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | L-1 blind critic running (pairs: that worktree's `shots/blind/club3d-r11L-crit/`, report → `critiques/r11/L-1.md`) | **merged**: readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
+| L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | **L-1: NOT YET**: 0/8 pairs, vs AAA 2.5, vs HTML5 6, feel 5.5 (`critiques/r11/L-1.md`) | **merged**: readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
 | V club variety | worktree agent (handoff `variety-r11.md`) | 1, running | n/a | casegen templates + the user's crowd/scandal beats (see Log 2026-10-13) |
 | refs scout | done 2026-10-13 | n/a | n/a | **built**: `club3d/` 12 (Hitman ×4, Cyberpunk ×2, GTA V, Yakuza ×2, LEGO ×2…), `travel/` 12 (Spider-Man, Arkham Knight, LEGO); all ≥1280 px. Gaps: no Hitman club/Iceberg Lounge, few dancefloor-with-guards shots, mostly daytime travel |
 
 ## Next (in order, each one a small fresh agent from its handoff file)
 1. ~~Merge L~~ done 2026-10-13.
 2. ~~Reference pools~~ done 2026-10-13 (README sections in `docs/references/README.md`).
-3. **First blind critics** for L and F (one fresh critic each, 8 pairs + strips): needs each track's critic
+3. **First blind critics** (L done: see L round 2 below) for L and F (one fresh critic each, 8 pairs + strips): needs each track's critic
    pack (`club3d.js --label r11L-<n>`; `travel.js --label r11F-1` + `--commute --secs 180 --every 6`).
+3b. **L round 2** (fresh builder from `loop-r11.md`, after V merges: both in `src/club3d/`), from L-1:
+   1) dither out crowd figures between camera and her (shader discard near her screen pos);
+   2) crowd variety: 8-tone palette lifted off black, 3-4 head/hair variants, scale/lean, phase offsets;
+   3) floor: beat-tinted LED tile canvas texture, light pools, blob shadows (the KO'd bouncer floats);
+   4) cape points straight up (pairs 2/7/8): clamp ~70° + damping; 5) "spotted" as an event: clear
+   bubbles/tips, brief slow-mo, red vignette, CCTV of her on the stage screen, "LOST THEM" stamp;
+   6) show the grab in-world before the struggle panel; 7) HUD diet: "GET CLOSER" overlaps the title
+   card, one transient layer at a time, slim stat bars; 8) X-ray: nearest 3 tags, de-overlap, icons,
+   beacon on the clue; 9) cheap bloom on emissives (quality-gated); 10) dress the DJ booth + sign.
 4. **V round 1:** case templates (suspect × clue type × twist) in `src/club3d/casegen.js`, per-visit
    variation of events, objectives, NPC profiles and layout; 8 seeded visits as the critic pack.
 5. **F round 2:** courier-van tail (trail + warehouse gate), Polaroids blowing off a roof, super-hearing
