@@ -102,7 +102,7 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
 4. After merges: push `phase-2`. Publishing to `main` and the `testdrive-*` tags only when the user asks.
 5. Keep this board current after every merge or decision. Stop the loop when every track is done.
 
-## Board (resumed 2026-10-13: steps 2 + 4 running, ≤2 agents)
+## Board (paused 2026-10-13 after publishing testdrive-2026-10-13 to main; resume tomorrow)
 | Track | Branch | Round | Last critic | State |
 |---|---|---|---|---|
 | T tech debt | `worktree-agent-a047ac9311b1f985f` | 1 done | n/a (regression pack `shots/r11T-pack/`) | **merged** (78030b3): v1 + v2 gone, -6,052 lines, -176 KB JS at startup, 0 errors in every area |
@@ -137,11 +137,11 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
    5) one toast at a time. 6) land wins/losses (freeze + SAVED!/ESCAPED! panel). 7) streamlined cruise
    pose, 15% smaller. 8) facade repulsion + fade. 9) directional captions. 10) daytime city texture.
    Harness first: in `--commute` the bot stays perched after a won rescue (kitten), so a
-   180 s run logs no offers; `impostor` is "never offered" on phase-2 (gate/act state). Then courier-van tail (trail + warehouse gate), Polaroids blowing off a roof, super-hearing
+   180 s run logs no offers; `impostor` was "never offered" in the full run but won with `--only faller,impostor` (run-order/act state). Then courier-van tail (trail + warehouse gate), Polaroids blowing off a roof, super-hearing
    street rescue, Puzzle Maker riddle chain, news chopper; check the impostor's knockoff colours.
 6. **T round 2:** split `overworld.js` (1,103 lines) and `brawler.js` (911); renames (clubzone →
    building engine, `NightCase` → asylum's); harness tidy (`premade3d` → `clubs`).
-7. **Ask the user:** delete the now-unreferenced 28 MB of assets (`assets/clubs/*`, 2 plates; list in
+7. ~~Ask the user~~ deleted 2026-10-13 (user OK): the 28 MB of assets (`assets/clubs/*`, 2 plates; list in
    `docs/polish/handoff/tech-r11.md`)?
 
 ## Credit-lean process (lessons from round 11; applies from round 12)
