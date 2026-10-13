@@ -23,8 +23,8 @@ export const STEALTH = {
   hold: 1.1,            // s he keeps the "?" after losing sight of her
   fade: 14, fadeSearch: 7,
   close: 1.7, closeRate: 22, // a searching bouncer this close finds her in the crowd unless she dances
-  spotAlert: 50,        // the floor's alert the moment he makes her
-  chase: [24, 34],      // alert per second while a bouncer who's made her can see her (normal, hard)
+  spotAlert: 45,        // the floor's alert the moment he makes her
+  chase: [16, 24],      // alert per second while a bouncer who's made her can see her (normal, hard): ~3.4 s / 2.3 s to break his sight
   grab: 1.2,            // an alerted bouncer this close (and seeing her for grabT) grabs her
   grabT: 0.6,
   speed: { walk: 1.7, slow: 0.8, search: 2.1, chase: 2.3 },
@@ -58,7 +58,7 @@ let xmats = null;
 const xMat = (k) => {
   if (!xmats) {
     xmats = {};
-    for (const [n, c] of Object.entries(XCOL)) xmats[n] = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.8, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false });
+    for (const [n, c] of Object.entries(XCOL)) xmats[n] = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 1, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false });
   }
   return xmats[k];
 };
@@ -321,8 +321,14 @@ export const stealthMethods = {
         u.earrow.style.transform = `rotate(${ang.toFixed(2)}rad)`;
         u.edge.classList.add('on');
       } else u.edge.classList.remove('on');
-      // X-ray: every bouncer labelled with his state (through walls), the downed ones with their count
-      const tp = tagOn && !behind && sx > 0 && sx < W && sy > 30 && sy < H ? { x: sx, y: sy + 30 } : null;
+      // X-ray: every bouncer labelled with his state (through walls), the downed ones with their count;
+      // the tag sits under his feet (over his head it hid the glowing figure itself at a distance)
+      let tp = null;
+      if (tagOn && !behind) {
+        v.set(m.position.x, m.position.y - 0.05, m.position.z).project(cam);
+        const fx = (v.x * 0.5 + 0.5) * W, fy = (-v.y * 0.5 + 0.5) * H + 6;
+        if (v.z <= 1 && fx > 0 && fx < W && fy > 30 && fy < H - 10) tp = { x: fx, y: fy };
+      }
       if (tp && Math.hypot(m.position.x - this.hero.position.x, m.position.z - this.hero.position.z) < 30) {
         const txt = gd.st === 'ko' ? `${LABEL.ko} ${Math.max(0, Math.ceil((gd.dazed || 0) - this.t))}s` : gd.torch && gd.st === 'calm' ? 'CALM · TORCH' : gd === this.ropeGuard && gd.st === 'calm' ? 'CALM · ROPE' : LABEL[gd.st] || '';
         if (u.tt !== txt) { u.tt = txt; u.tag.textContent = txt; u.tag.className = `c3-xtag s-${gd.st}`; }

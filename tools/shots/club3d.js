@@ -100,7 +100,7 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
       /** The bouncers' heads: [state, sus, seeing] each. */
       minds: () => page.evaluate(() => window.__game.mode.guards.map((g) => `${g.st}:${Math.round(g.sus || 0)}${g.seeing ? '*' : ''}`).join(' ')),
     };
-    await page.goto(`http://localhost:${PORT}/?flight=2d&club=v3&club3under=0&club3case=${CASE}${query}`);
+    await page.goto(`http://localhost:${PORT}/?flight=2d&club=v3&club3under=0${/club3case=/.test(query) ? '' : `&club3case=${CASE}`}${query}`); // (a flow may bring its own case)
     await page.waitForFunction(() => window.__game && document.querySelector('#btn-new'), null, { timeout: 30000 });
     await page.evaluate(async () => { (await import('/src/settings.js')).autoTune.done = true; });
     await page.mouse.click(W / 2, H / 2); // (skips the intro video)
@@ -419,19 +419,27 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
       const res = P.evaluate(async () => { const { struggle } = await import('/src/club3d/struggle.js'); const { CLIPS, clipsReady, nextClip } = await import('/src/club3d/clips.js'); await clipsReady; const t0 = performance.now(); const ok = await struggle({ clip: nextClip(CLIPS.captive), title: 'BREAK FREE!', text: 'A test on a thumb. <b>Lose this one and they carry you out.</b>', diff: 'hard' }); return { ok, secs: +((performance.now() - t0) / 1000).toFixed(1) }; });
       await P.waitForFunction(() => window.__struggle, null, { timeout: 20000 });
       await P.waitForTimeout(500); await V.shot('loop_struggle_hint'); await V.strip('touch', 1);
-      const cx = 560, cy = 230, r = 46, start = Date.now();
+      // (measure the input, not SwiftShader: the club under the overlay stops drawing for this test, so
+      // pointer events arrive at a phone's rate instead of one per 5 fps frame)
+      await P.evaluate(() => { const m = window.__game.mode; m._render = m.render; m.render = () => {}; });
+      // (the page runs ~5 fps under SwiftShader and takes about one pointer event a frame: the thumb
+      // follows the struggle's own clock in 0.9 rad steps, under the 1.65 rad jump filter)
+      const cx = 560, cy = 230, r = 46;
       await P.mouse.move(cx + r, cy); await P.mouse.down();
-      let k = 0, shot = 2;
-      while (Date.now() - start < 9000) {
+      let last = null, a = 0;
+      const t0 = await P.evaluate(() => window.__struggle.state().t), trace = [];
+      for (let i = 0; i < 4000; i++) {
         const s = await P.evaluate(() => window.__struggle && window.__struggle.state());
         if (!s) break;
-        const a = ((Date.now() - start) / 1000) * 1.3 * Math.PI * 2, wob = 1 + 0.12 * Math.sin(a * 3.1);
-        await P.mouse.move(cx + Math.cos(a) * r * wob, cy + Math.sin(a) * r * wob);
-        if (++k % 40 === 0 && shot <= 4) await V.strip('touch', shot++);
+        if (s.t === last) { await P.waitForTimeout(8); continue; }
+        last = s.t;
+        if (trace.length < 40) trace.push(`${s.got.toFixed(1)}@${s.t.toFixed(1)}`);
+        const target = (s.t - t0) * 1.3 * Math.PI * 2;
+        while (a < target) { a = Math.min(target, a + 0.9); const wob = 1 + 0.12 * Math.sin(a * 3.1); await P.mouse.move(cx + Math.cos(a) * r * wob, cy + Math.sin(a) * r * wob); }
       }
       await P.mouse.up();
-      const out = await res;
-      return out;
+      await P.evaluate(() => { const m = window.__game.mode; if (m._render) m.render = m._render; });
+      return { ...(await res), trace: trace.filter((q, i) => i % 4 === 0).join(' ') };
     });
     await flow('caught', '&club3case=auction&club3seed=7&club3event=none', async (V) => {
       // a story club: made, grabbed, the struggle (won on a thumb), free: they're down, she's in the crowd
@@ -450,15 +458,18 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
       await V.gwait(0.3); await V.strip('caught', 1); log.push(await V.minds());
       await P.waitForFunction(() => window.__struggle, null, { timeout: 30000, polling: 50 });
       await P.waitForTimeout(700); await V.strip('caught', 2);
-      const cx = 560, cy = 230, r = 46, start = Date.now();
+      const cx = 560, cy = 230, r = 46;
       await P.mouse.move(cx + r, cy); await P.mouse.down();
-      let k = 0, n = 3;
-      while (Date.now() - start < 9000) {
+      let k = 0, n = 3, last = null, a = 0;
+      const t0 = await P.evaluate(() => window.__struggle.state().t);
+      for (let i = 0; i < 4000; i++) {
         const s = await P.evaluate(() => window.__struggle && window.__struggle.state());
         if (!s) break;
-        const a = ((Date.now() - start) / 1000) * 1.3 * Math.PI * 2;
-        await P.mouse.move(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
-        if (++k === 60 && n === 3) { await V.strip('caught', n++); }
+        if (s.t === last) { await P.waitForTimeout(8); continue; }
+        last = s.t;
+        const target = (s.t - t0) * 1.3 * Math.PI * 2;
+        while (a < target) { a = Math.min(target, a + 0.9); await P.mouse.move(cx + Math.cos(a) * r, cy + Math.sin(a) * r); }
+        if (++k === 14 && n === 3) await V.strip('caught', n++);
       }
       await P.mouse.up();
       await P.waitForTimeout(250); await V.strip('caught', 4);
