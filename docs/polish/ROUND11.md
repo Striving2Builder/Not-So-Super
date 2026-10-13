@@ -109,11 +109,11 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
 | F travel | `worktree-agent-a4e919b8e12914483` | 1 done | not yet run | **merged** (a6f223a): moment director, air events in 3D, impostor rooftop chase |
 | L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | not yet run (pack in that worktree's `shots/r11L-2/`) | **merged**: readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
 | V club variety | worktree agent (handoff `variety-r11.md`) | 1, running | n/a | casegen templates + the user's crowd/scandal beats (see Log 2026-10-13) |
-| refs scout | sonnet, running | n/a | n/a | building `docs/references/club3d/` + `travel/` (needed before any blind critic) |
+| refs scout | done 2026-10-13 | n/a | n/a | **built**: `club3d/` 12 (Hitman ×4, Cyberpunk ×2, GTA V, Yakuza ×2, LEGO ×2…), `travel/` 12 (Spider-Man, Arkham Knight, LEGO); all ≥1280 px. Gaps: no Hitman club/Iceberg Lounge, few dancefloor-with-guards shots, mostly daytime travel |
 
 ## Next (in order, each one a small fresh agent from its handoff file)
 1. ~~Merge L~~ done 2026-10-13.
-2. **Reference pools** (sonnet, one short run): build `club3d/` and `travel/` (brief in this file's history).
+2. ~~Reference pools~~ done 2026-10-13 (README sections in `docs/references/README.md`).
 3. **First blind critics** for L and F (one fresh critic each, 8 pairs + strips): needs each track's critic
    pack (`club3d.js --label r11L-<n>`; `travel.js --label r11F-1` + `--commute --secs 180 --every 6`).
 4. **V round 1:** case templates (suspect × clue type × twist) in `src/club3d/casegen.js`, per-visit
