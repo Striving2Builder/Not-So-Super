@@ -44,30 +44,40 @@ export async function playCutscene({ folder, src, caption = '', maxSecs = 12, ho
   UI.open++;
   return new Promise((resolve) => {
     let done = false, timer = null, alive = null, played = 0, lastT = 0, taps = 0;
+    // (round 11, no dead ends: the way out is on screen from the first frame, top right, and says
+    // what it takes; after a few seconds it nudges, so nobody sits through a loop thinking they must)
+    const nudge = setTimeout(() => skipEl.classList.add('nudge'), 4000);
     const end = () => {
       if (done) return;
       done = true;
-      clearTimeout(timer); clearInterval(alive);
+      clearTimeout(timer); clearInterval(alive); clearTimeout(nudge);
       removeEventListener('keydown', key, true);
       el.removeEventListener('click', onClick);
       video.pause(); video.loop = false; video.removeAttribute('loop'); video.onended = video.ontimeupdate = video.onerror = null; video.removeAttribute('src'); video.load();
       img.removeAttribute('src');
-      skipEl.textContent = skipText;
+      skipEl.textContent = skipText; skipEl._h = null; skipEl.classList.remove('nudge');
       el.classList.remove('on');
       UI.open = Math.max(0, UI.open - 1);
       resolve();
     };
-    const left = () => { skipEl.textContent = skipTaps > 1 ? (taps ? `tap ${skipTaps - taps} more to skip` : `tap ${skipTaps}× to skip`) : skipText; };
+    const soundFirst = () => !tapSkips && video.muted && !!video.src && !video.paused;
+    const left = () => {
+      const need = skipTaps - taps, pips = skipTaps > 1 ? `<i>${'●'.repeat(taps)}${'○'.repeat(need)}</i>` : '';
+      const html = soundFirst() && !taps ? `TAP: SOUND · THEN ${skipTaps > 1 ? `${skipTaps}× ` : ''}SKIP <b>▶▶</b>${pips}`
+        : `${skipTaps > 1 ? `TAP ${need}× TO SKIP` : 'TAP TO SKIP'} <b>▶▶</b>${pips}`;
+      if (skipEl._h !== html) { skipEl._h = html; skipEl.innerHTML = html; }
+    };
     // a skip takes skipTaps deliberate taps (or keys), so a stray one never ends a forced clip
     const skip = () => { if (++taps >= skipTaps) end(); else left(); };
     const key = (e) => { e.preventDefault(); e.stopPropagation(); skip(); };
     const onClick = () => {
-      if (!tapSkips && video.muted && video.src && !video.paused) { video.muted = false; return; }
+      if (soundFirst()) { video.muted = false; left(); return; }
       skip();
     };
     addEventListener('keydown', key, true);
     el.addEventListener('click', onClick);
     left();
+    setTimeout(() => !done && left(), 400); // (autoplay may have fallen back to muted: say so)
     if (url && !isImage(url)) {
       el.classList.remove('still');
       video.src = url;

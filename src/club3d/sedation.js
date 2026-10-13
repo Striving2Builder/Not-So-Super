@@ -114,6 +114,7 @@ export const sedationMethods = {
     const forced = new URLSearchParams(location.search).get('club3wake');
     if (forced && opts.some(([k]) => k === forced)) where = forced;
     this.alert = 0;
+    this.resetGuardMinds?.(); // (she's somewhere else now: nobody's still hunting the old spot)
     st.intox = Math.max(35, Math.min(60, st.intox));
     const put = (x, z) => { this.hero.position.set(x, 0, z); this.camSnap = true; this.landT = 1.6; this.heroClip('getUp', 1.6); };
     if (where === 'vip') {

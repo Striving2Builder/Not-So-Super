@@ -137,6 +137,9 @@ export const powerMethods = {
     for (const m of this.hidden) m.visible = on;
     if (this.safeGlow) this.safeGlow.visible = on && !this.safeDone;
     if (this.stashGlow) this.stashGlow.visible = on && !this.stashFound;
+    this.xrayGlow?.(on); // (the bouncers glow through the walls in their state's colour: stealth.js)
+    document.body.classList.toggle('c3-xray', on);
+    if (this.renderer) this.renderer.toneMappingExposure = (this.exposure ?? 1.1) * (on ? 0.5 : 1); // (the room goes dark round them)
     if (on) sfx.xray();
   },
 
