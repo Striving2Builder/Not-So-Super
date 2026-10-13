@@ -40,6 +40,10 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
   /** A fresh visit: new game, straight into a club zone. Resolves a helper bag. */
   async function visit(query) {
     const errors = [];
+    const frozen = async (fn) => {
+      await page.evaluate(async () => { (await import('/src/ui.js')).UI.open++; }).catch(() => {});
+      try { return await fn(); } finally { await page.evaluate(async () => { const U = (await import('/src/ui.js')).UI; U.open = Math.max(0, U.open - 1); }).catch(() => {}); }
+    };
     const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: DPR, hasTouch: DPR > 1, isMobile: DPR > 1 });
     page.on('pageerror', (e) => errors.push(String(e.stack || e)));
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -47,7 +51,9 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
     const clickTop = (idx) => page.evaluate((idx) => { const el = [...document.querySelectorAll('#modal-root .modal-back')].pop(); if (!el) return; const o = el.querySelectorAll('.opt'); if (o.length) o[Math.max(0, Math.min(o.length - 1, idx))].click(); else (el.querySelector('button') || el).click(); }, idx); // (the act's panels have plain buttons)
     const V = {
       page, errors,
-      shot: (n) => page.screenshot({ path: path.join(OUT, `${n}.png`) }),
+      // (the clock stops while a frame is written: under SwiftShader a screenshot costs seconds of game
+      // time, and a 6 s window, like the cover after breaking free, ran out between two frames)
+      shot: (n) => frozen(() => page.screenshot({ path: path.join(OUT, `${n}.png`) })),
       modal,
       /** Pick an option (index or label substring) on the next dialog. */
       async pick(match = 0, wait = 15000) {
@@ -86,7 +92,7 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
         const d = path.join(ROOT, 'shots', LABEL, 'strips', dir);
         fs.mkdirSync(d, { recursive: true });
         const ms = await page.evaluate(() => Math.round((window.__game.mode.t || 0) * 1000));
-        await page.screenshot({ path: path.join(d, `f${String(n).padStart(2, '0')}_${ms}.png`) });
+        await frozen(() => page.screenshot({ path: path.join(d, `f${String(n).padStart(2, '0')}_${ms}.png`) }));
       },
       /** Pin bouncer i at (x, z) facing rot (he stands there on his round); the others go blind (posed strips). */
       pin: (i, x, z, rot, blindOthers = true) => page.evaluate(([i, x, z, rot, blind]) => {
