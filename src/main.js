@@ -6,10 +6,7 @@ import { Brawler } from './brawler.js';
 import { Investigate } from './investigate.js';
 import { Special3D } from './special3d.js';
 import { Captured } from './captured.js';
-import { ClubZone } from './clubzone.js';
-import { NightCase } from './nightcase.js';
 import { AsylumZone } from './asylum.js';
-import { Nightclub } from './nightclub/nightclub.js';
 import { Club3D } from './club3d/club3d.js';
 import { HotelZone } from './hotel/hotel.js';
 import { showNewspaper } from './newspaper.js';
@@ -42,10 +39,7 @@ game.modes = {
   investigate: new Investigate(game),
   special: new Special3D(game),
   captured: new Captured(game),
-  club: new ClubZone(game),
-  nightcase: new NightCase(game),
   asylum: new AsylumZone(game),
-  nightclub: new Nightclub(game),
   club3: new Club3D(game),
   hotel: new HotelZone(game), // the act's boss floor (src/hotel/)
 };
@@ -61,8 +55,6 @@ function resize() {
   canvas.height = Math.round(game.h * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   game.modes.special.resize();
-  game.modes.club.resize();
-  game.modes.nightcase.resize();
   game.modes.asylum.resize();
   game.modes.club3.resize();
   game.modes.hotel.resize();
@@ -95,42 +87,28 @@ game.gfxFailed = () => {
 };
 
 // ---------------------------------------------------------------- zone flow
-// Club missions play the 3D infiltration club (docs/design/nightclub.md), the default since
-// 2026-10-07. The 2D detective club is its fallback until it's deleted: ?club=v2 plays it, and so
-// does any device the 3D club can't start on. ?club=v1 brings back the premade 3D clubs.
-const CLUB_VERSION = (/[?&]club=(v[123])(&|$)/.exec(location.search) || [])[1] || 'v3';
-game.newClubs = CLUB_VERSION !== 'v1'; // the overworld skips loading the premade club buildings
+// A mission at a club venue (a raid, or a night case after dark) plays the 3D infiltration club
+// (src/club3d/, docs/design/nightclub.md).
 
 /** Which game mode plays a zone. */
 function modeFor(z) {
   const clubVenue = VENUES[z.venue]?.club || VENUES[z.venue]?.kind === 'club';
-  if (clubVenue && (z.mode === 'special' || z.mode === 'nightcase')) {
-    if (CLUB_VERSION === 'v3') return 'club3'; // (no WebGL: startZone falls back to the 2D club)
-    if (CLUB_VERSION === 'v2') return 'nightclub';
-  }
-  if (z.mode === 'special' && VENUES[z.venue]?.club) return 'club';  // raid inside a premade club
-  return { brawl: 'brawler', investigate: 'investigate', special: 'special', nightcase: 'nightcase', asylum: 'asylum', hotel: 'hotel' }[z.mode];
+  if (clubVenue && (z.mode === 'special' || z.mode === 'nightcase')) return 'club3';
+  return { brawl: 'brawler', investigate: 'investigate', special: 'special', asylum: 'asylum', hotel: 'hotel' }[z.mode];
 }
 
 game.startZone = (z) => {
   const mode = modeFor(z);
   try { game.setMode(mode, { zone: z }); } catch (e) {
-    // (a 3D zone without a WebGL context, out of memory…): not a frozen half-scene. The 3D club
-    // falls back to the 2D one; anything else goes back to the sky.
+    // (a 3D zone without a WebGL context, out of memory…): not a frozen half-scene, back to the sky
     console.error(e);
     try { game.mode.exit?.(); } catch (e2) { /* half-entered */ }
     game.mode = null;
-    if (mode === 'club3') {
-      // (say why, so a device test can report it: the 2D club is a stopgap, not the game)
+    if (mode === 'club3') { // (say why, so a device test can report it)
       const why = String((e && (e.message || e)) || 'unknown').slice(0, 160);
-      try { localStorage.setItem('supergirl-club3-fail', JSON.stringify({ why, build: BUILD, at: new Date().toISOString() })); } catch (e4) { /* private mode */ }
-      try {
-        game.setMode('nightclub', { zone: z }); game.commentary.onZoneStart(z);
-        dialog({ title: '3D club failed to start', text: `This device fell back to the 2D club.<br><br><small>${why.replace(/</g, '&lt;')}<br>${BUILD}</small>` });
-        return;
-      } catch (e3) { console.error(e3); game.mode = null; }
+      try { localStorage.setItem('supergirl-club3-fail', JSON.stringify({ why, build: BUILD, at: new Date().toISOString() })); } catch (e3) { /* private mode */ }
     }
-    toast("Couldn't open that scene. Try again in a moment.", 'bad');
+    toast(mode === 'club3' ? "Couldn't open the club. Try again in a moment." : "Couldn't open that scene. Try again in a moment.", 'bad');
     game.setMode('overworld', { returnFrom: z });
     return;
   }
@@ -283,7 +261,8 @@ function victoryPaper(zone, res) {
       ],
     };
   }
-  if (zone.mode === 'investigate' || zone.mode === 'nightcase' || zone.mode === 'asylum') {
+  // (a night case in the 3D club names no culprit here: it gets the raid's front page below)
+  if ((zone.mode === 'investigate' || zone.mode === 'nightcase' || zone.mode === 'asylum') && res.culprit) {
     return {
       photo: 'case',
       headline: chance(0.5) ? `${H} CRACKS THE CASE!` : `MYSTERY SOLVED!`,

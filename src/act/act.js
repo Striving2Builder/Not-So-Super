@@ -288,47 +288,38 @@ export class Act {
   }
 
   // ------------------------------------------------------------------ impostor sightings
+  /**
+   * The sightings' clock (from City Guardian on): every 150-210 s, minus 20 s per lieutenant
+   * unmasked (min 100), while none is on the map. The flight's moment director (src/moments/) puts
+   * the sighting up when it's due and runs it as a rooftop chase (src/moments/impostor.js).
+   */
   stepSightings(dt, ow) {
-    const z = ow.zones.find((q) => q.impostor);
-    if (z) return this.moveImpostor(z, dt, ow);
-    this.sightT -= dt;
-    if (this.sightT > 0) return;
-    const n = this.keys();
-    // the Puzzle Maker hits back harder the closer she gets
-    this.sightT = Math.max(SIGHT.min, rand(...SIGHT.every) - n * SIGHT.cut);
-    const h = ow.hero, blocks = this.g.city.blocks.filter((b) => {
-      if (b.river) return false;
-      const d = dist(b.x0 + LOT / 2, b.y0 + LOT / 2, h.x, h.y);
-      return d > 900 && d < 1800 && ow.zones.every((q) => dist(q.x, q.y, b.x0 + LOT / 2, b.y0 + LOT / 2) > 400);
-    });
-    if (!blocks.length) return;
-    const b = pick(blocks);
-    ow.zones.push({
-      uid: ow.uid++, kind: 'impostor', impostor: true, district: b.d, t: 0, x: b.x0 + LOT / 2, y: b.y0 + LOT / 2, ttl: SIGHT.ttl,
-      name: '"Supergirl" spotted!', color: '#3fa0ff', glyph: '?', risk: 'Impostor', reward: SIGHT.catchRep, lockKey: 'Impostor',
-      blurb: 'Someone in your costume is posing for the photographers. Catch her before the pictures run: get close and DIVE.',
-      heading: rand(0, Math.PI * 2),
-    });
-    sfx.alarm();
-    toast(`📸 "Supergirl" spotted in ${DISTRICTS[b.d]?.name || 'the city'}! That's not you. Catch her!`, 'bad');
-    comic.headline(`SUPERGIRL SPOTTED IN ${(DISTRICTS[b.d]?.name || 'THE CITY').toUpperCase()}`, { tone: 'bad', kicker: 'LIVE' });
+    if (ow.zones.some((q) => q.impostor)) return;
+    if (this.sightT > 0) this.sightT -= dt;
   }
 
-  /** She runs: faster than cruising, slower than a boost, away from Supergirl, inside the city. */
-  moveImpostor(z, dt, ow) {
-    const h = ow.hero, city = this.g.city, d = dist(z.x, z.y, h.x, h.y);
-    const flee = Math.atan2(z.y - h.y, z.x - h.x);
-    let da = (d < 1400 ? flee : z.heading + Math.sin(z.t * 0.7) * 0.8) - z.heading;
-    while (da > Math.PI) da -= Math.PI * 2;
-    while (da < -Math.PI) da += Math.PI * 2;
-    z.heading += clamp(da, -1.8 * dt, 1.8 * dt);
-    const v = d < 1400 ? SIGHT.speed : SIGHT.lazy;
-    z.x += Math.cos(z.heading) * v * dt; z.y += Math.sin(z.heading) * v * dt;
-    const m = 120;
-    if (z.x < m || z.x > city.coastX - m) { z.heading = Math.PI - z.heading; z.x = clamp(z.x, m, city.coastX - m); }
-    if (z.y < m || z.y > city.H - m) { z.heading = -z.heading; z.y = clamp(z.y, m, city.H - m); }
-    z.district = city.districtAt(z.x, z.y);
-    if (z.district === 'water') z.district = 'docks';
+  /** Time for another sighting (the director asks before offering one). */
+  sightingDue() {
+    const A = this.A;
+    return !!(A && A.beats.guardian && !A.done && this.sightT <= 0 && !this.g.overworld?.zones.some((q) => q.impostor));
+  }
+
+  /** Put a sighting on the map at `at` ({ x, y }: a roof she's posing on); returns its zone. */
+  spawnSighting(ow, at) {
+    const n = this.keys(), city = this.g.city;
+    // the Puzzle Maker hits back harder the closer she gets
+    this.sightT = Math.max(SIGHT.min, rand(...SIGHT.every) - n * SIGHT.cut);
+    const d = city.districtAt(at.x, at.y), D = DISTRICTS[d === 'water' ? 'docks' : d];
+    const z = {
+      uid: ow.uid++, kind: 'impostor', impostor: true, district: d === 'water' ? 'docks' : d, t: 0, x: at.x, y: at.y, ttl: SIGHT.ttl,
+      name: '"Supergirl" spotted!', color: '#3fa0ff', glyph: '?', risk: 'Impostor', reward: SIGHT.catchRep, lockKey: 'Impostor',
+      blurb: 'Someone in your costume is posing for the photographers. Drop to rooftop height, get close and DIVE.',
+    };
+    ow.zones.push(z);
+    sfx.alarm();
+    toast(`📸 "Supergirl" spotted in ${D?.name || 'the city'}! That's not you. Catch her!`, 'bad');
+    comic.headline(`SUPERGIRL SPOTTED IN ${(D?.name || 'THE CITY').toUpperCase()}`, { tone: 'bad', kicker: 'LIVE' });
+    return z;
   }
 
   /** DIVE close enough: caught. */

@@ -324,7 +324,7 @@ export class Flight3D {
 
   render(ctx) {
     const ow = this.ow, g = this.g, h = ow.hero, st = g.state, W = g.w, H = g.h;
-    const dt = Math.min(0.05, (performance.now() - (this.lastT || performance.now())) / 1000);
+    const dt = Math.min(0.05, (performance.now() - (this.lastT || performance.now())) / 1000) * (ow.moments?.scale ?? 1); // (× a moment's slow motion)
     this.lastT = performance.now();
     this.frame++;
     const night = st ? st.night : 0.8, clock = st ? st.clock : 22 * 60;
@@ -347,6 +347,7 @@ export class Flight3D {
     this.city3.update(this.cam.cam, { far: fogFar, near: Math.min(700, fogFar * 0.5), night, frame: this.frame });
     this.syncBeams(ow.t);
     this.fx3.update(dt, this.hero, h, frac, boosting, this.cam.cam, ow.fx.rings.length);
+    ow.moments?.render3d(this, dt); // the flight moments and air events (src/moments/)
     // render
     const r = this.renderer;
     r.info.autoReset = false; r.info.reset(); // count the whole frame (main + her pass), not just the last draw
@@ -394,6 +395,7 @@ export class Flight3D {
     this.fx3.drawLines(ctx, W, H, Math.max(frac * k, ow.fx.rush || 0), boosting && k, vp[2] ? { x: vp[0], y: vp[1] } : { x: W / 2, y: H / 2 }, walls, night, this.cam.boostK * k, this.heroEl);
     ctx.restore();
     this.icons(ctx, P, W, H);
+    ow.moments?.overlay(ctx, P, W, H, this); // (the moments' tags, lock-ons and banner)
     ow.heroArt.drawPops(ctx, hs[0], hs[1], Math.min(W, H) / 390);
     this.chips(ctx, P, W, H);
   }

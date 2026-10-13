@@ -4,7 +4,7 @@
 //
 //   node tools/shots/dive.js [--port 8841] [--label dive] [--cases brawl3d,club3d,brawl2d,club2d] [--secs 2.4] [--reduced]
 //     [--every 3] (shoot every Nth 60 Hz frame) [--window 900,1900] (keep only that ms range) [--pick 20] [--cols 5]
-//   cases: <zone><view> — zone: brawl | club | cold (a club still downloading) | inv | spec (a self-built 3D zone) ; view: 3d | 2d
+//   cases: <zone><view> — zone: brawl | club | cold (a club dived into the moment it's spawned) | inv | spec (a self-built 3D zone) ; view: 3d | 2d
 // Output: shots/<label>/<case>/f###_<ms>.jpg + shots/<label>/<case>.png (sheet) + errors in log.json.
 const path = require('path');
 const fs = require('fs');
@@ -36,7 +36,7 @@ const ZONE = {
   brawl: (g) => { g.state.clock = 21 * 60; return g.overworld.spawn('street', true); },
   club: (g) => g.overworld.spawn('special', true, 'Triangle Club'),
   spec: (g) => g.overworld.spawn('special', true, 'Warehouse'),
-  cold: (g) => g.overworld.spawn('special', true, 'The Clubhouse'), // dived at once: the club isn't preloaded
+  cold: (g) => g.overworld.spawn('special', true, 'The Clubhouse'), // dived at once, the moment it's spawned
   inv: (g) => { let z = null; for (let i = 0; i < 40 && !(z && z.mode === 'investigate'); i++) { g.state.clock = 12 * 60; z = g.overworld.spawn('case', true); } return z; },
 };
 

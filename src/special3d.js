@@ -171,7 +171,7 @@ export class Special3D {
     setTimeout(() => { if (!this.done) toast('Drag the screen to turn the camera. Stay out of the guards\' vision cones.', 'info'); }, 1600);
   }
 
-  // ---- overridable world hooks (ClubZone replaces these with a premade building)
+  // ---- overridable world hooks (ClubZone's zones and the 3D club build their own)
   buildWorld() {
     const k = this.V.kind;
     this.vmats = VENUE_KINDS.has(k) ? venueMats(this, k) : null;
@@ -192,7 +192,7 @@ export class Special3D {
   spawnPoint() { return { pos: new THREE.Vector3(0, 0, 8.2), heading: Math.PI }; }
 
   /**
-   * The shared comic finish for whatever buildWorld() made (own venues, premade clubs, nightlife):
+   * The shared comic finish for whatever buildWorld() made (own venues, nightlife, ClubZone buildings):
    * cel bands + halftone in the shade on every lit material, ink lines along a prebuilt
    * building's hard edges (once per cached building), and ground out to the fog so no room
    * floats in the void. Zones tune it with this.backdrop = false | { color, y }.
