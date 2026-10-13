@@ -106,7 +106,7 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
 | Track | Branch | Round | Last critic | State |
 |---|---|---|---|---|
 | T tech debt | `worktree-agent-a047ac9311b1f985f` | 1 done | n/a (regression pack `shots/r11T-pack/`) | **merged** (78030b3): v1 + v2 gone, -6,052 lines, -176 KB JS at startup, 0 errors in every area |
-| F travel | `worktree-agent-a4e919b8e12914483` | 1 done | not yet run | **merged** (a6f223a): moment director, air events in 3D, impostor rooftop chase |
+| F travel | `worktree-agent-a4e919b8e12914483` | 1 done | not yet run | **merged** (a6f223a): moment director, air events in 3D, impostor rooftop chase. F-1 blind critic running (pack `shots/r11F-crit/` on phase-2, pairs `shots/blind/travel-r11F-crit/`) |
 | L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | **L-1: NOT YET**: 0/8 pairs, vs AAA 2.5, vs HTML5 6, feel 5.5 (`critiques/r11/L-1.md`) | **merged**: readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
 | V club variety | worktree agent (handoff `variety-r11.md`) | 1, running | n/a | casegen templates + the user's crowd/scandal beats (see Log 2026-10-13) |
 | refs scout | done 2026-10-13 | n/a | n/a | **built**: `club3d/` 12 (Hitman ×4, Cyberpunk ×2, GTA V, Yakuza ×2, LEGO ×2…), `travel/` 12 (Spider-Man, Arkham Knight, LEGO); all ≥1280 px. Gaps: no Hitman club/Iceberg Lounge, few dancefloor-with-guards shots, mostly daytime travel |
@@ -127,7 +127,8 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
    beacon on the clue; 9) cheap bloom on emissives (quality-gated); 10) dress the DJ booth + sign.
 4. **V round 1:** case templates (suspect × clue type × twist) in `src/club3d/casegen.js`, per-visit
    variation of events, objectives, NPC profiles and layout; 8 seeded visits as the critic pack.
-5. **F round 2:** courier-van tail (trail + warehouse gate), Polaroids blowing off a roof, super-hearing
+5. **F round 2:** harness first: in `--commute` the bot stays perched after a won rescue (kitten), so a
+   180 s run logs no offers; `impostor` is "never offered" on phase-2 (gate/act state). Then courier-van tail (trail + warehouse gate), Polaroids blowing off a roof, super-hearing
    street rescue, Puzzle Maker riddle chain, news chopper; check the impostor's knockoff colours.
 6. **T round 2:** split `overworld.js` (1,103 lines) and `brawler.js` (911); renames (clubzone →
    building engine, `NightCase` → asylum's); harness tidy (`premade3d` → `clubs`).
