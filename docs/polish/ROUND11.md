@@ -102,14 +102,14 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
 4. After merges: push `phase-2`. Publishing to `main` and the `testdrive-*` tags only when the user asks.
 5. Keep this board current after every merge or decision. Stop the loop when every track is done.
 
-## Board (paused 2026-10-12 at the user's request: "finish this build, identify the next, then pause")
+## Board (resumed 2026-10-13: steps 2 + 4 running, ≤2 agents)
 | Track | Branch | Round | Last critic | State |
 |---|---|---|---|---|
 | T tech debt | `worktree-agent-a047ac9311b1f985f` | 1 done | n/a (regression pack `shots/r11T-pack/`) | **merged** (78030b3): v1 + v2 gone, -6,052 lines, -176 KB JS at startup, 0 errors in every area |
 | F travel | `worktree-agent-a4e919b8e12914483` | 1 done | not yet run | **merged** (a6f223a): moment director, air events in 3D, impostor rooftop chase |
 | L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | not yet run (pack in that worktree's `shots/r11L-2/`) | **merged**: readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
-| V club variety | (not started) | 0 | n/a | starts after L merges (shared `src/club3d/`) |
-| refs scout | n/a | n/a | n/a | **not built**: `docs/references/club3d/` + `travel/` don't exist yet; needed before any blind critic |
+| V club variety | worktree agent (handoff `variety-r11.md`) | 1, running | n/a | casegen templates + the user's crowd/scandal beats (see Log 2026-10-13) |
+| refs scout | sonnet, running | n/a | n/a | building `docs/references/club3d/` + `travel/` (needed before any blind critic) |
 
 ## Next (in order, each one a small fresh agent from its handoff file)
 1. ~~Merge L~~ done 2026-10-13.
@@ -149,3 +149,8 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
   touch the club's case files).
 - 2026-10-11/12: the monthly spend limit stopped every agent three times mid-work (no work lost: all in
   worktrees). User: finish the build, identify the next, pause. T, F and L merged and pushed; loop paused 2026-10-13.
+- 2026-10-13: resumed. Running: the refs scout (step 2) and V round 1 (step 4, pulled ahead of the critics,
+  which need the pools). User's new ask folded into V: at the club's story beats, a crowd closes in on
+  Supergirl (fans pushing drinks to get her tipsy, phones up, posing for gotcha shots), and a tabloid
+  storyline about catching her "being naughty" whose photo can be real, fake (staged, lookalike,
+  doctored) or a setup. PG-13, no new clips. Next: step 3 critics for L and F once the pools land.
