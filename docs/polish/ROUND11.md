@@ -102,19 +102,50 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
 4. After merges: push `phase-2`. Publishing to `main` and the `testdrive-*` tags only when the user asks.
 5. Keep this board current after every merge or decision. Stop the loop when every track is done.
 
-## Board
-| Track | Builder (agent / branch) | Round | Last critic (pairs better / vs HTML5 / feel / verdict) | State |
+## Board (paused 2026-10-12 at the user's request: "finish this build, identify the next, then pause")
+| Track | Branch | Round | Last critic | State |
 |---|---|---|---|---|
-| T tech debt | running (worktree, handoff `tech-r11.md`) | 1 | n/a | building since 2026-10-11 |
-| L club loop | running (worktree, handoff `loop-r11.md`) | 1 | baseline pending (from its `r11L-base` shots) | building since 2026-10-11 |
-| V club variety | (waits for T's merge) | 0 | baseline pending | wave 2 |
-| F travel | running (worktree, handoff `travel-r11.md`) | 1 | baseline pending (from its `r11F-base` shots) | building since 2026-10-11 |
-| refs scout | running | n/a | n/a | building the `club3d` + `travel` pools |
+| T tech debt | `worktree-agent-a047ac9311b1f985f` | 1 done | n/a (regression pack `shots/r11T-pack/`) | **merged** (78030b3): v1 + v2 gone, -6,052 lines, -176 KB JS at startup, 0 errors in every area |
+| F travel | `worktree-agent-a4e919b8e12914483` | 1 done | not yet run | **merged** (a6f223a): moment director, air events in 3D, impostor rooftop chase |
+| L club loop | `worktree-agent-acf0df8fc46297e1d` | 1, finishing | not yet run | a fresh finisher is merging phase-2 in and fixing the caught-flow crash + touch struggle; then merge |
+| V club variety | (not started) | 0 | n/a | starts after L merges (shared `src/club3d/`) |
+| refs scout | n/a | n/a | n/a | **not built**: `docs/references/club3d/` + `travel/` don't exist yet; needed before any blind critic |
 
-Worktrees: the round-11 builders are the newest `worktree-agent-*` branches in `git worktree list`
-(created 2026-10-11); a fresh thread resumes a track with a fresh builder pointed at that branch and its
-handoff file.
+## Next (in order, each one a small fresh agent from its handoff file)
+1. **Merge L** once its finisher reports (0 errors, all club3d flows), push phase-2.
+2. **Reference pools** (sonnet, one short run): build `club3d/` and `travel/` (brief in this file's history).
+3. **First blind critics** for L and F (one fresh critic each, 8 pairs + strips): needs each track's critic
+   pack (`club3d.js --label r11L-<n>`; `travel.js --label r11F-1` + `--commute --secs 180 --every 6`).
+4. **V round 1:** case templates (suspect × clue type × twist) in `src/club3d/casegen.js`, per-visit
+   variation of events, objectives, NPC profiles and layout; 8 seeded visits as the critic pack.
+5. **F round 2:** courier-van tail (trail + warehouse gate), Polaroids blowing off a roof, super-hearing
+   street rescue, Puzzle Maker riddle chain, news chopper; check the impostor's knockoff colours.
+6. **T round 2:** split `overworld.js` (1,103 lines) and `brawler.js` (911); renames (clubzone →
+   building engine, `NightCase` → asylum's); harness tidy (`premade3d` → `clubs`).
+7. **Ask the user:** delete the now-unreferenced 28 MB of assets (`assets/clubs/*`, 2 plates; list in
+   `docs/polish/handoff/tech-r11.md`)?
+
+## Credit-lean process (lessons from round 11; applies from round 12)
+- **Never resume a long builder transcript** (a resume re-sends its whole history: track T alone used
+  ~620k tokens). Start a fresh agent pointed at the branch + handoff file instead.
+- **Small jobs, not whole tracks:** one milestone per agent (e.g. "wire the courier tail + 0 errors"),
+  with a token budget in the brief: commit + update the handoff + report at ~150k tokens, whatever
+  state it's in.
+- **Effort and model by job:** default effort for builders; `max` only for a hard bug or the critic's
+  judgement; sonnet for scouts, harness runs and mechanical cleanup.
+- **The director runs harnesses itself** (plain shell, no model tokens) and reads only final reports of
+  ≤25 lines; builders put detail in the handoff file, not the report.
+- **Images are the expensive tokens:** builders look at ≤6 frames per iteration and prefer one contact
+  sheet over many PNGs; critics get exactly 8 pairs + ≤5 strips.
+- **Knowledge passes through files:** the handoff (≤40 lines: done / next / numbers) plus
+  `docs/polish/LEARNINGS.md` (harness quirks, gotchas; append-only, one line each). A critic's report is
+  distilled by the director into a ≤20-line ranked fix list that becomes the next brief.
+- **One round per director thread:** start it with "Continue round N: read docs/polish/ROUND11.md".
+- **At most 2 builders at once** near the monthly limit; long builds can go to cloud sessions
+  (docs/polish/CLOUD.md) on cloud credit.
 
 ## Log
 - 2026-10-11: round planned. Wave 1 = T, L, F and the reference scout; V starts once T is merged (both
   touch the club's case files).
+- 2026-10-11/12: the monthly spend limit stopped every agent three times mid-work (no work lost: all in
+  worktrees). User: finish the build, identify the next, pause. T and F merged; L finishing.
