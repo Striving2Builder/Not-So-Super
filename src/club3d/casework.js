@@ -5,11 +5,14 @@ import { pickCase, CaseBook, CLUB_CASES } from '../nightclub/case.js';
 import { dialog, toast, banner } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { HERO } from '../data.js';
+import { makeCase } from './casegen.js';
 
 export const caseMethods = {
   startCase(zone) {
-    const forced = CLUB_CASES[new URLSearchParams(location.search).get('club3case')];
-    this.caseDef = forced || pickCase(zone, this.g.state);
+    const q = new URLSearchParams(location.search), forced = CLUB_CASES[q.get('club3case')];
+    // a generated case (casegen.js): the map's "gen:<seed>" label, or ?club3case=gen&club3gen=<seed>
+    const gen = q.get('club3case') === 'gen' ? +(q.get('club3gen') || 1) : /^gen:\d+$/.test(zone?.clubCase || '') ? +zone.clubCase.slice(4) : null;
+    this.caseDef = forced || (gen ? makeCase(gen) : pickCase(zone, this.g.state));
     this.book = new CaseBook(this.caseDef);
     this.noted = new Set();      // rumour / whisper ids she's noted
     this.learned = new Set();    // VIP questions she knows the answer to
@@ -28,6 +31,7 @@ export const caseMethods = {
     const fresh = this.book.find(kind, id);
     if (c.item) this.items.add(c.item);
     if (!fresh) return false;
+    this.onGenClue?.(key);
     sfx.pickup();
     const d = this.caseDef;
     const tail = c.flavour ? '' : `<span class="hint">Case board: ${this.book.count}/${d.need}${this.book.ready && !this.caseSolved ? ' · you can make an accusation (CASE)' : ''}</span>`;
@@ -88,6 +92,7 @@ export const caseMethods = {
     banner('CASE SOLVED', 'Now get out: the exit, or the skylight', '#39ff6a');
     const where = (fresh.length ? fresh : leads).map((l) => `<div class="item"><b>${l.name}</b> · ${l.reward} REP<br>${l.blurb}</div>`).join('');
     await dialog({ title: how === 'confession' ? 'He folds' : 'Case solved', text: `${d.solvedText || ''} The distribution points are marked on your map:<div class="list">${where}</div><span class="hint">Get out with it: walk out the front, or fly out through the skylight over the dance floor.</span>` });
+    await this.genSolved?.(); // (a generated case: the morning's papers)
     await this.g.act?.onCaseSolved(d.id); // the act: this case's lieutenant is unmasked
     this.alert = Math.max(this.alert, 35); // they know now
   },
@@ -121,6 +126,8 @@ export const caseMethods = {
       return list;
     }
     list.push({ t: `Build the case: ${this.book.count}/${d.need} clues${this.book.ready ? ' (CASE to accuse)' : ''}`, done: this.book.ready });
+    const go = this.genObjective?.();
+    if (go) list.push(go);
     const heard = T.filter((q) => q.done).length;
     list.push({ t: `Listen in on the Talkers (${heard}/${T.length})`, done: heard === T.length, target: T.find((q) => !q.done)?.pos });
     if (A.vip && !this.vipDone) list.push({ t: this.vipIn ? `Win over ${d.vip?.host || 'the VIP host'}` : 'Get past the VIP rope', target: this.vipIn ? this.vipHost?.position : this.plan.byKind.vip.door });
