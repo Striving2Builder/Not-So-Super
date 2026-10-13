@@ -42,7 +42,7 @@ judging blind side-by-side against the AAA games, is wowed (the bar is below).
 | Track | Owns |
 |---|---|
 | T tech debt | `src/main.js` zone flow (club version switch, `modeFor`, `startZone` fallback); `src/clubzone.js` premade-club loading (the `ClubZone` base stays: the asylum and the hotel use it); `src/clubdress.js`, `src/clubmood.js`, `src/nightcase.js` if dead; `src/nightclub/*` except `cases/` and anything v3 imports; premade-only lines in `data.js`, `overworld.js`, `settings.js`, `special3d.js`; `tools/` scripts for the premade clubs; README and ARCHITECTURE.md |
-| L club loop | `src/club3d/`: `club3d.js` (camera, HUD, update), `danger.js`, `feel.js`, `story.js`, `struggle.js`, `sedation.js`, `cast.js` (bouncer and guard AI), `press.js`, `powers.js`, `crowd.js` (cover, parting), `quick.js`, `music.js`, `video.js`, `livefeed.js`, new club files for feel; `src/cutscene.js` (skip affordances) |
+| L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | not yet run (pack in that worktree's `shots/r11L-2/`) | **merged**: readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
 | V club variety | `src/club3d/`: `plan.js`, `events.js`, `casework.js`, `chatter.js`, `backrooms.js`, `office.js`, `vip.js`, `rooms.js`, `build.js`, `dressing.js`, `vices.js`, `undercover.js`; `src/nightclub/cases/`; new `src/club3d/casegen.js` (+ data files); `CLUB_CASE_LABELS` in `data.js`; `clubCase` in `overworld.js` |
 | F travel | `src/overworld.js` (not the camera), `src/airevents.js`, `src/paparazzi.js`, `src/nav.js`, `src/flightmarks.js`, `src/flightfx3d.js`, `src/polaroids.js` strays, the sightings in `src/act/act.js`, `src/airspace.js`, `src/flightaudio.js`, new flight-moment files |
 | director | `style.css` (append per-track blocks headed `/* === r11 <track> === */`), `ui.js`, `comic.js`, `index.html`, `settings.js` (additive keys), `sfx.js` (additive), this file, STATUS.md |
@@ -107,12 +107,12 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
 |---|---|---|---|---|
 | T tech debt | `worktree-agent-a047ac9311b1f985f` | 1 done | n/a (regression pack `shots/r11T-pack/`) | **merged** (78030b3): v1 + v2 gone, -6,052 lines, -176 KB JS at startup, 0 errors in every area |
 | F travel | `worktree-agent-a4e919b8e12914483` | 1 done | not yet run | **merged** (a6f223a): moment director, air events in 3D, impostor rooftop chase |
-| L club loop | `worktree-agent-acf0df8fc46297e1d` | 1, finishing | not yet run | a fresh finisher is merging phase-2 in and fixing the caught-flow crash + touch struggle; then merge |
+| L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | not yet run (pack in that worktree's `shots/r11L-2/`) | **merged**: readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
 | V club variety | (not started) | 0 | n/a | starts after L merges (shared `src/club3d/`) |
 | refs scout | n/a | n/a | n/a | **not built**: `docs/references/club3d/` + `travel/` don't exist yet; needed before any blind critic |
 
 ## Next (in order, each one a small fresh agent from its handoff file)
-1. **Merge L** once its finisher reports (0 errors, all club3d flows), push phase-2.
+1. ~~Merge L~~ done 2026-10-13.
 2. **Reference pools** (sonnet, one short run): build `club3d/` and `travel/` (brief in this file's history).
 3. **First blind critics** for L and F (one fresh critic each, 8 pairs + strips): needs each track's critic
    pack (`club3d.js --label r11L-<n>`; `travel.js --label r11F-1` + `--commute --secs 180 --every 6`).
@@ -148,4 +148,4 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
 - 2026-10-11: round planned. Wave 1 = T, L, F and the reference scout; V starts once T is merged (both
   touch the club's case files).
 - 2026-10-11/12: the monthly spend limit stopped every agent three times mid-work (no work lost: all in
-  worktrees). User: finish the build, identify the next, pause. T and F merged; L finishing.
+  worktrees). User: finish the build, identify the next, pause. T, F and L merged and pushed; loop paused 2026-10-13.
