@@ -108,7 +108,7 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
 | T tech debt | `worktree-agent-a047ac9311b1f985f` | 1 done | n/a (regression pack `shots/r11T-pack/`) | **merged** (78030b3): v1 + v2 gone, -6,052 lines, -176 KB JS at startup, 0 errors in every area |
 | F travel | `worktree-agent-a4e919b8e12914483` | 1 done | not yet run | **merged** (a6f223a): moment director, air events in 3D, impostor rooftop chase. **F-1: NOT YET**: 1/8 (tie), vs AAA 3, vs HTML5 6, feel 4; commute ~85% dead air (`critiques/r11/F-1.md`) |
 | L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | **L-1: NOT YET**: 0/8 pairs, vs AAA 2.5, vs HTML5 6, feel 5.5 (`critiques/r11/L-1.md`) | **merged**: readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
-| V club variety | worktree agent (handoff `variety-r11.md`) | 1, running | n/a | casegen templates + the user's crowd/scandal beats (see Log 2026-10-13) |
+| V club variety | `r11-variety` | 1 done | not yet run (pack in that worktree's `shots/r11V-1/`: gen1-8 frames + strips) | **merged** (a17368d): casegen (8 suspects × 6 clue types × 5 twists), crowd scandal beats (shots, gotcha selfie, planted glass, ringed in, GONE WILD? headline, snapper, morning paper); 8 gen + 21 old flows, 0 errors; +0.8% calls, +5-10% during a beat. Weak: the knot is hard to read at phone size |
 | refs scout | done 2026-10-13 | n/a | n/a | **built**: `club3d/` 12 (Hitman ×4, Cyberpunk ×2, GTA V, Yakuza ×2, LEGO ×2…), `travel/` 12 (Spider-Man, Arkham Knight, LEGO); all ≥1280 px. Gaps: no Hitman club/Iceberg Lounge, few dancefloor-with-guards shots, mostly daytime travel |
 
 ## Next (in order, each one a small fresh agent from its handoff file)
@@ -125,8 +125,9 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
    6) show the grab in-world before the struggle panel; 7) HUD diet: "GET CLOSER" overlaps the title
    card, one transient layer at a time, slim stat bars; 8) X-ray: nearest 3 tags, de-overlap, icons,
    beacon on the clue; 9) cheap bloom on emissives (quality-gated); 10) dress the DJ booth + sign.
-4. **V round 1:** case templates (suspect × clue type × twist) in `src/club3d/casegen.js`, per-visit
-   variation of events, objectives, NPC profiles and layout; 8 seeded visits as the critic pack.
+4. ~~V round 1~~ merged 2026-10-13. **V-1 blind critic** next (8 pairs from `shots/r11V-1/club3d/gen*`).
+   V round 2 (with L round 2's crowd work): a readable knot (closer camera in a beat, phone-up pose in
+   `crowd.js`), the knockoff on a club screen for the lookalike twist, real venues for generated leads.
 5. **F round 2** (from F-1, ranked): 1) the black box bottom-right = a video panel with no frame yet
    (likely headless Chromium can't decode the clip; check on a phone). Fix with a poster frame / ink
    placeholder until `playing`; never hide, shrink or move the panel (user rule). 2) spawn moments in a
@@ -172,3 +173,4 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
   Supergirl (fans pushing drinks to get her tipsy, phones up, posing for gotcha shots), and a tabloid
   storyline about catching her "being naughty" whose photo can be real, fake (staged, lookalike,
   doctored) or a setup. PG-13, no new clips. Next: step 3 critics for L and F once the pools land.
+- 2026-10-13: refs pools built; L-1 NOT YET (0/8, 2.5/6/5.5); F-1 NOT YET (1/8, 3/6/4); V round 1 merged.
