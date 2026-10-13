@@ -414,9 +414,10 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
       return { log, en: await P.evaluate(() => Math.round(window.__game.mode.en)) };
     });
     await flow('touch', '&club3room=rave&club3seed=7&club3event=none', async (V) => {
-      // the hard struggle on a phone: a thumb lands, then draws circles at a human ~1.3 loops/s (the
-      // landing point is ON its circle), with a little wobble. It must win well inside the 12 s.
-      const P = V.page;
+      // the hard struggle on a phone: the thumb is already down (she was running on the stick), then draws
+      // slow, wobbly circles at ~1 loop/s without lifting. It must win with seconds to spare.
+      const P = V.page, cx = 560, cy = 230, r = 46;
+      await P.mouse.move(cx + r, cy); await P.mouse.down();
       const res = P.evaluate(async () => { const { struggle } = await import('/src/club3d/struggle.js'); const { CLIPS, clipsReady, nextClip } = await import('/src/club3d/clips.js'); await clipsReady; const t0 = performance.now(); const ok = await struggle({ clip: nextClip(CLIPS.captive), title: 'BREAK FREE!', text: 'A test on a thumb. <b>Lose this one and they carry you out.</b>', diff: 'hard' }); return { ok, secs: +((performance.now() - t0) / 1000).toFixed(1) }; });
       await P.waitForFunction(() => window.__struggle, null, { timeout: 20000 });
       await P.waitForTimeout(500); await V.shot('loop_struggle_hint'); await V.strip('touch', 1);
@@ -425,8 +426,6 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
       await P.evaluate(() => { const m = window.__game.mode; m._render = m.render; m.render = () => {}; });
       // (the page runs ~5 fps under SwiftShader and takes about one pointer event a frame: the thumb
       // follows the struggle's own clock in 0.9 rad steps, under the 1.65 rad jump filter)
-      const cx = 560, cy = 230, r = 46;
-      await P.mouse.move(cx + r, cy); await P.mouse.down();
       let last = null, a = 0;
       const t0 = await P.evaluate(() => window.__struggle.state().t), trace = [];
       for (let i = 0; i < 4000; i++) {
@@ -435,7 +434,7 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
         if (s.t === last) { await P.waitForTimeout(8); continue; }
         last = s.t;
         if (trace.length < 40) trace.push(`${s.got.toFixed(1)}@${s.t.toFixed(1)}`);
-        const target = (s.t - t0) * 1.3 * Math.PI * 2;
+        const target = (s.t - t0) * 1.0 * Math.PI * 2;
         while (a < target) { a = Math.min(target, a + 0.9); const wob = 1 + 0.12 * Math.sin(a * 3.1); await P.mouse.move(cx + Math.cos(a) * r * wob, cy + Math.sin(a) * r * wob); }
       }
       await P.mouse.up();

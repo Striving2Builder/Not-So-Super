@@ -14,7 +14,7 @@ import { $ } from '../util.js';
 
 export const STRUGGLE = {
   normal: { turns: 3, time: 12, slip: 0.12, idle: 0.45 },
-  hard:   { turns: 5, time: 12, slip: 0.2, idle: 0.4 },
+  hard:   { turns: 4, time: 13, slip: 0.14, idle: 0.55 }, // (5 in 12 s lost to real thumbs: a slow, wobbly circler still wins with a few seconds left)
 };
 
 const TAU = Math.PI * 2;
@@ -76,6 +76,9 @@ export function struggle({ clip = null, title = 'BREAK FREE!', text = '', diff =
       ang = null;
     };
     const move = (e) => {
+      // a thumb that was already down when she got caught (on the joystick, mid-run) and just keeps
+      // going round: it's the struggle's thumb now, no lift-and-tap first (a hovering mouse isn't)
+      if (!ptr && (e.pointerType === 'touch' || e.pointerType === 'pen' || e.buttons)) { ptr = { id: e.pointerId, x: e.clientX, y: e.clientY }; ang = null; return; }
       if (!ptr || e.pointerId !== ptr.id) return;
       const dx = e.clientX - ptr.x, dy = e.clientY - ptr.y;
       if (Math.hypot(dx, dy) < STEP) return;
