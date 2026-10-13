@@ -3,7 +3,9 @@
 // (Talker → clue, close-up + phone, VIP quiz → dance, a back-room fight, sedation → wake → capture,
 // the owner's confession → solved → skylight, the leak → thrown out, each per-visit event).
 //   node tools/shots/club3d.js [--label c3] [--port 8881] [--rooms rave,pit] [--flows all|none|sedate,confess]
-//                              [--case squirt|blackmail|earworm] [--w 844 --h 390]
+//                              [--case squirt|blackmail|earworm] [--w 844 --h 390] [--gen 1-8]
+//   --gen a-b: generated cases (club3d/casegen.js), one visit per seed, each crowd beat played
+//   (flows gen<seed>; strips in shots/<label>/strips/gen<seed>)
 // → shots/<label>/club3d/*.png + metrics.json (fps is SwiftShader: compare runs, never a phone)
 const path = require('path');
 const fs = require('fs');
@@ -27,7 +29,8 @@ const ROOMS = arg('--rooms', 'rave,mezzanine,pit,centre,tunnel').split(',').filt
 const FLOWS = arg('--flows', 'all');
 const W = +arg('--w', 844), H = +arg('--h', 390), DPR = +arg('--dpr', 1);
 const OUT = path.join(ROOT, 'shots', LABEL, 'club3d');
-const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
+const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f) || (/^gen\d+$/.test(f) && GEN.length);
+const GEN = (() => { const g = arg('--gen', ''); if (!g) return []; const [a, b] = g.split('-').map(Number); return Array.from({ length: (b || a) - a + 1 }, (_, i) => a + i); })();
 
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
@@ -513,6 +516,49 @@ const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f);
       await V.page.waitForTimeout(900); await V.shot('flow_gate_high');
       return { sober, high };
     });
+    // ---- generated cases: each seed's crowd beats, in its own order, the phones up, the headline
+    for (const seed of GEN) {
+      await flow(`gen${seed}`, `&club3case=gen&club3gen=${seed}&club3seed=${seed}&club3event=none&club3beat=9999`, async (V) => {
+        const info = await V.page.evaluate(() => { const m = window.__game.mode, d = m.caseDef; return { title: d.title, ...d.gen, profile: undefined, room: m.plan.id, fz: m.plan.V.floor.z, need: d.need, obj: m.objectiveList().map((o) => o.t) }; });
+        let n = 0;
+        await V.put(info.seed % 2 ? -3 : 3, info.fz + 3, 900);
+        await V.shot(`gen${seed}_00_start`); await V.strip(`gen${seed}`, n++);
+        const out = { title: info.title, suspect: info.suspect, clue: info.clue, twist: info.twist, room: info.room, obj: info.obj, beats: [] };
+        for (const [bi, kind] of info.beats.entries()) {
+          await V.page.evaluate((k) => { const m = window.__game.mode; m.run(() => m.beat(k)); }, kind);
+          await V.gwait(kind === 'headline' ? 1.4 : 1.1);
+          const gl = await V.gl();
+          await V.shot(`gen${seed}_${bi + 1}_${kind}`); await V.strip(`gen${seed}`, n++);
+          // answer the beat (each seed answers differently: down it / palm it / say no …)
+          const pickI = (seed + bi) % 3;
+          if (await V.page.evaluate(() => !!document.querySelector('#c3-quick.on'))) { await V.page.keyboard.press(String(pickI + 1)); }
+          await V.gwait(1.3); await V.strip(`gen${seed}`, n++);
+          await V.through(() => !window.__game.mode.busy && !document.querySelector('#c3-quick.on'), 15000);
+          out.beats.push({ kind, pick: pickI, calls: gl.calls });
+        }
+        // the snapper (if one ran) and the case board line
+        const tail = await V.page.evaluate(() => { const m = window.__game.mode, B = m.gb; return { snapper: !!B.snapper, snapRoom: B.snapper?.room?.kind || null, photo: B.photo, intox: Math.round(m.g.state.intox), env: (m.envelope || []).map((c) => c.id), noted: [...m.noted], obj: m.objectiveList().map((o) => o.t) }; });
+        if (tail.snapper) {
+          await V.gwait(2.5);
+          await V.page.evaluate(() => { const m = window.__game.mode, p = m.gb.snapper.m.position; m.hero.position.set(p.x + 1, 0, p.z + 0.6); m.camSnap = true; m.gb.snapper.walk = 0; m.gb.snapper.path = []; });
+          await V.page.waitForTimeout(900);
+          await V.page.evaluate(() => { const m = window.__game.mode; m.run(() => m.confrontSnapper()); });
+          await V.gwait(0.5); await V.shot(`gen${seed}_8_snapper`); await V.strip(`gen${seed}`, n++);
+          await V.page.keyboard.press('2');
+          await V.page.waitForTimeout(1200);
+          await V.through(() => !window.__game.mode.busy && !document.querySelector('#c3-quick.on'), 15000);
+        }
+        // the proof (a fake) or the phone (real): then solve it and read the morning paper
+        await V.page.evaluate(async () => { const m = window.__game.mode, d = m.caseDef, T = (await import('/src/club3d/casedata.js')).TWISTS[d.gen.twist]; if (T.proof) m.run(() => m.gotClue(T.proof, { title: 'Proof' })); });
+        await V.page.waitForTimeout(1200); await V.shot(`gen${seed}_9_proof`); await V.strip(`gen${seed}`, n++);
+        await V.through(() => !window.__game.mode.busy, 10000);
+        await V.page.evaluate(() => { const m = window.__game.mode; m.run(() => m.solveCase('accusation')); });
+        await V.through(() => !!document.querySelector('.paper'), 12000);
+        await V.page.waitForTimeout(800); await V.shot(`gen${seed}_9_paper`); await V.strip(`gen${seed}`, n++);
+        await V.through(() => !window.__game.mode.busy, 15000);
+        return { ...out, ...tail, after: await V.page.evaluate(() => ({ proof: window.__game.mode.gb.proof, phone: window.__game.mode.gb.phoneBack, solved: window.__game.mode.caseSolved })) };
+      });
+    }
     for (const ev of ['redcarpet', 'paparazzi', 'raid', 'firealarm', 'fight']) {
       await flow(`ev_${ev}`, `&club3room=rave&club3seed=7&club3event=${ev}`, async (V) => {
         await V.put(0, 6, 800);

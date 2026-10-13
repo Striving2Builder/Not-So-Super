@@ -125,9 +125,10 @@ export const caseMethods = {
       list.push({ t: 'Get out: the exit, or the skylight over the floor', target: this.exitRing.position, cur: true });
       return list;
     }
+    const go = this.genObjective?.(); // (a generated case: the photo comes first once it's out)
+    if (go && !go.done && this.gb?.photo) list.push(go);
     list.push({ t: `Build the case: ${this.book.count}/${d.need} clues${this.book.ready ? ' (CASE to accuse)' : ''}`, done: this.book.ready });
-    const go = this.genObjective?.();
-    if (go) list.push(go);
+    if (go && (go.done || !this.gb?.photo)) list.push(go);
     const heard = T.filter((q) => q.done).length;
     list.push({ t: `Listen in on the Talkers (${heard}/${T.length})`, done: heard === T.length, target: T.find((q) => !q.done)?.pos });
     if (A.vip && !this.vipDone) list.push({ t: this.vipIn ? `Win over ${d.vip?.host || 'the VIP host'}` : 'Get past the VIP rope', target: this.vipIn ? this.vipHost?.position : this.plan.byKind.vip.door });

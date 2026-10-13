@@ -31,6 +31,9 @@ export const beatMethods = {
   stepBeats(dt) {
     const B = this.gb;
     if (!B || this.done) return;
+    // game-time waits and answer deadlines (a paused game doesn't run them out)
+    if (B.waits?.length) B.waits = B.waits.filter((w) => (this.t >= w.t ? (w.res(), false) : true));
+    if (B.deadline && this.t >= B.deadline) { B.deadline = 0; this.closeQuick?.('slow'); }
     this.stepKnot(dt);
     this.stepSnapper(dt);
     if (B.knot || this.busy || this.sub || this.sedating || this.quickOn || this.room || this.escapeT > 0) return;
@@ -64,8 +67,11 @@ export const beatMethods = {
       .sort((a, b) => Math.hypot(a.hx - h.x, a.hz - h.z) - Math.hypot(b.hx - h.x, b.hz - h.z)).slice(0, n);
     const k = near.map((p, i) => {
       const a = -1.9 + (3.8 * (i + 0.5)) / near.length; // a fan of angles, none between her and the camera
-      return { p, hx: p.hx, hz: p.hz, rot: p.rot, a, r };
+      const q = { p, hx: p.hx, hz: p.hz, rot: p.rot, col: p.col.getHex(), a, r };
+      p.col.setHex(0xcfe8ff); // (lit by their own phone screens: the knot reads against the crowd)
+      return q;
     });
+    this.crowd.repickT = 0;
     this.gb.knot = { k, t: 0, phones, r, flashT: 0.4 };
     if (phones) this.phoneMesh(k.length);
     return this.gb.knot;
@@ -85,7 +91,7 @@ export const beatMethods = {
     if (B.leaving) {
       B.leaveT -= dt;
       for (const q of B.leaving) { q.p.hx += (q.hx - q.p.hx) * ease; q.p.hz += (q.hz - q.p.hz) * ease; }
-      if (B.leaveT <= 0) { for (const q of B.leaving) { q.p.hx = q.hx; q.p.hz = q.hz; q.p.rot = q.rot; } B.leaving = null; }
+      if (B.leaveT <= 0) { for (const q of B.leaving) { q.p.hx = q.hx; q.p.hz = q.hz; q.p.rot = q.rot; q.p.col.setHex(q.col); } B.leaving = null; this.crowd.repickT = 0; }
     }
     if (!K) return;
     K.t += dt;
@@ -96,7 +102,7 @@ export const beatMethods = {
       q.p.rot = Math.atan2(h.x - q.p.x, h.z - q.p.z);
       if (ph && K.phones) {
         // a phone held up at arm's length, screen toward her (its back toward the camera glows)
-        v.set(q.p.x + Math.sin(q.p.rot) * 0.38, (q.p.fy || 0) + 1.78 + Math.sin(this.t * 3 + i) * 0.03, q.p.z + Math.cos(q.p.rot) * 0.38);
+        v.set(q.p.x + Math.sin(q.p.rot) * 0.38, (q.p.fy || 0) + 1.95 + Math.sin(this.t * 3 + i) * 0.03, q.p.z + Math.cos(q.p.rot) * 0.38);
         m.makeRotationY(q.p.rot); m.setPosition(v); ph.setMatrixAt(i, m);
       }
     });
@@ -115,7 +121,7 @@ export const beatMethods = {
 
   phoneMesh(n) {
     if (!this.phones) {
-      const g = new THREE.PlaneGeometry(0.12, 0.2);
+      const g = new THREE.PlaneGeometry(0.17, 0.28);
       this.phones = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({ color: 0x9fd8ff, side: THREE.DoubleSide, fog: false }), BEAT.phones);
       this.phones.frustumCulled = false; this.phones.name = 'c3-phones';
       this.scene.add(this.phones);
@@ -126,8 +132,8 @@ export const beatMethods = {
   /** A small choice that answers itself after `secs` (no dead ends): `slow` when time runs out. */
   quickT(opts, secs = BEAT.hold) {
     const p = this.quick({ at: this.hero.position, away: 'away', ...opts });
-    const timer = setTimeout(() => this.closeQuick?.('slow'), secs * 1000);
-    return p.finally(() => clearTimeout(timer));
+    this.gb.deadline = this.t + secs;
+    return p.finally(() => { this.gb.deadline = 0; });
   },
 
   /** A fan blurts out something useful (a rumour or whisper she hasn't noted). */
@@ -249,7 +255,7 @@ export const beatMethods = {
     if (f && CLIPS.press.length) { f.setList('clubPress', CLIPS.press); f.play('clubPress', `${this.clubName} · ${G.headline}`, true); }
     sfx.alarm?.();
     banner(G.headline, G.sub.replace('{CLUB}', this.clubName), '#ffd84d');
-    comic.caption(`Every phone in the club buzzes at once: ${G.headline}`, { ms: 3200 });
+    comic.caption(`Every phone in the club buzzes at once: ${G.headline}`, { ms: 5200 });
     this.formKnot(Math.min(BEAT.phones, G.profile.knot + 1), 2.6);
     const s = this.screenOf(this.hero.position, 2.2);
     if (s) comic.pow(G.twist === 'real' ? 'GONE WILD?!' : 'SCANDAL!', s.x, s.y - 40, { size: 1.3 });
@@ -349,5 +355,6 @@ export const beatMethods = {
     await showNewspaper({ tabloid: true, photo: 'tabloid', ...paper });
   },
 
-  wait(s) { return new Promise((r) => setTimeout(r, s * 1000)); },
+  /** Game seconds (stepBeats resolves it; a dialog or the pause holds it). */
+  wait(s) { return new Promise((res) => { const B = this.gb; if (!B || this.done) return res(); (B.waits = B.waits || []).push({ t: this.t + s, res }); }); },
 };
