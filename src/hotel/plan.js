@@ -236,7 +236,7 @@ export function buildHotel() {
       collider.material.side = THREE.DoubleSide;
       const { floor, mainY } = scanFloor(scene, collider);
       return {
-        scene, meta: { lights: [] }, collider, floor, mainY, box: new THREE.Box3().setFromObject(scene), M,
+        scene, collider, floor, mainY, box: new THREE.Box3().setFromObject(scene), M,
         rooms: L.rooms, seals: L.seals, posters: L.posters, wings: WINGS, main: L.main, lobby: L.lobby, ball: L.ball,
         entrance: { pos: V3(0, 0, 4.4), heading: Math.PI, door: V3(0, 0, 5.4) },
         ballDoor: V3(0, 0, -46),

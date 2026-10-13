@@ -55,37 +55,6 @@ export function damask(c, y0, y1, bg, fg, cw = 64, ch = 96) {
 }
 
 export const WALLS = {
-  club: [
-    (c) => {
-      c.fillStyle = '#0b0816'; c.fillRect(0, 0, 512, 512);
-      const y0 = WY(2.7), y1 = WY(0.18), D = 64;
-      c.save(); c.beginPath(); c.rect(0, y0, 512, y1 - y0); c.clip();
-      for (let r = -1; r * D / 2 < y1 - y0 + D; r++) for (let q = -1; q <= 8; q++) {
-        const cx = q * D + ((r + 2) % 2) * D / 2, cy = y0 + r * D / 2;
-        const g = c.createLinearGradient(cx - D / 4, cy - D / 4, cx + D / 4, cy + D / 4);
-        g.addColorStop(0, '#3e3278'); g.addColorStop(1, '#171230');
-        c.fillStyle = g; c.beginPath(); c.moveTo(cx, cy - D / 2); c.lineTo(cx + D / 2, cy); c.lineTo(cx, cy + D / 2); c.lineTo(cx - D / 2, cy); c.closePath(); c.fill();
-        c.strokeStyle = '#05030a'; c.lineWidth = 2; c.stroke();
-        c.fillStyle = '#4a3f7a'; c.beginPath(); c.arc(cx, cy - D / 2, 2.5, 0, TAU); c.fill();
-      }
-      c.restore();
-      c.fillStyle = '#3a3550'; c.fillRect(0, y0 - 3, 512, 3); c.fillRect(0, y1, 512, 3);
-      c.fillStyle = '#05040a'; c.fillRect(0, 0, 512, y0 - 3);
-      c.fillStyle = '#020104'; c.fillRect(0, y1 + 3, 512, 512);
-    },
-    (c) => {
-      c.fillStyle = '#000'; c.fillRect(0, 0, 512, 512);
-      coveWash(c, 'rgba(255,47,208,A)', 2.86, 1.0, 0.34);
-      // vertical LED bars every 1.7 m: the walls are lit, never a black void
-      for (const [x, col] of [[64, '#27e0ff'], [320, '#9d4dff']]) {
-        c.save(); c.shadowColor = col; c.shadowBlur = 14; c.fillStyle = col; c.fillRect(x - 3, WY(2.7), 6, (2.7 - 0.3) * WS); c.restore();
-        c.fillStyle = 'rgba(255,255,255,.7)'; c.fillRect(x - 1, WY(2.7), 2, (2.7 - 0.3) * WS);
-      }
-      neonLine(c, WY(2.86), '#ff2fd0', 5, 16);
-      coveWash(c, 'rgba(39,224,255,A)', 0.1, 0.6, 0.22);
-      neonLine(c, WY(0.1), '#27e0ff', 4, 14);
-    },
-  ],
   redlight: [
     (c) => {
       c.fillStyle = '#120605'; c.fillRect(0, 0, 512, 512);
@@ -149,15 +118,6 @@ export const WALLS = {
 
 // floors: [tile size in metres, painter]
 export const FLOORS = {
-  club: [3, (c) => {
-    c.fillStyle = '#000'; c.fillRect(0, 0, 512, 512);
-    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
-      const x = i * 128, y = j * 128, g = c.createLinearGradient(x, y, x + 128, y + 128);
-      g.addColorStop(0, '#2c2650'); g.addColorStop(0.5, '#15122c'); g.addColorStop(1, '#1f1a3c');
-      c.fillStyle = g; c.fillRect(x + 2, y + 2, 124, 124);
-    }
-    speckle(c, 512, 512, 900, 0.05);
-  }],
   redlight: [4, (c) => {
     c.fillStyle = '#0c0504'; c.fillRect(0, 0, 512, 512);
     const cols = ['#2b140f', '#24110c', '#301812', '#27120d'];
@@ -232,7 +192,7 @@ export function styleRoom(zn, k) {
     floorMat.needsUpdate = true;
   }
   // Darker ambient: contrast comes from the neon, not from flat fill light.
-  const amb = { club: [0.45, 0.12], redlight: [0.55, 0.14], gentlemens: [0.55, 0.14], casino: [0.7, 0.2] }[k];
+  const amb = { redlight: [0.55, 0.14], gentlemens: [0.55, 0.14], casino: [0.7, 0.2] }[k];
   for (const o of zn.scene.children) {
     if (o.isHemisphereLight) o.intensity = amb[0];
     else if (o.isAmbientLight) o.intensity = amb[1];
@@ -244,7 +204,7 @@ export function styleRoom(zn, k) {
   zn.scene.traverse((o) => { if (o.isPointLight) pl.push(o); });
   for (const l of pl) if (zn.plights.indexOf(l) < 0 || zn.plights.indexOf(l) > 1) l.visible = false;
   // no black void past the walls: a deep neon-tinted night instead
-  const bg = { club: 0x1c0d38, redlight: 0x2a0a12, gentlemens: 0x260b28, casino: 0x22120a }[k];
+  const bg = { redlight: 0x2a0a12, gentlemens: 0x260b28, casino: 0x22120a }[k];
   zn.scene.background = C(bg); zn.scene.fog.color = C(bg);
   return { floorMat, floors, hall: zn.plights.slice(0, 2) };
 }

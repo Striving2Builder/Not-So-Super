@@ -47,6 +47,6 @@ Don't raise GPU memory (textures, render targets): the iPad is crashing on memor
    marked *code*. The chase camera angle stays as it is (user, 2026-10-04).
 3. **QA / testing** (`cloud/qa-r10`): run every harness tool on phase-2 and list what's broken,
    without visual changes: `shoot.js` for every area (page errors, missing frames), `brawlrun.js`
-   (brawls complete), `clubreach.js` (no unreachable spots), `stab.js --tour` and `--lose` (context
+   (brawls complete), `club3d.js` and `act.js` (every flow), `stab.js --tour` and `--lose` (context
    loss recovery), `dive.js` (all cases). Fix plain bugs (exceptions, stuck states) with a test or a
    tool run that proves the fix; list anything visual or design-level for the director instead.

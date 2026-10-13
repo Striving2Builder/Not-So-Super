@@ -1,6 +1,7 @@
 # Nightclub v2: the 2D detective nightclubs (SUPERSEDED)
 
-> **Superseded 2026-10-07 by [nightclub.md](nightclub.md)** (3D infiltration clubs). The user's
+> **Superseded 2026-10-07 by [nightclub.md](nightclub.md)** (3D infiltration clubs); **its code was
+> deleted 2026-10-11** (round 11, tech debt; the commits before that still have it). The user's
 > verdict: the 2D side-scroll walk "isn't going to cut it", and the Resident Evil / FF7 fixed-camera
 > plan was rejected (stale on repeat). Kept as a record of what was built in `src/nightclub/`; the
 > case data, intoxication, blackout polaroids and close-ups carry over into v3.

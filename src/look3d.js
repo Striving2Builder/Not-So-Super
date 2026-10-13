@@ -79,7 +79,7 @@ if (rimK > 0.0) {
 
 const LIT = new Set(['MeshLambertMaterial', 'MeshPhongMaterial', 'MeshStandardMaterial', 'MeshPhysicalMaterial', 'MeshToonMaterial']);
 /**
- * Give a whole prebuilt scene (a premade club, a venue) the comic surface treatment: flat
+ * Give a whole prebuilt scene (a venue, a zone's building) the comic surface treatment: flat
  * light bands + halftone in the shade on every lit material that doesn't have it yet.
  */
 export function comicScene(root, { halftone = 0.45, cel = 0.85 } = {}) {

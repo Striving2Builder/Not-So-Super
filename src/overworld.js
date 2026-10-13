@@ -4,7 +4,6 @@ import { BLOCK, ROAD, LOT } from './city.js';
 import { DISTRICTS, STREET_CRIMES, CASES, VENUES, THEMES, BOSSES, HERO, NIGHT_DISTRICTS, ASYLUM, CLUB_CASE_LABELS } from './data.js';
 import { drawHeroTop } from './art.js'; // placeholder art until her model loads
 import { clamp, lerp, pick, chance, rand, dist, rgba, easeOut, easeInOut, fmtClock, fmtTime, wobble, $ } from './util.js';
-import { loadClub, preloadClub } from './clubzone.js';
 import { quality, settings } from './settings.js';
 import { AirEvents } from './airevents.js';
 import { Paparazzi } from './paparazzi.js';
@@ -36,7 +35,6 @@ const DIVE_T = 1.1;
 /** The 3D dive's path: f (0..1 of DIVE_T) by which she's over the spot / down to it; units above its street or roof. */
 const DIVE = { xyBy: 0.72, downBy: 0.82, above: 8 };
 const NEAR_R = 130;
-const PRELOAD_R = 1600; // start downloading a club's building when she's this close to its zone
 const TARGET = { street: 5, case: 2, special: 2 };
 // Flight-view look. heroScale: her sprite vs the world (she's the star of every frame);
 // sway: px the view slides out along her bank; haze: aerial-perspective veil at full height.
@@ -358,7 +356,7 @@ export class Overworld {
   maintainZones(initial = false) {
     const counts = { street: 0, case: 0, special: 0 };
     for (const z of this.zones) if (!z.lead && z.kind in counts && !z.stashJob && !z.storyId && !z.hotel && !z.actGate) counts[z.kind]++; // leads, the story clubs and the act's hotel and gate missions are extra, beyond the quota
-    // Always keep one club raid (premade 3D club) somewhere on the map.
+    // Always keep one club raid (the 3D club, src/club3d/) somewhere on the map.
     const clubs = Object.keys(VENUES).filter((v) => VENUES[v].club);
     if (clubs.length && !this.zones.some((z) => z.mode === 'special' && VENUES[z.venue]?.club && !z.storyId)) { this.spawn('special', initial, pick(clubs)); return; }
     // ...and the asylum (its own zone type, src/asylum.js)
@@ -412,7 +410,7 @@ export class Overworld {
       });
     } else if (night) {
       Object.assign(z, nightCaseFields());
-      if (this.g.newClubs) this.clubCase(z, 'Night · ');
+      this.clubCase(z, 'Night · ');
     } else if (kind === 'case') {
       Object.assign(z, {
         mode: 'investigate', def, name: def.name, reward: def.reward, lockKey: 'Investigations', ttl: rand(160, 230),
@@ -426,7 +424,7 @@ export class Overworld {
         lockKey: venueName, ttl: rand(220, 300), color: boss ? '#ff3030' : '#ff3fb8', glyph: boss ? 'B' : '★', risk: 'CAPTURE',
         blurb: `${THEMES[theme].name} operation inside the ${venueName}${boss ? `, run by ${boss}` : ''}. Traps everywhere.`,
       });
-      if (this.g.newClubs && (VENUES[venueName]?.club || VENUES[venueName]?.kind === 'club')) this.clubCase(z, '');
+      if (VENUES[venueName]?.club || VENUES[venueName]?.kind === 'club') this.clubCase(z, '');
     }
     this.zones.push(z);
     if (!initial && !this.attract && kind !== 'street') toast(`New ${z.mode === 'nightcase' ? 'night case' : kind === 'case' ? 'investigation' : 'special zone'}: ${z.name} (${DISTRICTS[z.district].name})`, 'info');
@@ -458,7 +456,7 @@ export class Overworld {
   /** The story clubs (CLUB_CASE_LABELS with a `club`): each keeps its own spot on the map until its case is solved. */
   ensureStoryClubs() {
     const st = this.g.state;
-    if (!st || this.attract || !this.g.newClubs) return;
+    if (!st || this.attract) return;
     for (const [id, L] of Object.entries(CLUB_CASE_LABELS)) {
       if (!L.club || st.cases?.[id]?.solved || this.zones.some((z) => z.storyId === id)) continue;
       const z = this.spawn('special', true, L.venue);
@@ -625,7 +623,6 @@ export class Overworld {
     let near = null, nd = NEAR_R;
     for (const z of this.zones) { const dd = dist(z.x, z.y, h.x, h.y); if (dd < nd) { nd = dd; near = z; } }
     this.near = this.attract ? null : near;
-    if (!this.attract) this.preloadNearbyClub(h);
     this.updatePrompt();
     if (!this.attract) {
       if (inp.pressed('dive')) this.tryDive();
@@ -681,24 +678,6 @@ export class Overworld {
     this.parts = this.parts.filter((p) => p.life > 0);
   }
 
-  /**
-   * Load the nearest club building in the background, so diving in is quick. Sticks with its
-   * choice while she stays in range: phones keep one club in memory, so hopping between two
-   * nearby clubs would evict and reload them over and over.
-   */
-  preloadNearbyClub(h) {
-    const range = (key) => Math.min(...this.zones.filter((z) => VENUES[z.venue]?.club === key).map((z) => dist(z.x, z.y, h.x, h.y)));
-    if (this.preloadKey && range(this.preloadKey) < PRELOAD_R * 1.3) return;
-    this.preloadKey = null;
-    let best = PRELOAD_R;
-    for (const z of this.zones) {
-      const club = VENUES[z.venue]?.club;
-      const d = club ? dist(z.x, z.y, h.x, h.y) : Infinity;
-      if (d < best) { best = d; this.preloadKey = club; }
-    }
-    if (this.preloadKey && !this.g.newClubs) preloadClub(this.preloadKey);
-  }
-
   tryDive() {
     const z = this.near, st = this.g.state;
     if (!z) { toast('Fly over a crime marker to dive in', 'info'); return; }
@@ -711,7 +690,6 @@ export class Overworld {
     if (this.nav.target && this.nav.target.ref === z) this.nav.clear(); // reached it
     this.hero.perch = null;
     this.g.commentary.onDive(z); // spinning-emblem transition + sting
-    if (VENUES[z.venue]?.club && !this.g.newClubs) loadClub(VENUES[z.venue].club); // start loading the building during the dive
   }
 
   updatePrompt() {

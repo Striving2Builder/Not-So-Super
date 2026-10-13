@@ -1,9 +1,10 @@
 """Stitch 16:9 room renders into one walkable plate (the generators can't make 4:1 panoramas).
 
-Each source image becomes a "bay"; neighbouring bays cross-fade over SEAM px and the game hides the
-join behind a foreground pillar (stage.js). Mirrored bays (name ending in '~') add variety.
-Writes assets/nightclub/plates/<room>.jpg and prints the ART entry for src/nightclub/rooms.js
-(width in plate units = 1024 px tall, seam and arch x positions in plate units).
+Each source image becomes a "bay"; neighbouring bays cross-fade over SEAM px. Mirrored bays (name
+ending in '~') add variety. Writes assets/nightclub/plates/<room>.jpg: the 3D club's side rooms hang
+them on their back walls (src/club3d/rooms.js), the brawler fights in front of them
+(src/brawlplate.js) and loose polaroids use them (src/polaroids.js). It also prints each plate's
+width, seams and arches in plate units (1024 px tall), for the record: the 2D club that walked them is gone.
 
     python tools/nightclub/stitch.py            # every room in ROOMS below
     python tools/nightclub/stitch.py main dark  # just these
