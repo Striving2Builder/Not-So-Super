@@ -7,3 +7,4 @@
 - Three builders + a scout in parallel hit the monthly spend limit mid-work three times in round 11: commit WIP every ~30 min.
 - Worktrees don't have `docs/references/` (git-ignored): give agents absolute paths to the main checkout's pools.
 - Round 11 T removed v1/v2 clubs: anything importing `src/nightclub/{nightclub,stage,intox,crowd,layout}.js`, `clubmood`, `clubdress`, `nlclub`, `NIGHT_JOBS`, `mergeStatic/packFloor` or the `club*` settings keys is stale.
+- `travel.js` full run can report "impostor was never offered" after the other moments; `--only impostor` offers and wins it (harness ordering, not the game; round 11).
