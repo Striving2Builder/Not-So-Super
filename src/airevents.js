@@ -6,7 +6,8 @@
 //   rings   — an optional stunt course of hoops at different heights, against the clock
 //   kitten  — a kitten stuck on a rooftop: perch on that roof to rescue it
 // The overworld owns this (update/draw hooks); each event exposes a marker for arrows, the map
-// and the waypoint list.
+// and the waypoint list. The moment director (src/moments/director.js) decides when one comes up and
+// where (ahead of her); src/moments/air3d.js draws them in the 3D flight.
 import { BLOCK, ROAD } from './city.js';
 import { BANDS } from './flight.js';
 import { clamp, pick, chance, rand, dist, rgba } from './util.js';
@@ -35,9 +36,6 @@ export class AirEvents {
 
   reset() {
     this.list = [];
-    this.urgentT = rand(20, 35);  // next falling person / car / helicopter
-    this.ringsT = rand(40, 70);   // next stunt course
-    this.kittenT = rand(8, 20);   // next kitten
     this.carry = null;            // someone she's carrying down after a catch
   }
 
@@ -47,33 +45,26 @@ export class AirEvents {
   /** Diving into an incident: urgent events are resolved by someone else (no penalty). */
   abandon() {
     for (const e of this.list) if (e.kind === 'heli') this.releaseHeli(e);
+    for (const e of this.list) if (e.kind !== 'kitten') e.outcome = 'gone';
     this.list = this.list.filter((e) => e.kind === 'kitten');
     this.carry = null;
   }
 
-  /** Markers for off-screen arrows, the map and the waypoint list. */
+  /** Markers for off-screen arrows, the map and the waypoint list (the flight moments' too). */
   markers() {
     return this.list.filter((e) => e.kind !== 'rings' || e.next < e.rings.length).map((e) => {
       const p = e.kind === 'rings' ? e.rings[e.next] : e;
       return { x: p.x, y: p.y, color: KINDS[e.kind].color, glyph: KINDS[e.kind].glyph, name: e.label || KINDS[e.kind].label, ref: e, t: e.ttl - e.t };
-    });
+    }).concat(this.ow.moments?.markers() || []);
   }
 
-  // ------------------------------------------------------------------ spawning
+  /** A building's height in the view that's showing (the 3D city stands taller). */
+  hOf(o) { return this.ow.hOf(o); }
+
+  // ------------------------------------------------------------------ spawning (by the moment director)
   update(dt) {
     const st = this.g.state;
     if (!st) return;
-    this.urgentT -= dt; this.ringsT -= dt; this.kittenT -= dt;
-    const has = (k) => this.list.some((e) => e.kind === k || (k === 'car' && e.kind === 'getaway'));
-    const urgent = this.list.some((e) => ['faller', 'car', 'getaway', 'heli'].includes(e.kind));
-    if (this.urgentT <= 0 && !urgent) {
-      this.urgentT = rand(35, 60);
-      const kind = pick(st.isNight ? ['faller', 'car', 'getaway', 'getaway', 'heli'] : ['faller', 'faller', 'car', 'getaway', 'heli']);
-      this.spawn(kind);
-    }
-    if (this.ringsT <= 0 && !has('rings')) { this.ringsT = rand(80, 120); this.spawn('rings'); }
-    if (this.kittenT <= 0 && !has('kitten')) { this.kittenT = rand(40, 70); this.spawn('kitten'); }
-
     for (const e of [...this.list]) {
       e.t += dt;
       const res = this[`step_${e.kind === 'getaway' ? 'car' : e.kind}`](e, dt);
@@ -83,8 +74,9 @@ export class AirEvents {
     if (this.carry) { this.carry.t += dt; if (this.carry.t > 2.2) { toast(this.carry.done, 'good'); this.carry = null; } }
   }
 
-  spawn(kind) {
-    const e = this[`make_${kind === 'getaway' ? 'car' : kind}`](kind);
+  /** at: { x, y } to place it near (the director's spot ahead of her), else round her. */
+  spawn(kind, at = null) {
+    const e = this[`make_${kind === 'getaway' ? 'car' : kind}`](kind, at);
     if (!e) return null;
     Object.assign(e, { kind, t: 0 });
     this.list.push(e);
@@ -95,27 +87,30 @@ export class AirEvents {
     return e;
   }
 
-  /** A box building of height [lo, hi] roughly `near`..`far` from her. */
-  pickBuilding(lo, hi, near, far) {
+  /** A box building of height [lo, hi] (as shown) roughly `near`..`far` from c (default: her). */
+  pickBuilding(lo, hi, near, far, c = this.hero) {
     const h = this.hero, city = this.g.city, out = [];
-    const r = Math.ceil(far / BLOCK) + 1, bx = Math.floor(h.x / BLOCK), by = Math.floor(h.y / BLOCK);
+    const r = Math.ceil(far / BLOCK) + 1, bx = Math.floor(c.x / BLOCK), by = Math.floor(c.y / BLOCK);
     for (let y = by - r; y <= by + r; y++) for (let x = bx - r; x <= bx + r; x++) {
       const b = city.block(x, y);
       if (!b) continue;
       for (const o of b.b) {
-        if (o.kind !== 'box' || o.ship || o.h < lo || o.h > hi) continue;
-        const d = dist(o.x + o.w / 2, o.y + o.d / 2, h.x, h.y);
-        if (d > near && d < far) out.push(o);
+        if (o.kind !== 'box' || o.ship || o.landmark) continue;
+        const hh = this.hOf(o);
+        if (hh < lo || hh > hi) continue;
+        const d = dist(o.x + o.w / 2, o.y + o.d / 2, c.x, c.y);
+        if (d > near && d < far && dist(o.x + o.w / 2, o.y + o.d / 2, h.x, h.y) > 300) out.push(o);
       }
     }
     return out.length ? pick(out) : null;
   }
 
   // ------------------------------------------------------------------ falling window-washer
-  make_faller() {
-    const b = this.pickBuilding(110, 9999, 450, 1100);
+  make_faller(kind, at) {
+    const lo = this.ow.view3d ? 180 : 110, b = at ? this.pickBuilding(lo, 760, 0, 520, at) : this.pickBuilding(lo, 9999, 450, 1100);
     if (!b) return null;
-    return { b, x: b.x + b.w * rand(0.3, 0.7), y: b.y + b.d + 4, z: b.h - 6, phase: 'dangle', vz: 0, ttl: 60, hint: 'catch them at their height' };
+    const top = this.hOf(b);
+    return { b, top, x: b.x + b.w * rand(0.3, 0.7), y: b.y + b.d + 4, z: top - 6, phase: 'dangle', vz: 0, ttl: 60, hint: 'catch them at their height' };
   }
 
   step_faller(e, dt) {
@@ -132,14 +127,14 @@ export class AirEvents {
   }
 
   // ------------------------------------------------------------------ runaway / getaway car
-  make_car(kind) {
-    const h = this.hero, city = this.g.city;
+  make_car(kind, at) {
+    const h = this.hero, city = this.g.city, c = at || h, R = at ? 2 : 6;
     const getaway = kind === 'getaway';
     for (let tries = 0; tries < 30; tries++) {
-      const ix = clamp(Math.round((h.x - ROAD / 2) / BLOCK) + Math.round(rand(-6, 6)), 0, city.landCols);
-      const iy = clamp(Math.round((h.y - ROAD / 2) / BLOCK) + Math.round(rand(-6, 6)), 0, city.rows);
+      const ix = clamp(Math.round((c.x - ROAD / 2) / BLOCK) + Math.round(rand(-R, R)), 0, city.landCols);
+      const iy = clamp(Math.round((c.y - ROAD / 2) / BLOCK) + Math.round(rand(-R, R)), 0, city.rows);
       const x = ix * BLOCK + ROAD / 2, y = iy * BLOCK + ROAD / 2, d = dist(x, y, h.x, h.y);
-      if (d < 500 || d > 1200) continue;
+      if (d < (at ? 350 : 500) || d > (at ? 1700 : 1200)) continue;
       const e = { ix, iy, x, y, dir: 0, spd: getaway ? 285 : 235, ttl: getaway ? 34 : 28, getaway, label: getaway ? 'Getaway car' : 'Runaway car', hint: 'drop to rooftop height to grab it' };
       this.pickDir(e);
       return e;
@@ -179,12 +174,12 @@ export class AirEvents {
   }
 
   // ------------------------------------------------------------------ helicopter
-  make_heli() {
+  make_heli(kind, at) {
     const air = this.ow.airspace, h = this.hero;
     const heli = air.helis.find((c) => c.kind === 'news' && !c.ctl && !c.follow) || air.helis.find((c) => !c.ctl);
     if (!heli) return null;
     const a = rand(0, TAU), d = rand(650, 950);
-    Object.assign(heli, { x: h.x + Math.cos(a) * d, y: h.y + Math.sin(a) * d, z: 560, ctl: true });
+    Object.assign(heli, at ? { x: at.x, y: at.y } : { x: h.x + Math.cos(a) * d, y: h.y + Math.sin(a) * d }, { z: 560, ctl: true });
     return { heli, x: heli.x, y: heli.y, z: heli.z, cx: heli.x, cy: heli.y, ttl: 60, hint: 'match its height and catch it' };
   }
 
@@ -213,9 +208,10 @@ export class AirEvents {
   }
 
   // ------------------------------------------------------------------ stunt rings
-  make_rings() {
+  make_rings(kind, at) {
     const h = this.hero, city = this.g.city;
-    let a = h.ang + rand(-0.6, 0.6), x = h.x + Math.cos(a) * 420, y = h.y + Math.sin(a) * 420;
+    let a = at ? Math.atan2(at.y - h.y, at.x - h.x) : h.ang + rand(-0.6, 0.6);
+    let x = at ? at.x : h.x + Math.cos(a) * 420, y = at ? at.y : h.y + Math.sin(a) * 420;
     let band = h.band;
     const rings = [];
     for (let i = 0; i < 6; i++) {
@@ -249,10 +245,10 @@ export class AirEvents {
   }
 
   // ------------------------------------------------------------------ kitten on a roof
-  make_kitten() {
-    const b = this.pickBuilding(40, 230, 500, 1400);
+  make_kitten(kind, at) {
+    const b = at ? this.pickBuilding(40, 260, 0, 520, at) : this.pickBuilding(40, 230, 500, 1400);
     if (!b) return null;
-    return { b, x: b.x + b.w * rand(0.25, 0.75), y: b.y + b.d * rand(0.25, 0.75), z: b.h, ttl: 160, hint: 'perch on its roof' };
+    return { b, x: b.x + b.w * rand(0.25, 0.75), y: b.y + b.d * rand(0.25, 0.75), z: this.hOf(b), ttl: 160, hint: 'perch on its roof' };
   }
 
   step_kitten(e) {
@@ -264,22 +260,25 @@ export class AirEvents {
   win(e) {
     const st = this.g.state, K = KINDS[e.kind];
     this.list = this.list.filter((q) => q !== e);
+    e.outcome = 'won';
     st.stats.airSaves = (st.stats.airSaves || 0) + 1;
-    const hs = this.ow.heroScreen || { x: this.g.w / 2, y: this.g.h / 2 };
+    const hs = this.ow.heroScreen || { x: this.g.w / 2, y: this.g.h / 2 }, h = this.hero;
+    // the catch beat (src/moments/director.js): a burst where it happened, slow motion, sparks, a stinger
+    const pow = (word, size = 1.2) => (this.ow.moments ? this.ow.moments.celebrate(e.x, e.y, e.z ?? h.z, word, { size }) : comic.pow(word, hs.x, hs.y - 30, { size }));
     switch (e.kind) {
       case 'faller':
-        comic.pow('GOTCHA!', hs.x, hs.y - 30, { size: 1.1 });
+        pow('GOTCHA!', 1.1);
         this.carry = { kind: 'faller', t: 0, done: 'Window-washer set down safely.' };
         st.addRep(K.reward, 'Caught a falling window-washer');
         break;
       case 'car': case 'getaway':
         this.ow.shake = Math.max(this.ow.shake, 12);
         sfx.hit();
-        comic.pow(e.getaway ? 'CRUNCH!' : 'SCREECH!', hs.x, hs.y - 30, { size: 1.2 });
+        pow(e.getaway ? 'CRUNCH!' : 'SCREECH!');
         st.addRep(K.reward, e.getaway ? 'Stopped a getaway car' : 'Stopped a runaway car');
         break;
       case 'heli':
-        comic.pow('CAUGHT IT!', hs.x, hs.y - 30, { size: 1.2 });
+        pow('CAUGHT IT!');
         this.releaseHeli(e, true);
         this.carry = { kind: 'heli', t: 0, done: 'Helicopter set down on a rooftop. Crew safe.' };
         st.addRep(K.reward, 'Saved a falling helicopter');
@@ -289,7 +288,7 @@ export class AirEvents {
         const best = st.stats.bestRings;
         const record = !best || time < best;
         if (record) st.stats.bestRings = +time.toFixed(1);
-        comic.pow(record ? 'NEW RECORD!' : 'NAILED IT!', hs.x, hs.y - 30);
+        pow(record ? 'NEW RECORD!' : 'NAILED IT!', 1.1);
         st.addRep(K.reward + (record ? 2 : 0), `Stunt course in ${time.toFixed(1)}s${record ? ' (record)' : ''}`);
         break;
       }
@@ -305,6 +304,8 @@ export class AirEvents {
   lose(e, failed) {
     const st = this.g.state, K = KINDS[e.kind];
     this.list = this.list.filter((q) => q !== e);
+    e.outcome = 'lost';
+    if (failed && e.kind !== 'rings') this.ow.audio?.sting('fail');
     if (e.kind === 'heli') this.releaseHeli(e, true);
     if (!failed) {
       if (e.kind === 'car' || e.kind === 'getaway') st.addRep(K.fail, e.getaway ? 'The getaway car escaped' : 'The runaway car crashed');
@@ -315,12 +316,13 @@ export class AirEvents {
     else if (why) toast(why, 'info');
   }
 
-  /** Speech bubble from the event's spot on screen (only when it's on screen). */
+  /** Speech bubble from the event's spot on screen (only when it's on screen; 3D or the 2D view). */
   say(e, text, kind, speaker) {
-    const V = this.ow.V;
-    if (!V) return;
-    const x = V.SX(e.x, e.z || 0), y = V.SY(e.y, e.z || 0);
-    if (x < 0 || y < 0 || x > V.W || y > V.H) return;
+    const v = this.ow.view3d, V = this.ow.V, W = this.g.w, H = this.g.h;
+    let x, y;
+    if (v && document.body.classList.contains('fly3d')) { const p = v.projector().proj(e.x, e.y, (e.z || 0) + 6); if (!p[2]) return; [x, y] = p; }
+    else if (V) { x = V.SX(e.x, e.z || 0); y = V.SY(e.y, e.z || 0); } else return;
+    if (x < 40 || y < 60 || x > W - 40 || y > H - 40) return;
     this.g.commentary.talk(text, x, y - 20, { kind, speaker });
   }
 
