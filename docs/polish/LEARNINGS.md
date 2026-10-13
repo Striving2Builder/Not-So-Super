@@ -7,4 +7,6 @@
 - Three builders + a scout in parallel hit the monthly spend limit mid-work three times in round 11: commit WIP every ~30 min.
 - Worktrees don't have `docs/references/` (git-ignored): give agents absolute paths to the main checkout's pools.
 - Round 11 T removed v1/v2 clubs: anything importing `src/nightclub/{nightclub,stage,intox,crowd,layout}.js`, `clubmood`, `clubdress`, `nlclub`, `NIGHT_JOBS`, `mergeStatic/packFloor` or the `club*` settings keys is stale.
+- Club beat/prompt timers must run on game time (`this.t`), not `setTimeout`: a harness screenshot costs seconds of real time and ran a 6 s answer window out before the key press (round 11 V).
+- `club3d.js` forces `&club3case=<--case>` unless the query brings one: generated cases use `&club3case=gen&club3gen=<seed>`; `&club3beat=9999` stops the crowd beats firing on their own timer (round 11 V).
 - `travel.js` full run can report "impostor was never offered" after the other moments; `--only impostor` offers and wins it (harness ordering, not the game; round 11).

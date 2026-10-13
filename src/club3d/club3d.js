@@ -5,6 +5,7 @@
 // back office's blackmail and fights in the back rooms. This file is the conductor: the systems
 // live in their own modules and are mixed in at the bottom.
 import * as THREE from 'three';
+import { beatMethods } from './casebeats.js';
 import { Special3D } from '../special3d.js';
 import { bakeStatic, comicScene, groundBackdrop } from '../look3d.js';
 import { quality } from '../settings.js';
@@ -93,6 +94,7 @@ export class Club3D extends Special3D {
     this.seedEnvelope();
     this.music = new ClubMusic(); this.music.start();
     this.startEvents();
+    this.startBeats(); // (a generated case's crowd beats: casebeats.js)
     this.startChatter();
     this.askUndercover();
   }
@@ -130,7 +132,7 @@ export class Club3D extends Special3D {
     // everyone in the crowd: the hall's dancers + the DJs, the dark room's, the VIP's entourage, the loungers
     const Q = quality().club3;
     const keepOut = [[plan.spawn.x, plan.spawn.z, 2.6], ...this.inter.map((o) => [o.pos.x, o.pos.z, 1.4]), ...this.castSpots()];
-    const people = placeCrowd(plan, Q.crowd, this.colliders, keepOut).map((p) => ({ ...p, pose: 'dance' }));
+    const people = placeCrowd(plan, Math.round(Q.crowd * (this.caseDef.gen?.profile.crowd || 1)), this.colliders, keepOut).map((p) => ({ ...p, pose: 'dance' }));
     const near = (p, cx, cz, r) => Math.hypot(p.x - cx, p.z - cz) < r;
     for (const p of people) if (near(p, this.hallA.spots.bar.x, this.hallA.spots.bar.z, 3)) p.pose = 'stand';
     people.push(...X.people, ...(this.roomA.dark?.dancers || []), ...(this.roomA.lounge?.loungers || []));
@@ -261,6 +263,7 @@ export class Club3D extends Special3D {
     this.stepChatter(dt);
     this.stepVices(dt);
     this.stepStory(dt);
+    this.stepBeats(dt);
     this.stepIncidents(dt);
     this.stepBackrooms(dt);
     this.stepClubFeed(dt);
@@ -443,4 +446,4 @@ export class Club3D extends Special3D {
 }
 
 Object.assign(Club3D.prototype, castMethods, eventMethods, powerMethods, chatterMethods, viceMethods, caseMethods, sedationMethods, vipMethods, officeMethods, brawlMethods, closeupMethods, undercoverMethods, quickMethods, feelMethods, dangerMethods, storyMethods, pressMethods, backroomMethods, clubFeedMethods,
-  stealthMethods, tensionMethods, cctvMethods, selfTalkMethods);
+  stealthMethods, tensionMethods, cctvMethods, selfTalkMethods, beatMethods);

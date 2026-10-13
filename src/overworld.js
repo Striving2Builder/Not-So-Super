@@ -1,5 +1,6 @@
 // Flying patrol over the procedural city, drawn in 2.5D: every point is projected with a
 // straight-down perspective camera, so rooftops grow and lean away from screen centre.
+import { genLabel } from './club3d/casegen.js';
 import { BLOCK, ROAD, LOT } from './city.js';
 import { DISTRICTS, STREET_CRIMES, CASES, VENUES, THEMES, BOSSES, HERO, NIGHT_DISTRICTS, ASYLUM, CLUB_CASE_LABELS } from './data.js';
 import { drawHeroTop } from './art.js'; // placeholder art until her model loads
@@ -441,6 +442,14 @@ export class Overworld {
     // (a case already waiting on the map isn't offered twice while there are others to play)
     const listed = new Set(this.zones.map((q) => q.clubCase).filter(Boolean));
     const fresh = open.filter((k) => !listed.has(k));
+    // half the ordinary club missions (all of them once the hand-written cases are solved) play a
+    // generated case (club3d/casegen.js): a suspect × a clue type × a twist, from a seed
+    if (!forced && (!open.length || Math.random() < 0.5)) {
+      const seed = 1 + Math.floor(Math.random() * 4000), L = genLabel(seed), at = z.venue;
+      Object.assign(z, { clubCase: `gen:${seed}`, theme: L.theme, name: `${L.name} at ${/^The /.test(at) ? at : 'the ' + at}`, risk: riskPrefix + L.risk, blurb: L.blurb, boss: null });
+      if (z.mode === 'special') Object.assign(z, { glyph: '★', color: '#ff3fb8' });
+      return;
+    }
     const id = pick(fresh.length ? fresh : open.length ? open : ids), L = CLUB_CASE_LABELS[id];
     const at = L.club || z.venue;
     Object.assign(z, { clubCase: id, theme: L.theme, name: `${L.name} at ${L.club || /^The /.test(at) ? at : 'the ' + at}`, risk: riskPrefix + L.risk, blurb: L.blurb, boss: null });
