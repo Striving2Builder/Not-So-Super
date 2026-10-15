@@ -44,6 +44,10 @@ runs the paparazzi show and sells the enhanced cut. Name: open (the user's call)
 at grand openings in the red-light, nightclub and naughty districts, and pose for every camera. Their
 reputation moves opposite to hers (below).
 
+**The cult's look (user, 2026-10-14, "the cult characters for now").** Hooded robes and coats in
+black with red and gold trim, and faceless masks: gold, white, a red demon mask, and a wraith with
+glowing red eyes. References (local, git-ignored): `docs/references/user/act2-cult-*.jpg`.
+
 **Holdovers.** Kell and the Puzzle Maker are locked up. Act 1's lieutenants can come back as
 henchmen or informants until the user's own henchmen designs land.
 

@@ -185,7 +185,9 @@ the beats' lines in `casebeats.js`) and may edit them by hand: add new lines, ne
   the zones (`LENGTH` 1.02 → ~0.5 m, narrower hem) and in flight (`CAPE.len` and the boost/dive length
   bumps ~halved), plus the L-1 lift clamp (~70°, damped); `?cape=long` keeps the old one. Shorter skirt
   on every costume, Dark the most (per-skin amounts): at load, move the skirt-rect vertices (`SKIRT.uv`,
-  the same atlas on every skin) toward the waist, hem ~25–30% higher, to mid-thigh like the user's photo.
+  the same atlas on every skin) toward the waist. **Target (user, 2026-10-14): a bit shorter than the
+  photo**, upper thigh, because in game it reads longer than it is; one tunable per skin, corrected
+  from the user's phone feedback.
   Check first that legs exist under the skirt; if not, do it in Blender (sg_blender / dark_blender
   step) and flag it. Skirt flutter: a vertex-shader sway on the skirt's lower half (same UV mask),
   driven by the cloth cape's wind (`M.setWind`) and flight speed, plus a `flip()` impulse. Shots: hero
