@@ -1,7 +1,7 @@
 // The act (src/act/, src/hotel/; docs/design/act1.md): its screens and flows played through in
 // headless Chromium. Story beats, the act board, a Polaroid call (right and wrong), an unmasking,
 // an impostor sighting caught, and (with --flows hotel,ballroom) the 13th floor and its boss.
-//   node tools/shots/act.js [--label act] [--port 8882] [--flows all|board,polaroid,unmask,sighting,hotel,ballroom] [--w 844 --h 390]
+//   node tools/shots/act.js [--label act] [--port 8882] [--flows all|board,polaroid,unmask,sighting,hotel,ballroom] [--w 844 --h 390] [--query '&camdist=closest']
 // → shots/<label>/act/*.png + report.json (errors per flow; fps is SwiftShader: compare runs only)
 const path = require('path');
 const fs = require('fs');
@@ -22,6 +22,8 @@ const argv = process.argv.slice(2);
 const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
 const LABEL = arg('--label', 'act'), PORT = +arg('--port', 8882), FLOWS = arg('--flows', 'all');
 const W = +arg('--w', 844), H = +arg('--h', 390);
+const EXTRA = arg('--query', ''); // e.g. --query '&camdist=closest' (appended to every page's query)
+const glOf = (V) => V.page.evaluate(() => { const r = window.__game.mode.renderer.info.render; return { calls: r.calls, tris: r.triangles }; });
 const OUT = path.join(ROOT, 'shots', LABEL, 'act');
 const ALL = ['board', 'trail', 'gates', 'polaroid', 'unmask', 'sighting', 'tower', 'hotel', 'kell', 'seal', 'ballroom'];
 const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
@@ -39,7 +41,7 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     const page = await browser.newPage({ viewport: { width: W, height: H } });
     page.on('pageerror', (e) => errors.push(String(e.stack || e)));
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-    await page.goto(`http://localhost:${PORT}/?${query}`);
+    await page.goto(`http://localhost:${PORT}/?${query}${EXTRA}`);
     await page.waitForFunction(() => window.__game && document.querySelector('#btn-new'), null, { timeout: 30000 });
     await page.evaluate(async () => { (await import('/src/settings.js')).autoTune.done = true; });
     await page.evaluate(() => { const c = document.querySelector('#cutscene'); if (c) for (let i = 0; i < 4; i++) c.click(); }); // the intro
@@ -229,11 +231,11 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     await V.page.evaluate(() => { window.__game.mode.grace = 1e9; });
     await V.page.waitForTimeout(2500);
     await V.through(() => !document.querySelector('#modal-root .modal-back'), 8000);
-    await V.shot('hotel_arrival');
+    await V.shot('hotel_arrival'); (report.gl = report.gl || {}).hotel_arrival = await glOf(V);
     for (const [i, spot] of (await V.page.evaluate(() => window.__game.mode.debugSpots())).entries()) {
       await V.page.evaluate((s) => { const m = window.__game.mode; m.hero.position.set(s.x, 0, s.z); m.yaw = s.yaw; }, spot);
       await V.page.waitForTimeout(1200);
-      await V.shot(`hotel_${i + 1}_${spot.name}`);
+      await V.shot(`hotel_${i + 1}_${spot.name}`); report.gl[`hotel_${i + 1}`] = await glOf(V);
     }
     report.hotelMem = await V.page.evaluate(() => ({ heap: Math.round((performance.memory?.usedJSHeapSize || 0) / 1e6), posters: window.__game.mode.posters.filter((p) => p.canvas).length, info: window.__game.mode.renderer.info.memory }));
     console.log('mem', JSON.stringify(report.hotelMem));
@@ -303,7 +305,7 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     await V.page.evaluate(() => window.__game.mode.debugBallroom());
     await V.page.waitForTimeout(2000);
     await V.through(() => !document.querySelector('#modal-root .modal-back'), 8000);
-    await V.shot('ballroom_masquerade');
+    await V.shot('ballroom_masquerade'); (report.gl = report.gl || {}).ballroom = await glOf(V);
     await V.page.evaluate(() => window.__game.mode.debugBallroom('fight'));
     await V.page.waitForTimeout(2000);
     await V.through(() => !document.querySelector('#modal-root .modal-back'), 8000);

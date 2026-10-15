@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { beatMethods } from './casebeats.js';
 import { Special3D } from '../special3d.js';
 import { bakeStatic, comicScene, groundBackdrop } from '../look3d.js';
-import { quality } from '../settings.js';
+import { quality, camStep } from '../settings.js';
 import { clamp, wobble, $ } from '../util.js';
 import { banner, toast } from '../ui.js';
 import { makePlan, roomAt, floorY } from './plan.js';
@@ -50,6 +50,12 @@ const IDLE_FACE = 1.5;      // seconds standing still before she turns to the vi
 // the bouncers she can't see get arrows at the screen's edge instead, stealth.js)
 const CAM_OPEN = [0.62, 6.2], CAM_CROWD = [0.45, 4.4], CAM_HUNT = [0.5, 7.0];
 const FOV = 58;
+/** Those three at the player's Camera setting (settings.js camStep: Far = as above): nearer, a little lower
+ * (not in the crowd: there the pitch stays, to see over the nearest heads). */
+function camAt(c, hunt, crowd) {
+  const { k, dp } = camStep();
+  return [crowd ? c[0] : Math.max(0.35, c[0] - dp), Math.max(2.3, c[1] * (hunt ? Math.max(k, 0.65) : k))]; // (hunted still opens up)
+}
 
 const tmpC = new THREE.Color(), tmpA = new THREE.Color(), tmpB = new THREE.Color();
 
@@ -90,7 +96,7 @@ export class Club3D extends Special3D {
     zone.name = `${this.caseDef.title} at ${this.caseDef.club || /^the /i.test(this.clubName) ? this.clubName : 'the ' + this.clubName}`; // (a story club's name is its own: "at Flashpoint")
     super.enter({ zone });
     // after the base zone's reset: the camera's own state
-    this.yaw = 0; this.camPD = [...CAM_OPEN]; this.camSnap = true; this.camPitch = null;
+    this.yaw = 0; this.camPD = camAt(CAM_OPEN); this.camSnap = true; this.camPitch = null;
     this.seedEnvelope();
     this.music = new ClubMusic(); this.music.start();
     this.startEvents();
@@ -376,8 +382,9 @@ export class Club3D extends Special3D {
     const hunted = !this.room && (this.cctvK > 0.3 || this.guards.some((gd) => gd.st === 'alert'));
     this.huntK = clamp((this.huntK || 0) + (hunted ? dt * 1.4 : -dt * 0.7), 0, 1);
     const hk = this.huntK * this.huntK * (3 - 2 * this.huntK);
-    let want = [CAM_OPEN[0] + (CAM_CROWD[0] - CAM_OPEN[0]) * inCrowd, CAM_OPEN[1] + (CAM_CROWD[1] - CAM_OPEN[1]) * inCrowd];
-    if (hk > 0) want = [want[0] + (CAM_HUNT[0] - want[0]) * hk, want[1] + (CAM_HUNT[1] - want[1]) * hk];
+    const cO = camAt(CAM_OPEN), cC = camAt(CAM_CROWD, false, true), cH = camAt(CAM_HUNT, true), ck = camStep().k; // (live: read every frame)
+    let want = [cO[0] + (cC[0] - cO[0]) * inCrowd, cO[1] + (cC[1] - cO[1]) * inCrowd];
+    if (hk > 0) want = [want[0] + (cH[0] - want[0]) * hk, want[1] + (cH[1] - want[1]) * hk];
     const k = 1 - Math.pow(0.02, dt);
     this.camPD[0] += (want[0] - this.camPD[0]) * k * 0.6; this.camPD[1] += (want[1] - this.camPD[1]) * k * 0.6;
     // walls between her and the camera: tip up toward top-down (rooms have no ceilings)
@@ -395,7 +402,7 @@ export class Club3D extends Special3D {
     const la = this._look || (this._look = h.clone());
     const tz = h.z - 1.4 - (this.moving || 0) * 0.6 - 2.2 * hk, tx = h.x;
     la.x += (tx - la.x) * Math.min(1, dt * 5); la.z += (tz - la.z) * Math.min(1, dt * 5); la.y = h.y;
-    this.cam.lookAt(la.x, la.y + 0.7 + 1.0 * hk, la.z);
+    this.cam.lookAt(la.x, la.y + 0.7 + 1.0 * hk + (1 - ck) * 0.5, la.z); // (closer steps aim a little higher)
     // a punch (made, a takedown): the lens snaps in and eases out, the frame jolts
     const kk = this.kickK ? this.kickK * Math.exp(-Math.max(0, this.t - this.kickAt) * 5) : 0;
     if (kk > 0.01) { const j = 0.09 * kk; this.cam.position.x += (Math.random() - 0.5) * j; this.cam.position.y += (Math.random() - 0.5) * j; }
@@ -408,7 +415,9 @@ export class Club3D extends Special3D {
     if (Math.abs(this.cam.fov - fov) > 0.01) { this.cam.fov = fov; this.cam.updateProjectionMatrix(); }
     if (this.shadows) this.shadows.update();
     this.renderCctv(); // (the security camera's picture first: the frame's own draw stays the last)
+    this.crowd?.seeThrough(this.cam, h, this.renderer); // (crowd between the lens and her dithers out)
     this.renderer.render(this.scene, this.cam);
+    this.crowd?.seeThrough(null); // (off for every other pass: the CCTV, the sub-scenes)
     this.afterRender?.();
   }
 

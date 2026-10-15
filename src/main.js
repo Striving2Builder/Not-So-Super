@@ -20,7 +20,7 @@ import { loadEnemies } from './enemies.js';
 import { playCutscene, playScreenScene } from './cutscene.js';
 import { comic } from './comic.js';
 import { Commentary } from './commentary.js';
-import { settings, quality, autoTune, HERO_SKIN_LABELS, HERO_LOOK_LABELS } from './settings.js';
+import { settings, quality, autoTune, HERO_SKIN_LABELS, HERO_LOOK_LABELS, CAM_STEP_LABELS } from './settings.js';
 import { perfHud } from './perfhud.js';
 import { gfxLost, crashedLastTime } from './gfx.js';
 import { BUILD } from './version.js';
@@ -307,6 +307,7 @@ async function pauseMenu() {
       { label: `Sound: ${sfx.enabled ? 'ON' : 'OFF'}`, value: 's' },
       { label: `Comic commentary: ${comic.enabled ? 'ON' : 'OFF'}`, value: 'c' },
       { label: `Graphics: ${settings.graphicsLabel}`, note: 'Battery saver: 30 fps, lighter clubs', value: 'g' },
+      { label: `Camera: ${CAM_STEP_LABELS[settings.camDist]}`, note: 'Far / Medium / Close / Closest, in the 3D zones', value: 'm' },
       { label: `City feed videos: ${settings.cityFeed ? 'ON' : 'OFF'}`, note: 'Clips in the minimap corner', value: 'f' },
       { label: `Hero: ${HERO_SKIN_LABELS[settings.hero]}`, note: settings.hero === HERO_SKIN ? 'Supergirl / Classic / Ponytail / Supergirl_Dark costume' : 'Reload the page to change costume', value: 'v' },
       { label: `Hero render: ${HERO_LOOK_LABELS[settings.heroLook]}`, note: settings.heroLook === HERO_LOOK ? 'Comic or realistic, for testing' : 'Reload the page to change render', value: 'l' },
@@ -322,6 +323,7 @@ async function pauseMenu() {
   if (v === 'f') { if (!settings.toggleCityFeed()) game.overworld.feed.stop(); return pauseMenu(); }
   if (v === 'v') { settings.cycleHero(); return pauseMenu(); }
   if (v === 'l') { settings.cycleHeroLook(); return pauseMenu(); }
+  if (v === 'm') { settings.cycleCamDist(); return pauseMenu(); }
   if (v === 'h') { await dialog({ title: 'How to play', text: HOWTO }); return pauseMenu(); }
   if (v === 'b') { await game.act.openBoard(); return pauseMenu(); }
   if (v === 'a' && game.mode.abort) game.mode.abort();

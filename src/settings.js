@@ -71,6 +71,14 @@ export const HERO_SKIN_LABELS = { supergirl: 'Supergirl', classic: 'Classic', po
 /** How her model is drawn: the comic cel look with ink, or realistic textures under plain PBR light. */
 export const HERO_LOOKS = ['comic', 'real'];
 export const HERO_LOOK_LABELS = { comic: 'Comic', real: 'Realistic' };
+/**
+ * The 3D zones' follow camera (club, hotel, asylum, warehouses; never the flight chase camera):
+ * k scales every follow distance (Far = the original framing, Closest ≈ 2.6 m from her), dp lowers
+ * the pitch (radians; the cameras keep it ≥ 0.35). Same fixed angle and controls at every step.
+ */
+export const CAM_STEPS = ['far', 'medium', 'close', 'closest'];
+export const CAM_STEP_LABELS = { far: 'Far', medium: 'Medium', close: 'Close', closest: 'Closest' };
+const CAM_K = { far: [1, 0], medium: [0.8, 0.04], close: [0.6, 0.08], closest: [0.42, 0.12] };
 
 let touch = null; // a phone doesn't stop being a phone: read the media query once
 const isTouch = () => { if (touch === null) touch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches; return touch; };
@@ -79,7 +87,7 @@ function read() {
   try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
 }
 function write() {
-  try { localStorage.setItem(KEY, JSON.stringify({ graphics: state.graphics, autoSlow: state.autoSlow, autopilot: state.autopilot, cityFeed: state.cityFeed, hero: state.hero, heroLook: state.heroLook })); } catch (e) { /* private mode */ }
+  try { localStorage.setItem(KEY, JSON.stringify({ graphics: state.graphics, autoSlow: state.autoSlow, autopilot: state.autopilot, cityFeed: state.cityFeed, hero: state.hero, heroLook: state.heroLook, camDist: state.camDist })); } catch (e) { /* private mode */ }
 }
 
 const saved = read();
@@ -90,12 +98,19 @@ const state = {
   cityFeed: saved.cityFeed !== false,   // clips in the minimap corner
   hero: HERO_SKINS.includes(saved.hero) ? saved.hero : 'supergirl', // her costume model (read once at load)
   heroLook: HERO_LOOKS.includes(saved.heroLook) ? saved.heroLook : 'comic',
+  camDist: CAM_STEPS.includes(saved.camDist) ? saved.camDist : 'far', // the 3D zones' camera distance
 };
 const query = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
 /** The costume / render this page load uses (?hero= / ?look= for tests, else the saved choice). */
 export const HERO_SKIN = HERO_SKINS.includes(query?.get('hero')) ? query.get('hero') : state.hero;
 export const HERO_LOOK = HERO_LOOKS.includes(query?.get('look')) ? query.get('look') : state.heroLook;
 const listeners = [];
+let camQuery = CAM_STEPS.includes(query?.get('camdist')) ? query.get('camdist') : null; // (?camdist= for tests)
+/** The 3D zones' camera step now: { id, k: distance multiplier, dp: pitch drop }. Read every frame (applies live). */
+export function camStep() {
+  const id = camQuery || state.camDist, [k, dp] = CAM_K[id];
+  return { id, k, dp };
+}
 
 /**
  * iOS / iPadOS (also when the iPad says it's a Mac, or has a trackpad and so a fine pointer): Safari
@@ -130,6 +145,9 @@ export const settings = {
   cycleHero() { state.hero = HERO_SKINS[(HERO_SKINS.indexOf(state.hero) + 1) % HERO_SKINS.length]; write(); return state.hero; },
   get heroLook() { return state.heroLook; },
   cycleHeroLook() { state.heroLook = HERO_LOOKS[(HERO_LOOKS.indexOf(state.heroLook) + 1) % HERO_LOOKS.length]; write(); return state.heroLook; },
+  get camDist() { return camQuery || state.camDist; },
+  /** Cycle Far → Medium → Close → Closest (live: the cameras read camStep() every frame). */
+  cycleCamDist() { state.camDist = CAM_STEPS[(CAM_STEPS.indexOf(this.camDist) + 1) % CAM_STEPS.length]; camQuery = null; write(); return state.camDist; },
   onChange(fn) { listeners.push(fn); },
   /** After the browser killed the tab (out of memory): Auto drops to Battery saver, like a slow device. */
   afterCrash() {

@@ -4,6 +4,13 @@
 import * as THREE from 'three';
 import { CAM_DIST, CAM_PITCHES, WALL_H, segEnter, sightBlockers } from './zonekit.js';
 import { lookFrame } from './look3d.js';
+import { camStep } from './settings.js';
+
+/** The zones' camera at the player's Camera setting: [distance, pitches] (Far = CAM_DIST, CAM_PITCHES). */
+export function zoneCam() {
+  const { k, dp } = camStep();
+  return [CAM_DIST * k, dp ? [Math.max(0.35, CAM_PITCHES[0] - dp), ...CAM_PITCHES.slice(1)] : CAM_PITCHES, k];
+}
 
 
 export const cameraMethods = {
@@ -32,11 +39,11 @@ export const cameraMethods = {
    * camera swings up toward top-down (club ceilings are sliced away above her head, so from
    * overhead the view is nearly always clear) instead of squashing in against her back.
    */
-  cameraPitch(h) {
-    let best = CAM_PITCHES[0], bestReach = -1;
-    for (const p of CAM_PITCHES) {
-      const reach = this.cameraReach(h, this.cameraOffset(p));
-      if (reach >= CAM_DIST * 0.75) return p;
+  cameraPitch(h, dist = CAM_DIST, pitches = CAM_PITCHES) {
+    let best = pitches[0], bestReach = -1;
+    for (const p of pitches) {
+      const reach = this.cameraReach(h, this.cameraOffset(p, dist));
+      if (reach >= dist * 0.75) return p;
       if (reach > bestReach) { bestReach = reach; best = p; }
     }
     return best;
@@ -45,18 +52,19 @@ export const cameraMethods = {
   render() {
     if (!this.scene || this.warming) return; // (shaders still compiling behind the LOADING card)
     const h = this.hero.position, st = this.g.state;
-    const target = this.cameraPitch(h), snap = this.camPitch === null;
+    const [dist, pitches, ck] = zoneCam(); // (the Camera setting: read every frame, so it applies live)
+    const target = this.cameraPitch(h, dist, pitches), snap = this.camPitch === null;
     // tilt up quickly to get out from behind a wall; settle back down gently
     this.camPitch = snap ? target : this.camPitch + (target - this.camPitch) * (target > this.camPitch ? 0.3 : 0.08);
-    const off = this.cameraOffset(this.camPitch);
-    const want = h.clone().add(off.multiplyScalar(this.cameraReach(h, off) / CAM_DIST));
+    const off = this.cameraOffset(this.camPitch, dist);
+    const want = h.clone().add(off.multiplyScalar(this.cameraReach(h, off) / dist));
     // smoothed follow that eases toward a look-ahead point in the direction she's heading
     const k = snap ? 1 : 1 - Math.pow(0.0005, this.frameDt || 1 / 60);
     if (snap) this.cam.position.copy(want); else this.cam.position.lerp(want, Math.max(0.12, k));
     // Aim past her into the room (she sits below centre, the space ahead reads), plus a little
     // look-ahead the way she's running.
     const la = this._look || (this._look = h.clone());
-    const ahead = 1.5, cx = -Math.sin(this.yaw) * ahead, cz = -Math.cos(this.yaw) * ahead;
+    const ahead = 1.5 * (0.5 + 0.5 * ck), cx = -Math.sin(this.yaw) * ahead, cz = -Math.cos(this.yaw) * ahead;
     const fwdX = Math.sin(this.hero.rotation.y) * 0.9, fwdZ = Math.cos(this.hero.rotation.y) * 0.9;
     const tx = h.x + cx + fwdX * (this.moving || 0), tz = h.z + cz + fwdZ * (this.moving || 0);
     if (snap) la.set(tx, h.y, tz);

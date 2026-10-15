@@ -3,7 +3,7 @@
 // (Talker → clue, close-up + phone, VIP quiz → dance, a back-room fight, sedation → wake → capture,
 // the owner's confession → solved → skylight, the leak → thrown out, each per-visit event).
 //   node tools/shots/club3d.js [--label c3] [--port 8881] [--rooms rave,pit] [--flows all|none|sedate,confess]
-//                              [--case squirt|blackmail|earworm] [--w 844 --h 390] [--gen 1-8]
+//                              [--case squirt|blackmail|earworm] [--w 844 --h 390] [--gen 1-8] [--query '&camdist=closest']
 //   flows idle (D2: the crowd rings her when she stands still) and cage (D3: the Gilded Cage dance)
 //   --gen a-b: generated cases (club3d/casegen.js), one visit per seed, each crowd beat played
 //   (flows gen<seed>; strips in shots/<label>/strips/gen<seed>)
@@ -29,6 +29,7 @@ const LABEL = arg('--label', 'c3'), PORT = +arg('--port', 8881), CASE = arg('--c
 const ROOMS = arg('--rooms', 'rave,mezzanine,pit,centre,tunnel').split(',').filter((r) => r && r !== 'none');
 const FLOWS = arg('--flows', 'all');
 const W = +arg('--w', 844), H = +arg('--h', 390), DPR = +arg('--dpr', 1);
+const EXTRA = arg('--query', ''); // e.g. --query '&camdist=closest' (appended to every visit's query)
 const OUT = path.join(ROOT, 'shots', LABEL, 'club3d');
 const want = (f) => FLOWS === 'all' || FLOWS.split(',').includes(f) || (/^gen\d+$/.test(f) && GEN.length);
 const GEN = (() => { const g = arg('--gen', ''); if (!g) return []; const [a, b] = g.split('-').map(Number); return Array.from({ length: (b || a) - a + 1 }, (_, i) => a + i); })();
@@ -110,7 +111,7 @@ const GEN = (() => { const g = arg('--gen', ''); if (!g) return []; const [a, b]
       /** The bouncers' heads: [state, sus, seeing] each. */
       minds: () => page.evaluate(() => window.__game.mode.guards.map((g) => `${g.st}:${Math.round(g.sus || 0)}${g.seeing ? '*' : ''}`).join(' ')),
     };
-    await page.goto(`http://localhost:${PORT}/?flight=2d&club=v3&club3under=0${/club3case=/.test(query) ? '' : `&club3case=${CASE}`}${query}`); // (a flow may bring its own case)
+    await page.goto(`http://localhost:${PORT}/?flight=2d&club=v3&club3under=0${/club3case=/.test(query) ? '' : `&club3case=${CASE}`}${query}${EXTRA}`); // (a flow may bring its own case)
     await page.waitForFunction(() => window.__game && document.querySelector('#btn-new'), null, { timeout: 30000 });
     await page.evaluate(async () => { (await import('/src/settings.js')).autoTune.done = true; });
     await page.mouse.click(W / 2, H / 2); // (skips the intro video)
