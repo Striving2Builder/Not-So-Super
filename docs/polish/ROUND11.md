@@ -109,7 +109,7 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
 | T tech debt | `worktree-agent-a047ac9311b1f985f` | 1 done | n/a (regression pack `shots/r11T-pack/`) | **merged** (78030b3): v1 + v2 gone, -6,052 lines, -176 KB JS at startup, 0 errors in every area |
 | F travel | `worktree-agent-a4e919b8e12914483` | 1 done | not yet run | **merged** (a6f223a): moment director, air events in 3D, impostor rooftop chase. **F-1: NOT YET**: 1/8 (tie), vs AAA 3, vs HTML5 6, feel 4; commute ~85% dead air (`critiques/r11/F-1.md`) |
 | L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | **L-1: NOT YET**: 0/8 pairs, vs AAA 2.5, vs HTML5 6, feel 5.5 (`critiques/r11/L-1.md`) | **merged**: readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
-| V club variety | `r11-variety` | 1 done | not yet run (pack in that worktree's `shots/r11V-1/`: gen1-8 frames + strips) | **merged** (a17368d): casegen (8 suspects × 6 clue types × 5 twists), crowd scandal beats (shots, gotcha selfie, planted glass, ringed in, GONE WILD? headline, snapper, morning paper); 8 gen + 21 old flows, 0 errors; +0.8% calls, +5-10% during a beat. Weak: the knot is hard to read at phone size |
+| V club variety | `r11-variety` | 1 done | **V-1: NOT YET**: 0/8, vs AAA 2.5, vs HTML5 5, feel 4, variety 3 (`critiques/r11/V-1.md`) | **merged** (a17368d): casegen (8 suspects × 6 clue types × 5 twists), crowd scandal beats (shots, gotcha selfie, planted glass, ringed in, GONE WILD? headline, snapper, morning paper); 8 gen + 21 old flows, 0 errors; +0.8% calls, +5-10% during a beat. Weak: the knot is hard to read at phone size |
 | D device fixes | D1 (748f379), D4 (4d2bff6), D2+D3 (1dc374b), D5 (ee53a17) merged | **done; phone-tested OK by the user 2026-10-15** | n/a (the user's phone test) | **queued 2026-10-14**, from the user's device test: D1 S-shield struggle, D4 Supergirl look (wave 1); D2 idle crowd + D3 cage dance (one builder), D5 camera distance setting (wave 2). Specs under "Device test fixes" below |
 | refs scout | done 2026-10-13 | n/a | n/a | **built**: `club3d/` 12 (Hitman ×4, Cyberpunk ×2, GTA V, Yakuza ×2, LEGO ×2…), `travel/` 12 (Spider-Man, Arkham Knight, LEGO); all ≥1280 px. Gaps: no Hitman club/Iceberg Lounge, few dancefloor-with-guards shots, mostly daytime travel |
 
@@ -131,8 +131,15 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
    card, one transient layer at a time, slim stat bars; 8) X-ray: nearest 3 tags, de-overlap, icons,
    beacon on the clue; 9) cheap bloom on emissives (quality-gated); 10) dress the DJ booth + sign.
 4. ~~V round 1~~ merged 2026-10-13. **V-1 blind critic** next (8 pairs from `shots/r11V-1/club3d/gen*`).
-   V round 2 (with L round 2's crowd work): a readable knot (closer camera in a beat, phone-up pose in
-   `crowd.js`), the knockoff on a club screen for the lookalike twist, real venues for generated leads.
+   **V round 2** (after L2a merges: it needs the phone-up pose), from V-1 ("one story, new names"), ranked:
+   1) beats per twist: the snapper only when the photo is real; one new beat each for setup / planted /
+   lookalike (the knockoff on a club screen); no beat in every visit (the "One shot with us!" one is in all);
+   2) the morning paper: its photo = a grab of the real gotcha frame (no green placeholder circle), ≥6
+   headline templates; 3) stage beats in 3D (phones up, flashes, the glass in her hand, the snapper running)
+   instead of dialog boxes; 4) per-venue fog + light colour + one landmark prop; 5) vary the pacing and the
+   case board (every visit closes ~16 s with 1 clue; gen5 = gen8 frame for frame: seeds must differ);
+   6) real venues for generated leads. Her readability in the crowd (ink silhouette through figures,
+   replace the dither band) goes to L2b (crowd.js / the camera are L's).
 5. **F round 2** (from F-1, ranked): 1) the black box bottom-right = a video panel with no frame yet
    (likely headless Chromium can't decode the clip; check on a phone). Fix with a poster frame / ink
    placeholder until `playing`; never hide, shrink or move the panel (user rule). 2) spawn moments in a
@@ -263,3 +270,5 @@ the beats' lines in `casebeats.js`) and may edit them by hand: add new lines, ne
   floor, DJ booth), F2a (harness fixes, video placeholder, cone spawn + beacon, one toast, win/loss panel, boost
   speed lines). Next: L2b (the feel: spotted event, grab in-world, HUD diet + bubble cap, X-ray, CCTV, bloom),
   F2b (flight-native beats, cruise pose, facades, captions, new moments), V round 2 (after V-1 + L2a), T round 2.
+- 2026-10-15: V-1 NOT YET (0/8; 2.5 / 5 / feel 4 / variety 3): the 8 visits read as one story reskinned. V round 2
+  brief rewritten in Next step 4; her silhouette in the crowd added to L2b.
