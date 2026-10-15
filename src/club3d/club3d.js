@@ -50,10 +50,11 @@ const IDLE_FACE = 1.5;      // seconds standing still before she turns to the vi
 // the bouncers she can't see get arrows at the screen's edge instead, stealth.js)
 const CAM_OPEN = [0.62, 6.2], CAM_CROWD = [0.45, 4.4], CAM_HUNT = [0.5, 7.0];
 const FOV = 58;
-/** Those three at the player's Camera setting (settings.js camStep: Far = as above): nearer, a little lower. */
-function camAt(c, hunt) {
+/** Those three at the player's Camera setting (settings.js camStep: Far = as above): nearer, a little lower
+ * (not in the crowd: there the pitch stays, to see over the nearest heads). */
+function camAt(c, hunt, crowd) {
   const { k, dp } = camStep();
-  return [Math.max(0.35, c[0] - dp), Math.max(2.3, c[1] * (hunt ? Math.max(k, 0.65) : k))]; // (hunted still opens up)
+  return [crowd ? c[0] : Math.max(0.35, c[0] - dp), Math.max(2.3, c[1] * (hunt ? Math.max(k, 0.65) : k))]; // (hunted still opens up)
 }
 
 const tmpC = new THREE.Color(), tmpA = new THREE.Color(), tmpB = new THREE.Color();
@@ -381,7 +382,7 @@ export class Club3D extends Special3D {
     const hunted = !this.room && (this.cctvK > 0.3 || this.guards.some((gd) => gd.st === 'alert'));
     this.huntK = clamp((this.huntK || 0) + (hunted ? dt * 1.4 : -dt * 0.7), 0, 1);
     const hk = this.huntK * this.huntK * (3 - 2 * this.huntK);
-    const cO = camAt(CAM_OPEN), cC = camAt(CAM_CROWD), cH = camAt(CAM_HUNT, true), ck = camStep().k; // (live: read every frame)
+    const cO = camAt(CAM_OPEN), cC = camAt(CAM_CROWD, false, true), cH = camAt(CAM_HUNT, true), ck = camStep().k; // (live: read every frame)
     let want = [cO[0] + (cC[0] - cO[0]) * inCrowd, cO[1] + (cC[1] - cO[1]) * inCrowd];
     if (hk > 0) want = [want[0] + (cH[0] - want[0]) * hk, want[1] + (cH[1] - want[1]) * hk];
     const k = 1 - Math.pow(0.02, dt);

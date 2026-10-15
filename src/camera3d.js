@@ -64,14 +64,14 @@ export const cameraMethods = {
     // Aim past her into the room (she sits below centre, the space ahead reads), plus a little
     // look-ahead the way she's running.
     const la = this._look || (this._look = h.clone());
-    const ahead = 1.5, cx = -Math.sin(this.yaw) * ahead, cz = -Math.cos(this.yaw) * ahead;
+    const ahead = 1.5 * (0.5 + 0.5 * ck), cx = -Math.sin(this.yaw) * ahead, cz = -Math.cos(this.yaw) * ahead;
     const fwdX = Math.sin(this.hero.rotation.y) * 0.9, fwdZ = Math.cos(this.hero.rotation.y) * 0.9;
     const tx = h.x + cx + fwdX * (this.moving || 0), tz = h.z + cz + fwdZ * (this.moving || 0);
     if (snap) la.set(tx, h.y, tz);
     la.x += (tx - la.x) * Math.max(0.1, k * 0.7);
     la.z += (tz - la.z) * Math.max(0.1, k * 0.7);
     la.y = h.y;
-    this.cam.lookAt(la.x, la.y + 0.55 + (1 - ck) * 0.5, la.z); // (closer steps aim a little higher: she stays below centre)
+    this.cam.lookAt(la.x, la.y + 0.55, la.z);
     if (st.intox > 30) {
       const k = (st.intox - 30) / 70;
       this.cam.rotation.z += Math.sin(this.t * 1.3) * 0.08 * k;

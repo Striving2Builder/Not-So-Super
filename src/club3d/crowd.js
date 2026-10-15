@@ -55,14 +55,15 @@ function figures() {
 
 /**
  * See-through (round 11 D5): anyone standing between the lens and her dithers out over her
- * screen-space ellipse (seeBox: centre + radii in drawing-buffer px; seeZ: her view depth; seeK: 0 = off),
+ * screen-space ellipse, and anyone within ~1.5 m of the lens thins out (seeBox: centre + radii in drawing-buffer px; seeZ: her view depth; seeK: 0 = off),
  * so the crowd never covers her, whatever the Camera setting. One discard, no extra draws.
  */
 const SEE_GLSL = `uniform vec4 seeBox; uniform float seeZ, seeK;
 bool seeCut(float z){
   if (seeK <= 0.0 || z > seeZ - 0.2) return false;
   vec2 q = (gl_FragCoord.xy - seeBox.xy) / seeBox.zw;
-  float a = (1.0 - smoothstep(0.55, 1.0, dot(q, q))) * smoothstep(0.2, 0.9, seeZ - z) * seeK;
+  float a = (1.0 - smoothstep(0.55, 1.0, dot(q, q))) * smoothstep(0.2, 0.9, seeZ - z);
+  a = max(a, smoothstep(1.9, 0.9, z) * 0.85) * seeK;   // (and anyone right at the lens thins out: the close steps)
   return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < a;
 }
 `;
