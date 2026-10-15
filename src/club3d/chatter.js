@@ -13,12 +13,12 @@ import { INTOX_HAZE } from '../state.js';
 
 const ATMOS = {
   good: ['This DJ is insane!', 'I love this song!', 'Best night ever!', 'Is that… Supergirl? No way!', 'Somebody said Supergirl\'s here!', 'Turn it UP!'],
-  mid: ['Who\'s the girl in the cape?', 'Drinks are watered down again.', 'My feet are killing me.', 'Where\'s Jess? She had my phone.', 'Two more songs, then we go.'],
-  bad: ['Ugh. The drunk superhero.', 'Hide your drinks, Supergirl\'s here.', 'Didn\'t she pass out on the news?', 'Ask her for a selfie. For the memes.'],
+  mid: ['Who\'s the girl in the little red mini skirt?', 'Drinks are watered down again.', 'I dare you to reach up her slutty skirt', 'I think i saw some stains on her S', 'Two more songs, then we go.'],
+  bad: ['Ugh. The drunk superslut.', 'Hide your drinks, Supergirl\'s here.', 'Didn\'t the news show an upskirt of her?', 'Ask her for a selfie. For the memes.'],
 };
 const REACT = {
-  high: ['She\'s wasted!', 'Is Supergirl… drunk?', 'Somebody get her some water…', 'Whoa, careful!'],
-  dance: ['Go off, cape!', 'She can DANCE!', 'Woooo!', 'Yes, girl!'],
+  high: ['She\'s wasted!', 'Is Supergirl… drunk?', 'Somebody get her some water…', 'Whoa, Supergirl has dead hooker eyes!'],
+  dance: ['Shake your tits, Sups', 'She can DANCE!', 'Woooo!', 'Yes, girl!'],
   alert: ['Someone get security…', 'She\'s snooping around.', 'Why is she staring at the bouncers?'],
 };
 const OFFERS = [

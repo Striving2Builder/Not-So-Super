@@ -45,6 +45,7 @@ judging blind side-by-side against the AAA games, is wowed (the bar is below).
 | L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | **L-1: NOT YET**: 0/8 pairs, vs AAA 2.5, vs HTML5 6, feel 5.5 (`critiques/r11/L-1.md`) | **merged**: readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
 | V club variety | `src/club3d/`: `plan.js`, `events.js`, `casework.js`, `chatter.js`, `backrooms.js`, `office.js`, `vip.js`, `rooms.js`, `build.js`, `dressing.js`, `vices.js`, `undercover.js`; `src/nightclub/cases/`; new `src/club3d/casegen.js` (+ data files); `CLUB_CASE_LABELS` in `data.js`; `clubCase` in `overworld.js` |
 | F travel | `src/overworld.js` (not the camera), `src/airevents.js`, `src/paparazzi.js`, `src/nav.js`, `src/flightmarks.js`, `src/flightfx3d.js`, `src/polaroids.js` strays, the sightings in `src/act/act.js`, `src/airspace.js`, `src/flightaudio.js`, new flight-moment files |
+| D device fixes (2026-10-14) | D1 `src/club3d/struggle.js` · D2 `src/club3d/danger.js` (+ `formKnot` in `casebeats.js`) · D3 the cages in `build.js` + `story.js` · D4 `src/cape.js`, `src/capefly3d.js`, `src/herolook3d.js`, `src/hero3d.js` · D5 the camera in `club3d.js` `render()`, `zonekit.js` camera constants, the crowd dither in `crowd.js` |
 | director | `style.css` (append per-track blocks headed `/* === r11 <track> === */`), `ui.js`, `comic.js`, `index.html`, `settings.js` (additive keys), `sfx.js` (additive), this file, STATUS.md |
 
 L and V share `src/club3d/`. When V needs a per-visit knob in an L file (bouncer style, crowd density),
@@ -90,7 +91,7 @@ the user.
   `shots/keys/`. Critic reports go to `docs/polish/critiques/r11/<track>-<n>.md` on phase-2.
 
 ## Harness ports
-T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and critics 8951–8959.
+T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and critics 8951–8959 · D 8961–8969.
 
 ## Director protocol (each loop tick)
 1. Read the board. For each running agent that has reported: review its report and handoff, merge its
@@ -102,25 +103,29 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
 4. After merges: push `phase-2`. Publishing to `main` and the `testdrive-*` tags only when the user asks.
 5. Keep this board current after every merge or decision. Stop the loop when every track is done.
 
-## Board (paused 2026-10-13 after publishing testdrive-2026-10-13 to main; resume tomorrow)
+## Board (paused 2026-10-13 after publishing testdrive-2026-10-13 to main; 2026-10-14: track D queued first)
 | Track | Branch | Round | Last critic | State |
 |---|---|---|---|---|
 | T tech debt | `worktree-agent-a047ac9311b1f985f` | 1 done | n/a (regression pack `shots/r11T-pack/`) | **merged** (78030b3): v1 + v2 gone, -6,052 lines, -176 KB JS at startup, 0 errors in every area |
 | F travel | `worktree-agent-a4e919b8e12914483` | 1 done | not yet run | **merged** (a6f223a): moment director, air events in 3D, impostor rooftop chase. **F-1: NOT YET**: 1/8 (tie), vs AAA 3, vs HTML5 6, feel 4; commute ~85% dead air (`critiques/r11/F-1.md`) |
 | L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | **L-1: NOT YET**: 0/8 pairs, vs AAA 2.5, vs HTML5 6, feel 5.5 (`critiques/r11/L-1.md`) | **merged**: readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
 | V club variety | `r11-variety` | 1 done | not yet run (pack in that worktree's `shots/r11V-1/`: gen1-8 frames + strips) | **merged** (a17368d): casegen (8 suspects × 6 clue types × 5 twists), crowd scandal beats (shots, gotcha selfie, planted glass, ringed in, GONE WILD? headline, snapper, morning paper); 8 gen + 21 old flows, 0 errors; +0.8% calls, +5-10% during a beat. Weak: the knot is hard to read at phone size |
+| D device fixes | (none yet) | queued | n/a (the user's phone test) | **queued 2026-10-14**, from the user's device test: D1 S-shield struggle, D4 Supergirl look (wave 1); D2 idle crowd + D3 cage dance (one builder), D5 camera distance setting (wave 2). Specs under "Device test fixes" below |
 | refs scout | done 2026-10-13 | n/a | n/a | **built**: `club3d/` 12 (Hitman ×4, Cyberpunk ×2, GTA V, Yakuza ×2, LEGO ×2…), `travel/` 12 (Spider-Man, Arkham Knight, LEGO); all ≥1280 px. Gaps: no Hitman club/Iceberg Lounge, few dancefloor-with-guards shots, mostly daytime travel |
 
 ## Next (in order, each one a small fresh agent from its handoff file)
+0. **Device test fixes first (user, 2026-10-14; specs below).** Wave 1 = D1 + D4 (no shared files).
+   Wave 2 = D2 + D3 as one club-floor builder, alongside D5. Then a `testdrive-*` tag for the phone (on the
+   user's go). Then resume at step 3 below.
 1. ~~Merge L~~ done 2026-10-13.
 2. ~~Reference pools~~ done 2026-10-13 (README sections in `docs/references/README.md`).
 3. **First blind critics** (L done: see L round 2 below) for L and F (one fresh critic each, 8 pairs + strips): needs each track's critic
    pack (`club3d.js --label r11L-<n>`; `travel.js --label r11F-1` + `--commute --secs 180 --every 6`).
 3b. **L round 2** (fresh builder from `loop-r11.md`, after V merges: both in `src/club3d/`), from L-1:
-   1) dither out crowd figures between camera and her (shader discard near her screen pos);
+   1) ~~crowd dither~~ moved to D5 (2026-10-14);
    2) crowd variety: 8-tone palette lifted off black, 3-4 head/hair variants, scale/lean, phase offsets;
    3) floor: beat-tinted LED tile canvas texture, light pools, blob shadows (the KO'd bouncer floats);
-   4) cape points straight up (pairs 2/7/8): clamp ~70° + damping; 5) "spotted" as an event: clear
+   4) ~~cape clamp~~ moved to D4 (2026-10-14); 5) "spotted" as an event: clear
    bubbles/tips, brief slow-mo, red vignette, CCTV of her on the stage screen, "LOST THEM" stamp;
    6) show the grab in-world before the struggle panel; 7) HUD diet: "GET CLOSER" overlaps the title
    card, one transient layer at a time, slim stat bars; 8) X-ray: nearest 3 tags, de-overlap, icons,
@@ -136,6 +141,8 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
    skim bonus); offers as a flare she flies into. 4) speed lines + FOV kick on BOOST (lens, not camera).
    5) one toast at a time. 6) land wins/losses (freeze + SAVED!/ESCAPED! panel). 7) streamlined cruise
    pose, 15% smaller. 8) facade repulsion + fade. 9) directional captions. 10) daytime city texture.
+   Plus Act 2's first flight piece (docs/design/act2.md): a drug stash on a rooftop, as one of the
+   flight-native beats (perch to take it: intoxication + a memory flash on the LIVE feed).
    Harness first: in `--commute` the bot stays perched after a won rescue (kitten), so a
    180 s run logs no offers; `impostor` was "never offered" in the full run but won with `--only faller,impostor` (run-order/act state). Then courier-van tail (trail + warehouse gate), Polaroids blowing off a roof, super-hearing
    street rescue, Puzzle Maker riddle chain, news chopper; check the impostor's knockoff colours.
@@ -143,6 +150,54 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
    building engine, `NightCase` → asylum's); harness tidy (`premade3d` → `clubs`).
 7. ~~Ask the user~~ deleted 2026-10-13 (user OK): the 28 MB of assets (`assets/clubs/*`, 2 plates; list in
    `docs/polish/handoff/tech-r11.md`)?
+
+## Device test fixes (track D, from the user's device test, 2026-10-14)
+One small fresh agent per job (credit-lean rules below), handoff `docs/polish/handoff/d<n>-r11.md`,
+done = the listed harness flows with 0 errors, perf within 5%, frames in the handoff. The user owns
+the crowd's text arrays (`GROPE`, `LAUGH`, `SHOT` in `danger.js`; `ATMOS`, `REACT` in `chatter.js`;
+the beats' lines in `casebeats.js`) and may edit them by hand: add new lines, never rewrite theirs.
+
+- **D1 S-shield struggle** (`struggle.js`, a `/* === r11 D === */` style.css block). The pad is the S
+  on her chest, cropped from the user's photo: `assets/ui/s_shield.webp` (source:
+  `docs/references/user/sg-classic-greenscreen.jpg`, local). It takes the ring's spot and footprint;
+  never cover more of the clip than the ring did. The photo is soft (~234×160 source px), so a crisp SVG
+  ink guide sits on top: the S stroke as a ~40-point polyline fitted to the photo, a glowing start dot,
+  a trail that fills as she traces. A trace scores while the thumb stays inside a corridor (~14% of the
+  pad) moving forward along the S; either end can start. Each full trace: "I'm Supergirl!" (bubble,
+  jolt, punch sound). Off the corridor or backtracking: "No… never… you won't get away with this." and
+  only that trace resets (finished ones stay banked); standing still drains the current trace. Lines
+  in `SAY_WIN` / `SAY_MISS` at the top. Same `struggle()` API (callers: story.js, sedation.js,
+  flashpoint.js, hotel.js, ballroom.js). Normal 3 traces / 12 s, hard 4 / 14 s, winnable on touch;
+  keyboard keeps the WASD roll. `window.__struggle` gains `trace()`. Flows: a synthetic S-trace wins
+  normal and hard; club3d.js + act.js.
+- **D2 The crowd closes in when she stands still** (`danger.js`; generalise `formKnot` in
+  `casebeats.js` so it runs outside generated cases). After ~4 s still on the floor (not dancing, not
+  in a room, not busy) the nearest 4–8 dancers drift into a ring, phones up; the longer she stands the
+  faster the incidents (up to ~2.5×): more SNAP/FLASH, skirt flips, hands, fans/paparazzi cards in the
+  envelope. Moving ~1 m breaks the ring (no dead end). A skirt flip calls D4's `flip()` if merged.
+  Tunables `DANGER.idle { after, max, faster }`; new lines in an `IDLE` const by `GROPE`. Flow: `idle`.
+- **D3 Cage dance (the Gilded Cage)** (`build.js` cage door, `story.js`; reuse `vip.js danceGame`).
+  The empty cage (index 0, door open): "Dance in the cage" → onto the plinth, the door swings shut,
+  the crowd gathers with phones, the on-the-beat dance. −8 rep (`CAGE.rep`), a dance card, a LIVE feed
+  line. Tap to step out any time; again after 20 s; the bouncers ignore her while caged. Act 2's fast
+  way to a negative rep (docs/design/act2.md). Flow: `cage`.
+- **D4 Supergirl look** (`cape.js`, `capefly3d.js`, `herolook3d.js`, `hero3d.js`). Cape to mid-back in
+  the zones (`LENGTH` 1.02 → ~0.5 m, narrower hem) and in flight (`CAPE.len` and the boost/dive length
+  bumps ~halved), plus the L-1 lift clamp (~70°, damped); `?cape=long` keeps the old one. Shorter skirt
+  on every costume, Dark the most (per-skin amounts): at load, move the skirt-rect vertices (`SKIRT.uv`,
+  the same atlas on every skin) toward the waist, hem ~25–30% higher, to mid-thigh like the user's photo.
+  Check first that legs exist under the skirt; if not, do it in Blender (sg_blender / dark_blender
+  step) and flag it. Skirt flutter: a vertex-shader sway on the skirt's lower half (same UV mask),
+  driven by the cloth cape's wind (`M.setWind`) and flight speed, plus a `flip()` impulse. Shots: hero
+  lab (front/side/back, supergirl + dark), flight, club.
+- **D5 Camera distance setting, every 3D zone** (`club3d.js` `render()`, `zonekit.js` `CAM_DIST` /
+  `CAM_PITCHES`, the crowd dither in `crowd.js`; director hooks in `settings.js` + the pause menu).
+  **Camera: Far (today, default) / Medium / Close / Closest**, saved, `?camdist=`. A multiplier on
+  `CAM_OPEN` / `CAM_CROWD` / `CAM_HUNT` and the zones' `CAM_DIST`: Closest ≈ 2.6 m, pitch lower but
+  ≥ ~0.35 rad; hunted still eases out. Same fixed angle and controls (not over-the-shoulder: that's a
+  later job if the phone test asks for it). The L-1 crowd dither moves here (figures between camera and
+  her fade out). Perf: measure each step; >5% → thin the far sprite crowd at that step on
+  Balanced/Saver. Flight's chase camera untouched. Flows: club3d + act.js at Far and Closest.
 
 ## Credit-lean process (lessons from round 11; applies from round 12)
 - **Never resume a long builder transcript** (a resume re-sends its whole history: track T alone used
@@ -174,3 +229,7 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
   storyline about catching her "being naughty" whose photo can be real, fake (staged, lookalike,
   doctored) or a setup. PG-13, no new clips. Next: step 3 critics for L and F once the pools land.
 - 2026-10-13: refs pools built; L-1 NOT YET (0/8, 2.5/6/5.5); F-1 NOT YET (1/8, 3/6/4); V round 1 merged.
+- 2026-10-14: the user's device test → track D (5 jobs, specs above), first in line. The user drafted
+  Act 2: docs/design/act2.md (boss = the impostor cult's leader in Supergirl's stolen suit; 5 finds per
+  suit piece; the crop top built in Blender from the user's reference image). Pulled early: the S-shield
+  struggle (D1), the cage dance (D3), a rooftop drug stash (F round 2). Waiting on the user's go for wave 1.

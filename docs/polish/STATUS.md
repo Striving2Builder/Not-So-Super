@@ -245,6 +245,7 @@ dodging guard flashlight cones; user refs: foggy club, laser beams, DJ booth, ba
 8. Apply the `src/` folder reorganisation (ARCHITECTURE.md) when no builders are running.
 
 ## Waiting on the user
+- **Act 2 (drafted 2026-10-14, [design/act2.md](../design/act2.md)):** the crop-top reference image, the cult leader's name, the drug's name. The user's device-test fixes are track D in [ROUND11.md](ROUND11.md), waiting on the go for wave 1.
 - Video clips in `assets/video/AsylumTV/`, `assets/video/Asylum/` and `assets/video/Billboards/`, then run `node tools/build_video_manifest.js`. Until then the screens show static.
 - A real-phone check of the LIVE panel (headless black box) and of the hero's sharpness in flight.
 - The iPad model and which build was tested (asked 2026-10-03, unanswered); `?perf=1` numbers from the next test build.

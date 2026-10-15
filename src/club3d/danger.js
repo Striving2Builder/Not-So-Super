@@ -19,9 +19,9 @@ export const DANGER = {
   againAfter: [60, 90], // until another man with a spiked glass turns up
 };
 
-const GROPE = ['Hey! Who was that?!', 'Who flipped my little red mini skirt?!', 'Hands OFF!', 'Did someone just pinch me?!', 'Okay, WHO did that?', 'My cape! Let go of my cape!'];
-const LAUGH = ['Ha! Nice skirt, cape!', 'Whoops!', 'Wasn\'t me!', 'Supergirl\'s got a red one!', 'Hahaha!'];
-const SHOT = ['Drink! Drink! Drink!', 'Down it, hero!', 'One for the Girl of Steel!', 'Open up, cape!'];
+const GROPE = ['Hey! Who was that?!', 'Who flipped my little red mini skirt?!', 'Hands OFF!', 'Did someone just rub me up?!', 'Okay, WHO did that?', 'OMG, Why am I wet?!'];
+const LAUGH = ['Ha! Nice red mini skirt, cape!', 'Nice tent over that S', 'Wasn\'t me!', 'Supergirl\'s got a red one!', 'Hahaha!'];
+const SHOT = ['Drink! Drink! Drink!', 'Down it, hero!', 'One for the Girl of Steel!', 'Take it, cape!'];
 
 let beamMat = null;
 function torchBeam() {
