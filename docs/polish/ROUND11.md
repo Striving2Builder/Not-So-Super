@@ -285,3 +285,8 @@ the beats' lines in `casebeats.js`) and may edit them by hand: add new lines, ne
   plays car/rings/kitten/faller to wins with approach frames, commute boosts; flybench ±3.5% (noise). The director runs
   its critic pack (r11F2a + 180 s commute). L2b: WIP saved (b10883d, unverified); the director runs its flows, then a
   fresh agent finishes from `handoff/l2b-r11.md`.
+- 2026-10-15: r11F2a pack on phase-2: all 7 moments won, 0 errors. 180 s commute: 3 offers in the first 68 s (rings,
+  impostor, kitten: ~1 per 20 s), then the bot sat perched from 72 s (the post-rescue perch bug is back in `--commute`:
+  F2b fixes it first). The critic's commute strip is cropped to 0-66 s. F-2 critic running. L2b flows by the director
+  on b10883d: 6/6, 0 errors, calls +3-4%; idle-ring bubbles still overlap, near-lens ring members fill the frame.
+  L2b-finish running (~120k budget).
