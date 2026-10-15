@@ -276,3 +276,7 @@ the beats' lines in `casebeats.js`) and may edit them by hand: add new lines, ne
   time (+ director: `clearToasts()` on zone change), verdict panels, harness commute fixes. Smoke on the merge: travel
   impostor/faller won, rings lost (bot); club rave touch/caught/idle; 0 errors. The black box is in the WebGL canvas
   (not the video panel). F2a-finish running: black box, bot tuning, perf A/B, critic pack r11F2a.
+- 2026-10-15: L2a merged (42a6e7f): crowd colour/hair/heads/scale/lean, phone-up pose (`p.phone`), LED floor + pools + blob
+  shadows (`floor.js`), dressed DJ booth (`booth.js`); +1-1.5% calls, +2.3-2.6% tris over 5 rooms. Merge smoke: rave +
+  centre, stealth/touch/caught/idle/cage, 0 errors. Pack `shots/r11L2a/` in its worktree. Still mannequins (stick
+  limbs, plain heads); idle-ring bubbles overlap (as the user saw). L2b launched.
