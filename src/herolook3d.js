@@ -7,6 +7,20 @@ import * as THREE from 'three';
 import { comic, gradMap } from './look3d.js';
 import { HERO_SKIN } from './settings.js';
 
+/**
+ * How far her skirt's hem rises, per skin (model metres; THE tunable for the user's phone notes).
+ * The modelled hem sits at 0.80 m, mid-thigh (hip joint 1.03, knee 0.56, waist 1.20); 0.12 puts it at
+ * 0.92, upper thigh, a bit above the reference photo (in game it reads longer than it is). The legs
+ * are modelled under it, so nothing opens up. ?skirt=<m> overrides every skin (?skirt=0: as modelled).
+ */
+export const SKIRT_TRIM = { supergirl: 0.12, classic: 0.12, ponytail: 0.12, dark: 0.135 };
+/**
+ * Her skirt's flutter (morph targets on the skirt's own vertices, so every material, the ink hull and
+ * the skinning carry it): sway: hem shift (m) at full wind; flip: the flare angle (deg) of flip();
+ * ripple: [hem wave (m), lobes round the hem]; spring: flip() spring [stiffness, damping ratio, kick].
+ */
+export const SKIRT_SWAY = { sway: 0.06, flip: 80, ripple: [0.028, 3], spring: [60, 0.42, 11] };
+
 /** Costume read: saturation, self-light (fraction of albedo), cyan-white rim (only the silhouette). */
 export const SUIT = { sat: 1.45, self: 0.32, rim: [0.62, 0.95, 1.0], rimK: [1.3, 2.4], rimEdge: [0.82, 0.92] }; // rimK: open sky / against dark walls; rimEdge: its fresnel band
 /**
@@ -131,6 +145,7 @@ export function hullGeometry(geo) {
   for (let i = 0; i < idx.length; i += 3) if (!out(idx[i])) keep.push(idx[i], idx[i + 1], idx[i + 2]);
   const g = new THREE.BufferGeometry();
   for (const k in geo.attributes) g.setAttribute(k, geo.attributes[k]);
+  g.morphAttributes = geo.morphAttributes; g.morphTargetsRelative = geo.morphTargetsRelative; // (the skirt's flutter)
   g.setIndex(keep);
   g.boundingSphere = geo.boundingSphere; g.boundingBox = geo.boundingBox;
   return (geo.userData.hull = g);
@@ -153,4 +168,156 @@ export function dressHero(root, opts, skip = []) {
 export function inkHull(root) {
   root.traverse((o) => { if (o.userData.ink && o.isSkinnedMesh && o.geometry.index) o.geometry = hullGeometry(o.geometry); });
   return root;
+}
+
+const _q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+const TRIM = _q && _q.has('skirt') && Number.isFinite(+_q.get('skirt')) ? +_q.get('skirt') : SKIRT_TRIM[HERO_SKIN] ?? 0.12;
+
+/**
+ * Shorten her skirt (SKIRT_TRIM) and give it its flutter shapes: once per loaded geometry, at load.
+ * The skirt's vertices (its atlas rect, below the chest) squeeze up toward the waist, flare kept; each
+ * takes the skin weights of the original skirt vertex nearest its new spot, so walking doesn't stretch
+ * it. Then five relative morph targets: sway x, sway z, flip (the panels swing out and up round the
+ * belt), ripple sin / cos (a wave round the hem).
+ */
+export function shapeSkirt(mesh) {
+  const geo = mesh.geometry;
+  if (geo.userData.skirt !== undefined || !geo.attributes.uv || !geo.index) return;
+  const pos = geo.attributes.position, nrm = geo.attributes.normal, uv = geo.attributes.uv, si = geo.attributes.skinIndex, sw = geo.attributes.skinWeight;
+  const [u0, v0, u1, v1] = SKIRT.uv, used = new Uint8Array(pos.count), list = [];
+  for (const i of geo.index.array) used[i] = 1;
+  for (let i = 0; i < pos.count; i++) {
+    const u = uv.getX(i), v = uv.getY(i);
+    if (used[i] && u > u0 && u < u1 && v > v0 && v < v1 && pos.getY(i) < 1.3) list.push(i);
+  }
+  geo.userData.skirt = null;
+  if (list.length < 50) return;
+  let top = -1e9, hem = 1e9;
+  for (const i of list) { top = Math.max(top, pos.getY(i)); hem = Math.min(hem, pos.getY(i)); }
+  const len0 = top - hem, trim = Math.min(Math.max(TRIM, -0.1), len0 * 0.6), s = (len0 - trim) / len0, len = len0 - trim;
+  // the trim: squeeze toward the waist (normals by the inverse transpose), weights from the nearest original
+  const n = list.length, op = new Float32Array(n * 3), oi = [], ow = [];
+  list.forEach((i, k) => {
+    op[k * 3] = pos.getX(i); op[k * 3 + 1] = pos.getY(i); op[k * 3 + 2] = pos.getZ(i);
+    if (si && sw) { oi.push([si.getX(i), si.getY(i), si.getZ(i), si.getW(i)]); ow.push([sw.getX(i), sw.getY(i), sw.getZ(i), sw.getW(i)]); }
+  });
+  if (trim) list.forEach((i, k) => {
+    const y = top - (top - op[k * 3 + 1]) * s, x = op[k * 3], z = op[k * 3 + 2];
+    pos.setY(i, y);
+    if (nrm) { const nx = nrm.getX(i), ny = nrm.getY(i) / s, nz = nrm.getZ(i), l = Math.hypot(nx, ny, nz) || 1; nrm.setXYZ(i, nx / l, ny / l, nz / l); }
+    if (!oi.length) return;
+    let best = k, bd = 1e9;
+    for (let j = 0; j < n; j++) { const d = (op[j * 3] - x) ** 2 + (op[j * 3 + 1] - y) ** 2 + (op[j * 3 + 2] - z) ** 2; if (d < bd) { bd = d; best = j; } }
+    si.setXYZW(i, ...oi[best]); sw.setXYZW(i, ...ow[best]);
+  });
+  pos.needsUpdate = true; if (nrm) nrm.needsUpdate = true; if (si) si.needsUpdate = true; if (sw) sw.needsUpdate = true;
+  if (trim > 0) briefs(mesh, list);
+  // the flutter shapes, weighted by depth below the waist (the belt stays put)
+  let cx = 0, cz = 0, cn = 0;
+  for (const i of list) if (pos.getY(i) > top - len * 0.3) { cx += pos.getX(i); cz += pos.getZ(i); cn++; }
+  cx /= cn || 1; cz /= cn || 1;
+  const S = SKIRT_SWAY, phi = (S.flip * Math.PI) / 180, [R, lobes] = S.ripple;
+  const T = Array.from({ length: 5 }, () => new Float32Array(pos.count * 3));
+  for (const i of list) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), t = (top - y) / len;
+    const w = Math.pow(Math.min(1, Math.max(0, (t - 0.12) / 0.88)), 1.5), wb = Math.min(1, Math.max(0, (t - 0.08) / 0.3));
+    let rx = x - cx, rz = z - cz; const rl = Math.hypot(rx, rz) || 1; rx /= rl; rz /= rl;
+    const th = Math.atan2(rz, rx), d = (top - y) * wb, o = i * 3;
+    T[0][o] = S.sway * w;
+    T[1][o + 2] = S.sway * w;
+    T[2][o] = rx * d * Math.sin(phi); T[2][o + 1] = d * (1 - Math.cos(phi)); T[2][o + 2] = rz * d * Math.sin(phi);
+    const a = Math.sin(lobes * th) * R * w, b = Math.cos(lobes * th) * R * w;
+    T[3][o] = rx * a; T[3][o + 1] = a * 0.6; T[3][o + 2] = rz * a;
+    T[4][o] = rx * b; T[4][o + 1] = b * 0.6; T[4][o + 2] = rz * b;
+  }
+  geo.morphAttributes.position = T.map((a) => new THREE.BufferAttribute(a, 3));
+  geo.morphTargetsRelative = true;
+  geo.userData.skirt = 0; // (index of its first morph target)
+  mesh.updateMorphTargets();
+}
+
+/**
+ * Under the shorter skirt her briefs show, and most atlases (Classic, Ponytail, Dark, both renders)
+ * paint them as skin (the long skirt hid them): her pelvis below the belt (the vertices her hips bone
+ * leads, so the leg holes follow the thighs' weights) takes the suit fabric's UVs from her abdomen
+ * just above the belt, at the same angle round her body.
+ */
+function briefs(mesh, skirt) {
+  const geo = mesh.geometry, pos = geo.attributes.position, uv = geo.attributes.uv, si = geo.attributes.skinIndex, sw = geo.attributes.skinWeight;
+  const bones = mesh.skeleton && mesh.skeleton.bones;
+  if (!bones || !si || !sw) return;
+  const hipJ = new Set(); bones.forEach((b, j) => { if (/Hips$/.test(b.name)) hipJ.add(j); });
+  const inSkirt = new Uint8Array(pos.count); for (const i of skirt) inSkirt[i] = 1;
+  const used = new Uint8Array(pos.count); for (const i of geo.index.array) used[i] = 1;
+  const hipW = (i) => { let w = 0; for (let k = 0; k < 4; k++) if (hipJ.has(si.getComponent(i, k))) w += sw.getComponent(i, k); return w; };
+  let cx = 0, cz = 0, cn = 0;
+  for (const i of skirt) { cx += pos.getX(i); cz += pos.getZ(i); cn++; }
+  cx /= cn; cz /= cn;
+  const ang = (i) => Math.atan2(pos.getZ(i) - cz, pos.getX(i) - cx), src = [];
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    if (used[i] && !inSkirt[i] && y > 1.24 && y < 1.3 && Math.abs(pos.getX(i) - cx) < 0.2) src.push([ang(i), uv.getX(i), uv.getY(i)]);
+  }
+  if (src.length < 8) return;
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    if (!used[i] || inSkirt[i] || y < 0.78 || y > 1.1 || Math.abs(pos.getX(i) - cx) > 0.24 || hipW(i) < 0.45) continue;
+    const a = ang(i);
+    let best = src[0], bd = 9;
+    for (const s of src) { const d = Math.abs(Math.atan2(Math.sin(a - s[0]), Math.cos(a - s[0]))); if (d < bd) { bd = d; best = s; } }
+    uv.setXY(i, best[1], best[2]);
+  }
+  uv.needsUpdate = true;
+}
+
+const _p = new THREE.Vector3(), _d = new THREE.Vector3(), _m3 = new THREE.Matrix3();
+/**
+ * Drives one HeroModel's skirt shapes: the air on her (the cloth cape's wind, in her frame, plus her
+ * own motion) sways it and sets a ripple travelling round the hem (faster with more air); flip() is
+ * a short upward flare on a damped spring that settles in about a second.
+ */
+export class SkirtSway {
+  constructor(root) {
+    this.root = root; this.meshes = []; this.n = 0;
+    root.traverse((o) => { if (o.isSkinnedMesh && o.geometry.userData.skirt != null && o.morphTargetInfluences) this.meshes.push(o); });
+    this.v = new THREE.Vector3(); this.air = new THREE.Vector3(); this.last = null;
+    this.k = [0, 0, 0, 0, 0]; this.fx = 0; this.fv = 0; this.ph = 0; this.t = Math.random() * 9;
+  }
+
+  /** A flare up and out (power ~1: a full flip; it peaks in ~0.15 s and settles in ~1 s). */
+  flip(power = 1) { this.fv += SKIRT_SWAY.spring[2] * power; }
+
+  /** wind: the air on her in her own frame (+z = the way she faces), or null (her motion only). */
+  step(dt, wind = null) {
+    if (!this.meshes.length || !(dt > 0)) return;
+    if (this.n++ % 30 === 0) for (const m of this.meshes) for (const c of m.children) if (c.userData.ink && c.morphTargetInfluences) c.morphTargetInfluences = m.morphTargetInfluences; // (her ink hull: same shapes)
+    // her own motion, in her frame (model metres/s): the air streams the other way
+    this.root.getWorldPosition(_p);
+    if (this.last) {
+      _d.subVectors(_p, this.last).applyMatrix3(_m3.setFromMatrix4(this.root.matrixWorld).invert()).divideScalar(dt);
+      if (_d.lengthSq() < 1e6) this.v.lerp(_d, Math.min(1, dt * 8)); // (a teleport isn't a gust)
+    } else this.last = new THREE.Vector3();
+    this.last.copy(_p);
+    this.air.set(0, 0, 0); if (wind) this.air.copy(wind);
+    this.air.addScaledVector(this.v, -0.6);
+    const mag = this.air.length(), g = 1 - Math.exp(-mag / 6), dx = mag ? this.air.x / mag : 0, dy = mag ? this.air.y / mag : 0, dz = mag ? this.air.z / mag : 0;
+    this.t += dt;
+    // the flip: a damped spring kicked by flip()
+    const [K, Z] = SKIRT_SWAY.spring, h = Math.min(dt, 1 / 30);
+    this.fv += (-K * this.fx - 2 * Z * Math.sqrt(K) * this.fv) * h; this.fx += this.fv * h;
+    this.ph += dt * (2.5 + 9 * g);
+    const amp = 0.15 + 0.85 * g, tgt = [
+      dx * g * 0.7 + Math.sin(this.t * 1.7) * 0.12 * g,
+      dz * g * 0.7 + Math.sin(this.t * 2.3) * 0.1 * g,
+      0.04 + Math.max(0, dy) * g * 0.25 + 0.06 * g,
+    ];
+    const e = Math.min(1, dt * 6);
+    for (let j = 0; j < 3; j++) this.k[j] += (tgt[j] - this.k[j]) * e;
+    this.k[3] = amp * Math.cos(this.ph); this.k[4] = amp * Math.sin(this.ph);
+    const flare = Math.min(1.1, Math.max(-0.05, this.k[2] + this.fx));
+    for (const m of this.meshes) {
+      const I = m.morphTargetInfluences;
+      I[0] = this.k[0]; I[1] = this.k[1]; I[2] = flare; I[3] = this.k[3]; I[4] = this.k[4];
+    }
+  }
 }
