@@ -387,7 +387,7 @@ export class Club3D extends Special3D {
     // her, the screens are on her) it opens up: further back, aimed up the room, so the chase and the
     // DJ wall showing her are both in frame
     const inCrowd = clamp((this.cover - 1) / 4, 0, 1) * (this.room ? 0.5 : 1);
-    const hunted = !this.room && (this.cctvK > 0.3 || this.guards.some((gd) => gd.st === 'alert'));
+    const hunted = !this.room && ((this.cctvK > 0.3 && !this.camBeat) || this.guards.some((gd) => gd.st === 'alert')); // (r11 V2 hook: a beat's own screens aren't a hunt)
     this.huntK = clamp((this.huntK || 0) + (hunted ? dt * 1.4 : -dt * 0.7), 0, 1);
     const hk = this.huntK * this.huntK * (3 - 2 * this.huntK);
     const cO = camAt(CAM_OPEN), cC = camAt(CAM_CROWD, false, true), cH = camAt(CAM_HUNT, true), ck = camStep().k; // (live: read every frame)

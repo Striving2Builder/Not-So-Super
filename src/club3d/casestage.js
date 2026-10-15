@@ -101,9 +101,9 @@ export const stageMethods = {
 
   /** Points the club's screens (cctv.js) at someone else for a while, with a caption of its own. */
   screensOn(pos, label, secs = 5) {
-    this.camSubject = pos; this.camLabel = label;
+    this.camSubject = pos; this.camLabel = label; this.camBeat = true; // (camBeat: the camera stays on her, not the hunt framing)
     this.cctvHold = Math.max(this.cctvHold || 0, secs);
-    this.wait(secs).then(() => { if (this.camSubject === pos) { this.camSubject = null; this.camLabel = null; } });
+    this.wait(secs + 0.8).then(() => { if (this.camSubject === pos) { this.camSubject = null; this.camLabel = null; this.camBeat = false; } });
   },
 
   // ------------------------------------------------------------------ the runner

@@ -1,5 +1,5 @@
 // r11 V2 (track V): each main room its own place. Its own air (fog, background and key light colour,
-// the sky light's tint) and one landmark you see from the door: the Warehouse Rave's mirror ball,
+// the sky light's tint) and one landmark you see from the door: the Warehouse Rave's giant neon triangle,
 // the Mezzanine's gold chandelier, the Pit's fire ring, Centre Stage's halo over the round booth,
 // the Tunnel's subway roundel. One merged mesh each (≤2 draws), no new lights. dressHall calls it.
 import * as THREE from 'three';
@@ -23,12 +23,10 @@ function paint(g, hex) {
 }
 const at = (g, x, y, z, rx = 0, ry = 0) => { g.rotateX(rx); g.rotateY(ry); g.translate(x, y, z); return g; };
 
-function mirrorBall(H, F) {
-  const ball = new THREE.IcosahedronGeometry(1.25, 2).toNonIndexed(), n = ball.attributes.position.count, col = new Float32Array(n * 3);
-  for (let f = 0; f < n / 3; f++) { const v = [1, 0.85, 0.6, 0.95, 0.75][(f * 7) % 5]; for (let j = 0; j < 3; j++) col.set([v, v, v * 1.04], (f * 3 + j) * 3); }
-  ball.setAttribute('color', new THREE.BufferAttribute(col, 3)); ball.deleteAttribute('normal'); ball.deleteAttribute('uv');
-  const y = H - 1.9, cable = paint(new THREE.CylinderGeometry(0.03, 0.03, 1.9, 4).toNonIndexed(), 0x777788);
-  return { geos: [at(ball, F.x, y, F.z), at(cable, F.x, y + 1.6, F.z)], spin: true };
+// (every hall already has a small mirror ball: the rave's landmark is a giant neon triangle, turning)
+function neonTriangle(H, F) {
+  const y = H - 1.9, tri = (r, t, c) => paint(new THREE.TorusGeometry(r, t, 4, 3).toNonIndexed(), c);
+  return { geos: [at(tri(2.6, 0.13, 0x27e0ff), F.x, y, F.z, 0, 0), at(tri(1.9, 0.09, 0xff2fd0), F.x, y, F.z, 0, Math.PI), at(paint(new THREE.CylinderGeometry(0.03, 0.03, 2.2, 4).toNonIndexed(), 0x777788), F.x, y + 2.4, F.z)], spin: true };
 }
 function chandelier(H, F) {
   const y = H - 1.6, gold = 0xffd27a, g = [paint(new THREE.TorusGeometry(3.2, 0.1, 6, 40), gold), paint(new THREE.TorusGeometry(2.1, 0.08, 6, 32), gold)].map((q) => at(q.toNonIndexed(), F.x, y, F.z, Math.PI / 2));
@@ -58,7 +56,7 @@ export function dressVenue(zn, plan) {
   if (zn.key) zn.key.color.setHex(Z.key);
   S.traverse((o) => { if (o.isHemisphereLight) o.color.setHex(Z.sky); });
   const H = V.wallH, F = V.floor;
-  const L = id === 'rave' ? mirrorBall(H, F) : id === 'mezzanine' ? chandelier(H, F) : id === 'pit' ? fireRing(H, F, V) : id === 'centre' ? halo(H, F, V) : roundel(H, V);
+  const L = id === 'rave' ? neonTriangle(H, F) : id === 'mezzanine' ? chandelier(H, F) : id === 'pit' ? fireRing(H, F, V) : id === 'centre' ? halo(H, F, V) : roundel(H, V);
   const geo = mergeGeometries(L.geos);
   if (!geo) return null;
   let m;

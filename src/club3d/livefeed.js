@@ -16,7 +16,7 @@ export const clubFeedMethods = {
     const playing = f.tick(dt);
     const high = this.g.state.intox >= INTOX_HAZE && !this.sub && !this.done;
     if (!high) {
-      if (playing && f.playing.cat === 'clubHigh') f.stop();
+      if (playing && f.playing?.cat === 'clubHigh') f.stop(); // (r11 V2: playing can outlive f.playing for a frame)
       this.feedT = Math.min(this.feedT || 0, 1.5); // (high again: it's back on almost at once)
       return;
     }
