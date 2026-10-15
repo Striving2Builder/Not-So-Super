@@ -120,6 +120,7 @@ function installBot() {
     return v;
   };
   B.react = 2.5;
+  B.seek = seek; B.nearestBand = nearestBand;
   // the harness's "slow camera": a moment's first 3 s run at 0.35× sim speed against the wall clock, so
   // the screenshots (each costs real time) catch the approach; the game itself is unchanged
   const tick0 = ow.moments.tick.bind(ow.moments);
@@ -292,6 +293,12 @@ function commuteSetup(every) {
     const legs = window.__legs, t = legs[window.__leg % 2];
     if (!ow.nav.target || Math.hypot(t.x - ow.hero.x, t.y - ow.hero.y) < 400) { window.__leg++; const n = legs[window.__leg % 2]; ow.nav.set({ x: n.x, y: n.y, name: n.name }); }
     B.band = 1;
+    // r11 F2c: a player takes the route content on her line (hoops, slipstream, pigeons, smoke)
+    const rp = M.route?.p;
+    if (rp && !rp.hit || rp?.kind === 'hoops' && rp.next < 3) {
+      const q = rp.kind === 'hoops' ? rp.hoops[rp.next] : rp.kind === 'slip' ? rp.pts[4] : rp;
+      if (q) { B.band = rp.kind === 'smoke' ? 1 : B.nearestBand(q.z); return B.seek(q.x, q.y); }
+    }
     // a long leg: BOOST in bursts (6 s of every 16), like a player in a hurry (the strip shows the speed lines)
     const tw = legs[window.__leg % 2];
     B.boost = Math.hypot(tw.x - ow.hero.x, tw.y - ow.hero.y) > 1400 && (M.clock % 16) < 6;
@@ -336,6 +343,18 @@ async function commute(browser) {
     r.log = await page.evaluate(() => window.__game.overworld.moments.log);
     r.liveSecs = +liveSecs.toFixed(1); r.timeline = timeline;
     r.offers = r.log.filter((q) => q.ev === 'offered').length;
+    // r11 F2c: moments vs route pieces, and the longest stretch of sky with nothing new offered
+    const offT = r.log.filter((q) => q.ev === 'offered').map((q) => q.t);
+    r.momentOffers = r.log.filter((q) => q.ev === 'offered' && !q.kind.startsWith('route:')).length; r.routeOffers = offT.length - r.momentOffers;
+    r.routeTaken = r.log.filter((q) => q.ev === 'taken' && q.kind.startsWith('route:')).map((q) => `${q.t}s ${q.kind}`);
+    // dead air: the longest stretch with no moment live and nothing new offered (a taken moment isn't dead air)
+    let live = 0, from = 0; r.longestGap = 0;
+    for (const q of [...r.log, { t: SECS, ev: 'end', kind: '' }]) {
+      const route = q.kind.startsWith('route:');
+      if (q.ev === 'offered' || q.ev === 'end') { if (!live) r.longestGap = Math.max(r.longestGap, q.t - from); from = q.t; if (q.ev === 'offered' && !route) live++; }
+      else if (!route && q.ev !== 'taken') { live = Math.max(0, live - 1); if (!live) from = q.t; }
+    }
+    r.longestGap = +r.longestGap.toFixed(1);
     r.commute = await page.evaluate(() => ({ commuteSecs: window.__game.overworld.moments.commute, clock: window.__game.overworld.moments.clock }));
   } catch (e) { r.fail = String(e.message || e).split('\n')[0]; }
   await ctx.close();

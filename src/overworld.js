@@ -552,7 +552,7 @@ export class Overworld {
       // (Still subject to the drunk wobble: autopilot is not a way around intoxication.)
       if (this.nav.autopilot && this.nav.target && !h.perch && Math.hypot(a.x, a.y) < 0.12) a = wobble(this.view3d ? this.view3d.autoSteer(h, this.nav.steer(h)) : this.nav.steer(h), st ? st.intox : 0, this.t); // (3D: routes round towers taller than her)
     }
-    const boost = !this.attract && inp.down('boost');
+    const boost = !this.attract && (inp.down('boost') || this.moments.burst); // (r11 F2c: a slipstream's burst)
     if (!this.attract) this.altitudeInput(inp, a);
     // a moment's swoop (DIVE onto its target) drives her for a moment; otherwise she flies
     const swoop = !this.attract && this.moments.swoop(dt);

@@ -10,6 +10,7 @@ import { banner, bannerSpot } from './hud.js';
 import { AirMoment, drawAir3d, overlayAir } from './air3d.js';
 import { ImpostorChase } from './impostor.js';
 import { frameStep, frameOff, overlayFocus } from './frame.js';
+import { RouteFX } from './route.js';
 import { BLOCK, ROAD, LOT } from '../city.js';
 import { clamp, lerp, rand, dist } from '../util.js';
 import { comic } from '../comic.js';
@@ -73,6 +74,8 @@ export class MomentDirector {
     this.sw = null; this.slowT = 0; this.scale = 1;
     this.pings = [];
     this.forced = false;
+    this.lastAny = -99;
+    (this.route || (this.route = new RouteFX(this))).reset(); // (r11 F2c: route content between offers)
   }
 
   /** The state the gates read: rank, the act, time of day. */
@@ -111,6 +114,8 @@ export class MomentDirector {
       if (m.result && (m.outro -= dt) <= 0) { m.end(); this.live = this.live.filter((q) => q !== m); }
     }
     if (this.off) return;
+    const flying0 = !ow.diving && ow.rising === null && !h.perch && !this.sw;
+    this.route.update(dt, flying0 && h.speed >= 80 && !ow.events.carry && !this.live.some((m) => !m.result && m.taken)); // (r11 F2c)
     const flying = !ow.diving && ow.rising === null && !h.perch && !this.sw;
     if (flying) this.flyT += dt;
     // a story sighting that's due goes up at once (the act's own clock paces those)
@@ -165,7 +170,7 @@ export class MomentDirector {
     this.live.push(m);
     if (quiet) return;
     const K = KINDS[m.kind];
-    this.lastAt[K?.group || m.kind] = this.clock; this.lastKind = m.kind; this.seen[m.kind] = true;
+    this.lastAt[K?.group || m.kind] = this.clock; this.lastAny = this.clock; this.lastKind = m.kind; this.seen[m.kind] = true;
     this.pings.push({ x: m.x, y: m.y, t: 0, color: m.color });
     this.note(m, 'offered');
   }
@@ -175,6 +180,9 @@ export class MomentDirector {
     if (this.log.length > 300) this.log.shift();
   }
 
+  /** r11 F2c: a slipstream's speed burst is on (the overworld boosts her). */
+  get burst() { return (this.route?.burst || 0) > 0; }
+
   has(ref) { return this.live.includes(ref); }
 
   /** Diving into a zone: the airborne stuff is someone else's problem now (no penalty). */
@@ -183,6 +191,7 @@ export class MomentDirector {
     this.live = [];
     frameOff(this.ow.view3d); this.focus = null;
     this.sw = null;
+    this.route.reset();
   }
 
   markers() { return this.live.map((m) => m.marker()).filter(Boolean); }
@@ -307,6 +316,7 @@ export class MomentDirector {
     frameStep(this, view, dt); // (r11 F2b: the focus target: lens, halo/arrow, one message lane)
     for (const m of this.live) { try { m.draw3d(kit, view); } catch (e) { console.error(e); m.result = m.result || 'lost'; } }
     drawAir3d(this, kit, view);
+    this.route.draw(kit, view, dt);
     kit.end(dt, view.scene.fog, view.sceneScale ?? 1);
     if (!kit.warmed && this.flyT > 2) kit.warm(view.cam.cam);
   }
@@ -316,6 +326,7 @@ export class MomentDirector {
     for (const m of this.live) m.overlay(ctx, P, W, H, view);
     overlayAir(this, ctx, P, W, H, view);
     overlayFocus(this, ctx, P, W, H, view);
+    this.route.overlay(ctx, P, W, H);
     const focus = this.live.filter((m) => !m.result && m.banner).sort((a, b) => (b.taken - a.taken) || (a.t - b.t))[0];
     const b = focus?.banner();
     if (b) banner(ctx, bannerSpot(W), b, this.ow.t);
