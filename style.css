@@ -850,7 +850,7 @@ body.c3-xray #xray-tint::after { content: ""; position: absolute; left: 0; right
 /* === r11 D === */
 /* D1 the S-shield struggle: the shield in the old ring's spot (pentagon ≈ the ring's disc: ~7.8k px²) */
 .c3-struggle .st-shield { position: absolute; right: calc(24px + var(--sr)); bottom: calc(24px + var(--sb)); width: 156px; height: 107px; pointer-events: none; }
-.c3-struggle .st-shield img { position: absolute; inset: 0; width: 100%; height: 100%; clip-path: polygon(14.1% 9.4%, 82.1% 5.3%, 92.3% 29.7%, 45.7% 90.3%, 4.5% 27.5%); filter: contrast(1.12) saturate(1.15); }
+.c3-struggle .st-shield img { position: absolute; inset: 0; width: 100%; height: 100%; clip-path: polygon(16.5% 9.4%, 84.2% 8.8%, 93.4% 28.1%, 88.2% 32.5%, 79.5% 40.0%, 72.6% 47.5%, 64.5% 58.8%, 55.8% 73.8%, 46.8% 88.8%, 43.8% 91.6%, 40.4% 88.8%, 31.8% 77.5%, 21.8% 62.5%, 13.0% 47.5%, 6.2% 36.2%, 4.5% 30.6%, 7.1% 25.0%, 13.9% 13.8%); filter: contrast(1.12) saturate(1.15); }
 .c3-struggle .st-shield svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .c3-struggle .sg-rim { fill: none; stroke: #0b0b12; stroke-width: 9; stroke-linejoin: round; }
 .c3-struggle .sg-lane { fill: none; stroke: rgba(0, 0, 0, .22); stroke-width: 66; stroke-linecap: round; stroke-linejoin: round; }

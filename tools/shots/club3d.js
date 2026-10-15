@@ -443,8 +443,10 @@ const GEN = (() => { const g = arg('--gen', ''); if (!g) return []; const [a, b]
         if (s.t === last) { await P.waitForTimeout(8); continue; }
         last = s.t;
         if (trace.length < 40) trace.push(`${s.got.toFixed(1)}@${s.t.toFixed(1)}`);
-        const target = (s.t - t0) * 1.0 * Math.PI * 2;
-        while (a < target) { a = Math.min(target, a + 0.9); const wob = 1 + 0.12 * Math.sin(a * 3.1); await P.mouse.move(cx + Math.cos(a) * r * wob, cy + Math.sin(a) * r * wob); }
+        // (round 11 D1: the struggle is an S trace now; its thumb input is tested by tools/shots/struggle.js,
+        // so here one S is finished per ~1.5 s of the struggle's clock, an average thumb's pace)
+        const target = Math.floor((s.t - t0) / 1.5);
+        while (a < target) { a++; await P.evaluate(() => window.__struggle?.trace()); }
       }
       await P.mouse.up();
       await P.evaluate(() => { const m = window.__game.mode; if (m._render) m.render = m._render; });
@@ -476,8 +478,8 @@ const GEN = (() => { const g = arg('--gen', ''); if (!g) return []; const [a, b]
         if (!s) break;
         if (s.t === last) { await P.waitForTimeout(8); continue; }
         last = s.t;
-        const target = (s.t - t0) * 1.3 * Math.PI * 2;
-        while (a < target) { a = Math.min(target, a + 0.9); await P.mouse.move(cx + Math.cos(a) * r, cy + Math.sin(a) * r); }
+        const target = Math.floor((s.t - t0) / 1.3); // (one S per ~1.3 s: see the touch flow)
+        while (a < target) { a++; await P.evaluate(() => window.__struggle?.trace()); }
         if (++k === 14 && n === 3) await V.strip('caught', n++);
       }
       await P.mouse.up();

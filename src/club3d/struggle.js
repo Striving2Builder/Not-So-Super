@@ -152,7 +152,7 @@ export function struggle({ clip = null, title = 'BREAK FREE!', text = '', diff =
     <div class="st-top"><h2>${title}</h2>${text ? `<div class="st-text">${text}</div>` : ''}<div class="st-time"><i></i></div></div>
     <div class="st-gest sg"><svg viewBox="88 50 330 150"><polyline class="sg-ghost" points="${S}"/><circle class="sg-gdot" r="13"/></svg></div>
     <div class="st-shield"><img src="${IMG}" alt="" draggable="false"><svg viewBox="0 0 ${IW} ${IH}">
-      <polygon class="sg-rim" points="66,30 384,17 432,95 214,289 21,88"/>
+      <polygon class="sg-rim" points="77,30 394,28 437,90 413,104 372,128 340,152 302,188 261,236 219,284 205,293 189,284 149,248 102,200 61,152 29,116 21,98 33,80 65,44"/>
       <polyline class="sg-lane" points="${S}"/><polyline class="sg-ink" points="${S}"/><polyline class="sg-guide" points="${S}"/>
       <polyline class="sg-glow" points=""/><polyline class="sg-trail" points=""/>
       <circle class="sg-end" cx="${s0x}" cy="${s0y}" r="17"/><circle class="sg-end" cx="${s1x}" cy="${s1y}" r="17"/>
