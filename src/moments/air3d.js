@@ -14,7 +14,7 @@ import { verdict } from './verdict.js';
 const COL = { faller: '#ffd23f', car: '#ff8a3d', getaway: '#ff3d3d', heli: '#ff5a5a', rings: '#6ff7ff', kitten: '#ffb36b' };
 const HOOP = 26; // hoop radius, m (the pass test is 62 world units wide)
 /** r11 F2a: targets read from the chase camera: actors at BIG × their size (ink hull included), a beacon over each. */
-const BIG = { person: 2, car: 2, rig: 1.7, heli: 1.5, cat: 2.2 }, BEAM = 520;
+const BIG = { person: 3, car: 3, rig: 2.55, heli: 2.25, cat: 3.3 }, BEAM = 520; // (r11 F2b: 1.5× again, + the bold ink hull)
 
 /** An air event in the director's schedule (AirEvents runs it; this tracks it for pacing and the banner). */
 export class AirMoment extends Moment {
@@ -54,7 +54,7 @@ export class AirMoment extends Moment {
     if (this.result) return null;
     if (e.kind === 'rings') return e.next > 0 ? { title: 'STUNT COURSE', col: COL.rings, time: e.limit - (e.t - e.started), meters: [{ label: 'HOOPS', v: e.next / e.rings.length, col: COL.rings, pips: e.rings.length }] } : null;
     if (!this.taken) return null;
-    if (e.kind === 'faller') return { title: e.phase === 'fall' ? 'CATCH HIM!' : 'WINDOW-WASHER IN TROUBLE', col: COL.faller, time: e.phase === 'fall' ? e.z / Math.max(40, e.vz) : 9 - e.t, meters: [{ label: 'HEIGHT', v: e.z / Math.max(1, e.top || e.z), col: COL.faller, warn: e.phase === 'fall' }] };
+    if (e.kind === 'faller') return { title: e.phase === 'fall' ? 'CATCH HIM!' : e.phase === 'ledge' ? 'HE GRABBED A LEDGE!' : 'WINDOW-WASHER IN TROUBLE', col: COL.faller, time: e.phase === 'fall' ? e.z / Math.max(40, e.vz) : e.phase === 'ledge' ? 3.5 - (e.t - e.ledgeT) : 9 - e.t, meters: [{ label: 'HEIGHT', v: e.z / Math.max(1, e.top || e.z), col: COL.faller, warn: e.phase === 'fall' }] };
     if (e.kind === 'car' || e.kind === 'getaway') return { title: e.getaway ? 'STOP THE GETAWAY CAR' : 'STOP THE RUNAWAY CAR', col: COL[e.kind], time: e.ttl - e.t, meters: [{ label: h.z > 260 ? 'TOO HIGH ▼' : 'IN REACH', v: h.z > 260 ? 0.25 : 1, col: COL[e.kind], warn: h.z > 260 }] };
     if (e.kind === 'heli') return { title: 'CATCH THE CHOPPER', col: COL.heli, time: (e.z - 40) / 21, meters: [{ label: 'ALTITUDE', v: (e.z - 40) / 520, col: COL.heli, warn: e.z < 200 }] };
     return null;
@@ -66,7 +66,7 @@ export function drawAir3d(dir, kit, view) {
   const ow = dir.ow, h = ow.hero, A = dir.airA || (dir.airA = new Map()), seen = new Set(), t = ow.t;
   const slot = (e, n, role) => {
     let s = A.get(e); if (!s) A.set(e, (s = {})); seen.add(e);
-    if (!s[n]) { const a = s[n] = kit.take(role); a.group.scale.setScalar(a.base * (e === ow.events.carry ? 1 : BIG[role.split(':')[0]] || 1)); }
+    if (!s[n]) { const a = s[n] = kit.take(role); a.group.scale.setScalar(a.base * (e === ow.events.carry ? 0.85 : BIG[role.split(':')[0]] || 1)); a.hull.material = kit.inkBold; }
     return s[n];
   };
   for (const e of ow.events.list) { const p = e.kind === 'rings' ? e.rings[e.next] : e; if (p) kit.beam(p.x, p.y, COL[e.kind], BEAM); }
@@ -78,7 +78,7 @@ export function drawAir3d(dir, kit, view) {
       const w = 4.5;
       kit.rope([e.x - w, e.y + 2, top], [e.x - w, e.y + 3, rigZ + (e.phase === 'dangle' ? 0 : -2.5)], [e.x + w, e.y + 2, top], [e.x + w, e.y + 3, rigZ + (e.phase === 'dangle' ? 0 : 2.5)]);
       const p = slot(e, 'p', 'person:washer');
-      if (e.phase === 'dangle') p.pose('hang').at(e.x + Math.sin(t * 2) * 1.5, e.y + 4, e.z - 3.6, Math.PI / 2, 0, Math.sin(t * 2) * 0.1);
+      if (e.phase !== 'fall') p.pose('hang').at(e.x + Math.sin(t * 2) * 1.5, e.y + 4, e.z - 3.6, Math.PI / 2, 0, Math.sin(t * 2) * 0.1);
       else p.pose(FLAIL[Math.floor(t * 8) % 2]).at(e.x, e.y + 4, e.z - 2, Math.PI / 2 + t * 2, -0.4, Math.sin(t * 5) * 0.3);
       kit.ring(e.x, e.y + 4, 0, 30, COL.faller, 0.9, e.phase === 'fall' ? 2.2 : 0.8);
       rig.group.visible = true;
@@ -112,9 +112,16 @@ export function drawAir3d(dir, kit, view) {
       kit.ring(e.x, e.y, e.z, 24, COL.kitten, 0.9, 0.7);
     }
   }
-  // the window-washer she just caught rides under her for a moment
+  // r11 F2b: the payoff in frame: the washer in her arms, the car hoisted overhead (set down at the
+  // end), the kitten held up, the chopper slung under her
   const C = ow.events.carry;
-  if (C && C.kind === 'faller') slot(C, 'p', 'person:washer').pose('cheer').at(h.x, h.y, h.z - 9, h.ang, 0.3, 0);
+  if (C) {
+    const fx = Math.cos(h.ang) * 2.5, fy = Math.sin(h.ang) * 2.5, down = Math.max(0, (C.t - 1.7) / 0.5);
+    if (C.kind === 'faller') slot(C, 'p', 'person:washer').pose('cheer').at(h.x + fx, h.y + fy, h.z - 4, h.ang + Math.PI / 2, 0.5, 0);
+    else if (C.kind === 'car') slot(C, 'car', C.getaway ? 'car:getaway' : 'car:runaway').at(h.x, h.y, (h.z + 11) * (1 - down), C.ang + C.t * 0.6, 0.15 * Math.sin(t * 9), 0.2 * Math.sin(t * 7));
+    else if (C.kind === 'kitten') slot(C, 'cat', 'cat').at(h.x + fx, h.y + fy, h.z + 4, h.ang + Math.PI, 0, Math.sin(t * 4) * 0.1);
+    else if (C.kind === 'heli') { const c = slot(C, 'heli', 'heli:news').at(h.x, h.y, h.z - 16, h.ang + Math.PI / 2, 0, 0.1 * Math.sin(t * 3)); c.rotor.rotation.y += 0.3; }
+  }
   // tabloid drones (vice districts at night) and their flashes
   for (const d of ow.paps.drones) {
     const ang = Math.atan2(h.y - d.y, h.x - d.x);

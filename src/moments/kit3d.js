@@ -16,6 +16,7 @@ export const KIT = {
   card: 2.6,       // Polaroid card size (× its 0.88 × 1.05 m face)
   max: { drones: 10, cards: 8, hoops: 8, glows: 72, puffs: 64, rings: 5, beams: 6 },
   ink: 2.0,        // ink hull width, CSS px at arm's length (thins with distance)
+  inkBold: 4.4,    // r11 F2b: a moment's target (car, washer, chopper, kitten) gets the thick comic outline
 };
 
 const INK = new THREE.Color(0x140c16);
@@ -25,10 +26,10 @@ const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vect
 export const toScene = (out, x, y, z) => out.set(x * M, z * M, y * M);
 
 /** Screen-constant ink hull (works on plain and instanced meshes); fades into the scene's fog. */
-function inkMaterial(fog) {
+function inkMaterial(fog, w = KIT.ink) {
   return new THREE.ShaderMaterial({
     side: THREE.BackSide,
-    uniforms: { olW: { value: KIT.ink }, res: LOOK.res, dpr: LOOK.dpr, fogC: { value: new THREE.Color() }, fogR: { value: new THREE.Vector2(1e5, 2e5) }, ink: { value: INK } },
+    uniforms: { olW: { value: w }, res: LOOK.res, dpr: LOOK.dpr, fogC: { value: new THREE.Color() }, fogR: { value: new THREE.Vector2(1e5, 2e5) }, ink: { value: INK } },
     vertexShader: `uniform float olW, dpr; uniform vec2 res; varying float vD;
 void main() {
   mat4 im = mat4(1.0);
@@ -238,6 +239,7 @@ export class Kit3D {
     this.scene = scene; this.renderer = renderer;
     this.cel = celMaterial();
     this.ink = inkMaterial(true);
+    this.inkBold = inkMaterial(true, KIT.inkBold);
     this.pools = {};      // role → [Actor]
     this.figures = {};    // look → pose geometries
     this.geos = {};
@@ -316,7 +318,7 @@ export class Kit3D {
       }
       list.push(a);
     }
-    a.busy = true; a.group.scale.setScalar(a.base);
+    a.busy = true; a.group.scale.setScalar(a.base); a.hull.material = this.ink;
     return a;
   }
 
@@ -389,7 +391,7 @@ export class Kit3D {
     this.beamU.time.value = this.t;
     const cam = this.cam, px = cam ? (this.renderer.getDrawingBufferSize(_s2).y * scale / (2 * Math.tan((cam.fov * Math.PI) / 360))) : 400;
     this.glows.update(dt, px); this.puffs.update(dt, px);
-    if (fog) { this.ink.uniforms.fogC.value.copy(fog.color); this.ink.uniforms.fogR.value.set(fog.near, fog.far); }
+    if (fog) [[this.ink, 1], [this.inkBold, 1.6]].forEach(([m, k]) => { m.uniforms.fogC.value.copy(fog.color); m.uniforms.fogR.value.set(fog.near * k, fog.far * k); }); // (the bold one reads through the haze)
   }
 
   /** Burst helpers (world units): sparks/flash (additive), smoke/dust (puffs). */

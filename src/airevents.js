@@ -17,6 +17,8 @@ import { sfx } from './sfx.js';
 
 const TAU = Math.PI * 2;
 const LOW_ENOUGH = 260; // cars can only be grabbed from about rooftop-skim height
+/** r11 F2b: keyboard keys in a hint only off touch (touch players have the ▲ ▼ buttons). */
+const keys = (k) => { try { return matchMedia('(pointer: coarse)').matches ? '' : ` (${k})`; } catch (e) { return ` (${k})`; } };
 
 // Reward and give-up costs per kind.
 const KINDS = {
@@ -71,7 +73,7 @@ export class AirEvents {
       if (res === 'won') this.win(e);
       else if (res === 'lost' || e.t > e.ttl) this.lose(e, res === 'lost');
     }
-    if (this.carry) { this.carry.t += dt; if (this.carry.t > 2.2) { toast(this.carry.done, 'good'); this.carry = null; } }
+    if (this.carry) { this.carry.t += dt; if (this.carry.t > 2.2) { if (this.carry.done) toast(this.carry.done, 'good'); this.carry = null; } }
   }
 
   /** at: { x, y } to place it near (the director's spot ahead of her), else round her. */
@@ -118,11 +120,14 @@ export class AirEvents {
     const h = this.hero;
     if (e.phase === 'dangle' && e.t > 9) { e.phase = 'fall'; this.say(e, pick(['AAAAH!', 'The rope snapped!', 'HELP!']), 'shout', 'WINDOW-WASHER'); }
     else if (e.phase === 'dangle' && e.t > 1 && chance(dt * 0.4)) this.say(e, pick(['Help! My rig is slipping!', 'Somebody! Up here!']), 'shout', 'WINDOW-WASHER');
+    if (e.phase === 'dangle') e.z = Math.max(e.top * 0.6, e.z - 1.6 * dt); // (r11 F2b: the rig visibly slips down the facade)
     if (e.phase === 'fall') {
       e.vz = Math.min(95, e.vz + 55 * dt); // a comic-book fall: slow enough to reach them
       e.z -= e.vz * dt;
+      // r11 F2b: one miss and a recovery: halfway down he snags a ledge and hangs on for a few seconds
+      if (!e.ledged && e.z < e.top * 0.45) { e.ledged = true; e.phase = 'ledge'; e.ledgeT = e.t; e.vz = 0; this.say(e, pick(['Got a ledge! Can\'t… hold…', 'HANGING ON!']), 'shout', 'WINDOW-WASHER'); }
       if (e.z <= 0) return 'lost';
-    }
+    } else if (e.phase === 'ledge' && e.t - e.ledgeT > 3.5) { e.phase = 'fall'; this.say(e, 'AAAAH!', 'shout', 'WINDOW-WASHER'); }
     if (dist(e.x, e.y, h.x, h.y) < 55 && Math.abs(h.z - e.z) < 150) return 'won';
     return null;
   }
@@ -180,7 +185,7 @@ export class AirEvents {
     if (e.getaway && e.t > 1 && chance(dt * 0.25)) this.say(e, pick(['Floor it!', 'She\'s on us!', 'Lose her in traffic!']), 'shout', 'GETAWAY DRIVER');
     const near = dist(e.x, e.y, h.x, h.y) < 55;
     if (near && h.z <= LOW_ENOUGH) return 'won';
-    if (near && !e.toldLow) { e.toldLow = true; toast('Too high to grab it: drop to rooftop height (▼ / F)', 'info'); }
+    if (near && !e.toldLow) { e.toldLow = true; toast(`Too high to grab it: drop to rooftop height${keys('▼ / F')}`, 'info'); }
     return null;
   }
 
@@ -247,10 +252,10 @@ export class AirEvents {
       sfx.pickup();
       if (e.next === e.rings.length) return 'won';
       const nz = e.rings[e.next].z;
-      if (Math.abs(nz - h.z) > 75) toast(nz > h.z ? 'Next hoop is higher: ▲ / R' : 'Next hoop is lower: ▼ / F', 'info');
+      if (Math.abs(nz - h.z) > 75) toast(nz > h.z ? `Next hoop is higher ▲${keys('R')}` : `Next hoop is lower ▼${keys('F')}`, 'info');
     } else if (dist(r.x, r.y, h.x, h.y) < 62 && !e.warned) {
       e.warned = true;
-      toast(r.z > h.z ? 'The hoop is higher than you: ▲ / R' : 'The hoop is lower than you: ▼ / F', 'info');
+      toast(r.z > h.z ? `The hoop is higher than you ▲${keys('R')}` : `The hoop is lower than you ▼${keys('F')}`, 'info');
     }
     return null;
   }
@@ -286,6 +291,7 @@ export class AirEvents {
         this.ow.shake = Math.max(this.ow.shake, 12);
         sfx.hit();
         pow(e.getaway ? 'CRUNCH!' : 'SCREECH!');
+        this.carry = { kind: 'car', getaway: e.getaway, ang: e.dir * Math.PI / 2, t: 0, done: null }; // (r11 F2b: hoisted overhead, then set down)
         st.addRep(K.reward, e.getaway ? 'Stopped a getaway car' : 'Stopped a runaway car');
         break;
       case 'heli':
@@ -305,6 +311,7 @@ export class AirEvents {
       }
       case 'kitten':
         st.stats.kittens = (st.stats.kittens || 0) + 1;
+        this.carry = { kind: 'kitten', t: 0, done: null };
         this.g.commentary.talk('Meow!', hs.x + 20, hs.y - 30, { kind: 'speech', speaker: 'KITTEN' });
         st.addRep(K.reward, `Rescued a kitten (${st.stats.kittens} so far)`);
         break;

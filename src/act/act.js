@@ -11,6 +11,7 @@ import { playScreenScene } from '../cutscene.js';
 import { BILLBOARDS, CLUB_CASE_LABELS, DISTRICTS, HERO, VENUES } from '../data.js';
 import { dialog, toast, openModal, closeModal, UI } from '../ui.js';
 import { comic } from '../comic.js';
+import { unmaskedPanel } from '../moments/unmasked.js';
 import { sfx } from '../sfx.js';
 import { npcLook, portrait } from '../art.js';
 import { LOT } from '../city.js';
@@ -331,9 +332,9 @@ export class Act {
     comic.headline('IMPOSTOR UNMASKED!', { tone: 'good', kicker: 'CAUGHT!' });
     const imp = LIEUTENANTS.find((l) => l.id === 'impostor');
     if (!A.unmasked.impostor) {
-      await dialog({ title: 'Caught her!', text: `You swoop down on a rooftop photo shoot. The "Supergirl" posing for the lenses is a stranger in a cheap tube-top costume and a blonde wig. The wig comes off in your hand.` });
+      await unmaskedPanel('A stranger in a cheap tube top. The blonde wig came off in your hand.'); // (r11 F2b: a comic panel, not a Continue box)
       await this.unmask(imp);
-    } else await dialog({ title: 'Another one', text: 'Another wig, another tube top, another stranger paid to be you. He has more than one of them.' });
+    } else await unmaskedPanel('Another wig, another tube top, another stranger paid to be you.', { tag: 'ANOTHER ONE!' });
     st.addRep(SIGHT.catchRep, 'Caught the impostor');
     st.save();
   }
