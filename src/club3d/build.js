@@ -319,6 +319,24 @@ export function buildHall(zn, plan, M, X, video) {
 }
 
 // ------------------------------------------------------------------ the story clubs' set pieces
+/**
+ * The empty birdcage's door (round 11 D3, story.js cageDance): the three missing bars as one mesh,
+ * hung from the top ring (scale.y 0 → 1 drops them shut), and a spotlight cone over the plinth.
+ * Both hidden (no draw calls) until she steps in.
+ */
+function cageDoor(S, x, z, gold) {
+  const bars = [];
+  for (let k = 0; k < 3; k++) { const a = (k / 14) * TAU; bars.push(new THREE.CylinderGeometry(0.025, 0.025, 2.4, 4).translate(Math.cos(a) * 1.15, -1.2, Math.sin(a) * 1.15)); }
+  const door = new THREE.Mesh(mergeGeometries(bars), toon(gold, {}, { halftone: 0.3 }));
+  door.position.set(x, 3.0, z); door.scale.y = 0.001; door.visible = false;
+  const spot = new THREE.Mesh(new THREE.ConeGeometry(1.3, 5.4, 20, 1, true).translate(0, -2.7, 0),
+    new THREE.MeshBasicMaterial({ color: 0xfff0c8, transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }));
+  spot.position.set(x, 6.0, z); spot.visible = false;
+  door.userData.noX = spot.userData.noX = true;
+  S.add(door, spot);
+  return { door, spot };
+}
+
 const PART_H = 3.0; // the Hive's partitions: over every head, under the camera's usual height
 
 /** The Hive's mirrored partitions, the Gilded Cage's booths and birdcages, Flashpoint's catwalk. */
@@ -364,13 +382,13 @@ function buildStoryHall(zn, plan, M, X, A) {
     const gold = 0xd8aa40;
     A.cages = [];
     V.cages.forEach(([x, z], i) => {
-      zn.cyl(1.25, 1.35, 0.6, x, 0.3, z, toon(0x2a1a08, {}, { halftone: 0.3 }), true);
+      const plinth = zn.cyl(1.25, 1.35, 0.6, x, 0.3, z, toon(0x2a1a08, {}, { halftone: 0.3 }), true);
       for (const y of [0.62, 3.0]) X.prop(new THREE.TorusGeometry(1.15, 0.05, 6, 28).rotateX(Math.PI / 2).translate(x, y, z), gold);
       X.prop(new THREE.ConeGeometry(1.2, 0.7, 16, 1, true).translate(x, 3.35, z), gold);
       for (let k = 0; k < 14; k++) { const a = (k / 14) * TAU; if (i === 0 && k < 3) continue; X.prop(new THREE.CylinderGeometry(0.025, 0.025, 2.4, 4).translate(x + Math.cos(a) * 1.15, 1.8, z + Math.sin(a) * 1.15), gold); }
       if (i) X.people.push({ x, z, rot: Math.PI, pose: 'dance', type: 'dress', fixed: true, y: 0.6 });
       X.pool(x, z, 2.2, V.accent[i % 2], 0.35);
-      A.cages.push({ x, z, empty: i === 0 });
+      A.cages.push({ x, z, empty: i === 0, plinth, ...(i === 0 ? cageDoor(S, x, z, gold) : {}) });
     });
   }
   if (V.catwalk) {

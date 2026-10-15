@@ -4,6 +4,7 @@
 // the owner's confession → solved → skylight, the leak → thrown out, each per-visit event).
 //   node tools/shots/club3d.js [--label c3] [--port 8881] [--rooms rave,pit] [--flows all|none|sedate,confess]
 //                              [--case squirt|blackmail|earworm] [--w 844 --h 390] [--gen 1-8]
+//   flows idle (D2: the crowd rings her when she stands still) and cage (D3: the Gilded Cage dance)
 //   --gen a-b: generated cases (club3d/casegen.js), one visit per seed, each crowd beat played
 //   (flows gen<seed>; strips in shots/<label>/strips/gen<seed>)
 // → shots/<label>/club3d/*.png + metrics.json (fps is SwiftShader: compare runs, never a phone)
@@ -491,6 +492,55 @@ const GEN = (() => { const g = arg('--gen', ''); if (!g) return []; const [a, b]
       await V.gwait(1.0); await V.strip('caught', 7); log.push(await V.minds());
       await P.keyboard.up('KeyG');
       return { log, sedations: await P.evaluate(() => window.__game.mode.sedations), freeAt: await P.evaluate(() => window.__game.mode.freeAt) };
+    });
+    // round 11 D2: she stands still on the rave floor: the ring closes in, the incidents speed up, a skirt
+    // flip fires, she walks off and the ring lets go (strips in shots/<label>/strips/idle)
+    await flow('idle', '&club3room=rave&club3seed=7&club3event=none', async (V) => {
+      const P = V.page, ev = (f) => P.evaluate(f), log = [];
+      const fz = await ev(() => window.__game.mode.plan.V.floor.z);
+      await V.put(0, fz + 1.5, 600);
+      const gl0 = await V.gl();
+      const ring = () => ev(() => { const m = window.__game.mode, K = m.knotHost().knot; return { still: +m.still.toFixed(1), ring: !!m.idleRing, n: K ? K.k.length : 0, rate: m.idleRing ? +m.idleRate().toFixed(2) : 1, flips: m.idleFlips, leaving: (m.knotHost().leaving || []).length, env: (m.envelope || []).map((c) => c.id) }; });
+      await V.gwait(4.6); log.push(await ring());
+      await V.gwait(1.0); await V.strip('idle', 1); await V.shot('flow_idle_ring');
+      const gl1 = await V.gl();
+      // the longer she stands, the faster: jump her clock on and let the incidents roll until a flip fires
+      await ev(() => { window.__game.mode.still = 24; }); log.push(await ring());
+      let inc = 0;
+      for (let i = 0; i < 40 && !(await ev(() => window.__game.mode.idleFlips > 0)); i++) { await ev(() => { const m = window.__game.mode; m.incT = 0; m.stunT = 0; }); await V.gwait(0.15); inc++; }
+      await V.gwait(0.1); await V.strip('idle', 2); log.push({ incidents: inc, ...(await ring()) });
+      await V.gwait(1.2); await V.strip('idle', 3);
+      // she walks off: the ring breaks, the dancers drift home
+      await ev(() => { window.__game.mode.stunT = 0; });
+      await V.stick(0.9, 0); await V.gwait(0.5); await V.stick(null); log.push(await ring());
+      await V.gwait(0.3); await V.strip('idle', 4);
+      await V.gwait(2.4); log.push(await ring()); await V.strip('idle', 5);
+      return { log, gl: { before: gl0, ring: gl1 } };
+    });
+    // round 11 D3: the Gilded Cage: walk to the empty cage, dance in it, −8 rep, step out
+    await flow('cage', '&club3case=auction&club3seed=7&club3event=none', async (V) => {
+      const P = V.page, ev = (f) => P.evaluate(f), log = [];
+      const o = await ev(() => { const o = window.__game.mode.inter.find((q) => q.label === 'Dance in the cage'); return o && { x: o.pos.x, z: o.pos.z }; });
+      if (!o) return { failed: 'no cage interactable' };
+      await V.put(o.x + 1.2, o.z + 1.2, 500);
+      await V.stick(-0.6, -0.6); await V.gwait(0.35); await V.stick(null); await V.gwait(0.3);
+      const near = await ev(() => window.__game.mode.near?.label || null);
+      await V.strip('cage', 1);
+      const rep0 = await ev(() => window.__game.state.rep);
+      await ev(() => { const m = window.__game.mode; m.grace = 0; }); // (the bouncers are live: they must let her be)
+      if (near === 'Dance in the cage') await P.keyboard.press('KeyE');
+      else await ev(() => { const m = window.__game.mode; m.run(() => m.inter.find((q) => q.label === 'Dance in the cage').act()); });
+      await P.waitForFunction(() => !!window.__game.mode.caged, null, { timeout: 15000 });
+      await V.gwait(0.8); await V.strip('cage', 2);
+      for (let i = 0; i < 6; i++) { await P.keyboard.press('1'); await V.gwait(0.3); }
+      await V.strip('cage', 3); await V.shot('flow_cage_dance');
+      const gl = await V.gl();
+      const mid = await ev(() => { const m = window.__game.mode, C = m.caged; return { y: +m.hero.position.y.toFixed(2), door: +C.cg.door.scale.y.toFixed(2), knot: m.knotHost().knot?.k.length || 0, hits: C.hits, misses: C.misses, ignored: m.grace > m.t, seeing: m.guards.filter((g) => g.seeing).length, feed: m.g.overworld?.feed?.playing?.cat || null }; });
+      await P.keyboard.press('2');
+      await P.waitForFunction(() => !window.__game.mode.caged && !window.__game.mode.busy, null, { timeout: 15000 });
+      await V.gwait(0.4); await V.strip('cage', 4);
+      const end = await ev(() => { const m = window.__game.mode, o = m.inter.find((q) => q.label === 'Dance in the cage'); return { rep: m.g.state.rep, env: (m.envelope || []).map((c) => c.id), again: o.can(), door: m.hallA.cages[0].door.visible, col: !m.colliders.find((c) => c.mesh === m.hallA.cages[0].plinth).disabled, y: +m.hero.position.y.toFixed(2) }; });
+      return { near, rep0, repDrop: rep0 - end.rep, mid, end, gl };
     });
     // ---- the story clubs' own systems
     if (CASE === 'flashpoint') await flow('hotseat', '&club3seed=7&club3event=none', async (V) => {

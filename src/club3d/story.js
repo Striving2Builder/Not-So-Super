@@ -12,7 +12,8 @@ import { dialog, toast, banner } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { HERO } from '../data.js';
 import { INTOX_HAZE } from '../state.js';
-import { $ } from '../util.js';
+import { $, pick } from '../util.js';
+import { comic } from '../comic.js';
 
 /** normal = the original clubs. hard: two more bouncers, quicker to spot her, taken twice = carried out. */
 export const DIFF = {
@@ -35,6 +36,17 @@ const TRAP_DEFAULT = { title: 'BREAK FREE!', text: 'They\'ve got her held tight.
 // bolts through the crowd to the far side of the floor (no dead end: the same lock never replays).
 export const SHAKE = { r: 9, daze: 7, cover: 6, again: 30 };
 // the USE spots a sober hero can still work in the Hive: the ways to get high, the fights, the way out
+// round 11 D3: the Gilded Cage's empty birdcage. She dances in it on the beat for the bidders' phones:
+// `rep` off her reputation (Act 2's fast way down, docs/design/act2.md), a dance card, the LIVE feed.
+// `secs` of dance (STEP OUT any time), `again` s before she can go back in, `win`: the on-beat window
+// (fraction of a beat either side), the crowd's ring (`ring` dancers at `r` m), the plinth's top `y`.
+export const CAGE = { rep: 8, again: 20, secs: 12, win: 0.22, ring: 8, r: 2.7, y: 0.6, shut: 0.6, good: 6 };
+const CAGE_SAY = {
+  in: ['Fine. ONE dance.', 'Okay… I\'m part of the show now.', 'Just blending in. In a cage.'],
+  crowd: ['She\'s IN the cage!', 'Lot one! Lot one!', 'Dance, Supergirl!', 'Phones up, phones up!', 'Is this part of the auction?!'],
+  hit: ['WOO!', 'YES!', 'SNAP!', 'DANCE!'],
+  out: ['That\'s enough show for tonight.', 'Never telling anyone about this.'],
+};
 const SOBER_OK = /^(Order at the bar|Fly out|Check the first stall|Take the shot-off|Change into|Kick in|Take on|Stop the courier|Read the glowing)/;
 
 export const storyMethods = {
@@ -42,6 +54,8 @@ export const storyMethods = {
   startStory() {
     this.diff = DIFF[this.caseDef.difficulty] || DIFF.normal;
     this.scandal = 0; this.wallT = 20; this.escapeT = 0;
+    // (per visit: the cage, the idle ring in danger.js)
+    this.caged = null; this.cageAt = -99; this.cageDances = 0; this.idleRing = null; this.idleRings = 0; this.idleFlips = 0;
   },
 
   captureAt() { return this.diff?.captureAt ?? 3; },
@@ -80,6 +94,8 @@ export const storyMethods = {
       this.addInter({ x: b.x, z: b.z }, `Peek into booth ${b.i + 1}`, () => !this.book.has('booth', String(b.i + 1)), () => this.peekBooth(b, def));
     }
     if (d.press) this.placePress?.();
+    const cg = A.cages?.find((c) => c.empty && c.door);
+    if (cg) this.addInter({ x: cg.x + 1.75, z: cg.z + 0.45 }, 'Dance in the cage', () => !this.caged && this.t >= this.cageAt + CAGE.again, () => this.cageDance(cg));
     if (d.highOnly) for (const o of this.inter) {
       if (SOBER_OK.test(o.label)) continue;
       const act = o.act, base = o.label;
@@ -100,6 +116,7 @@ export const storyMethods = {
       if (ok && !this._highOnce) { this._highOnce = true; banner('THE HIVE OPENS UP', `${d.drugName} hits: now they'll talk to you`, '#ffb020'); }
     }
     this.stepShake(dt);
+    this.stepCage(dt);
     if (d.press) this.stepPress?.(dt);
     // the screens move on to the next clip now and then (the same clip all night is a dead screen)
     if (d.clips?.wall && this.videoWant === 'dj') {
@@ -217,6 +234,91 @@ export const storyMethods = {
       if (E) { E.down = false; E.root.rotation.x = 0; E.root.position.y = E.floorY ?? 0; }
       else { m.rotation.x = 0; m.position.y = gd.y0 ?? 0; }
     }
+  },
+
+  // ---------------------------------------------------------------- the cage dance (round 11 D3)
+  /** Up onto the plinth, the door drops shut, the spot comes up, the crowd's phones: the dance. */
+  async cageDance(cg) {
+    const h = this.hero.position, col = this.colliders.find((c) => c.mesh === cg.plinth);
+    if (col) col.disabled = true;
+    this.setXray?.(false); this.setHearing?.(false);
+    h.set(cg.x, CAGE.y, cg.z); this.hero.rotation.y = 0; this.camSnap = true;
+    const C = (this.caged = { cg, col, t: 0, hits: 0, misses: 0, beat: -1, sayT: 2 });
+    cg.door.visible = cg.spot.visible = true; cg.door.scale.y = 0.001;
+    this.heroClip('dance', 999);
+    this.formKnot(CAGE.ring, CAGE.r);
+    sfx.crowd?.(); sfx.shutter?.();
+    banner('LOT ONE', 'Dance on the beat for the bidders · STEP OUT any time', '#ffc840');
+    const s = this.screenOf(h, 2.6);
+    if (s) comic.say(pick(CAGE_SAY.in), s.x, s.y, { kind: 'shout', ms: 1800 });
+    const f = this.g.overworld?.feed;
+    if (f && CLIPS.shame.length) { f.setList('clubCage', CLIPS.shame); f.play('clubCage', `${this.clubName} · LIVE: ${HERO} dancing in a gilded cage`, true); }
+    // the pad: DANCE on the beat (1, USE or DANCE), STEP OUT (2)
+    let el = $('c3-cage');
+    if (!el) { el = document.createElement('div'); el.id = 'c3-cage'; $('game').appendChild(el); }
+    el.style.cssText = 'position:absolute;left:0;right:0;margin:0 auto;bottom:18px;z-index:52;width:min(420px,calc(100vw - 380px));min-width:250px;display:flex;gap:8px;pointer-events:auto;font:400 18px Bangers,Impact,sans-serif;letter-spacing:.05em';
+    const btn = 'border:2px solid #111;border-radius:12px;box-shadow:4px 4px 0 rgba(0,0,0,.5);color:#fff;padding:10px 8px;cursor:pointer;font:inherit';
+    el.innerHTML = `<button data-a="tap" style="${btn};flex:2;background:#c8302a">DANCE! <small style="font:12px sans-serif;opacity:.8">on the beat · 1</small></button><button data-a="out" style="${btn};flex:1;background:rgba(10,6,18,.9)">STEP OUT <small style="font:12px sans-serif;opacity:.8">2</small></button>`;
+    el.querySelectorAll('button').forEach((b) => b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); if (b.dataset.a === 'tap') this.cageTap(); else this.cageOut(); }));
+    const onKey = (e) => { if (e.key === '1') this.cageTap(); else if (e.key === '2') this.cageOut(); else return; e.preventDefault(); e.stopPropagation(); };
+    addEventListener('keydown', onKey, true);
+    C.el = el.querySelector('[data-a=tap]');
+    await new Promise((res) => { C.res = res; });
+    removeEventListener('keydown', onKey, true);
+    el.remove();
+    // the result: the phones got it, whatever she did
+    const st = this.g.state, good = C.hits >= CAGE.good;
+    st.addRep(-CAGE.rep, 'Danced in the Gilded Cage');
+    this.addCard('dance', good ? `${HERO}, dancing in a gilded cage` : `${HERO}, stumbling about in a gilded cage`);
+    this.cageDances++;
+    toast(good ? `The bidders cheer. Every phone in the ballroom got it. −${CAGE.rep} reputation.` : `Off the beat, in a birdcage, on camera. −${CAGE.rep} reputation.`, 'bad');
+    this.releaseKnot();
+    cg.door.visible = cg.spot.visible = false;
+    if (col) col.disabled = false;
+    h.set(cg.x + 1.75, 0, cg.z + 0.45); this.camSnap = true; this.still = 0;
+    this.landT = 0; this.heroModel?.play('idle', { fade: 0.2 });
+    const s2 = this.screenOf(h, 2.3);
+    if (s2) comic.say(pick(CAGE_SAY.out), s2.x, s2.y, { kind: 'shout', ms: 1600 });
+    this.caged = null; this.cageAt = this.t;
+  },
+
+  /** A tap: on the beat, the crowd goes wild; off it, a stumble. */
+  cageTap() {
+    const C = this.caged, B = this.B;
+    if (!C || C.done || !B) return;
+    const on = B.ph < CAGE.win || B.ph > 1 - CAGE.win * 0.5, s = this.screenOf(this.hero.position, 2.4);
+    if (on && C.beat !== B.n) {
+      C.beat = B.n; C.hits++; sfx.shutter?.();
+      if (s) comic.pow(pick(CAGE_SAY.hit), s.x + (Math.random() - 0.5) * 80, s.y - 30, { size: 0.7, colors: ['#ffd84d', '#ffffff'] });
+    } else {
+      C.misses++; sfx.scratch ? sfx.scratch() : sfx.lose?.();
+      if (s) comic.pow('OOPS!', s.x, s.y - 20, { size: 0.6 });
+    }
+  },
+
+  cageOut() { const C = this.caged; if (C && !C.done) { C.done = true; C.res?.(); } },
+
+  /** Per frame while she's in the cage: on the plinth, the door, the beat on the pad, the bouncers let her be. */
+  stepCage(dt) {
+    const C = this.caged;
+    if (!C || C.done) return;
+    if (this.sedating) return this.cageOut(); // (a blackout takes her out of the show)
+    const h = this.hero.position, cg = C.cg, inp = this.g.input, B = this.B;
+    C.t += dt;
+    h.set(cg.x, CAGE.y, cg.z);
+    cg.door.scale.y = Math.min(1, C.t / CAGE.shut);
+    cg.spot.material.opacity = 0.12 + 0.08 * (B?.pulse || 0);
+    this.grace = Math.max(this.grace || 0, this.t + 0.5); // (she's part of the show: no bouncer reads her as an intruder)
+    if (C.el && B) C.el.style.filter = `brightness(${0.75 + 0.6 * B.pulse})`;
+    if (inp.pressed('interact') || inp.pressed('dance')) this.cageTap();
+    C.sayT -= dt;
+    const K = this.knotHost().knot;
+    if (C.sayT <= 0 && K?.k.length) {
+      C.sayT = 2.2;
+      const q = pick(K.k), s = this.screenOf({ x: q.p.x, y: 0, z: q.p.z }, 2);
+      if (s) comic.say(pick(CAGE_SAY.crowd), s.x, s.y, { ms: 1500 });
+    }
+    if (C.t >= CAGE.secs) this.cageOut();
   },
 
   /** The Gilded Cage's booths: X-ray sees through the velvet unseen; pulling it back, somebody sees you. */
