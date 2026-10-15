@@ -110,7 +110,7 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
 | F travel | `worktree-agent-a4e919b8e12914483` | 1 done | not yet run | **merged** (a6f223a): moment director, air events in 3D, impostor rooftop chase. **F-1: NOT YET**: 1/8 (tie), vs AAA 3, vs HTML5 6, feel 4; commute ~85% dead air (`critiques/r11/F-1.md`) |
 | L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | **L-1: NOT YET**: 0/8 pairs, vs AAA 2.5, vs HTML5 6, feel 5.5 (`critiques/r11/L-1.md`) | **merged**: readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
 | V club variety | `r11-variety` | 1 done | not yet run (pack in that worktree's `shots/r11V-1/`: gen1-8 frames + strips) | **merged** (a17368d): casegen (8 suspects × 6 clue types × 5 twists), crowd scandal beats (shots, gotcha selfie, planted glass, ringed in, GONE WILD? headline, snapper, morning paper); 8 gen + 21 old flows, 0 errors; +0.8% calls, +5-10% during a beat. Weak: the knot is hard to read at phone size |
-| D device fixes | (none yet) | queued | n/a (the user's phone test) | **queued 2026-10-14**, from the user's device test: D1 S-shield struggle, D4 Supergirl look (wave 1); D2 idle crowd + D3 cage dance (one builder), D5 camera distance setting (wave 2). Specs under "Device test fixes" below |
+| D device fixes | D1, D4: worktree branches (2026-10-14) | wave 1 running | n/a (the user's phone test) | **queued 2026-10-14**, from the user's device test: D1 S-shield struggle, D4 Supergirl look (wave 1); D2 idle crowd + D3 cage dance (one builder), D5 camera distance setting (wave 2). Specs under "Device test fixes" below |
 | refs scout | done 2026-10-13 | n/a | n/a | **built**: `club3d/` 12 (Hitman ×4, Cyberpunk ×2, GTA V, Yakuza ×2, LEGO ×2…), `travel/` 12 (Spider-Man, Arkham Knight, LEGO); all ≥1280 px. Gaps: no Hitman club/Iceberg Lounge, few dancefloor-with-guards shots, mostly daytime travel |
 
 ## Next (in order, each one a small fresh agent from its handoff file)
@@ -235,3 +235,5 @@ the beats' lines in `casebeats.js`) and may edit them by hand: add new lines, ne
   Act 2: docs/design/act2.md (boss = the impostor cult's leader in Supergirl's stolen suit; 5 finds per
   suit piece; the crop top built in Blender from the user's reference image). Pulled early: the S-shield
   struggle (D1), the cage dance (D3), a rooftop drug stash (F round 2). Waiting on the user's go for wave 1.
+- 2026-10-14: user: Act 2 waits (images, cult leader, drugs still to come); cult look refs saved; skirt a bit
+  shorter than the photo. Wave 1 launched: D1 (S-shield struggle) + D4 (cape, skirt, flutter).
