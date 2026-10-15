@@ -107,7 +107,7 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
 | Track | Branch | Round | Last critic | State |
 |---|---|---|---|---|
 | T tech debt | `worktree-agent-a047ac9311b1f985f` | 1 done | n/a (regression pack `shots/r11T-pack/`) | **merged** (78030b3): v1 + v2 gone, -6,052 lines, -176 KB JS at startup, 0 errors in every area |
-| F travel | `worktree-agent-a4e919b8e12914483` | 1 done | not yet run | **merged** (a6f223a): moment director, air events in 3D, impostor rooftop chase. **F-1: NOT YET**: 1/8 (tie), vs AAA 3, vs HTML5 6, feel 4; commute ~85% dead air (`critiques/r11/F-1.md`) **F-2: NOT YET**: 1/8 (tie), 3 / 6 / feel 4.5; commute ~70% dead air (`critiques/r11/F-2.md`) |
+| F travel | `worktree-agent-a4e919b8e12914483` | 1 done | not yet run | **merged** (a6f223a): moment director, air events in 3D, impostor rooftop chase. **F-1: NOT YET**: 1/8 (tie), vs AAA 3, vs HTML5 6, feel 4; commute ~85% dead air (`critiques/r11/F-1.md`) **F-3: NOT YET**: 1/8 (hoops), 3 / 6 / feel 5 (F-1 4, F-2 4.5); commute ~50% dead air (`critiques/r11/F-3.md`) |
 | L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | **L-2: NOT YET**: 2/8 (1 win, 1 tie), 3 / 6.5 / feel 5.5 (L-1 was 0/8, 2.5 / 6 / 5.5) (`critiques/r11/L-2.md`) | **merged** (L2a 42a6e7f, L2b a18038b; round 1): readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
 | V club variety | `r11-variety` | 1 done | **V-1: NOT YET**: 0/8, vs AAA 2.5, vs HTML5 5, feel 4, variety 3 (`critiques/r11/V-1.md`) | **merged** (a17368d): casegen (8 suspects × 6 clue types × 5 twists), crowd scandal beats (shots, gotcha selfie, planted glass, ringed in, GONE WILD? headline, snapper, morning paper); 8 gen + 21 old flows, 0 errors; +0.8% calls, +5-10% during a beat. Weak: the knot is hard to read at phone size |
 | D device fixes | D1 (748f379), D4 (4d2bff6), D2+D3 (1dc374b), D5 (ee53a17) merged | **done; phone-tested OK by the user 2026-10-15** | n/a (the user's phone test) | **queued 2026-10-14**, from the user's device test: D1 S-shield struggle, D4 Supergirl look (wave 1); D2 idle crowd + D3 cage dance (one builder), D5 camera distance setting (wave 2). Specs under "Device test fixes" below |
@@ -309,3 +309,13 @@ the beats' lines in `casebeats.js`) and may edit them by hand: add new lines, ne
   sight; 5) idle escalates (ring shrinks, flashes up, "That's HER!" ~5 s, a bouncer turns with ? ~8 s; she can always
   leave); 6) X-ray darkens the crowd (not deletes), chips 2×, beacon in a safe inset; 7) a real CCTV cut (128 px second
   camera + REC); 8) one tutorial/TIP/NEWS at a time; 9) stats panel 85% fill; 10) 3/4 camera at the DJ booth.
+- 2026-10-15: F-3 NOT YET (1/8; 3 / 6 / 5). **F stalls on pairs and vs-AAA over 3 critics (feel +0.5 each): approach
+  changed** (rule "If a track stalls"; user told). The critic could not see what F2b reported built: no car overhead, no
+  chopper under her, the washer halo circling an empty wall, a giant floating kitten (pair 7). New approach for F2c =
+  verification first: the builder looks at a frame for each payoff/target before claiming it, the harness captures the
+  hold frame, and the director checks a sheet before any critic. F2c brief (from F-3): 1) payoff on her body (car /
+  chopper / washer in her hands ~2.5 s, panel held until it's on screen); 2) target in frame before the halo (spawn at
+  cruise height ahead; halo only when the target projects on screen, else the edge arrow; fix the kitten's scale); 3) gaps
+  between offers ≤15 s with cheap route content (hoop strings, slipstream ribbons, pigeon flocks, smoke plumes); 4) every
+  moment ends on an inked panel (washer had a toast, getaway nothing); 5) mute MEANWHILE / closing-time / new-case toasts
+  during a moment. V2 launched (builder) with F-3 (critic).
