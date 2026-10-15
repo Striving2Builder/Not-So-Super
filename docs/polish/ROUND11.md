@@ -272,3 +272,7 @@ the beats' lines in `casebeats.js`) and may edit them by hand: add new lines, ne
   F2b (flight-native beats, cruise pose, facades, captions, new moments), V round 2 (after V-1 + L2a), T round 2.
 - 2026-10-15: V-1 NOT YET (0/8; 2.5 / 5 / feel 4 / variety 3): the 8 visits read as one story reskinned. V round 2
   brief rewritten in Next step 4; her silhouette in the crowd added to L2b.
+- 2026-10-15: F2a merged partial (26553c4, budget hit): in-frame spawns (±35°, lead, beacon, 2× targets), one toast at a
+  time (+ director: `clearToasts()` on zone change), verdict panels, harness commute fixes. Smoke on the merge: travel
+  impostor/faller won, rings lost (bot); club rave touch/caught/idle; 0 errors. The black box is in the WebGL canvas
+  (not the video panel). F2a-finish running: black box, bot tuning, perf A/B, critic pack r11F2a.
