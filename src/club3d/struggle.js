@@ -103,7 +103,7 @@ export function tracer(u = 1) {
       else if (T.s >= T.P.L - NEAR) T.s = T.P.L; // (the tail's last curl, cut short: the thumb turning back there has drawn its S)
       else if ((T.off += l) > OFF_MAX) {
         const why = dot(T.s, m) < -0.5 ? 'back' : 'off';
-        T.reset(); T.lock = t + 0.3; T.prefer = 0;
+        T.missAt = T.s; T.reset(); T.lock = t + 0.3; T.prefer = 0;
         return why;
       } else return '';
     }
@@ -152,7 +152,7 @@ export function struggle({ clip = null, title = 'BREAK FREE!', text = '', diff =
     <div class="st-top"><h2>${title}</h2>${text ? `<div class="st-text">${text}</div>` : ''}<div class="st-time"><i></i></div></div>
     <div class="st-gest sg"><svg viewBox="88 50 330 150"><polyline class="sg-ghost" points="${S}"/><circle class="sg-gdot" r="13"/></svg></div>
     <div class="st-shield"><img src="${IMG}" alt="" draggable="false"><svg viewBox="0 0 ${IW} ${IH}">
-      <polygon class="sg-rim" points="65,28 385,15 445,95 215,300 18,88"/>
+      <polygon class="sg-rim" points="66,30 384,17 432,95 214,289 21,88"/>
       <polyline class="sg-lane" points="${S}"/><polyline class="sg-ink" points="${S}"/><polyline class="sg-guide" points="${S}"/>
       <polyline class="sg-glow" points=""/><polyline class="sg-trail" points=""/>
       <circle class="sg-end" cx="${s0x}" cy="${s0y}" r="17"/><circle class="sg-end" cx="${s1x}" cy="${s1y}" r="17"/>
@@ -185,7 +185,7 @@ export function struggle({ clip = null, title = 'BREAK FREE!', text = '', diff =
       speak(SAY_WIN, 'win'); sfx.punch(); pop(el, 'jolt'); pop(pad, 'flash');
     };
     const miss = (why) => {
-      whyMiss.push(`${why}@${Math.round(tr.s / LEN * 100)}`); if (whyMiss.length > 12) whyMiss.shift();
+      whyMiss.push(`${why}@${Math.round(tr.missAt / LEN * 100)}`); if (whyMiss.length > 12) whyMiss.shift();
       misses++; pop(pad, 'miss');
       if (t - missT >= MISS_GAP) { missT = t; speak(SAY_MISS, 'miss'); }
     };
@@ -297,7 +297,7 @@ export function struggle({ clip = null, title = 'BREAK FREE!', text = '', diff =
         const p = tr.point();
         const str = tr.dir && tr.s > 0 ? ptsStr(tr.P.pts.slice(0, p[2]).concat([[p[0], p[1]]])) : '';
         trail.setAttribute('points', str); glow.setAttribute('points', str);
-        curDot.setAttribute('cx', tr.dir ? p[0].toFixed(0) : '-99'); curDot.setAttribute('cy', p[1].toFixed(0));
+        curDot.style.display = tr.dir ? "" : "none"; curDot.setAttribute("cx", p[0].toFixed(0)); curDot.setAttribute("cy", p[1].toFixed(0));
       }
       pad.classList.toggle('fresh', !tr.dir);
       count.textContent = `${Math.min(NEED, banked)}/${NEED}`;

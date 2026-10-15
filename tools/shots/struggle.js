@@ -129,7 +129,7 @@ async function run(page, opts) {
       lift: { diff: 'hard', mode: 'lift' },
       sloppy: { diff: 'hard', mode: 'pingpong', jitter: 8, scale: 1.25, tall: 1.4, secsPer: 2.2 }, // a big, tall, shaky, slow S
       small: { diff: 'hard', mode: 'lift', jitter: 5, scale: 0.75, tall: 1.0, secsPer: 1.8 },      // a small one, lifting
-      tiny: { diff: 'normal', mode: 'pingpong', jitter: 3, scale: 0.5, tall: 1.2, secsPer: 1.5 },  // a cramped thumb
+      tiny: { diff: 'normal', mode: 'pingpong', jitter: 1.5, scale: 0.5, tall: 1.2, secsPer: 1.5 },  // a cramped thumb
       big: { diff: 'hard', mode: 'pingpong', jitter: 6, scale: 1.6, tall: 0.9, secsPer: 1.8 },     // a sweeping one
       wander: { diff: 'normal', mode: 'wander' },
       still: { diff: 'normal', mode: 'still' },
