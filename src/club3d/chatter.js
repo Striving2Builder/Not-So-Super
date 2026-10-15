@@ -45,7 +45,7 @@ export const chatterMethods = {
     this.chatterT -= dt;
     if (this.chatterT > 0) return;
     this.chatterT = 2 + Math.random() * 1.8;
-    if (this.quietT > 0 || this.hunted?.() || this.bubblesFull?.()) return; // (r11 L2b: she's just been made, or two are talking already)
+    if (this.quietT > 0 || this.idleRing || this.hunted?.() || this.bubblesFull?.()) return; // (r11 L2b: she's just been made, the ring has the floor, or two are talking already)
     const h = this.hero.position, st = this.g.state, d = this.caseDef;
     const p = this.crowd.nearest(h.x + (Math.random() - 0.5) * 5, h.z - 1 - Math.random() * 4, 6, (q) => Math.hypot(q.x - h.x, q.z - h.z) > 1.0 && !q.talking);
     if (!p) return;
@@ -112,7 +112,8 @@ export const chatterMethods = {
       if (b.gone || b.t <= 0 || !a || this.busy) { this.dropBubble(b); continue; }
       const w = b.el.offsetWidth || 180, hgt = b.el.offsetHeight || 60;
       const x = clamp(a.x - w / 2, 8, this.g.w - w - 8), y = clamp(a.y - hgt - 18, 56, this.g.h - hgt - 90);
-      b.el.style.transform = `translate(${Math.round(x)}px,${Math.round(y)}px)`;
+      b.bx = x; b.by = y; b.bw = w; b.bh = hgt; // (r11 L2b: feelfx layoutBubbles keeps it clear of the rest)
+      b.el.style.transform = `translate(${Math.round(x + (b._dx || 0))}px,${Math.round(y + (b._dy || 0))}px)`;
     }
   },
 

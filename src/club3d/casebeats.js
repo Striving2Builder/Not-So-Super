@@ -65,7 +65,7 @@ export const beatMethods = {
   knotHost() { return this.gb || this._kh || (this._kh = { knot: null, leaving: null }); },
 
   /** n dancers nearest her close in to a ring of radius r (north of her: the camera sees them). */
-  formKnot(n, r = BEAT.r, phones = true) {
+  formKnot(n, r = BEAT.r, phones = true, fan = 1.9) { // (fan: half-angle in rad; r11 L2b: the idle ring passes a narrower one, all on her far side)
     const B = this.knotHost(), h = this.hero.position, P = this.crowd.people;
     if (B.knot) this.releaseKnot(); // (a beat's knot takes over the idle ring's dancers)
     // dancers still drifting home from the last knot: their real home spots are in `leaving`
@@ -74,7 +74,7 @@ export const beatMethods = {
     const near = P.filter((p) => p.pose === 'dance' && !p.fixed && !p.left && Math.hypot(home(p).hx - h.x, home(p).hz - h.z) < 9)
       .sort((a, b) => Math.hypot(home(a).hx - h.x, home(a).hz - h.z) - Math.hypot(home(b).hx - h.x, home(b).hz - h.z)).slice(0, n);
     const k = near.map((p, i) => {
-      const a = -1.9 + (3.8 * (i + 0.5)) / near.length; // a fan of angles, none between her and the camera
+      const a = -fan + (2 * fan * (i + 0.5)) / near.length; // a fan of angles, none between her and the camera
       const o = was.get(p), q = o ? { ...o, a, r } : { p, hx: p.hx, hz: p.hz, rot: p.rot, col: p.col.getHex(), a, r };
       p.col.setHex(0xcfe8ff); // (lit by their own phone screens: the knot reads against the crowd)
       return q;
@@ -122,7 +122,7 @@ export const beatMethods = {
       if (K.flashT <= 0) {
         K.flashT = rand(0.35, 0.9) / (K.rate || 1); // (the idle ring: faster the longer she stands there)
         const q = pick(K.k), s = this.screenOf({ x: q.p.x, y: 1.9, z: q.p.z }, 0);
-        if (s) comic.pow(pick(['SNAP!', 'FLASH', 'CLICK!']), s.x, s.y, { size: 0.5, colors: ['#ffffff', '#ffd84d'] });
+        if (s && this.t - (K.powAt ?? -9) > 1.2) { K.powAt = this.t; comic.pow(pick(['SNAP!', 'FLASH', 'CLICK!']), s.x, s.y, { size: 0.5, colors: ['#ffffff', '#ffd84d'] }); } // (r11 L2b: one SNAP! word a beat, the flashes keep coming)
         ph.material.color.setHex(0xffffff); setTimeout(() => this.phones?.material.color.setHex(0x9fd8ff), 90);
         sfx.shutter?.();
       }

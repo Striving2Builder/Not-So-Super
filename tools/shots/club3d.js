@@ -515,6 +515,30 @@ const GEN = (() => { const g = arg('--gen', ''); if (!g) return []; const [a, b]
       for (let i = 0; i < 40 && !(await ev(() => window.__game.mode.idleFlips > 0)); i++) { await ev(() => { const m = window.__game.mode; m.incT = 0; m.stunT = 0; }); await V.gwait(0.15); inc++; }
       await V.gwait(0.1); await V.strip('idle', 2); log.push({ incidents: inc, ...(await ring()) });
       await V.gwait(1.2); await V.strip('idle', 3);
+      // r11 L2b: the busy ring: the crowd tries six lines in a row; at most 2 bubbles show, apart, clear of the HUD
+      const talk = () => ev(() => {
+        const sel = '#comic-layer .bubble:not(.out), #c3-chat .c3b:not(.out)';
+        const bs = [...document.querySelectorAll(sel)].map((e) => e.getBoundingClientRect());
+        const hud = [...document.querySelectorAll('#hud-top, #hud-left, #hud-right, #objectives, #c3-tip.on')].map((e) => e.getBoundingClientRect()).filter((r) => r.width && r.height);
+        const x = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+        let over = 0, onHud = 0;
+        bs.forEach((a, i) => { bs.slice(i + 1).forEach((b) => { if (x(a, b)) over++; }); if (hud.some((h) => x(a, h))) onHud++; });
+        return { bubbles: bs.length, over, onHud, at: bs.map((r) => [r.left, r.top, r.width, r.height].map(Math.round).join(',')).join(' ') };
+      });
+      const busy = [];
+      for (let i = 0; i < 6; i++) { await ev(() => { const m = window.__game.mode; if (m.idleRing) m.idleRing.sayT = 0; m.sayAt = -9; }); await V.gwait(0.12); busy.push(await talk()); }
+      await V.gwait(0.35); busy.push(await talk());
+      // the director's frame: two tap bubbles from one dancer, then four crowd lines at one spot (the cap and the de-overlap)
+      await ev(async () => {
+        const { comic } = await import(new URL('src/comic.js', location.href).href), m = window.__game.mode, h = m.hero.position;
+        const p = m.crowd.nearest(h.x, h.z - 1.5, 6, (q) => !q.talking), an = () => m.screenOf({ x: p.x, y: 0, z: p.z }, 2.05);
+        m.tapBubble(p, an, { id: 'r11l2b-a', text: 'Bouncers lose it at the drop.' }, 'rumour');
+        m.tapBubble(p, an, { id: 'r11l2b-b', text: 'Rico in VIP only drinks the blue ones.' }, 'rumour');
+        const s = m.screenOf(h, 2.3);
+        for (let i = 0; i < 4; i++) { m.sayAt = -9; comic.say(['Is that her?!', 'Phones UP!', 'Get her side!', 'Look this way!'][i], s.x + 30, s.y - 40); }
+      });
+      await V.gwait(0.4); busy.push(await talk()); await V.shot('flow_idle_talk');
+      log.push({ busy });
       // she walks off: the ring breaks, the dancers drift home
       await ev(() => { window.__game.mode.stunT = 0; });
       await V.stick(0.9, 0); await V.gwait(0.5); await V.stick(null); log.push(await ring());

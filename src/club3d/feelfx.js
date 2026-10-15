@@ -27,7 +27,7 @@ const SIL = { col: 0x6fd4ff, cell: 4, dot: 0.36, order: 30 };
 const SPOT_W = ['SPOTTED!', 'MADE!', 'BUSTED!'];
 const LOST_W = ['LOST THEM!', 'GONE!', 'SHAKEN!'];
 // what bubbles keep clear of: the title card, the stats, the LIVE panel (and the corner buttons), the tip
-const AVOID = '#hud-top, #hud-left, #hud-right, #c3-tip.on, #prompt.on, #c3-stamp.on, #c3-talk.on, #btns .tbtn, #stick-base';
+const AVOID = '#hud-top, #hud-left, #hud-right, #objectives, #c3-tip.on, #prompt.on, #c3-stamp.on, #c3-talk.on, #btns .tbtn, #stick-base';
 
 export const feelFxMethods = {
   startFeelFx() {
@@ -70,35 +70,63 @@ export const feelFxMethods = {
     return n >= L2B.cap;
   },
 
-  /** Per frame (the HUD pass): bubbles apart, clear of the title card and the LIVE panel. */
+  /**
+   * Per frame (the HUD pass): every bubble on screen (the comic layer's and the tap bubbles) apart from
+   * each other and clear of the title card, the stats, the LIVE panel and the tip. Her own voice and
+   * named voices are placed first, then the tap bubbles, then the crowd; a crowd bubble with no room goes.
+   */
   layoutBubbles() {
     const L = $('comic-layer');
-    if (!L) return;
-    const els = [...L.querySelectorAll('.bubble:not(.out)')];
-    if (!els.length) return;
+    const els = L ? [...L.querySelectorAll('.bubble:not(.out)')] : [];
+    const taps = (this.taps || []).filter((b) => !b.gone && b.el.isConnected && b.by != null);
+    if (!els.length && !taps.length) return;
     const now = performance.now();
-    if (now - this._avoidT > 250) {
+    if (now - this._avoidT > 250 || !this._avoid) {
       this._avoidT = now;
       this._avoid = [...document.querySelectorAll(AVOID)].map((e) => e.getBoundingClientRect()).filter((r) => r.width && r.height);
     }
-    const H = innerHeight, taken = [...this._avoid];
-    for (const b of this.taps || []) if (!b.gone && b.el.isConnected) taken.push(b.el.getBoundingClientRect());
+    const W = innerWidth, H = innerHeight, taken = [...this._avoid];
+    // and her: nobody's line sits on top of the girl the player is steering
+    const hp = this.hero?.position, f = hp && this.screenOf(hp, 0), t = hp && this.screenOf(hp, 1.75);
+    if (f && t && f.y > t.y) { const hw = (f.y - t.y) * 0.24; taken.push({ left: t.x - hw, right: t.x + hw, top: t.y - 4, bottom: f.y }); }
     const hit = (x, y, w, h) => taken.some((r) => x < r.right + 4 && x + w > r.left - 4 && y < r.bottom + 4 && y + h > r.top - 4);
-    for (const el of els) {
-      const x = parseFloat(el.style.left) || 0, y0 = parseFloat(el.style.top) || 0, w = el.offsetWidth, h = el.offsetHeight;
-      let dy = null;
-      for (let i = 0; i <= 8 && dy == null; i++) {
-        for (const s of i ? [-1, 1] : [1]) {
-          const d = s * i * (h * 0.5 + 6), y = y0 + d;
-          if (y < 50 || y + h > H - 6) continue;
-          if (!hit(x, y, w, h)) { dy = d; break; }
+    const ok = (x, y, w, h) => x >= 6 && x + w <= W - 6 && y >= 50 && y + h <= H - 6 && !hit(x, y, w, h);
+    // the nearest free spot (last frame's first, so nothing jitters): up or down, or a step to either side
+    const fit = (x, y0, w, h, last) => {
+      if (last && ok(x + last[0], y0 + last[1], w, h)) return last;
+      let best = null, bd = 1e9;
+      for (const dx of [0, -(w * 0.55 + 8), w * 0.55 + 8, -(w + 12), w + 12]) {
+        for (let k = -Math.floor(y0 / 16), dy; (dy = k * 16) < H - y0; k++) {
+          const d = Math.abs(dx) * 0.5 + Math.abs(dy); // (beside her beats far below her)
+          if (d < bd && ok(x + dx, y0 + dy, w, h)) { best = [dx, dy]; bd = d; }
         }
       }
-      if (dy == null) { if (el.dataset.k !== '1') { el.classList.add('out'); setTimeout(() => el.remove(), 300); continue; } dy = el._dy || 0; }
+      return best;
+    };
+    const own = (el) => el.dataset.k === '1' || el.classList.contains('shout') || el.classList.contains('thought');
+    const items = [
+      ...els.filter(own).map((el) => ({ el, keep: true })),
+      ...taps.map((b) => ({ b })),
+      ...els.filter((el) => !own(el)).map((el) => ({ el })),
+    ];
+    for (const it of items) {
+      const o = it.b || it.el;
+      let x, y0, w, h;
+      if (it.b) ({ bx: x, by: y0, bw: w, bh: h } = it.b);
+      else { x = parseFloat(o.style.left) || 0; y0 = parseFloat(o.style.top) || 0; w = o.offsetWidth; h = o.offsetHeight; }
+      let d = fit(x, y0, w, h, o._t);
+      if (!d) {
+        if (it.b) { this.dropBubble(it.b); continue; }
+        if (!it.keep) { o.classList.add('out'); setTimeout(() => o.remove(), 300); continue; }
+        d = o._t || [0, 0];
+      }
+      o._t = d;
       // (ease, so a bubble slides out of the way instead of jumping)
-      el._dy = el._dy == null ? dy : el._dy + (dy - el._dy) * 0.35;
-      el.style.marginTop = `${Math.round(el._dy)}px`;
-      taken.push({ left: x, right: x + w, top: y0 + dy, bottom: y0 + dy + h });
+      o._dx = o._dx == null ? d[0] : o._dx + (d[0] - o._dx) * 0.35;
+      o._dy = o._dy == null ? d[1] : o._dy + (d[1] - o._dy) * 0.35;
+      if (it.b) o.el.style.transform = `translate(${Math.round(x + o._dx)}px,${Math.round(y0 + o._dy)}px)`;
+      else { o.style.marginTop = `${Math.round(o._dy)}px`; o.style.marginLeft = `${Math.round(o._dx)}px`; }
+      taken.push({ left: x + d[0], right: x + d[0] + w, top: y0 + d[1], bottom: y0 + d[1] + h });
     }
   },
 

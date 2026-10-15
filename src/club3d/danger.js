@@ -21,7 +21,7 @@ export const DANGER = {
   // dancers (phones up); the incidents come faster the longer she stands, up to `faster`× after `max` s
   // more; moving `breakAt` m from where she stood breaks it. `flip`/`flash`: a held ring's own incidents
   // (the share of each roll), `say`: seconds between the crowd's lines.
-  idle: { after: 4, max: 16, faster: 2.5, ring: 7, r: 1.8, breakAt: 1, flip: 0.3, flash: 0.25, say: [3, 5] },
+  idle: { after: 4, max: 16, faster: 2.5, ring: 7, r: 1.8, fan: 1.4, breakAt: 1, flip: 0.3, flash: 0.25, say: [3, 5] }, // (fan r11 L2b: the ring on her far side, clear of the lens)
 };
 
 const GROPE = ['Hey! Who was that?!', 'Who flipped my little red mini skirt?!', 'Hands OFF!', 'Did someone just rub me up?!', 'Okay, WHO did that?', 'OMG, Why am I wet?!'];
@@ -175,7 +175,7 @@ export const dangerMethods = {
     }
     if (this.still < I.after || this.room || this.dancing || this.busy || this.sub || this.quickOn || this.sedating || this.caged || this.done) return;
     if (B.knot || this.escapeT > 0) return; // (a beat's knot is running: the idle ring waits)
-    const K = this.formKnot(I.ring, I.r);
+    const K = this.formKnot(I.ring, I.r, true, I.fan);
     if (!K.k.length) { this.releaseKnot(); this.still = 0; return; } // (nobody near: try again after another wait)
     K.idle = true;
     this.idleRing = { K, x: h.x, z: h.z, sayT: 1.2 };

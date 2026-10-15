@@ -79,13 +79,13 @@ function figures() {
  * screen-space ellipse, and anyone within ~1.5 m of the lens thins out (seeBox: centre + radii in drawing-buffer px; seeZ: her view depth; seeK: 0 = off),
  * so the crowd never covers her, whatever the Camera setting. One discard, no extra draws.
  */
-const SEE_KNOT = [0.5, 0.25]; // (r11 L2b) the knot's dither: over her, by the lens
+const SEE_KNOT = [0.5, 2.6]; // (r11 L2b) the knot: dither over her (x0.5), and the lens zone reaches 3.5 m (not 1.9): no giant bodies at the lens
 const SEE_GLSL = `uniform vec4 seeBox; uniform float seeZ, seeK; uniform vec2 seeM;
 bool seeCut(float z){
   if (seeK <= 0.0 || z > seeZ - 0.2) return false;
   vec2 q = (gl_FragCoord.xy - seeBox.xy) / seeBox.zw;
   float a = (1.0 - smoothstep(0.55, 1.0, dot(q, q))) * smoothstep(0.2, 0.9, seeZ - z) * seeM.x;
-  a = max(a, smoothstep(1.9, 0.9, z) * 0.85 * seeM.y) * seeK;   // (and anyone right at the lens thins out: the close steps)
+  a = max(a, smoothstep(0.9 + seeM.y, 0.9, z) * 0.85) * seeK;   // (and anyone right at the lens thins out: the close steps; seeM.y = reach past 0.9 m)
   return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < a;
 }
 `;
@@ -339,7 +339,7 @@ export class ClubCrowd {
     const U = this.mat.userData.sil;
     if (!cam) { U.seeK.value = 0; return; }
     // r11 L2b: her ink silhouette shows through the crowd now, so a ring of people round her (the knot)
-    // only thins over her, and the ones beside the lens stay (they're the shot)
+    // only thins over her, and the lens zone reaches further (no giant bodies at the lens)
     U.seeM.value.set(knot ? SEE_KNOT[0] : 1, knot ? SEE_KNOT[1] : 1);
     cam.updateMatrixWorld();
     const a = (this._sa || (this._sa = new THREE.Vector3())).set(h.x, h.y + 0.05, h.z).project(cam);
