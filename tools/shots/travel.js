@@ -66,14 +66,14 @@ function installBot() {
     B.boost = false; B.band = null; B.perch = false;
     if (!m) return B.idle ? B.idle() : null;
     const e = m.e, t = m.target ? m.target() : null;
-    switch (m.kind) {
+    const act = () => { switch (m.kind) {
       case 'impostor': { B.band = 0; const d = m.dist(); B.boost = d > 700; return seek(m.x, m.y, { slow: 260 }); }
-      case 'faller': { B.band = e.phase === 'fall' && e.z > 400 ? nearestBand(e.z) : 0; return seek(e.x, e.y + 4, { stopAt: 10, slow: 200 }); }
+      case 'faller': { B.band = nearestBand(e.z); return seek(e.x, e.y + 4, { stopAt: 10, slow: 200 }); } // (up at the washer's height: catch the rig, or them as they fall)
       case 'car': case 'getaway': {
         // chase at full speed (a "slow" ramp let the 235 u/s car hold her ~60 u off, just outside the
         // 55 u grab), aimed a beat ahead of the car on its road; high over the towers until close
         const d = m.dist(), lead = Math.min(0.6, d / 900), sp = e.spd || 0, dir = e.dir || 0;
-        B.band = d < 420 ? 0 : 1; B.boost = d > 160;
+        B.band = d < 420 ? 0 : 1; B.boost = d > 50; // (a getaway at 285 u/s held her ~70 u back without it)
         return seek(e.x + [1, 0, -1, 0][dir] * sp * lead, e.y + [0, 1, 0, -1][dir] * sp * lead);
       }
       case 'heli': { B.band = nearestBand(e.z); return seek(e.x, e.y, { slow: 160 }); }
@@ -104,7 +104,14 @@ function installBot() {
         return seek(t.x, t.y, { stopAt: t.stopAt || 0, slow: t.slow || 0 });
       }
     }
+    };
+    const v = act();
+    // a player's reaction beat: the first ~2 s of a moment she eases toward it (no boost, same band),
+    // so the strip gets an approach with the target in view before the catch (they spawn 80-160 m ahead)
+    if (v && m.kind !== 'impostor' && (e?.t ?? 99) < B.react) { B.boost = false; B.band = null; B.perch = false; return { x: v.x * 0.4, y: v.y * 0.4 }; }
+    return v;
   };
+  B.react = 2;
   inp.axis = () => {
     if (!B.on) return ax();
     let a = null;
@@ -205,7 +212,7 @@ async function playMoment(browser, kind, sc) {
       n++;
       if (s.result && !settled) settled = Date.now();
       if (settled && Date.now() - settled > (sc.after || 2500)) break;
-      await page.waitForTimeout(sc.gap || 500);
+      await page.waitForTimeout(sc.gap || 300);
     }
     r.result = r.frames.length ? r.frames[r.frames.length - 1].result : null;
     r.log = await page.evaluate(() => window.__game.overworld.moments.log);
@@ -232,6 +239,10 @@ function strip(kind, r) {
   const seen = F.map((q, i) => (q.view && !q.result && (res < 0 || i < res) ? i : -1)).filter((i) => i >= 0);
   if (seen.length) { idx.add(seen[0]); idx.add(seen.reduce((a, i) => (F[i].d != null && F[i].d < F[a].d ? i : a), seen[0])); }
   if (res >= 0) idx.add(Math.min(F.length - 1, res + 1)); // (the verdict panel)
+  // the stills for the blind pairs (travel/): the approach with the target in view, the verdict
+  const still = (i, tag) => { if (i >= 0 && F[i]) fs.copyFileSync(path.join(src, F[i].f), path.join(OUT, 'travel', `${kind}_${tag}.png`)); };
+  if (seen.length) { still(seen[0], 'a_approach'); still(seen.reduce((a, i) => (F[i].d < F[a].d ? i : a), seen[0]), 'b_close'); }
+  if (res >= 0) still(Math.min(F.length - 1, res + 1), 'c_verdict');
   for (const i of idx) fs.copyFileSync(path.join(src, F[i].f), path.join(sel, F[i].f));
   const out = path.join(OUT, 'strips', `${kind}.png`);
   try { execFileSync('python', [path.join(__dirname, 'sheet.py'), sel, out, '4', '420'], { stdio: 'pipe' }); } catch (e) { return null; }
