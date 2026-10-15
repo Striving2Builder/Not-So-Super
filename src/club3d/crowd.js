@@ -28,7 +28,8 @@ const SOLID = new Set(['sit', 'dj']);
 const OUTFIT = [0xe8407a, 0x2ec4d0, 0xece2c8, 0xe8b030, 0x8a5ae0, 0xe86a30, 0x4ad08a, 0xd03040];
 const HAIRC = [0x16110d, 0x16110d, 0x3a2414, 0x3a2414, 0x6a4024, 0x8a3a1c, 0xd8b070, 0xe8e0d0, 0xff5ab0, 0x4a8aff];
 const HEADS = { dress: ['headL', 'headL', 'headL', 'headB', 'headB', 'headA', 'headA', 'headS'], suit: ['headS', 'headS', 'headS', 'headS', 'headA', 'headA', 'headB', 'headL'] };
-const PHONE_CAP = 24; // the most phones held up at once
+const PHONE_CAP = 24;
+const tmpC = new THREE.Color(); // the most phones held up at once
 
 const cyl = (rt, rb, h, seg, x, y, z, sz = 1) => new THREE.CylinderGeometry(rt, rb, h, seg).scale(1, 1, sz).translate(x, y, z);
 const strip = (g) => { for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k); return g; };
@@ -69,7 +70,7 @@ function figures() {
     upper: part([cyl(0.055, 0.048, 0.32, 6, 0, -0.16, 0)], true, SLEEVE),
     fore: part([[cyl(0.046, 0.04, 0.29, 6, 0, -0.145, 0), SLEEVE], [new THREE.SphereGeometry(0.05, 6, 4).translate(0, -0.31, 0), SKIN]], true),
     // a phone in the hand, held up at her (p.phone), its screen lit
-    phone: part([[new THREE.BoxGeometry(0.08, 0.15, 0.016).translate(0, -0.4, 0.03), SCREEN]], true),
+    phone: part([[new THREE.BoxGeometry(0.1, 0.18, 0.018).translate(0, -0.41, 0.03), SCREEN]], true),
   };
 }
 
@@ -373,7 +374,7 @@ export class ClubCrowd {
     for (const k of Object.keys(M)) c[k] = 0;
     for (const i of this.picked) {
       const p = P[i], a = p.tone + (p.type === 'suit' ? 2 : 0);
-      for (const k of [p.type, p.head, 'upper', 'upper', 'fore', 'fore']) { M[k].alt.setXYZW(c[k], p.hair.r, p.hair.g, p.hair.b, a); M[k].setColorAt(c[k]++, p.col); }
+      for (const k of [p.type, p.head, 'upper', 'upper', 'fore', 'fore']) { M[k].alt.setXYZW(c[k], p.hair.r, p.hair.g, p.hair.b, a); M[k].setColorAt(c[k]++, p.phone ? tmpC.copy(p.col).multiplyScalar(0.5) : p.col); } // (the knot's screen-lit pale, held down: they stay people, not white blocks)
     }
     for (const m of Object.values(M)) { m.instanceColor.needsUpdate = true; m.alt.needsUpdate = true; }
   }
