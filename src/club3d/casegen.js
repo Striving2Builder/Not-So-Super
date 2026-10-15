@@ -13,6 +13,8 @@ import { SUSPECTS, ALLIES, DRINKS, CLUE_TYPES, FRAMES, FLAVOUR, TWISTS, TWIST_ID
 // booth, the lookalike her double on the club's screens, the setup the break-out). A suspect playing
 // their own twist runs their own list (casedata STYLE).
 const TWIST_BEATS = { real: ['shots', 'selfie', 'headline'], planted: ['push', 'booth', 'headline'], lookalike: ['double', 'selfie', 'headline'], doctored: ['selfie', 'shots', 'headline'], setup: ['trap', 'breakout', 'headline'] };
+// where each suspect's lead plays (the hand-written cases' venues): the loft, the presses, the den
+const LEAD_VENUE = { vox: 'Penthouse', sterling: 'Warehouse', crane: 'High-Roller Suite', lusk: 'Underground Lair', starla: 'Penthouse', pratt: 'Warehouse', bell: 'Underground Lair', kroll: 'High-Roller Suite' };
 /** The visit's own title, headline and lede (seeds with the same twist pick different ones). */
 function variant(S, twist, s) {
   const own = SUSPECTS.filter((q) => q.twist === twist).indexOf(S), i = own >= 0 ? own : SUSPECTS.indexOf(S) + 2, M = TWIST_MORE[twist], lap = Math.floor((s - 1) / 8);
@@ -140,7 +142,7 @@ export function makeCase(seed) {
     },
     questions,
     leads: [
-      { id: `gen-${S.id}-lead`, name: S.lead.name, kind: 'street', reward: 100,
+      { id: `gen-${S.id}-lead`, name: S.lead.name, ...(LEAD_VENUE[S.id] ? { kind: 'special', venue: LEAD_VENUE[S.id], theme: 'blackmail' } : { kind: 'street' }), reward: 100, // (r11 V2: a real venue)
         by: Object.keys(clues).filter((k) => clues[k].cat === 'drop' || clues[k].cat === 'supply'), blurb: S.lead.blurb },
     ],
   };
