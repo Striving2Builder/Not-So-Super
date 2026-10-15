@@ -895,3 +895,16 @@ body.c3-xray #xray-tint::after { content: ""; position: absolute; left: 0; right
 #mo-verdict.won b { color: #fff; }
 #mo-verdict small { display: block; margin-top: 2px; font: 800 13px/1.2 system-ui, sans-serif; letter-spacing: .03em; text-transform: uppercase; }
 @media (max-height: 480px) { #mo-verdict b { font-size: 44px; } #mo-verdict small { font-size: 11px; } }
+/* === r11 F2b === */
+/* one message lane while a flight moment runs: toasts drop below the moment's banner (never on it) */
+body.mo-on #toasts { top: calc(124px + var(--st)); left: 38%; } /* (left of the LIVE panel) */
+@media (max-height: 480px) { body.mo-on #toasts { top: calc(112px + var(--st)); } }
+/* captions in flight: clear of the joystick's rest spot and of the left edge (the skew pushed them off it) */
+@media (max-height: 480px) { body[data-mode="overworld"] .caption, body[data-mode="overworld"] .newsflash { bottom: calc(176px + var(--sb)); left: calc(22px + var(--sl)); } }
+/* the impostor unmasked: a comic panel instead of the Continue box (auto-dismisses) */
+#mo-unmask { position: absolute; left: calc(16px + var(--sl, 0px)); top: 22%; width: min(500px, calc(100vw - 330px)); min-width: 250px; z-index: 54; pointer-events: none; padding: 10px 18px 12px; border: 4px solid #0b0b12; box-shadow: 7px 7px 0 rgba(0, 0, 0, .55); background-color: #3fa0ff; color: #fff; background-image: radial-gradient(rgba(0, 0, 0, .18) 1.2px, transparent 1.4px); background-size: 7px 7px; transform: rotate(-3deg) scale(.3); opacity: 0; transition: opacity .12s, transform .18s cubic-bezier(.2, 1.6, .4, 1); text-align: center; }
+#mo-unmask.on { opacity: 1; transform: rotate(-3deg) scale(1); }
+#mo-unmask b { display: block; font: 400 60px/1 "Bangers", Impact, sans-serif; letter-spacing: .05em; color: #ffe23a; -webkit-text-stroke: 2px #0b0b12; text-shadow: 4px 4px 0 #0b0b12; }
+#mo-unmask small { display: block; margin-top: 4px; font: 800 13px/1.25 system-ui, sans-serif; letter-spacing: .03em; text-transform: uppercase; text-shadow: 1px 1px 0 #0b0b12; }
+#mo-unmask i { position: absolute; right: -14px; top: -18px; font: 400 26px/1 "Bangers", Impact, sans-serif; font-style: normal; background: #ffe23a; color: #0b0b12; border: 3px solid #0b0b12; padding: 3px 8px; transform: rotate(10deg); }
+@media (max-height: 480px) { #mo-unmask b { font-size: 48px; } #mo-unmask small { font-size: 11px; } }

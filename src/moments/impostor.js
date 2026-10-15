@@ -192,7 +192,10 @@ export class ImpostorChase extends Moment {
     this.state = 'caught'; this.stateT = 0;
     if (this.hop && this.z > this.roof.z + 4) { this.roof = this.hop.to; } // (tackled mid-hop: they land on the next roof)
     this.dir.celebrate(this.x, this.y, this.z + 4, pick(['GOTCHA!', 'TACKLED!', 'KA-POW!']), { size: 1.4 });
-    this.wig = { x: this.x, y: this.y, z: this.z + 6, vx: Math.cos(this.hero.ang) * 40, vy: Math.sin(this.hero.ang) * 40, vz: 70, r: 0 };
+    this.dir.freeze?.(0.3); // (r11 F2b: a hit-stop on the tackle, then the slow motion)
+    // the wig flies up and off to the side of her line, so the chase camera sees it go
+    const side = this.hero.ang + Math.PI / 2;
+    this.wig = { x: this.x, y: this.y, z: this.z + 6, vx: Math.cos(this.hero.ang) * 25 + Math.cos(side) * 30, vy: Math.sin(this.hero.ang) * 25 + Math.sin(side) * 30, vz: 95, r: 0 };
     this.say(pick(['Hey! Watch the wig!', "It's just a JOB, okay?!", 'Ow! My extensions!']), 'shout');
     for (const q of this.drones) if (q.alive) q.scatter = rand(0, Math.PI * 2);
     this.win(1.7);
@@ -259,7 +262,7 @@ export class ImpostorChase extends Moment {
     // the swarm (live ones circling, smashed ones tumbling down)
     for (const q of this.drones) if (q.alive || q.fall < 2) kit.drones.put(q.x, q.y, q.z, Math.atan2(this.y - q.y, this.x - q.x), q.alive ? 0.25 : q.a, q.alive ? Math.sin(t * 3) * 0.1 : q.a * 0.7, KIT.scale.drone);
     // the wig, flying off
-    if (this.wig) { const w = this.wig, a = this.wigA || (this.wigA = kit.take('wig')); a.at(w.x, w.y, w.z, w.r, w.r * 0.7, 0); headZ = w.z; }
+    if (this.wig) { const w = this.wig; let a = this.wigA; if (!a) { a = this.wigA = kit.take('wig'); a.group.scale.setScalar(a.base * 2.4); a.hull.material = kit.inkBold; } a.at(w.x, w.y, w.z, w.r, w.r * 0.7, 0); headZ = w.z; } // (r11 F2b: big and inked: the payoff)
     this.headZ = headZ;
   }
 

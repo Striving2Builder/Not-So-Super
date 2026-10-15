@@ -216,7 +216,7 @@ async function playMoment(browser, kind, sc) {
           const P = ow.view3d.projector(), [sx, sy, front] = P.proj(p.x, p.y, p.z ?? 0), W = innerWidth, H = innerHeight, hs = ow.heroScreen || { x: W / 2, y: H / 2 };
           view = !!m && front && sx > W * 0.06 && sx < W * 0.94 && sy > H * 0.1 && sy < H * 0.94 && Math.hypot(sx - hs.x, sy - hs.y) > 45;
         } catch (err) { /* no 3D view */ }
-        return { t: +ow.t.toFixed(2), result: m ? m.result : 'gone', state: m?.state || m?.e?.phase || null, d: m ? Math.round(m.dist()) : null, z: Math.round(ow.hero.z), slow: ow.moments.scale, view };
+        return { t: +ow.t.toFixed(2), result: m ? m.result : 'gone', state: m?.state || m?.e?.phase || null, d: m ? Math.round(m.dist()) : null, z: Math.round(ow.hero.z), slow: ow.moments.scale, view, mo: document.body.classList.contains("mo-on"), focus: ow.moments.focus?.kind || null, lens: +(ow.view3d?.cam?.lens || 0).toFixed(1) };
       }, kind);
       const f = `f${String(n).padStart(3, '0')}_${Math.round(s.t * 1000)}.png`;
       await shotTo(page, path.join(dir, f));
@@ -253,7 +253,11 @@ function strip(kind, r) {
   if (res >= 0) idx.add(Math.min(F.length - 1, res + 1)); // (the verdict panel)
   // the stills for the blind pairs (travel/): the approach with the target in view, the verdict
   const still = (i, tag) => { if (i >= 0 && F[i]) fs.copyFileSync(path.join(src, F[i].f), path.join(OUT, 'travel', `${kind}_${tag}.png`)); };
-  if (seen.length) { still(seen[0], 'a_approach'); still(seen.reduce((a, i) => (F[i].d < F[a].d ? i : a), seen[0]), 'b_close'); }
+  if (seen.length) {
+    // r11 F2b: approach and close are never the same frame (one in-view frame: close = the last frame before the resolution)
+    const close = seen.length > 1 ? seen.slice(1).reduce((a, i) => (F[i].d < F[a].d ? i : a), seen[1]) : (res > seen[0] + 1 ? res - 1 : -1);
+    still(seen[0], 'a_approach'); if (close >= 0 && close !== seen[0]) { still(close, 'b_close'); idx.add(close); }
+  }
   if (res >= 0) still(Math.min(F.length - 1, res + 1), 'c_verdict');
   for (const i of idx) fs.copyFileSync(path.join(src, F[i].f), path.join(sel, F[i].f));
   const out = path.join(OUT, 'strips', `${kind}.png`);
@@ -278,6 +282,7 @@ function commuteSetup(every) {
   // the commuting player: take most offers (detour, play it), skip some, then back on the route
   B.kind = null;
   B.idle = () => {
+    B.perch = false; B.dive = undefined; // (r11 F2b: a won kitten left B.perch on, so she sat perched on its roof to the end of the run)
     const legs = window.__legs, t = legs[window.__leg % 2];
     if (!ow.nav.target || Math.hypot(t.x - ow.hero.x, t.y - ow.hero.y) < 400) { window.__leg++; const n = legs[window.__leg % 2]; ow.nav.set({ x: n.x, y: n.y, name: n.name }); }
     B.band = 1;
@@ -350,7 +355,7 @@ async function commute(browser) {
         if (ONLY && !ONLY.split(',').includes(kind)) continue;
         const r = await playMoment(browser, kind, sc);
         r.strip = strip(kind, r);
-        report[kind] = { ...r, frames: r.frames.length, path: r.frames.map((q) => `${q.t}s ${q.state || ''} d${q.d} z${q.z}${q.view ? " V" : ""}${q.result ? ' ' + q.result : ''}`) };
+        report[kind] = { ...r, frames: r.frames.length, path: r.frames.map((q) => `${q.t}s ${q.state || ''} d${q.d} z${q.z}${q.view ? " V" : ""}${q.mo ? " MO" : ""} f:${q.focus} L${q.lens}${q.result ? ' ' + q.result : ''}`) };
         console.log(kind, JSON.stringify({ result: r.result, frames: r.frames.length, errors: r.errors.slice(0, 3), fail: r.fail, metrics: r.metrics, log: r.log }));
       }
     }

@@ -149,7 +149,8 @@ export class FlightCam3D {
     const sh = (B.shake[0] * this.boostK + B.shake[1] * this.kick) * (1 - K);
     if (sh > 0.001) { const t = performance.now() / 1000; this.cam.position.x += Math.sin(t * 71) * sh; this.cam.position.y += Math.sin(t * 53 + 1) * sh; this.cam.position.z += Math.sin(t * 61 + 2) * sh; }
     // the lens (the aim below depends on it)
-    if (Math.abs(fov - this.cam.fov) > 0.05) { this.cam.fov = fov; this.cam.updateProjectionMatrix(); }
+    const lensFov = fov + (this.lens || 0) * (1 - K); // r11 F2b: a flight moment in reach widens the lens only (the rig above doesn't move)
+    if (Math.abs(lensFov - this.cam.fov) > 0.05) { this.cam.fov = lensFov; this.cam.updateProjectionMatrix(); }
     // Aim: point the camera at her, then turn it so she lands on her screen spot.
     const ax = lerp(lerp(lerp(C.at[0], CAM.canyon.at[0], this.canyonK), A.at[0], hk), P.at[0], K), ay = lerp(lerp(lerp(C.at[1], CAM.canyon.at[1], this.canyonK), A.at[1], hk), P.at[1], K);
     const ty = Math.tan((this.cam.fov * Math.PI) / 360), tx = ty * this.cam.aspect;

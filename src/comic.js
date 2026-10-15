@@ -46,7 +46,7 @@ function storyEnd(el) {
   setTimeout(() => { el.remove(); if (story.el === el) story.el = null; setTimeout(storyNext, STORY_GAP); }, 350);
 }
 function storyNext() {
-  if (story.el || !layer()) return;
+  if (story.el || story.hold || !layer()) return; // (r11 F2b: held while a flight moment runs)
   const now = performance.now();
   story.q = story.q.filter((it) => now - it.at < STORY_STALE);
   const it = story.q.shift();
@@ -69,6 +69,8 @@ function storyPush(kind, key, make, ms) {
 export const comic = {
   get enabled() { return enabled; },
   toggle() { enabled = !enabled; if (!enabled) this.clear(); return enabled; },
+  /** r11 F2b: hold the story slot (one message lane while a flight moment runs): what's showing goes, the queue waits. */
+  hold(on) { story.hold = on; if (on && story.el) storyEnd(story.el); else if (!on) storyNext(); },
   clear() { const l = layer(); if (l) l.innerHTML = ''; story.el = null; story.q = []; },
 
   /** POW! BAM! etc. at a screen position. size 1 = normal, 1.6 = finisher. */

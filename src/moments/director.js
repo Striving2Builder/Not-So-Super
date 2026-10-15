@@ -9,6 +9,7 @@ import { Kit3D } from './kit3d.js';
 import { banner, bannerSpot } from './hud.js';
 import { AirMoment, drawAir3d, overlayAir } from './air3d.js';
 import { ImpostorChase } from './impostor.js';
+import { frameStep, frameOff, overlayFocus } from './frame.js';
 import { BLOCK, ROAD, LOT } from '../city.js';
 import { clamp, lerp, rand, dist } from '../util.js';
 import { comic } from '../comic.js';
@@ -63,6 +64,7 @@ export class MomentDirector {
   reset() {
     for (const m of this.live || []) m.end();
     this.kit?.clear();
+    frameOff(this.ow.view3d); this.focus = null;
     this.live = [];
     this.log = [];
     this.clock = 0; this.flyT = 0; this.commute = 0;
@@ -179,6 +181,7 @@ export class MomentDirector {
   abandon() {
     for (const m of this.live) if (!m.result) m.abandon();
     this.live = [];
+    frameOff(this.ow.view3d); this.focus = null;
     this.sw = null;
   }
 
@@ -301,6 +304,7 @@ export class MomentDirector {
     const kit = this.kit;
     this.frameDt = dt;
     kit.begin(view.cam.cam);
+    frameStep(this, view, dt); // (r11 F2b: the focus target: lens, halo/arrow, one message lane)
     for (const m of this.live) { try { m.draw3d(kit, view); } catch (e) { console.error(e); m.result = m.result || 'lost'; } }
     drawAir3d(this, kit, view);
     kit.end(dt, view.scene.fog, view.sceneScale ?? 1);
@@ -311,6 +315,7 @@ export class MomentDirector {
   overlay(ctx, P, W, H, view) {
     for (const m of this.live) m.overlay(ctx, P, W, H, view);
     overlayAir(this, ctx, P, W, H, view);
+    overlayFocus(this, ctx, P, W, H, view);
     const focus = this.live.filter((m) => !m.result && m.banner).sort((a, b) => (b.taken - a.taken) || (a.t - b.t))[0];
     const b = focus?.banner();
     if (b) banner(ctx, bannerSpot(W), b, this.ow.t);
