@@ -53,15 +53,30 @@ function figures() {
   };
 }
 
+/**
+ * See-through (round 11 D5): anyone standing between the lens and her dithers out over her
+ * screen-space ellipse (seeBox: centre + radii in drawing-buffer px; seeZ: her view depth; seeK: 0 = off),
+ * so the crowd never covers her, whatever the Camera setting. One discard, no extra draws.
+ */
+const SEE_GLSL = `uniform vec4 seeBox; uniform float seeZ, seeK;
+bool seeCut(float z){
+  if (seeK <= 0.0 || z > seeZ - 0.2) return false;
+  vec2 q = (gl_FragCoord.xy - seeBox.xy) / seeBox.zw;
+  float a = (1.0 - smoothstep(0.55, 1.0, dot(q, q))) * smoothstep(0.2, 0.9, seeZ - z) * seeK;
+  return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < a;
+}
+`;
+
 /** Ink figures with a two-colour rim from behind and above, floor light on the shoes, the strobe. */
 function silhouetteMat() {
   const U = {
     rimA: { value: new THREE.Color(0x27e0ff) }, rimB: { value: new THREE.Color(0xff2fd0) }, floorC: { value: new THREE.Color(0x6a3aff) },
     k: { value: 1 }, flash: { value: 0 }, fogC: { value: new THREE.Color(0x140a26) }, fogN: { value: 28 }, fogF: { value: 85 },
+    seeBox: { value: new THREE.Vector4(0, 0, 1, 1) }, seeZ: { value: 0 }, seeK: { value: 0 },
   };
   const m = new THREE.ShaderMaterial({
     uniforms: U,
-    vertexShader: `attribute float aY; varying vec3 vN; varying vec3 vV; varying float vY; varying vec3 vC; varying float vD;
+    vertexShader: `attribute float aY; varying vec3 vN; varying vec3 vV; varying float vY; varying vec3 vC; varying float vD; varying float vZ;
 void main(){
   mat4 im = mat4(1.0);
   #ifdef USE_INSTANCING
@@ -76,11 +91,14 @@ void main(){
   #else
   vC = vec3(1.0);
   #endif
-  gl_Position = projectionMatrix * viewMatrix * wp;
+  vec4 mv = viewMatrix * wp; vZ = -mv.z;
+  gl_Position = projectionMatrix * mv;
 }`,
     fragmentShader: `uniform vec3 rimA, rimB, floorC, fogC; uniform float k, flash, fogN, fogF;
-varying vec3 vN; varying vec3 vV; varying float vY; varying vec3 vC; varying float vD;
+varying vec3 vN; varying vec3 vV; varying float vY; varying vec3 vC; varying float vD; varying float vZ;
+${SEE_GLSL}
 void main(){
+  if (seeCut(vZ)) discard;
   // the light is behind them (the stage): edges turned toward it rim up, heads and shoulders
   // catch the beams; everything facing the camera stays ink
   vec3 L = normalize(vec3(0.0, 0.55, -1.0));
@@ -110,7 +128,7 @@ void main(){
 function spriteMat(map, U) {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
-    uniforms: { map: { value: map }, beatB: { value: 0 }, surge: { value: 0 }, rimA: U.rimA, rimB: U.rimB, floorC: U.floorC, k: U.k, flash: U.flash, fogC: U.fogC, fogN: U.fogN, fogF: U.fogF },
+    uniforms: { map: { value: map }, beatB: { value: 0 }, surge: { value: 0 }, rimA: U.rimA, rimB: U.rimB, floorC: U.floorC, k: U.k, flash: U.flash, fogC: U.fogC, fogN: U.fogN, fogF: U.fogF, seeBox: U.seeBox, seeZ: U.seeZ, seeK: U.seeK },
     vertexShader: `attribute vec3 iPos; attribute vec4 iPar; uniform float beatB, surge;
 varying vec2 vUv; varying float vD; varying float vSide; varying float vLy; varying float vPick;
 void main(){
@@ -133,8 +151,9 @@ void main(){
 }`,
     fragmentShader: `uniform sampler2D map; uniform vec3 rimA, rimB, floorC, fogC; uniform float k, flash, fogN, fogF;
 varying vec2 vUv; varying float vD; varying float vSide; varying float vLy; varying float vPick;
+${SEE_GLSL}
 void main(){
-  if (texture2D(map, vUv).a < 0.5) discard;
+  if (texture2D(map, vUv).a < 0.5 || seeCut(vD)) discard;
   // backlit edges: where the sheet is empty just above (or beside) this pixel, the stage light
   // shows round them (a screen pixel or so out, so the far ones keep their rim)
   vec2 px = max(fwidth(vUv), vec2(1.0 / 1792.0, 1.0 / 1440.0));
@@ -263,6 +282,25 @@ export class ClubCrowd {
     const U = this.mat.userData.sil;
     U.rimA.value.copy(a); U.rimB.value.copy(b); U.k.value = k; U.flash.value = flash;
     if (fog) { U.fogC.value.copy(fog.color); U.fogN.value = fog.near; U.fogF.value = fog.far; }
+  }
+
+  /**
+   * The see-through ellipse round her for the next draw (club3d render()): cam + her feet h, or
+   * null to switch it off (the CCTV picture, sub-scenes).
+   */
+  seeThrough(cam, h, renderer) {
+    const U = this.mat.userData.sil;
+    if (!cam) { U.seeK.value = 0; return; }
+    cam.updateMatrixWorld();
+    const a = (this._sa || (this._sa = new THREE.Vector3())).set(h.x, h.y + 0.05, h.z).project(cam);
+    const b = (this._sb || (this._sb = new THREE.Vector3())).set(h.x, h.y + 1.8, h.z).project(cam);
+    const m = (this._sm || (this._sm = new THREE.Vector3())).set(h.x, h.y + 0.9, h.z).applyMatrix4(cam.matrixWorldInverse);
+    if (m.z > -0.5) { U.seeK.value = 0; return; }
+    const sz = renderer.getDrawingBufferSize(this._sv || (this._sv = new THREE.Vector2()));
+    const ax = (a.x * 0.5 + 0.5) * sz.x, ay = (a.y * 0.5 + 0.5) * sz.y, bx = (b.x * 0.5 + 0.5) * sz.x, by = (b.y * 0.5 + 0.5) * sz.y;
+    const ry = Math.max(8, Math.hypot(bx - ax, by - ay) * 0.5 * 1.35);
+    U.seeBox.value.set((ax + bx) / 2, (ay + by) / 2, ry * 0.62, ry);
+    U.seeZ.value = -m.z; U.seeK.value = 1;
   }
 
   /** Who's drawn in 3D: the sitters and DJs, then the ones nearest the camera (in front of it). */
