@@ -103,14 +103,14 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
 4. After merges: push `phase-2`. Publishing to `main` and the `testdrive-*` tags only when the user asks.
 5. Keep this board current after every merge or decision. Stop the loop when every track is done.
 
-## Board (paused 2026-10-13 after publishing testdrive-2026-10-13 to main; 2026-10-14: track D queued first)
+## Board (2026-10-15: track D phone-tested OK; wave = V-1 critic + L2a + F2a)
 | Track | Branch | Round | Last critic | State |
 |---|---|---|---|---|
 | T tech debt | `worktree-agent-a047ac9311b1f985f` | 1 done | n/a (regression pack `shots/r11T-pack/`) | **merged** (78030b3): v1 + v2 gone, -6,052 lines, -176 KB JS at startup, 0 errors in every area |
 | F travel | `worktree-agent-a4e919b8e12914483` | 1 done | not yet run | **merged** (a6f223a): moment director, air events in 3D, impostor rooftop chase. **F-1: NOT YET**: 1/8 (tie), vs AAA 3, vs HTML5 6, feel 4; commute ~85% dead air (`critiques/r11/F-1.md`) |
 | L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | **L-1: NOT YET**: 0/8 pairs, vs AAA 2.5, vs HTML5 6, feel 5.5 (`critiques/r11/L-1.md`) | **merged**: readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
 | V club variety | `r11-variety` | 1 done | not yet run (pack in that worktree's `shots/r11V-1/`: gen1-8 frames + strips) | **merged** (a17368d): casegen (8 suspects × 6 clue types × 5 twists), crowd scandal beats (shots, gotcha selfie, planted glass, ringed in, GONE WILD? headline, snapper, morning paper); 8 gen + 21 old flows, 0 errors; +0.8% calls, +5-10% during a beat. Weak: the knot is hard to read at phone size |
-| D device fixes | D1 (748f379), D4 (4d2bff6), D2+D3 (1dc374b), D5 (ee53a17) merged | **done; published as testdrive-2026-10-15, waiting on the user's phone test** | n/a (the user's phone test) | **queued 2026-10-14**, from the user's device test: D1 S-shield struggle, D4 Supergirl look (wave 1); D2 idle crowd + D3 cage dance (one builder), D5 camera distance setting (wave 2). Specs under "Device test fixes" below |
+| D device fixes | D1 (748f379), D4 (4d2bff6), D2+D3 (1dc374b), D5 (ee53a17) merged | **done; phone-tested OK by the user 2026-10-15** | n/a (the user's phone test) | **queued 2026-10-14**, from the user's device test: D1 S-shield struggle, D4 Supergirl look (wave 1); D2 idle crowd + D3 cage dance (one builder), D5 camera distance setting (wave 2). Specs under "Device test fixes" below |
 | refs scout | done 2026-10-13 | n/a | n/a | **built**: `club3d/` 12 (Hitman ×4, Cyberpunk ×2, GTA V, Yakuza ×2, LEGO ×2…), `travel/` 12 (Spider-Man, Arkham Knight, LEGO); all ≥1280 px. Gaps: no Hitman club/Iceberg Lounge, few dancefloor-with-guards shots, mostly daytime travel |
 
 ## Next (in order, each one a small fresh agent from its handoff file)
@@ -254,3 +254,12 @@ the beats' lines in `casebeats.js`) and may edit them by hand: add new lines, ne
   idle/cage/touch/caught/talker/stealth), act.js (11 flows), flying (11), brawler (5), 3D rooms at Closest (4),
   investigations (12). Published to main as testdrive-2026-10-15 (user asked). Next after the phone test:
   step 3 (V-1 critic), L round 2 (trimmed), F round 2, T round 2.
+- 2026-10-15: user's phone test of testdrive-2026-10-15: S-shield struggle fine (swipe the S anywhere); skirt + cape
+  OK, leave them; idle ring OK but too many messages at once (chaotic, "I guess that is the point": L2b caps
+  overlapping bubbles, never edits the user's lines); cage dance fine; camera distance works at every step, Close
+  feels best (3D zones only: flight's chase camera stays, by the user's rule). Go: run the rest of round 11.
+  L round 2 and F round 2 split into two small jobs each (credit-lean). Wave: V-1 critic (pairs built in the
+  r11-variety worktree, `shots/blind/club3d-r11V-1/` + 5 strips), L2a (the look: crowd variety + phone-up pose,
+  floor, DJ booth), F2a (harness fixes, video placeholder, cone spawn + beacon, one toast, win/loss panel, boost
+  speed lines). Next: L2b (the feel: spotted event, grab in-world, HUD diet + bubble cap, X-ray, CCTV, bloom),
+  F2b (flight-native beats, cruise pose, facades, captions, new moments), V round 2 (after V-1 + L2a), T round 2.
