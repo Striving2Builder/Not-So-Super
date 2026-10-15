@@ -23,33 +23,53 @@ const SHEET = { json: 'assets/nightclub/dancers.json', png: 'assets/nightclub/da
 // the sheet's rows (dancers.json) by body and pose; poses with no row (sit, dj) are always 3D
 const ROWS = { dress: { dance: [0, 1, 4], stand: [2, 3] }, suit: { dance: [5, 6], stand: [7] } };
 const SOLID = new Set(['sit', 'dj']);
+// round 11 L2a: 8 club-wear tones lifted off black (they read as colour under the wash), hair from
+// natural to club-kid, and six heads (weighted by body)
+const OUTFIT = [0xe8407a, 0x2ec4d0, 0xece2c8, 0xe8b030, 0x8a5ae0, 0xe86a30, 0x4ad08a, 0xd03040];
+const HAIRC = [0x16110d, 0x16110d, 0x3a2414, 0x3a2414, 0x6a4024, 0x8a3a1c, 0xd8b070, 0xe8e0d0, 0xff5ab0, 0x4a8aff];
+const HEADS = { dress: ['headL', 'headL', 'headL', 'headB', 'headB', 'headA', 'headA', 'headS'], suit: ['headS', 'headS', 'headS', 'headS', 'headA', 'headA', 'headB', 'headL'] };
+const PHONE_CAP = 24; // the most phones held up at once
 
 const cyl = (rt, rb, h, seg, x, y, z, sz = 1) => new THREE.CylinderGeometry(rt, rb, h, seg).scale(1, 1, sz).translate(x, y, z);
 const strip = (g) => { for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k); return g; };
-/** Merge parts; aY = each vertex's height on a standing figure (limbs: chest height). */
-function part(list, limb = false) {
-  const g = mergeGeometries(list.map(strip)), P = g.attributes.position, y = new Float32Array(P.count);
+// what each vertex is made of (round 11 L2a: the outfits read as colour under the club light)
+const CLOTH = 0, SKIN = 1, HAIR = 2, DARK = 3, SCREEN = 4, SLEEVE = 5; // (SLEEVE: cloth on a suit, skin on a dress)
+/**
+ * Merge parts; aY = each vertex's height on a standing figure (limbs: chest height), aPart = what
+ * it's made of. list: geometries or [geometry, part] pairs (a bare one is `def`).
+ */
+function part(list, limb = false, def = CLOTH) {
+  const gs = list.map((q) => (Array.isArray(q) ? q : [q, def]));
+  const g = mergeGeometries(gs.map(([q]) => strip(q))), P = g.attributes.position, y = new Float32Array(P.count), k = new Float32Array(P.count);
+  let at = 0;
+  for (const [q, kind] of gs) { const n = q.attributes.position.count; k.fill(kind, at, at + n); at += n; }
   for (let i = 0; i < P.count; i++) y[i] = limb ? 1.3 : P.getY(i);
   g.setAttribute('aY', new THREE.BufferAttribute(y, 1));
+  g.setAttribute('aPart', new THREE.BufferAttribute(k, 1));
   return g;
 }
 function figures() {
-  const shoes = (x) => new THREE.BoxGeometry(0.11, 0.07, 0.24).translate(x, 0.035, 0.04);
-  const neckHead = (r, sy) => [cyl(0.05, 0.06, 0.18, 7, 0, 1.62, 0), new THREE.SphereGeometry(r, 12, 8).scale(0.95, sy, 1).translate(0, 1.8, -0.01)];
+  const shoes = (x) => [new THREE.BoxGeometry(0.11, 0.07, 0.24).translate(x, 0.035, 0.04), DARK];
+  const neckHead = (r, sy) => [[cyl(0.05, 0.06, 0.18, 7, 0, 1.62, 0), SKIN], [new THREE.SphereGeometry(r, 12, 8).scale(0.95, sy, 1).translate(0, 1.8, -0.01), SKIN]];
+  // hair: a crown over the top, down the back and sides (the face, toward +z, stays bare)
+  const hair = (r, back = 0.62) => [[new THREE.SphereGeometry(r, 10, 3, 0, TAU, 0, Math.PI * 0.3).translate(0, 1.8, -0.015), HAIR],
+    [new THREE.SphereGeometry(r * 0.99, 8, 4, Math.PI * 0.5 + 0.95, TAU - 1.9, 0, Math.PI * back).translate(0, 1.8, -0.015), HAIR]];
   return {
-    suit: part([cyl(0.085, 0.07, 0.86, 7, -0.1, 0.46, 0), cyl(0.085, 0.07, 0.86, 7, 0.1, 0.46, 0), shoes(-0.1), shoes(0.1),
+    suit: part([[cyl(0.085, 0.07, 0.86, 7, -0.1, 0.46, 0), DARK], [cyl(0.085, 0.07, 0.86, 7, 0.1, 0.46, 0), DARK], shoes(-0.1), shoes(0.1),
       cyl(0.19, 0.18, 0.2, 9, 0, 0.94, 0, 0.75), cyl(0.24, 0.18, 0.58, 9, 0, 1.32, 0, 0.7),
       new THREE.SphereGeometry(0.075, 8, 6).translate(-0.24, 1.53, 0), new THREE.SphereGeometry(0.075, 8, 6).translate(0.24, 1.53, 0)]),
-    dress: part([cyl(0.06, 0.045, 0.8, 6, -0.08, 0.42, 0), cyl(0.06, 0.045, 0.8, 6, 0.08, 0.42, 0), shoes(-0.08), shoes(0.08),
+    dress: part([[cyl(0.06, 0.045, 0.8, 6, -0.08, 0.42, 0), SKIN], [cyl(0.06, 0.045, 0.8, 6, 0.08, 0.42, 0), SKIN], shoes(-0.08), shoes(0.08),
       cyl(0.16, 0.31, 0.5, 11, 0, 0.76, 0), cyl(0.2, 0.15, 0.52, 9, 0, 1.27, 0, 0.72),
-      new THREE.SphereGeometry(0.06, 8, 6).translate(-0.2, 1.49, 0), new THREE.SphereGeometry(0.06, 8, 6).translate(0.2, 1.49, 0)]),
-    // heads: short hair, long hair, a hat (the sheet's men wear one), a bun
-    headS: part(neckHead(0.13, 1.1)),
-    headL: part([...neckHead(0.14, 1.08), new THREE.BoxGeometry(0.28, 0.48, 0.1).translate(0, 1.62, -0.1), new THREE.SphereGeometry(0.15, 10, 6, 0, TAU, 0, Math.PI * 0.55).translate(0, 1.82, -0.02)]),
-    headH: part([...neckHead(0.13, 1.1), cyl(0.12, 0.13, 0.13, 10, 0, 1.94, -0.01), cyl(0.22, 0.22, 0.02, 14, 0, 1.88, -0.01)]),
-    headB: part([...neckHead(0.135, 1.08), new THREE.SphereGeometry(0.075, 8, 6).translate(0, 1.95, -0.08)]),
-    upper: part([cyl(0.055, 0.048, 0.32, 6, 0, -0.16, 0)], true),
-    fore: part([cyl(0.046, 0.04, 0.29, 6, 0, -0.145, 0), new THREE.SphereGeometry(0.05, 6, 4).translate(0, -0.31, 0)], true),
+      [new THREE.SphereGeometry(0.06, 8, 6).translate(-0.2, 1.49, 0), SKIN], [new THREE.SphereGeometry(0.06, 8, 6).translate(0.2, 1.49, 0), SKIN]]),
+    // heads: short hair, long hair, a bun, big curls (each with its hair colour)
+    headS: part([...neckHead(0.13, 1.1), ...hair(0.142, 0.55)]),
+    headL: part([...neckHead(0.14, 1.08), [new THREE.BoxGeometry(0.28, 0.48, 0.1).translate(0, 1.62, -0.1), HAIR], [new THREE.SphereGeometry(0.15, 10, 6, 0, TAU, 0, Math.PI * 0.55).translate(0, 1.82, -0.02), HAIR]]),
+    headB: part([...neckHead(0.135, 1.08), ...hair(0.146), [new THREE.SphereGeometry(0.075, 8, 6).translate(0, 1.95, -0.08), HAIR]]),
+    headA: part([...neckHead(0.13, 1.08), [new THREE.SphereGeometry(0.17, 9, 6).scale(1.05, 0.9, 1).translate(0, 1.85, -0.04), HAIR]]),
+    upper: part([cyl(0.055, 0.048, 0.32, 6, 0, -0.16, 0)], true, SLEEVE),
+    fore: part([[cyl(0.046, 0.04, 0.29, 6, 0, -0.145, 0), SLEEVE], [new THREE.SphereGeometry(0.05, 6, 4).translate(0, -0.31, 0), SKIN]], true),
+    // a phone in the hand, held up at her (p.phone), its screen lit
+    phone: part([[new THREE.BoxGeometry(0.08, 0.15, 0.016).translate(0, -0.4, 0.03), SCREEN]], true),
   };
 }
 
@@ -74,10 +94,12 @@ function silhouetteMat() {
     rimA: { value: new THREE.Color(0x27e0ff) }, rimB: { value: new THREE.Color(0xff2fd0) }, floorC: { value: new THREE.Color(0x6a3aff) },
     k: { value: 1 }, flash: { value: 0 }, fogC: { value: new THREE.Color(0x140a26) }, fogN: { value: 28 }, fogF: { value: 85 },
     seeBox: { value: new THREE.Vector4(0, 0, 1, 1) }, seeZ: { value: 0 }, seeK: { value: 0 },
+    uT: { value: 0 }, lift: { value: 1 },
   };
   const m = new THREE.ShaderMaterial({
     uniforms: U,
-    vertexShader: `attribute float aY; varying vec3 vN; varying vec3 vV; varying float vY; varying vec3 vC; varying float vD; varying float vZ;
+    vertexShader: `attribute float aY; attribute float aPart; attribute vec4 iAlt;
+varying vec3 vN; varying vec3 vV; varying float vY; varying vec3 vC; varying float vD; varying float vZ; varying float vP; varying vec4 vA;
 void main(){
   mat4 im = mat4(1.0);
   #ifdef USE_INSTANCING
@@ -86,7 +108,7 @@ void main(){
   vec4 wp = modelMatrix * im * vec4(position, 1.0);
   vN = normalize(mat3(modelMatrix) * mat3(im) * normal);
   vV = cameraPosition - wp.xyz; vD = length(vV); vV /= vD;
-  vY = aY;
+  vY = aY; vP = aPart; vA = iAlt;
   #ifdef USE_INSTANCING_COLOR
   vC = instanceColor;
   #else
@@ -95,13 +117,14 @@ void main(){
   vec4 mv = viewMatrix * wp; vZ = -mv.z;
   gl_Position = projectionMatrix * mv;
 }`,
-    fragmentShader: `uniform vec3 rimA, rimB, floorC, fogC; uniform float k, flash, fogN, fogF;
-varying vec3 vN; varying vec3 vV; varying float vY; varying vec3 vC; varying float vD; varying float vZ;
+    fragmentShader: `uniform vec3 rimA, rimB, floorC, fogC; uniform float k, flash, fogN, fogF, uT, lift;
+varying vec3 vN; varying vec3 vV; varying float vY; varying vec3 vC; varying float vD; varying float vZ; varying float vP; varying vec4 vA;
 ${SEE_GLSL}
 void main(){
   if (seeCut(vZ)) discard;
   // the light is behind them (the stage): edges turned toward it rim up, heads and shoulders
-  // catch the beams; everything facing the camera stays ink
+  // catch the beams; the side facing the camera takes the room's wash in toon bands (round 11 L2a:
+  // the outfits read as colour, not as one black mannequin)
   vec3 L = normalize(vec3(0.0, 0.55, -1.0));
   float fres = 1.0 - clamp(dot(vN, vV), 0.0, 1.0);
   float rim = smoothstep(0.42, 0.85, fres) * smoothstep(0.0, 0.6, dot(vN, L));
@@ -109,9 +132,21 @@ void main(){
   // each figure mostly catches one of the two lights (their left / right edges lean to each)
   float pick = fract(dot(vC, vec3(12.9898, 78.233, 37.719))) - 0.5;
   vec3 rimC = mix(rimA, rimB, smoothstep(-0.15, 0.15, vN.x * 0.5 + pick * 0.6));
-  vec3 c = vec3(0.003, 0.0025, 0.006) + vC * 0.006;         // the ink body, a hint of the outfit
+  // what this bit is made of: iAlt = hair colour + skin tone (+2 = sleeves: a suit's arms are cloth)
+  float part = floor(vP + 0.5), sl = step(1.5, vA.a), tone = vA.a - sl * 2.0;
+  vec3 skin = mix(mix(vec3(0.86, 0.58, 0.42), vec3(0.5, 0.29, 0.17), smoothstep(0.0, 0.55, tone)), vec3(0.2, 0.11, 0.07), smoothstep(0.55, 1.0, tone));
+  vec3 alb = part < 0.5 ? vC : part < 1.5 ? skin : part < 2.5 ? vA.rgb : part < 3.5 ? vC * 0.12 + 0.012 : part < 4.5 ? vec3(0.0) : mix(skin, vC, sl);
+  vec3 K = normalize(vec3(0.15, 0.7, 0.7));
+  float d = dot(vN, K), band = d > 0.5 ? 1.0 : d > 0.08 ? 0.45 : 0.1;
+  vec3 wash = mix(rimA, rimB, 0.5 + pick * 0.5) * 0.35 + vec3(0.42, 0.38, 0.5);
+  vec3 c = vec3(0.003, 0.0025, 0.006) + alb * (0.012 + 0.13 * band) * wash * mix(1.0, k, 0.6) * lift;
   c += rimC * (rim + top) * k;
   c += floorC * smoothstep(0.7, 0.0, vY) * 0.05 * k;        // the LED floor on their shoes
+  if (part > 3.5 && part < 4.5) {
+    // a phone's lit screen, and its flash going off now and then
+    float f = step(0.965, fract(uT * 0.9 + pick * 7.0));
+    c = mix(vec3(0.55, 0.78, 1.0) * 1.3, vec3(1.6), f);
+  }
   c = mix(c, vec3(1.0), flash * (0.12 + 0.6 * (rim + top)));
   c = mix(c, fogC, smoothstep(fogN, fogF, vD));
   gl_FragColor = vec4(c, 1.0);
@@ -129,9 +164,9 @@ void main(){
 function spriteMat(map, U) {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
-    uniforms: { map: { value: map }, beatB: { value: 0 }, surge: { value: 0 }, rimA: U.rimA, rimB: U.rimB, floorC: U.floorC, k: U.k, flash: U.flash, fogC: U.fogC, fogN: U.fogN, fogF: U.fogF, seeBox: U.seeBox, seeZ: U.seeZ, seeK: U.seeK },
-    vertexShader: `attribute vec3 iPos; attribute vec4 iPar; uniform float beatB, surge;
-varying vec2 vUv; varying float vD; varying float vSide; varying float vLy; varying float vPick;
+    uniforms: { map: { value: map }, beatB: { value: 0 }, surge: { value: 0 }, rimA: U.rimA, rimB: U.rimB, floorC: U.floorC, k: U.k, flash: U.flash, fogC: U.fogC, fogN: U.fogN, fogF: U.fogF, seeBox: U.seeBox, seeZ: U.seeZ, seeK: U.seeK, lift: U.lift },
+    vertexShader: `attribute vec3 iPos; attribute vec4 iPar; attribute vec3 iCol; uniform float beatB, surge;
+varying vec2 vUv; varying float vD; varying float vSide; varying float vLy; varying float vPick; varying vec3 vCol;
 void main(){
   // iPar: sheet row, loop length (beats), phase, height (m; negative = mirrored, 0 = drawn in 3D)
   float row = iPar.x;
@@ -145,13 +180,13 @@ void main(){
   float frame = floor(fract(beatB / iPar.y + iPar.z) * 16.0);
   float u = mix(0.03, 0.97, iPar.w < 0.0 ? 1.0 - uv.x : uv.x);   // (inset: no bleed from the next frame)
   vUv = vec2((frame + u) / 16.0, 1.0 - (row + 1.0 - uv.y) / 8.0);
-  vSide = position.x; vLy = (position.y - foot) * h; vPick = iPar.z - 0.5;
+  vSide = position.x; vLy = (position.y - foot) * h; vPick = iPar.z - 0.5; vCol = iCol;
   vec4 mv = viewMatrix * vec4(p, 1.0);
   vD = -mv.z;
   gl_Position = h > 0.0 ? projectionMatrix * mv : vec4(0.0, 0.0, 2.0, 1.0);
 }`,
-    fragmentShader: `uniform sampler2D map; uniform vec3 rimA, rimB, floorC, fogC; uniform float k, flash, fogN, fogF;
-varying vec2 vUv; varying float vD; varying float vSide; varying float vLy; varying float vPick;
+    fragmentShader: `uniform sampler2D map; uniform vec3 rimA, rimB, floorC, fogC; uniform float k, flash, fogN, fogF, lift;
+varying vec2 vUv; varying float vD; varying float vSide; varying float vLy; varying float vPick; varying vec3 vCol;
 ${SEE_GLSL}
 void main(){
   if (texture2D(map, vUv).a < 0.5 || seeCut(vD)) discard;
@@ -162,6 +197,9 @@ void main(){
   float sd = texture2D(map, vUv - vec2(px.x, 0.0)).a + texture2D(map, vUv + vec2(px.x, 0.0)).a;
   float edge = clamp((1.0 - up) * 1.1 + (2.0 - sd) * 0.3, 0.0, 1.0) * mix(1.0, 0.35, smoothstep(8.0, 25.0, vD));
   vec3 c = vec3(0.003, 0.0025, 0.006) + mix(rimA, rimB, smoothstep(-0.15, 0.15, vSide * 0.5 + vPick * 0.6)) * edge * k;
+  // the outfit under the wash (r11 L2a): the clothes read as colour, legs and heads darker
+  float band = smoothstep(0.55, 0.8, vLy) * (1.0 - smoothstep(1.35, 1.5, vLy)) * 0.8 + 0.2;
+  c += vCol * band * 0.1 * mix(1.0, k, 0.6) * lift * (mix(rimA, rimB, 0.5 + vPick) * 0.35 + vec3(0.42, 0.38, 0.5));
   c += floorC * smoothstep(0.25, 0.0, vLy) * 0.05 * k;
   c = mix(c, vec3(1.0), flash * (0.12 + 0.6 * edge));
   c = mix(c, fogC, smoothstep(fogN, fogF, vD));
@@ -208,19 +246,22 @@ export class ClubCrowd {
    */
   constructor(zn, plan, people, { near = 140 } = {}) {
     this.zn = zn; this.plan = plan; this.people = people;
-    const OUT = [0xff2fd0, 0x27e0ff, 0xf2f2f2, 0xffe14d, 0x9d4dff, 0xff6a3d, 0x3dff9a, 0xe0e0ff];
     const GROOVES = ['bounce', 'bounce', 'sway', 'jump', 'step'];
-    const V = plan.V, pick = (a) => a[Math.floor(Math.random() * a.length)];
+    const V = plan.V, pick = (a) => a[Math.floor(Math.random() * a.length)], R = (a, b) => a + Math.random() * (b - a);
     for (const p of people) {
       p.type = p.type || (Math.random() < 0.55 ? 'dress' : 'suit');
       // most of the floor faces the booth; the rest dance with each other
       const inHall = Math.abs(p.x) < V.hw && Math.abs(p.z) < V.hd;
       p.rot = p.rot ?? (inHall && Math.random() < 0.7 ? Math.atan2(V.booth.x - p.x, V.booth.z - p.z) + (Math.random() - 0.5) * 1.4 : Math.random() * TAU);
-      p.s = 0.93 + Math.random() * 0.13; p.ph = Math.random() * TAU; p.style = Math.floor(Math.random() * 4);
-      p.off = Math.random() * 0.3; p.groove = pick(GROOVES);
+      // (round 11 L2a) each their own build, stance and timing: tall and short, broad and slight,
+      // leaning in or back, a beat early or late, a quarter of them on half time
+      p.s = R(0.88, 1.1); p.w = R(0.9, 1.12); p.lean = R(-0.07, 0.09); p.tilt = R(-0.05, 0.05);
+      p.ph = Math.random() * TAU; p.style = Math.floor(Math.random() * 4);
+      p.off = R(-0.22, 0.35); p.groove = pick(GROOVES);
       p.ox = 0; p.oz = 0; p.hx = p.x; p.hz = p.z;
-      p.col = new THREE.Color(pick(OUT));
-      p.head = p.type === 'dress' ? (Math.random() < 0.7 ? 'headL' : 'headB') : (Math.random() < 0.35 ? 'headH' : 'headS');
+      p.col = new THREE.Color(pick(OUTFIT)).multiplyScalar(p.type === 'suit' ? R(0.55, 0.9) : 1);
+      p.hair = new THREE.Color(pick(HAIRC)); p.tone = Math.random();
+      p.head = pick(HEADS[p.type]);
       p.solid = SOLID.has(p.pose);
       p.row = pick(ROWS[p.type][p.pose === 'stand' ? 'stand' : 'dance']);
       p.flip = Math.random() < 0.5; p.slow = Math.random() < 0.25;
@@ -231,11 +272,12 @@ export class ClubCrowd {
     const G = (this.G = figures()), mat = (this.mat = silhouetteMat());
     this.meshes = {};
     for (const k of Object.keys(G)) {
-      const n = k === 'upper' || k === 'fore' ? this.near * 2 : this.near;
+      const n = k === 'upper' || k === 'fore' ? this.near * 2 : k === 'phone' ? Math.min(this.near, PHONE_CAP) : this.near;
       const m = new THREE.InstancedMesh(G[k], mat, n);
       m.frustumCulled = false; m.name = 'c3-crowd'; m.count = 0;
       m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3);
+      G[k].setAttribute('iAlt', (m.alt = new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4)));
       zn.scene.add(m);
       this.meshes[k] = m;
     }
@@ -255,7 +297,9 @@ export class ClubCrowd {
     g.setIndex([0, 1, 2, 0, 2, 3]);
     this.iPos = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage);
     this.iPar = new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4).setUsage(THREE.DynamicDrawUsage);
-    g.setAttribute('iPos', this.iPos); g.setAttribute('iPar', this.iPar);
+    const col = new Float32Array(n * 3);
+    P.forEach((p, i) => p.col.toArray(col, i * 3));
+    g.setAttribute('iPos', this.iPos); g.setAttribute('iPar', this.iPar); g.setAttribute('iCol', new THREE.InstancedBufferAttribute(col, 3));
     g.instanceCount = n;
     const tex = (this.tex = new THREE.TextureLoader().load(SHEET.png));
     tex.minFilter = THREE.LinearMipmapLinearFilter;
@@ -311,6 +355,7 @@ export class ClubCrowd {
     for (let i = 0; i < n; i++) {
       const p = P[i];
       if (p.solid) { d[i] = -1; continue; }
+      if (p.phone) { d[i] = -0.5; continue; } // (a phone held up at her is always drawn in 3D)
       const dx = p.x - cam.x, dz = p.z - cam.z;
       let v = dx * dx + dz * dz;
       if (dz > 1) v += 1e4;          // behind the camera (it always looks north)
@@ -323,14 +368,14 @@ export class ClubCrowd {
     for (const i of this.picked) P[i].lod = 1;
     for (let i = 0; i < n; i++) if (!P[i].solid) this.iPar.setW(i, P[i].lod ? 0 : (P[i].flip ? -1 : 1) * CELL_H * P[i].s);
     this.iPar.needsUpdate = true;
-    // their slots' colours
+    // their slots' colours: the outfit, and iAlt = hair + skin tone (+2: a suit's sleeves are cloth)
     const M = this.meshes, c = {};
     for (const k of Object.keys(M)) c[k] = 0;
     for (const i of this.picked) {
-      const p = P[i];
-      for (const k of [p.type, p.head, 'upper', 'upper', 'fore', 'fore']) M[k].setColorAt(c[k]++, p.col);
+      const p = P[i], a = p.tone + (p.type === 'suit' ? 2 : 0);
+      for (const k of [p.type, p.head, 'upper', 'upper', 'fore', 'fore']) { M[k].alt.setXYZW(c[k], p.hair.r, p.hair.g, p.hair.b, a); M[k].setColorAt(c[k]++, p.col); }
     }
-    for (const m of Object.values(M)) m.instanceColor.needsUpdate = true;
+    for (const m of Object.values(M)) { m.instanceColor.needsUpdate = true; m.alt.needsUpdate = true; }
   }
 
   /**
@@ -347,6 +392,7 @@ export class ClubCrowd {
     let cover = 0, thick = 0;
     for (let i = 0; i < people.length; i++) {
       const p = people[i];
+      if (p.phone && p.phone !== true) p.phone = Math.max(0, p.phone - dt); // (a number = seconds left: the knot keeps topping it up)
       if (p.left) {
         // leaving (the fire alarm): walk for the door, then gone
         const ex = plan.entrance, dx = ex.x - p.hx, dz = ex.z + 3 - p.hz, d = Math.hypot(dx, dz);
@@ -367,7 +413,7 @@ export class ClubCrowd {
         p.ox = ox; p.oz = oz;
       }
       p.x = p.hx + p.ox; p.z = p.hz + p.oz;
-      p.fy = (p.y ?? floorY(plan, p.x, p.z)) + (surge > 0.3 && p.pose === 'dance' ? Math.max(0, Math.sin(B.ang * 2 + p.ph)) * surge * 0.25 : 0);
+      p.fy = (p.gy = p.y ?? floorY(plan, p.x, p.z)) +(surge > 0.3 && p.pose === 'dance' ? Math.max(0, Math.sin(B.ang * 2 + p.ph)) * surge * 0.25 : 0);
       pos[i * 3] = p.x; pos[i * 3 + 1] = p.fy; pos[i * 3 + 2] = p.z;
       if (her && p.pose === 'dance') {
         const d = Math.hypot(p.x - her.x, p.z - her.z);
@@ -379,8 +425,10 @@ export class ClubCrowd {
     // the 3D figures, each on its own beat (a touch late or early), each bar a new move
     const n = {};
     for (const k of Object.keys(meshes)) n[k] = 0;
+    this.mat.userData.sil.uT.value = t;
+    const ph = meshes.phone;
     for (const i of this.picked) {
-      const p = people[i], lb = B.b + p.off, lph = lb - Math.floor(lb), e = Math.exp(-lph * 5);
+      const p = people[i], lb = (p.slow ? B.b * 0.5 : B.b) + p.off, lph = lb - Math.floor(lb), e = Math.exp(-lph * 5);
       const s1 = Math.sin(lb * Math.PI + p.ph), half = Math.sin(lb * Math.PI * 0.5 + p.ph);
       let bob = 0, sway = 0, lean = 0, turn = 0, l0 = 0.12, l1 = 0.1, r0 = 0.12, r1 = 0.1, le = 0.25, re = 0.25;
       if (p.pose === 'dance') {
@@ -408,11 +456,17 @@ export class ClubCrowd {
         // the VIP's entourage: sunk into the couch, leaning back, hands on their knees, nodding along
         lean = -0.16 + e * 0.03; l0 = r0 = 0.4; l1 = r1 = 0.18; le = re = 1.0; sway = Math.sin(t * 0.6 + p.ph) * 0.02;
       }
+      const phone = p.phone && n.phone < ph.instanceMatrix.count;
+      if (phone) {
+        // filming her (p.phone): the right arm up at arm's length, the phone on her, the left hand low
+        r0 = 2.2 + Math.sin(t * 2.3 + p.ph) * 0.06; r1 = 0.12; re = 0.5; l0 = 0.35; l1 = 0.15; le = 0.5;
+        bob *= 0.3; sway *= 0.4; turn = 0; lean = -0.04;
+      }
       const sw = p.type === 'suit' ? 0.25 : 0.21, sy = p.type === 'suit' ? 1.52 : 1.48;
       root.position.set(p.x, p.fy - bob + (p.pose === 'sit' ? -0.42 : 0), p.z);
       root.rotation.y = p.rot + turn;
-      root.scale.set(p.s, p.s * (1 - bob * 0.4), p.s);
-      body.rotation.set(lean, 0, sway);
+      root.scale.set(p.s * p.w, p.s * (1 - bob * 0.4), p.s * p.w);
+      body.rotation.set(lean + p.lean, 0, sway + p.tilt);
       sh[0].position.set(-sw, sy, 0); sh[1].position.set(sw, sy, 0);
       sh[0].rotation.set(-l0, 0, -l1); sh[1].rotation.set(-r0, 0, r1);
       el[0].rotation.set(-le, 0, 0); el[1].rotation.set(-re, 0, 0);
@@ -421,8 +475,10 @@ export class ClubCrowd {
       meshes[p.head].setMatrixAt(n[p.head]++, body.matrixWorld);
       meshes.upper.setMatrixAt(n.upper++, sh[0].matrixWorld); meshes.upper.setMatrixAt(n.upper++, sh[1].matrixWorld);
       meshes.fore.setMatrixAt(n.fore++, el[0].matrixWorld); meshes.fore.setMatrixAt(n.fore++, el[1].matrixWorld);
+      if (phone) { ph.setColorAt(n.phone, p.col); ph.setMatrixAt(n.phone++, el[1].matrixWorld); }
     }
-    for (const [k, m] of Object.entries(meshes)) { m.count = n[k]; m.instanceMatrix.needsUpdate = true; }
+    if (n.phone) ph.instanceColor.needsUpdate = true;
+    for (const [k, m] of Object.entries(meshes)) { m.count = n[k]; m.visible = n[k] > 0; m.instanceMatrix.needsUpdate = true; }
     this.cover = cover; this.thick = thick;
     return { cover, thick };
   }

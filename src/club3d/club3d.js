@@ -15,6 +15,8 @@ import { makePlan, roomAt, floorY } from './plan.js';
 import { hallMats, makeClubKit, buildHall, buildShow, stepTiles, buildKit } from './build.js';
 import { buildRoom, buildAlley } from './rooms.js';
 import { dressHall } from './dressing.js';
+import { buildFloor } from './floor.js';
+import { dressBooth } from './booth.js';
 import { ClubCrowd, placeCrowd } from './crowd.js';
 import { ClubVideo, tickScreens } from './video.js';
 import { stashFromEnvelope } from '../polaroids.js';
@@ -121,12 +123,14 @@ export class Club3D extends Special3D {
     const X = (this.X = makeClubKit(this));
     this.hallA = buildHall(this, plan, M, X, this.video);
     this.dressStep = dressHall(this, plan, M, X, this.video, this.hallA);
+    this.boothStep = dressBooth(this, plan, M, X); // (r11 L2a: decks, mixer, lit lips, the name either side of her)
     this.roomA = {};
     for (const r of plan.rooms) this.roomA[r.kind] = buildRoom(this, plan, r, M, X, this.video);
     this.roomA.alley = buildAlley(this, plan, plan.alley, M, X);
     this.wallMats = [];
     this.scene.traverse((o) => { if (o.isMesh && o.material && o.material.userData.worldUV && !this.wallMats.includes(o.material) && o.geometry.type === 'BoxGeometry' && o.geometry.parameters.height > 1) this.wallMats.push(o.material); });
     this.showStep = buildShow(this, plan, X);
+    this.floorStep = buildFloor(this, plan, X); // (r11 L2a: LED grid, light pools, contact shadows)
     bakeStatic(S, this._static); this._static = null;
     buildKit(X);
     this.screens = [...this.hallA.screens, ...(this.roomA.office?.cctv || []), ...(this.roomA.dark?.screens || [])];
@@ -310,6 +314,7 @@ export class Club3D extends Special3D {
     const flash = drop ? (Math.floor(this.t * 12) % 2 ? 1 : 0) : 0;
     this.flashK = flash;
     this.crowd.light(tmpA, tmpB, (0.85 + 0.5 * B.pulse) * (this.xray ? 0.35 : 1), flash, this.scene.fog); // (X-ray: the crowd sinks into the dark)
+    this.floorStep(this.t, dt, B, drop, tmpA, tmpB); this.boothStep(this.t, B);
     this.plights.forEach((l, i) => { l.color.copy(i ? tmpB : tmpA); l.intensity = (drop ? (flash ? 120 : 4) : 18 + 26 * B.pulse); });
     this.dressStep(this.t, dt, B, drop, flash, tmpA, tmpB);
     tickScreens(this.screens, this.video, this.t, flash * 0.4);
