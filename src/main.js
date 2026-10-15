@@ -11,7 +11,7 @@ import { Club3D } from './club3d/club3d.js';
 import { HotelZone } from './hotel/hotel.js';
 import { showNewspaper } from './newspaper.js';
 import { HERO, DISTRICTS, THEMES, DEALS, BOSSES, VENUES, BILLBOARDS, CAPTURE_VIDEOS } from './data.js';
-import { UI, dialog, toast } from './ui.js';
+import { UI, dialog, toast, clearToasts } from './ui.js';
 import { sfx } from './sfx.js';
 import { ambience } from './ambience.js';
 import { $, pick, chance, fmtTime } from './util.js';
@@ -72,7 +72,7 @@ game.setMode = (name, p) => {
   game.input.reset();
   // speech bubbles and bursts point at things in the old scene; captions/headlines/spin survive
   document.querySelectorAll('#comic-layer .bubble, #comic-layer .pow').forEach((e) => e.remove());
-  $('toasts').innerHTML = ''; // the last mode's notices don't stack onto the new scene's intro
+  clearToasts(); // the last mode's notices (showing and queued) don't stack onto the new scene's intro
   $('prompt').classList.remove('on');
   $('marker').classList.remove('on');
   game.mode.enter(p || {});

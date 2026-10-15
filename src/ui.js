@@ -95,6 +95,13 @@ export function toast(msg, kind = 'info') {
   while (_tq.length > 3) _tq.shift();
   if (!_tShow) _nextToast(host);
 }
+/** A zone change: drop what's showing and what's waiting (the old mode's notices). */
+export function clearToasts() {
+  _tq.length = 0;
+  _tShow = null;
+  const host = $('toasts');
+  if (host) host.replaceChildren();
+}
 function _nextToast(host) {
   const q = _tq.shift();
   _tShow = q || null;
@@ -109,7 +116,7 @@ function _nextToast(host) {
     held += 200;
     if (held < (_tq.length ? 1600 : hold)) return setTimeout(step, 200);
     d.classList.add('out');
-    setTimeout(() => { d.remove(); _nextToast(host); }, 380);
+    setTimeout(() => { d.remove(); if (_tShow === q) _nextToast(host); }, 380);
   };
   setTimeout(step, 200);
 }
