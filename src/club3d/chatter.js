@@ -45,6 +45,7 @@ export const chatterMethods = {
     this.chatterT -= dt;
     if (this.chatterT > 0) return;
     this.chatterT = 2 + Math.random() * 1.8;
+    if (this.quietT > 0 || this.bubblesFull?.()) return; // (r11 L2b: she's just been made, or two are talking already)
     const h = this.hero.position, st = this.g.state, d = this.caseDef;
     const p = this.crowd.nearest(h.x + (Math.random() - 0.5) * 5, h.z - 1 - Math.random() * 4, 6, (q) => Math.hypot(q.x - h.x, q.z - h.z) > 1.0 && !q.talking);
     if (!p) return;

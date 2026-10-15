@@ -9,14 +9,15 @@ import { INTOX_HAZE } from '../state.js';
 
 const TIPS_KEY = 'supergirl-club3-tips';
 const TIPS = {
-  talker: "Stand in a Talker's ring to overhear them. Gold fills with evidence; red is their suspicion: step out before it fills.",
-  seen: "Made! When a bouncer's ? fills he shouts and the screens put you up on CCTV. Break his line of sight: the crowd (the ring under you turns cyan), a wall, or the drop.",
-  sus: "A ? over a bouncer's head fills while he can see you. Get into the crowd or out of his cone before it fills.",
-  takedown: 'His back is to you: USE drops him for a while. In a packed crowd, somebody will film it.',
-  drop: 'The drop is coming. When the strobe hits, the bouncers are blind for a few seconds.',
-  xray: 'X-ray: every bouncer glows through the walls in what he knows: blue calm, amber suspicious, red after you. It drains power (the crowd recharges it), and glowing eyes get noticed.',
-  intox: "You're tipsy: chatter scrambles and Talkers stop making sense. It wears off.",
-  clue: 'Clues go on your case board (CASE). With enough of them, accuse someone, or take it to the owner.',
+  // (r11 L2b: one line each, the critic's "HUD diet")
+  talker: 'Stand in the ring to overhear. Gold = evidence, red = they notice you.',
+  seen: 'Made! Break his sight: the crowd (cyan ring), a wall, or the drop.',
+  sus: 'The ? fills while he sees you. Into the crowd or out of his cone.',
+  takedown: 'His back is to you: USE drops him. Crowds film it.',
+  drop: 'At the drop the strobe blinds the bouncers for a few seconds.',
+  xray: 'X-ray: blue calm, amber suspicious, red after you. Drains power.',
+  intox: "Tipsy: chatter scrambles, Talkers stop making sense. It wears off.",
+  clue: 'Clues go on the CASE board. Enough of them: accuse, or go to the owner.',
 };
 let seenTips = null;
 const tipsSeen = () => {
@@ -96,6 +97,7 @@ export const feelMethods = {
   nextTip() {
     let el = $('c3-tip');
     if (!el) { el = document.createElement('div'); el.id = 'c3-tip'; $('game').appendChild(el); }
+    if (this.quietT > 0 && this.tipQ?.length) { clearTimeout(this.tipTimer); el.classList.remove('on'); this.tipOn = false; this.tipTimer = setTimeout(() => this.nextTip(), 600); return; } // (r11 L2b: not while she's just been made)
     const text = (this.tipQ || []).shift();
     clearTimeout(this.tipTimer);
     if (!text || this.done || !this.scene) { el.classList.remove('on'); this.tipOn = false; return; }

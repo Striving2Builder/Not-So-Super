@@ -36,7 +36,8 @@ export const STEALTH = {
 };
 const COL = { calm: 0xffe040, sus: 0xffa020, search: 0xff7a1a, alert: 0xff2a2a };
 const XCOL = { calm: 0x3ad8ff, sus: 0xffb020, search: 0xff8a2a, alert: 0xff2a3a, ko: 0x6a7a8a, poi: 0xffd84d };
-const LABEL = { calm: 'CALM', sus: 'SUSPICIOUS', search: 'SEARCHING', alert: 'ALERT', ko: 'OUT COLD' };
+const GLYPH = { calm: '◉', sus: '?', search: '?!', alert: '!' }; // (r11 L2b: X-ray chips, colour + glyph)
+const XTAGS = 3;
 const SAY = {
   sus: ['Hm?', 'Hey… is that…?', 'Wait.', 'Huh?', 'You. Hold up.'],
   search: ['Where\'d she go?', 'I saw something.', 'Over here…', 'Hello?'],
@@ -75,6 +76,7 @@ export const stealthMethods = {
       gd.seeing = false;
       if (gd.st === undefined) { gd.st = 'calm'; gd.sus = 0; gd.peak = 0; gd.holdT = 0; }
       if (gd.ko) { gd.st = 'ko'; if (gd.bang) gd.bang.visible = false; continue; }
+      if (this.grabbing && gd.grabbed) { gd.seeing = true; continue; } // (his hands are on her: feelfx.js grabBeat)
       if (gd.st === 'ko') this.wakeGuard(gd); // (dazed: back on his feet, and looking for her)
       const m = gd.mesh;
       gd.t += dt;
@@ -136,7 +138,7 @@ export const stealthMethods = {
         gd.lostT = 0;
         this.alert = Math.min(100, this.alert + S.chase[hard ? 1 : 0] * dt);
         gd.grabT = d < S.grab ? gd.grabT + dt : 0;
-        if (gd.grabT > S.grabT && !this.busy && !this.sedating) { gd.grabT = 0; this.say(m, 'Gotcha!', { ms: 1200 }); this.foundOut(`A bouncer grabs ${HERO} by the arm.`); }
+        if (gd.grabT > S.grabT && !this.busy && !this.sedating) { gd.grabT = 0; this.say(m, 'Gotcha!', { ms: 1200 }); this.grabBeat(gd, `A bouncer grabs ${HERO} by the arm.`); } // (r11 L2b: his hands on her first)
       } else {
         gd.lostT = (gd.lostT || 0) + dt;
         // he keeps coming to where she was, then searches round it with his blood up
@@ -288,7 +290,7 @@ export const stealthMethods = {
     let layer = $('c3-threat');
     if (!layer) { layer = document.createElement('div'); layer.id = 'c3-threat'; $('game').insertBefore(layer, $('comic-layer')); }
     const W = this.g.w, H = this.g.h, cam = this.cam, v = this._tv || (this._tv = new THREE.Vector3());
-    const show = !this.busy && !this.sub && !this.done && !!this.scene;
+    const show = !this.busy && !this.sub && !this.done && !!this.scene, tags = [];
     for (const gd of this.guards) {
       const u = gd.ui || (gd.ui = this.threatEls(layer));
       const m = gd.mesh;
@@ -329,13 +331,55 @@ export const stealthMethods = {
         const fx = (v.x * 0.5 + 0.5) * W, fy = (-v.y * 0.5 + 0.5) * H + 6;
         if (v.z <= 1 && fx > 0 && fx < W && fy > 30 && fy < H - 10) tp = { x: fx, y: fy };
       }
-      if (tp && Math.hypot(m.position.x - this.hero.position.x, m.position.z - this.hero.position.z) < 30) {
-        const txt = gd.st === 'ko' ? `${LABEL.ko} ${Math.max(0, Math.ceil((gd.dazed || 0) - this.t))}s` : gd.torch && gd.st === 'calm' ? 'CALM · TORCH' : gd === this.ropeGuard && gd.st === 'calm' ? 'CALM · ROPE' : LABEL[gd.st] || '';
-        if (u.tt !== txt) { u.tt = txt; u.tag.textContent = txt; u.tag.className = `c3-xtag s-${gd.st}`; }
-        u.tag.style.transform = `translate(${Math.round(tp.x)}px,${Math.round(tp.y)}px)`;
-        u.tag.classList.add('on');
-      } else u.tag.classList.remove('on');
+      const hd = Math.hypot(m.position.x - this.hero.position.x, m.position.z - this.hero.position.z);
+      if (tp && hd < 30) tags.push({ u, gd, tp, hd });
+      else u.tag.classList.remove('on');
     }
+    this.placeXTags(tags);
+    this.hudBeacon(show && this.xray);
+  },
+
+  /**
+   * r11 L2b: the X-ray tags, the nearest 3 only, as a glyph chip in the state's colour, pushed apart so
+   * they never overlap, and never on her (a bouncer behind her: his tag drops below her feet).
+   */
+  placeXTags(tags) {
+    tags.sort((a, b) => a.hd - b.hd);
+    const W = this.g.w, H = this.g.h, h = this.hero.position, cam = this.cam, v = this._tv;
+    // her box on screen (feet to head)
+    v.set(h.x, h.y - 0.05, h.z).project(cam); const fy = (-v.y * 0.5 + 0.5) * H, fx = (v.x * 0.5 + 0.5) * W;
+    v.set(h.x, h.y + 1.85, h.z).project(cam); const hy = (-v.y * 0.5 + 0.5) * H;
+    const hw = Math.max(18, (fy - hy) * 0.32);
+    const boxes = [{ l: fx - hw, r: fx + hw, t: hy - 6, b: fy + 2 }];
+    const hit = (x, y) => boxes.find((q) => x + 20 > q.l && x - 20 < q.r && y + 18 > q.t && y < q.b);
+    tags.forEach((T, i) => {
+      const { u, gd } = T;
+      if (i >= XTAGS) { u.tag.classList.remove('on'); return; }
+      const txt = gd.st === 'ko' ? `Zz ${Math.max(0, Math.ceil((gd.dazed || 0) - this.t))}` : (GLYPH[gd.st] || '') + (gd.torch && gd.st === 'calm' ? ' ✦' : gd === this.ropeGuard && gd.st === 'calm' ? ' ⊟' : '');
+      if (u.tt !== txt) { u.tt = txt; u.tag.textContent = txt; u.tag.className = `c3-xtag r11b s-${gd.st}`; }
+      let { x, y } = T.tp;
+      for (let k = 0; k < 6; k++) { const q = hit(x, y); if (!q) break; y = q === boxes[0] ? q.b + 4 : q.b + 3; }
+      y = clamp(y, 34, H - 24);
+      boxes.push({ l: x - 20, r: x + 20, t: y, b: y + 20 });
+      u.tag.style.transform = `translate(${Math.round(x)}px,${Math.round(y)}px)`;
+      u.tag.classList.add('on');
+    });
+  },
+
+  /** r11 L2b: under X-ray, a pulsing beacon on the nearest lead (a Talker not yet heard, else a gold POI). */
+  hudBeacon(on) {
+    let el = $('c3-beacon');
+    if (!on) { el?.classList.remove('on'); return; }
+    if (!el) { el = document.createElement('div'); el.id = 'c3-beacon'; el.innerHTML = '<i></i><b>LEAD</b>'; $('c3-threat').appendChild(el); }
+    const h = this.hero.position;
+    let best = null, bd = 1e9;
+    for (const tk of this.talkers || []) { if (tk.done) continue; const d = Math.hypot(tk.pos.x - h.x, tk.pos.z - h.z); if (d < bd) { bd = d; best = { x: tk.pos.x, y: 0, z: tk.pos.z }; } }
+    if (!best) for (const p of this.xrayPOIs()) { if (!p.visible) continue; const d = Math.hypot(p.position.x - h.x, p.position.z - h.z); if (d < bd) { bd = d; best = p.position; } }
+    const s = best && bd > 1.6 && this.screenOf({ x: best.x, y: best.y || 0, z: best.z }, 2.9);
+    if (!s) { el.classList.remove('on'); return; }
+    const W = this.g.w, H = this.g.h;
+    el.style.transform = `translate(${Math.round(clamp(s.x, 24, W - 24))}px,${Math.round(clamp(s.y, 60, H - 40))}px)`;
+    el.classList.add('on');
   },
 
   threatEls(layer) {

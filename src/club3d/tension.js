@@ -13,7 +13,7 @@ export const TENSION = {
   hb: [0.16, 0.6],       // a heartbeat from this much threat, every other beat; every beat from the second
   vig: 0.85,             // the red edge's opacity at full threat
   muffle: 0.45,          // the club's low-pass at full threat (super-hearing is 1)
-  slow: { close: [0.4, 0.75], spot: [0.55, 0.35] }, // [time scale, seconds] of the slow-motion beat
+  slow: { close: [0.4, 0.75], spot: [0.45, 0.55] }, // [time scale, seconds] of the slow-motion beat
   gap: 8,                // s between two close calls (a beat, not a stutter)
 };
 const CLOSE = ['Too close.', 'Phew. Still a ghost.', 'That was close.', 'Not tonight, pal.', 'Breathe, Kara. Breathe.', 'He looked right at her. And saw a dancer.'];
@@ -106,9 +106,9 @@ export const tensionMethods = {
     if (!host) return null;
     const el = document.createElement('div');
     el.id = 'c3-vig';
-    el.innerHTML = '<i class="r"></i><i class="c"></i>';
+    el.innerHTML = '<i class="r"></i><i class="c"></i><i class="s"></i>';
     host.insertBefore(el, $('hud'));
-    el.r = el.querySelector('.r'); el.c = el.querySelector('.c');
+    el.r = el.querySelector('.r'); el.c = el.querySelector('.c'); el.s = el.querySelector('.s');
     return (this._vig = el);
   },
 
@@ -132,6 +132,7 @@ export const tensionMethods = {
     this.pulseAt = this.t;
     const s = this.screenOf(gd.mesh.position, 2.6);
     if (s) comic.pow('!', s.x, s.y - 10, { size: 0.55, colors: ['#ffe040', '#ff2a2a'] });
+    this.spotEvent?.();
     this.selfTalk?.('spotted');
   },
 
@@ -149,6 +150,7 @@ export const tensionMethods = {
 
   lostThem() {
     TSFX.lost();
+    this.lostEvent?.();
     comic.caption(pick(LOST), { ms: 2600 });
     const v = this.vigEl();
     if (v) { v.c.classList.remove('go'); void v.c.offsetWidth; v.c.classList.add('go'); }

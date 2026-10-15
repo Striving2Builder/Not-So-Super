@@ -469,11 +469,15 @@ const GEN = (() => { const g = arg('--gen', ''); if (!g) return []; const [a, b]
       await V.pin(gi, spot.x, spot.z - 4.5, 0);
       await P.waitForFunction((i) => window.__game.mode.guards[i].st === 'alert', gi, { timeout: 30000, polling: 30 });
       await V.gwait(0.3); await V.strip('caught', 1); log.push(await V.minds());
+      // r11 L2b: the grab, in the world, before the struggle panel
+      const grabbed = await P.waitForFunction(() => window.__game.mode.grabbing && window.__game.mode.grabK > 0.6, null, { timeout: 30000, polling: 30 }).then(() => true).catch(() => false);
+      if (grabbed) { await V.strip('caught', 2); await V.shot('loop_grab'); }
+      log.push({ grabbed });
       await P.waitForFunction(() => window.__struggle, null, { timeout: 30000, polling: 50 });
-      await P.waitForTimeout(700); await V.strip('caught', 2);
+      await P.waitForTimeout(700); await V.strip('caught', 3);
       const cx = 560, cy = 230, r = 46;
       await P.mouse.move(cx + r, cy); await P.mouse.down();
-      let k = 0, n = 3, last = null, a = 0;
+      let k = 0, n = 4, last = null, a = 0;
       const t0 = await P.evaluate(() => window.__struggle.state().t);
       for (let i = 0; i < 4000; i++) {
         const s = await P.evaluate(() => window.__struggle && window.__struggle.state());
@@ -482,15 +486,15 @@ const GEN = (() => { const g = arg('--gen', ''); if (!g) return []; const [a, b]
         last = s.t;
         const target = Math.floor((s.t - t0) / 1.3); // (one S per ~1.3 s: see the touch flow)
         while (a < target) { a++; await P.evaluate(() => window.__struggle?.trace()); }
-        if (++k === 14 && n === 3) await V.strip('caught', n++);
+        if (++k === 14 && n === 4) await V.strip('caught', n++);
       }
       await P.mouse.up();
-      await P.waitForTimeout(250); await V.strip('caught', 4);
+      await P.waitForTimeout(250); await V.strip('caught', 5);
       await P.waitForFunction(() => !document.querySelector('.c3-struggle'), null, { timeout: 30000 });
-      await V.gwait(0.25); await V.strip('caught', 5); await V.shot('loop_free'); log.push(await V.minds());
-      await V.stick(-0.7, -0.45); await V.gwait(0.9); await V.strip('caught', 6);
+      await V.gwait(0.25); await V.strip('caught', 6); await V.shot('loop_free'); log.push(await V.minds());
+      await V.stick(-0.7, -0.45); await V.gwait(0.9); await V.strip('caught', 7);
       await V.stick(null); await P.keyboard.down('KeyG');
-      await V.gwait(1.0); await V.strip('caught', 7); log.push(await V.minds());
+      await V.gwait(1.0); await V.strip('caught', 8); log.push(await V.minds());
       await P.keyboard.up('KeyG');
       return { log, sedations: await P.evaluate(() => window.__game.mode.sedations), freeAt: await P.evaluate(() => window.__game.mode.freeAt) };
     });

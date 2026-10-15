@@ -79,12 +79,13 @@ function figures() {
  * screen-space ellipse, and anyone within ~1.5 m of the lens thins out (seeBox: centre + radii in drawing-buffer px; seeZ: her view depth; seeK: 0 = off),
  * so the crowd never covers her, whatever the Camera setting. One discard, no extra draws.
  */
-const SEE_GLSL = `uniform vec4 seeBox; uniform float seeZ, seeK;
+const SEE_KNOT = [0.5, 0.25]; // (r11 L2b) the knot's dither: over her, by the lens
+const SEE_GLSL = `uniform vec4 seeBox; uniform float seeZ, seeK; uniform vec2 seeM;
 bool seeCut(float z){
   if (seeK <= 0.0 || z > seeZ - 0.2) return false;
   vec2 q = (gl_FragCoord.xy - seeBox.xy) / seeBox.zw;
-  float a = (1.0 - smoothstep(0.55, 1.0, dot(q, q))) * smoothstep(0.2, 0.9, seeZ - z);
-  a = max(a, smoothstep(1.9, 0.9, z) * 0.85) * seeK;   // (and anyone right at the lens thins out: the close steps)
+  float a = (1.0 - smoothstep(0.55, 1.0, dot(q, q))) * smoothstep(0.2, 0.9, seeZ - z) * seeM.x;
+  a = max(a, smoothstep(1.9, 0.9, z) * 0.85 * seeM.y) * seeK;   // (and anyone right at the lens thins out: the close steps)
   return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < a;
 }
 `;
@@ -94,7 +95,7 @@ function silhouetteMat() {
   const U = {
     rimA: { value: new THREE.Color(0x27e0ff) }, rimB: { value: new THREE.Color(0xff2fd0) }, floorC: { value: new THREE.Color(0x6a3aff) },
     k: { value: 1 }, flash: { value: 0 }, fogC: { value: new THREE.Color(0x140a26) }, fogN: { value: 28 }, fogF: { value: 85 },
-    seeBox: { value: new THREE.Vector4(0, 0, 1, 1) }, seeZ: { value: 0 }, seeK: { value: 0 },
+    seeBox: { value: new THREE.Vector4(0, 0, 1, 1) }, seeZ: { value: 0 }, seeK: { value: 0 }, seeM: { value: new THREE.Vector2(1, 1) },
     uT: { value: 0 }, lift: { value: 1 },
   };
   const m = new THREE.ShaderMaterial({
@@ -165,7 +166,7 @@ void main(){
 function spriteMat(map, U) {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
-    uniforms: { map: { value: map }, beatB: { value: 0 }, surge: { value: 0 }, rimA: U.rimA, rimB: U.rimB, floorC: U.floorC, k: U.k, flash: U.flash, fogC: U.fogC, fogN: U.fogN, fogF: U.fogF, seeBox: U.seeBox, seeZ: U.seeZ, seeK: U.seeK, lift: U.lift },
+    uniforms: { map: { value: map }, beatB: { value: 0 }, surge: { value: 0 }, rimA: U.rimA, rimB: U.rimB, floorC: U.floorC, k: U.k, flash: U.flash, fogC: U.fogC, fogN: U.fogN, fogF: U.fogF, seeBox: U.seeBox, seeZ: U.seeZ, seeK: U.seeK, seeM: U.seeM, lift: U.lift },
     vertexShader: `attribute vec3 iPos; attribute vec4 iPar; attribute vec3 iCol; uniform float beatB, surge;
 varying vec2 vUv; varying float vD; varying float vSide; varying float vLy; varying float vPick; varying vec3 vCol;
 void main(){
@@ -334,9 +335,12 @@ export class ClubCrowd {
    * The see-through ellipse round her for the next draw (club3d render()): cam + her feet h, or
    * null to switch it off (the CCTV picture, sub-scenes).
    */
-  seeThrough(cam, h, renderer) {
+  seeThrough(cam, h, renderer, knot = false) {
     const U = this.mat.userData.sil;
     if (!cam) { U.seeK.value = 0; return; }
+    // r11 L2b: her ink silhouette shows through the crowd now, so a ring of people round her (the knot)
+    // only thins over her, and the ones beside the lens stay (they're the shot)
+    U.seeM.value.set(knot ? SEE_KNOT[0] : 1, knot ? SEE_KNOT[1] : 1);
     cam.updateMatrixWorld();
     const a = (this._sa || (this._sa = new THREE.Vector3())).set(h.x, h.y + 0.05, h.z).project(cam);
     const b = (this._sb || (this._sb = new THREE.Vector3())).set(h.x, h.y + 1.8, h.z).project(cam);
