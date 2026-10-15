@@ -109,6 +109,7 @@ export const beatMethods = {
       const tx = h.x + Math.sin(q.a) * K.r, tz = h.z - Math.cos(q.a) * K.r * 0.85;
       q.p.hx += (tx - q.p.hx) * ease; q.p.hz += (tz - q.p.hz) * ease;
       q.p.rot = Math.atan2(h.x - q.p.x, h.z - q.p.z);
+      q.p.phone = K.phones ? 0.3 : 0; // (r11 L2a hook: crowd.js poses them filming her, arm up, phone lit)
       if (ph && K.phones) {
         // a phone held up at arm's length, screen toward her (its back toward the camera glows)
         v.set(q.p.x + Math.sin(q.p.rot) * 0.38, (q.p.fy || 0) + 1.95 + Math.sin(this.t * 3 + i) * 0.03, q.p.z + Math.cos(q.p.rot) * 0.38);
