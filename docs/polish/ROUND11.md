@@ -110,7 +110,7 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
 | F travel | `worktree-agent-a4e919b8e12914483` | 1 done | not yet run | **merged** (a6f223a): moment director, air events in 3D, impostor rooftop chase. **F-1: NOT YET**: 1/8 (tie), vs AAA 3, vs HTML5 6, feel 4; commute ~85% dead air (`critiques/r11/F-1.md`) |
 | L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | **L-1: NOT YET**: 0/8 pairs, vs AAA 2.5, vs HTML5 6, feel 5.5 (`critiques/r11/L-1.md`) | **merged**: readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
 | V club variety | `r11-variety` | 1 done | not yet run (pack in that worktree's `shots/r11V-1/`: gen1-8 frames + strips) | **merged** (a17368d): casegen (8 suspects × 6 clue types × 5 twists), crowd scandal beats (shots, gotcha selfie, planted glass, ringed in, GONE WILD? headline, snapper, morning paper); 8 gen + 21 old flows, 0 errors; +0.8% calls, +5-10% during a beat. Weak: the knot is hard to read at phone size |
-| D device fixes | D1 (748f379), D4 (4d2bff6), D2+D3 (1dc374b) merged; D5 running | wave 2 | n/a (the user's phone test) | **queued 2026-10-14**, from the user's device test: D1 S-shield struggle, D4 Supergirl look (wave 1); D2 idle crowd + D3 cage dance (one builder), D5 camera distance setting (wave 2). Specs under "Device test fixes" below |
+| D device fixes | D1 (748f379), D4 (4d2bff6), D2+D3 (1dc374b), D5 (ee53a17) merged | **done; published as testdrive-2026-10-15, waiting on the user's phone test** | n/a (the user's phone test) | **queued 2026-10-14**, from the user's device test: D1 S-shield struggle, D4 Supergirl look (wave 1); D2 idle crowd + D3 cage dance (one builder), D5 camera distance setting (wave 2). Specs under "Device test fixes" below |
 | refs scout | done 2026-10-13 | n/a | n/a | **built**: `club3d/` 12 (Hitman ×4, Cyberpunk ×2, GTA V, Yakuza ×2, LEGO ×2…), `travel/` 12 (Spider-Man, Arkham Knight, LEGO); all ≥1280 px. Gaps: no Hitman club/Iceberg Lounge, few dancefloor-with-guards shots, mostly daytime travel |
 
 ## Next (in order, each one a small fresh agent from its handoff file)
@@ -249,3 +249,8 @@ the beats' lines in `casebeats.js`) and may edit them by hand: add new lines, ne
   (`knotHost()`), the cage dance (`CAGE`, `CAGE_SAY`; -8 rep, feed plays CLIPS.shame). idle/cage/sedate 0 errors
   on the merge. Open: the ring reads as "more people" in a packed rave (V round 2's phone-up pose); early
   step-out still costs the full 8; the beat window needs a phone.
+- 2026-10-15: D5 merged (ee53a17): Camera Far/Medium/Close/Closest (`camDist` setting, `?camdist=`; pause menu in
+  main.js), crowd dither; every step within ±3% calls/tris. Smoke test on the merge, 0 errors: club (rave, pit,
+  idle/cage/touch/caught/talker/stealth), act.js (11 flows), flying (11), brawler (5), 3D rooms at Closest (4),
+  investigations (12). Published to main as testdrive-2026-10-15 (user asked). Next after the phone test:
+  step 3 (V-1 critic), L round 2 (trimmed), F round 2, T round 2.
