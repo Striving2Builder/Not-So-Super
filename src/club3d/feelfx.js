@@ -18,7 +18,8 @@ import { clamp, pick, $ } from '../util.js';
 export const L2B = {
   cap: 2,           // crowd bubbles on screen at once (tap bubbles included)
   gap: 0.7,         // s between two crowd bubbles popping
-  quiet: 2.8,       // s the crowd holds its tongue once she's made
+  quiet: 2.8,       // s nobody but her and the bouncers talks once she's made (and while any bouncer's after her)
+  stamp: [1.4, 1.8], edge: 1.6, // s of game time: the SPOTTED! / LOST THEM! stamps, the thick red edge
   grab: { hold: 0.85, slow: [0.35, 0.7], push: 0.42 }, // s of the grab beat, its slow motion, the camera push
 };
 // her silhouette through the crowd: colour, halftone cell (px) and dot radius (of a cell), draw order
@@ -43,8 +44,8 @@ export const feelFxMethods = {
   bubbleGate(kind, o) {
     if (!this.scene || this.done || this.g.modeName !== 'club3') return true;
     if ((o.prio || 0) >= 1) return true;
-    if (this.quietT > 0) return false;
     const own = kind === 'shout' || kind === 'thought'; // (her own voice, the incidents' point)
+    if (this.quietT > 0 || (!own && this.hunted())) return false;
     if (!own && this.tipOn) return false;               // (one transient layer at a time)
     if (!own && this.t - this.sayAt < L2B.gap) return false;
     const live = [...($('comic-layer')?.querySelectorAll('.bubble:not(.out)') || [])];
@@ -59,6 +60,9 @@ export const feelFxMethods = {
     this.sayAt = this.t;
     return true;
   },
+
+  /** A bouncer has made her and is after her (no crowd chatter through a chase). */
+  hunted() { return (this.guards || []).some((gd) => gd.st === 'alert' && !gd.ko); },
 
   /** As many bubbles up as the cap allows (crowd + tap bubbles)? */
   bubblesFull() {
@@ -115,8 +119,7 @@ export const feelFxMethods = {
     if (!el) { el = document.createElement('div'); el.id = 'c3-stamp'; $('game').insertBefore(el, $('comic-layer')); }
     el.className = ''; el.textContent = word; void el.offsetWidth;
     el.className = `on s-${kind}`;
-    clearTimeout(this._stampT);
-    this._stampT = setTimeout(() => el.classList.remove('on'), kind === 'spot' ? 1500 : 1900);
+    this.stampT = kind === 'spot' ? L2B.stamp[0] : L2B.stamp[1]; // (game time: stepFeelFx takes it down)
   },
 
   /** "!" (tension.spotted calls this after its sting): the event. */
@@ -124,8 +127,7 @@ export const feelFxMethods = {
     this.hushFloor();
     this.quietT = L2B.quiet;
     this.stamp(pick(SPOT_W), 'spot');
-    const v = this.vigEl?.();
-    if (v?.s) { v.s.classList.remove('go'); void v.s.offsetWidth; v.s.classList.add('go'); }
+    this.edgeT = L2B.edge;
     // the screens go to her now (the cut's row glitch still plays), not after the ease
     this.cctvHold = Math.max(this.cctvHold || 0, 3); this.cctvWant = true;
     this.cctvK = Math.max(this.cctvK || 0, 0.55); this.cctvT = 0;
@@ -145,8 +147,9 @@ export const feelFxMethods = {
     if (!M || this._sil) return;
     const mat = new THREE.MeshBasicMaterial({ color: SIL.col, depthFunc: THREE.GreaterDepth, depthWrite: false, fog: false, toneMapped: false });
     mat.onBeforeCompile = (sh) => {
+      const cell = SIL.cell * Math.max(1, this.renderer?.getPixelRatio?.() || 1); // (dots the same size on a phone's dense screen)
       sh.fragmentShader = sh.fragmentShader.replace('void main() {', `void main() {
-  { vec2 c = gl_FragCoord.xy / ${SIL.cell.toFixed(1)}; vec2 f = fract(vec2(c.x + 0.5 * floor(c.y), c.y)) - 0.5; if (dot(f, f) > ${(SIL.dot * SIL.dot).toFixed(3)}) discard; }`);
+  { vec2 c = gl_FragCoord.xy / ${cell.toFixed(1)}; vec2 f = fract(vec2(c.x + 0.5 * floor(c.y), c.y)) - 0.5; if (dot(f, f) > ${(SIL.dot * SIL.dot).toFixed(3)}) discard; }`);
     };
     const sils = [];
     const add = (o) => {
@@ -178,6 +181,15 @@ export const feelFxMethods = {
   stepFeelFx(dt) {
     this.stepSilhouette();
     if (this.quietT > 0) this.quietT -= dt;
+    // the stamp and the red edge run on game time (a phone's 1.5 s, a harness frame's too)
+    if (this.stampT > 0 && (this.stampT -= dt) <= 0) $('c3-stamp')?.classList.add('out');
+    if (this.edgeT > 0 || this._edgeO) {
+      this.edgeT = Math.max(0, (this.edgeT || 0) - dt);
+      const u = 1 - this.edgeT / L2B.edge, o = this.edgeT > 0 ? Math.min(1, u * 10) * (1 - u * u * 0.9) : 0;
+      const s = this.vigEl?.()?.s;
+      if (s) s.style.opacity = o.toFixed(2);
+      this._edgeO = o > 0;
+    }
     this.grabK = clamp((this.grabK || 0) + (this.grabbing ? dt * 6 : -dt * 3), 0, 1);
   },
 
@@ -200,10 +212,12 @@ export const feelFxMethods = {
     const m = gd.mesh, h = this.hero.position, E = m.enemy;
     gd.grabbed = true;
     try {
-      const dx = h.x - m.position.x, dz = h.z - m.position.z, d = Math.hypot(dx, dz) || 1;
-      m.position.x = h.x - (dx / d) * 0.6; m.position.z = h.z - (dz / d) * 0.6;
-      m.rotation.y = Math.atan2(dx, dz);
-      this.hero.rotation.y = Math.atan2(-dx, -dz); // (she turns into it)
+      // he's on her from behind, on the far side from the lens (the camera always looks north), a little
+      // off to his side of her so both read: she faces us, flinching, his hand on her shoulder
+      const side = Math.sign(m.position.x - h.x) || 1;
+      m.position.x = h.x + side * 0.22; m.position.z = h.z - 0.5;
+      m.rotation.y = Math.atan2(h.x - m.position.x, h.z - m.position.z);
+      this.hero.rotation.y = 0; this.facing = true;
       this.grabAt = { x: (h.x + m.position.x) / 2, z: (h.z + m.position.z) / 2 };
       if (E) E.play('punch', { fade: 0.06, speed: 1.5 });
       this.heroModel?.play('pain', { fade: 0.08 });
@@ -213,6 +227,7 @@ export const feelFxMethods = {
       sfx.punch?.();
       const s = this.screenOf({ x: this.grabAt.x, y: h.y, z: this.grabAt.z }, 1.35);
       if (s) comic.pow('GRAB!', s.x, s.y, { size: 0.85, colors: ['#ffffff', '#ff2a2a'] });
+      this.stamp('GRABBED!', 'spot');
       await this.waitGame(0.22);
       const a = E?.actions?.punch;
       if (a) a.paused = true; // (his hands stay on her)
