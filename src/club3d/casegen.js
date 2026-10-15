@@ -7,7 +7,18 @@
 // objective line, the profile (crowd density, how pushy, the bouncers) and the headline.
 // Any 8 consecutive seeds give 8 different suspects; the clue type and the twist rotate with them.
 import { RNG } from '../rng.js';
-import { SUSPECTS, ALLIES, DRINKS, CLUE_TYPES, FRAMES, FLAVOUR, TWISTS, TWIST_IDS } from './casedata.js';
+import { SUSPECTS, ALLIES, DRINKS, CLUE_TYPES, FRAMES, FLAVOUR, TWISTS, TWIST_IDS, TWIST_MORE, STYLE } from './casedata.js';
+
+// r11 V2: each twist's own beats (the snapper only for a real photo; the planted drink has the CCTV
+// booth, the lookalike her double on the club's screens, the setup the break-out). A suspect playing
+// their own twist runs their own list (casedata STYLE).
+const TWIST_BEATS = { real: ['shots', 'selfie', 'headline'], planted: ['push', 'booth', 'headline'], lookalike: ['double', 'selfie', 'headline'], doctored: ['selfie', 'shots', 'headline'], setup: ['trap', 'breakout', 'headline'] };
+/** The visit's own title, headline and lede (seeds with the same twist pick different ones). */
+function variant(S, twist, s) {
+  const own = SUSPECTS.filter((q) => q.twist === twist).indexOf(S), i = own >= 0 ? own : SUSPECTS.indexOf(S) + 2, M = TWIST_MORE[twist], lap = Math.floor((s - 1) / 8);
+  const [headline, sub, lede] = M.papers[(i + lap) % M.papers.length];
+  return { title: M.titles[(i + lap) % M.titles.length], headline, sub, lede };
+}
 
 const CLUE_IDS = Object.keys(CLUE_TYPES);
 const CATS = ['deal', 'supply', 'drop'];
@@ -25,8 +36,8 @@ export function genParts(seed) {
 
 /** The map's label for a generated case (overworld clubCase). */
 export function genLabel(seed) {
-  const { S, twist } = genParts(seed), T = TWISTS[twist];
-  return { name: T.title, theme: 'extortion', risk: 'Scandal',
+  const { S, twist } = genParts(seed);
+  return { name: variant(S, twist, Math.abs(Math.floor(seed)) || 1).title, theme: 'extortion', risk: 'Scandal',
     blurb: `Someone wants a picture of Supergirl behaving badly, and tonight they've got the crowd on their side. ${S.rumour}` };
 }
 
@@ -42,6 +53,8 @@ function choices(r, right, pool) {
 /** The whole case for a seed: same shape as a hand-written one. */
 export function makeCase(seed) {
   const { S, clue, twist, r } = genParts(seed), T = TWISTS[twist], C = CLUE_TYPES[clue];
+  const own = twist === S.twist ? STYLE[S.id] || {} : {}, Vr = variant(S, twist, Math.abs(Math.floor(seed)) || 1);
+  const pace = own.pace || [14 + r.int(0, 6), 20 + r.int(0, 8)];
   const clues = {};
   // the trail: the clue type's spots carry the suspect's three facts (two each)
   const trail = C.keys.filter((k) => k !== T.proof);
@@ -81,10 +94,10 @@ export function makeCase(seed) {
   const drinkOpts = choices(r, { label: DRINKS[S.drink], value: S.drink }, Object.entries(DRINKS).map(([value, label]) => ({ label, value })));
   const camera = twist === 'setup' ? 'no' : 'ahead';
   return {
-    id: `gen-${seed}`, gen: { seed, suspect: S.id, clue, twist, beats: [...T.beats], obj: T.obj, hint: C.hint, headline: T.headline, sub: T.sub, profile: S.profile, look: S.look, name: S.name, short: S.short, lead: S.lead },
-    title: `${T.title}`, tagline: `${T.obj}. ${C.hint}.`, theme: 'extortion', room: S.room, events: S.events,
+    id: `gen-${seed}`, gen: { seed, suspect: S.id, clue, twist, beats: [...(own.beats || TWIST_BEATS[twist])], again: TWIST_MORE[twist].again, runner: TWIST_MORE[twist].runner, pace, crew: STYLE[S.id]?.crew, lines: { shot: STYLE[S.id]?.shot, selfie: STYLE[S.id]?.selfie }, obj: T.obj, hint: C.hint, headline: Vr.headline, sub: Vr.sub, lede: Vr.lede, profile: S.profile, look: S.look, name: S.name, short: S.short, lead: S.lead },
+    title: Vr.title, tagline: `${T.obj}. ${C.hint}.`, theme: 'extortion', room: S.room, events: S.events,
     difficulty: S.profile.difficulty || 'normal',
-    need: Math.min(counted - 3, 6 + (r.chance(0.5) ? 1 : 0)), rep: 30,
+    need: Math.min(counted - 3, own.need || 6 + (r.chance(0.5) ? 1 : 0)), rep: 30,
     clues,
     solvedText: `${S.name}, ${S.who}, wanted a picture of Supergirl behaving badly for ${S.motive}. ${S.buyer} was paying, and it was going out: ${S.drop}.`,
     drugName: 'The house special', uvLine: S.msg.drop.toUpperCase().slice(0, 28), carrierLine: 'Free shots, all night, if you share one with Supergirl.',

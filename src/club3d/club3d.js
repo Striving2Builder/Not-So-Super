@@ -396,7 +396,7 @@ export class Club3D extends Special3D {
     const k = 1 - Math.pow(0.02, dt);
     this.camPD[0] += (want[0] - this.camPD[0]) * k * 0.6; this.camPD[1] += (want[1] - this.camPD[1]) * k * 0.6;
     // walls between her and the camera: tip up toward top-down (rooms have no ceilings)
-    let pitch = this.camPD[0], dist = this.camPD[1] * (1 - L2B.grab.push * (this.grabK || 0)); // (r11 L2b: the grab pushes in)
+    let pitch = this.camPD[0], dist = this.camPD[1] * (1 - L2B.grab.push * (this.grabK || 0)) * (1 - 0.24 * (this.beatCamK || 0)); // (r11 L2b: the grab pushes in; r11 V2 hook: a crowd beat round her too, casestage.js)
     for (const p of [pitch, 0.95, 1.15, 1.32]) {
       const off = this.cameraOffset(p, dist);
       if (this.cameraReach(h, off) >= dist * 0.8 || p === 1.32) { pitch = p; break; }

@@ -40,14 +40,14 @@ export const SUSPECTS = [
     note: { deal: 'Starla, a wannabe hero, wants her out of the job', supply: 'Starla\'s fans paid for the "proof"', drop: 'Starla\'s 1 AM stream: "Is THIS your hero?"' },
     talk: ['"Starla says the city deserves a hero who can hold her drink. Herself."', '"Her fans paid for it. StarlaNation, they\'re called."', '"One o\'clock. She streams it. Is THIS your hero?"'],
     rumour: 'Some influencer in a purple cape is telling everyone she\'s the new Supergirl.', motive: 'her job', lead: { name: 'Starla\'s streaming studio', blurb: 'Starla goes live at 1 AM with the photo. Cut the feed.' } },
-  { id: 'pratt', twist: 'real', name: 'Ozzie Pratt', who: 'her self-styled number one fan', short: 'Ozzie', room: 'rave', look: { top: '#3dff9a', hairStyle: 'beanie' },
+  { id: 'pratt', twist: 'real', name: 'Ozzie Pratt', who: 'her self-styled number one fan', short: 'Ozzie', room: 'tunnel', look: { top: '#3dff9a', hairStyle: 'beanie' },
     host: 'Vivian "Flash" Cole', boss: 'Lenny Gold', buyer: 'an online auction', drop: 'the auction, closing at 3 AM', ally: 'flash', drink: 'blue',
     profile: { crowd: 1.1, knot: 6, pushy: 0.9 }, events: ['redcarpet', 'fight', 'raid'],
     msg: { deal: 'Supergirl\'s #1 fan. I just need ONE candid. — Oz', supply: 'Collectors bid 40K for an "after-hours Supergirl".', drop: 'Auction closes 3 AM. Highest bid gets the memory card.' },
     note: { deal: 'Ozzie Pratt, her "number one fan", is chasing candids', supply: 'Collectors are bidding on the photos', drop: 'The auction closes at 3 AM' },
     talk: ['"Ozzie\'s got a wall of her pictures at home. Wants one nobody else has."', '"Collectors bid forty grand for an after-hours Supergirl. Forty!"', '"The auction closes at three. Then the card goes to the top bid."'],
     rumour: 'A guy in a green Supergirl fan shirt has asked everyone for a selfie with her.', motive: 'a collection', lead: { name: 'Ozzie\'s fan shrine', blurb: 'The memory card is in Ozzie\'s flat, ready to ship. Get it back.' } },
-  { id: 'bell', twist: 'planted', name: 'Nico Bell', who: 'the bartender, deep in debt', short: 'Nico', room: 'mezzanine', look: { top: '#1a1a1a', hairStyle: 'short' },
+  { id: 'bell', twist: 'planted', name: 'Nico Bell', who: 'the bartender, deep in debt', short: 'Nico', room: 'rave', look: { top: '#1a1a1a', hairStyle: 'short' },
     host: 'Vivian "Flash" Cole', boss: 'Lenny Gold', buyer: 'Lou Banner, the Scoop\'s night editor', drop: 'a courier at the alley door, 2 AM', ally: 'lou', drink: 'house',
     profile: { crowd: 1, knot: 5, pushy: 0.6 }, events: ['fight', 'firealarm'],
     msg: { deal: 'Double the house special for her. On the house. — N.', supply: 'Lou Banner clears the debt for one good picture.', drop: 'Courier, alley door, 2 AM. Memory card in a matchbox.' },
@@ -167,3 +167,48 @@ export const TWISTS = {
     headline: 'SUPERGIRL MOBBED... AND LOVING IT?', sub: 'Party girl hero at {CLUB}' },
 };
 export const TWIST_IDS = Object.keys(TWISTS);
+
+// r11 V2: what makes each visit its own story. Per twist: the repeat beat, more titles, more
+// headlines (each with its own lede) for the morning paper, the runner (who flees with the evidence:
+// only a real photo has a snapper). Per suspect (when the seed plays their own twist): their beats in
+// their order, their pace (first beat, gap between beats, s), their crew's lines.
+export const TWIST_MORE = {
+  real: { again: 'shots', runner: 'snapper', titles: ['The Real Thing', 'Caught on Camera', 'One Too Many'],
+    papers: [['SUPERGIRL GONE WILD?', 'Tipsy hero caught on camera at {CLUB}', 'Witnesses say the Girl of Steel was "having the time of her life." The pictures agree.'],
+      ['HERO HITS THE BOTTLE', 'Wobbly night at {CLUB}', 'Fans lined up for a shot with Supergirl. Most of them got one.'],
+      ['SUPER SLOSHED!', 'Last orders at {CLUB}', 'The city\'s protector, swaying under the disco ball. Who was minding the skies?']] },
+  planted: { again: 'push', runner: 'wiper', titles: ['Hold This For Me', 'The Plant', 'Glass Act'],
+    papers: [['SUPERGIRL\'S BOOZY NIGHT?', 'Glass in hand at {CLUB}', 'A full glass, a big grin, a dozen flashes. Our readers can do the maths.'],
+      ['CHEERS, SUPERGIRL!', 'Drinks on the hero at {CLUB}', 'Bar staff say she "never put it down." The photos show a hero who likes a drink.'],
+      ['ONE FOR THE ROAD?', 'The glass she couldn\'t let go of, at {CLUB}', 'Is the Girl of Steel flying under the influence? Read our six-page special.']] },
+  lookalike: { again: 'selfie', runner: 'double', titles: ['Double Trouble', 'Seeing Double', 'The Other Supergirl'],
+    papers: [['SUPERGIRL DANCES ON THE BAR!', 'Wild scenes at {CLUB}', 'Cape off, heels on, top of the bar at midnight. Fans say she "owned the place."'],
+      ['TABLE-TOP TITAN!', 'The bar-top show at {CLUB}', 'Who knew the Girl of Steel could dance? Everyone at {CLUB}, that\'s who.'],
+      ['SUPERGIRL\'S SECRET PARTY LIFE', 'Night moves at {CLUB}', 'She saves the city by day. By night, a regular says, "she\'s ours."']] },
+  doctored: { again: 'shots', runner: null, titles: ['Photoshopped', 'Picture Perfect', 'The Edit'],
+    papers: [['SUPERGIRL: BOTTLE IN HAND!', 'Party pictures from {CLUB}', 'Eyes half-shut, bottle up. The camera never lies. Does it?'],
+      ['HERO OR ZERO?', 'The shot from {CLUB} that has the city talking', 'Our photo desk has the picture. Supergirl\'s office has "no comment."'],
+      ['THE GIRL OF SWILL', 'Exclusive pictures from {CLUB}', 'A bottle in each hand and nowhere to fly. Pages 2, 3 and 4.']] },
+  setup: { again: 'trap', runner: 'leader', titles: ['The Setup', 'Ringed In', 'Crowd Control'],
+    papers: [['SUPERGIRL MOBBED... AND LOVING IT?', 'Party girl hero at {CLUB}', 'Surrounded by fans and in no hurry to leave. Is this how a hero spends her nights?'],
+      ['SUPERGIRL\'S SQUAD GOALS', 'Hugs, shots and selfies at {CLUB}', 'Fifty new best friends and a camera on every one of them.'],
+      ['THE HERO WHO WOULDN\'T LEAVE', 'Closing time at {CLUB}', 'The bouncers asked her to go twice, a source says. She was "having too much fun."']] },
+};
+// her side of the story, when she killed it (twist → [headline, lede])
+export const PAPER_WIN = {
+  real: [['NO PHOTO, NO STORY', 'The picture everyone was talking about has vanished. So has the man who took it.'], ['SNAPPER SNAPPED', 'The photographer left {CLUB} with an empty camera and a red face.']],
+  planted: [['THE GLASS WAS A PLANT!', 'CCTV shows a man pushing the drink into her hand for the cameras. She never took a sip.'], ['FRAMED WITH A FULL GLASS', 'The tape from {CLUB} shows exactly who handed her that drink, and why.']],
+  lookalike: [['WRONG GIRL!', 'The "Supergirl" on the bar was a lookalike in a knockoff suit. The real one was chasing her.'], ['SEEING DOUBLE', 'A cheap suit, a crooked S and a wig: the bar-top "hero" unmasked at {CLUB}.']],
+  doctored: [['SUPERGIRL PHOTO A FAKE', 'The picture was a fake, and the proof is on every desk in the city by morning.'], ['PHOTOSHOP FLOP', 'The original print shows a glass of water. The "bottle" was painted in.']],
+  setup: [['THE CROWD WAS HIRED', 'A napkin plan from {CLUB}: "Ring her in. Phones up." Somebody paid for that mob.'], ['RENT-A-MOB!', 'The fans who wouldn\'t let her leave {CLUB} were paid to be there.']],
+};
+export const STYLE = {
+  vox:      { beats: ['stream', 'shots', 'headline'], pace: [10, 16], need: 5, crew: 'Dee Dee\'s camera guy', shot: '"We\'re LIVE! Dee Dee wants a shot of you doing a shot!"' },
+  sterling: { beats: ['selfie', 'headline', 'shots'], pace: [18, 26], need: 7, crew: 'A photographer in a grey suit', shot: '"Max sends his love. And this. Bottoms up!"' },
+  crane:    { beats: ['trap', 'breakout', 'headline'], pace: [12, 18], need: 6, crew: 'A woman with a clipboard' },
+  lusk:     { beats: ['shots', 'push', 'booth', 'headline'], pace: [9, 14], need: 5, crew: 'Benny\'s bottle boy', shot: '"Bottles on Benny! Supergirl drinks FREE!"' },
+  starla:   { beats: ['shots', 'selfie', 'headline'], pace: [15, 22], need: 7, crew: 'Starla\'s ring-light girl', shot: '"Starla says you can\'t keep up with her. Prove it!"' },
+  pratt:    { beats: ['selfie', 'headline', 'shots'], pace: [20, 30], need: 6, crew: 'Ozzie, the number one fan', shot: '"Ozzie bought these! He\'s been saving all year!"', selfie: '"I\'m your NUMBER ONE FAN! One picture! Pleeease!"' },
+  bell:     { beats: ['push', 'headline', 'booth'], pace: [14, 20], need: 6, crew: 'The bartender' },
+  kroll:    { beats: ['double', 'selfie', 'headline'], pace: [12, 20], need: 5, crew: 'A man in a gold jacket' },
+};

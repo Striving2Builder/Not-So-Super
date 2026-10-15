@@ -22,7 +22,7 @@ function modelShot(g, clip, time, x, feetY, heightPx, yaw = 0.45) {
   return true;
 }
 
-export function showNewspaper({ headline, sub = '', body = [], rep = 0, tabloid = false, photo = 'hero' }) {
+export function showNewspaper({ headline, sub = '', body = [], rep = 0, tabloid = false, photo = 'hero', stamp = null }) {
   return new Promise((resolve) => {
     sfx.paper();
     const date = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
@@ -32,7 +32,7 @@ export function showNewspaper({ headline, sub = '', body = [], rep = 0, tabloid 
       <div class="cols"><canvas class="photo" width="400" height="250"></canvas><div class="txt">${body.map((p) => `<p>${p}</p>`).join('')}</div></div>
       <div class="repd ${rep >= 0 ? 'good' : 'bad'}">${rep >= 0 ? '+' : ''}${rep} REPUTATION</div>
       <div class="tap">Tap to continue</div></div>`, 'paper-back');
-    drawPhoto(el.querySelector('canvas'), photo, tabloid);
+    drawPhoto(el.querySelector('canvas'), photo, tabloid, stamp); // (r11 V2: a real frame can carry its own stamp)
     let closed = false;
     const close = () => {
       if (closed) return;
@@ -53,14 +53,14 @@ function drawStamp(g, W, text) {
   g.fillText(text, 0, 1); g.restore();
 }
 
-function drawPhoto(c, kind, tabloid) {
+function drawPhoto(c, kind, tabloid, stamp = null) {
   const g = c.getContext('2d'), W = c.width, H = c.height;
   if (kind && typeof kind !== 'string') {
     // a real picture of her (a leaked polaroid): cover-fit, a little crooked, stamped
     const iw = kind.naturalWidth || kind.width, ih = kind.naturalHeight || kind.height, s = Math.max(W / iw, H / ih);
     g.fillStyle = '#222'; g.fillRect(0, 0, W, H);
     g.save(); g.translate(W / 2, H / 2); g.rotate(-0.04); g.drawImage(kind, -iw * s / 2, -ih * s / 2, iw * s, ih * s); g.restore();
-    return drawStamp(g, W, 'LEAKED!');
+    return drawStamp(g, W, stamp || 'LEAKED!');
   }
   const sky = g.createLinearGradient(0, 0, 0, H);
   sky.addColorStop(0, kind === 'fire' ? '#5a4a40' : '#6a8ab0'); sky.addColorStop(1, '#d8c8a8');
