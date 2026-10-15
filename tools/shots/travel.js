@@ -31,11 +31,11 @@ const SEED = `(() => { let s = 4242; Math.random = () => { s = (s + 0x6d2b79f5) 
 const SCENES = {
   impostor: { clock: 18 * 60 + 40, act: 'guardian', band: 1 },
   faller: { clock: 12 * 60, band: 1 },
-  car: { clock: 21 * 60 + 30, band: 1 },
-  getaway: { clock: 23 * 60, band: 1 },
+  car: { clock: 21 * 60 + 30, band: 1, gap: 200 },
+  getaway: { clock: 23 * 60, band: 1, gap: 200 },
   heli: { clock: 17 * 60 + 50, band: 1 },
   rings: { clock: 10 * 60, band: 1 },
-  kitten: { clock: 13 * 60, band: 1 },
+  kitten: { clock: 13 * 60, band: 1, gap: 250 },
 };
 
 // ------------------------------------------------------------------ the in-page player
@@ -53,6 +53,8 @@ function installBot() {
     const fx = Math.cos(cam.yaw), fy = Math.sin(cam.yaw);
     return { x: -fy * xw + fx * yw, y: -(fx * xw + fy * yw) };
   };
+  /** (x, y) moved `off` units sideways of her line to it: a target dead ahead hides behind her figure in the chase camera. */
+  const aside = (x, y, off) => { const h = ow.hero, dx = x - h.x, dy = y - h.y, d = Math.hypot(dx, dy) || 1; return [x - (dy / d) * off, y + (dx / d) * off]; };
   const seek = (x, y, { stopAt = 0, slow = 0 } = {}) => {
     const h = ow.hero, dx = x - h.x, dy = y - h.y, d = Math.hypot(dx, dy) || 1;
     let mag = 1;
@@ -64,15 +66,43 @@ function installBot() {
   B.plan = () => {
     const h = ow.hero, M = ow.moments, m = M.live.find((q) => !q.result && q.kind === B.kind) || M.live.find((q) => !q.result);
     B.boost = false; B.band = null; B.perch = false;
-    if (!m) return B.idle ? B.idle() : null;
+    if (!m) { B.warp = 1; return B.idle ? B.idle() : null; }
     const e = m.e, t = m.target ? m.target() : null;
-    switch (m.kind) {
+    const act = () => { switch (m.kind) {
       case 'impostor': { B.band = 0; const d = m.dist(); B.boost = d > 700; return seek(m.x, m.y, { slow: 260 }); }
-      case 'faller': { B.band = e.phase === 'fall' && e.z > 400 ? nearestBand(e.z) : 0; return seek(e.x, e.y + 4, { stopAt: 10, slow: 200 }); }
-      case 'car': case 'getaway': { B.band = 0; B.boost = m.dist() > 500; return seek(e.x, e.y, { slow: 120 }); }
+      case 'faller': { B.band = nearestBand(e.z); return seek(e.x, e.y + 4, { stopAt: 10, slow: 200 }); } // (up at the washer's height: catch the rig, or them as they fall)
+      case 'car': case 'getaway': {
+        // chase at full speed (a "slow" ramp let the 235 u/s car hold her ~60 u off, just outside the
+        // 55 u grab), aimed a beat ahead of the car on its road; high over the towers until close
+        const d = m.dist(), lead = Math.min(0.6, d / 900), sp = e.spd || 0, dir = e.dir || 0;
+        B.band = d < 420 ? 0 : 1; B.boost = d > 50; // (a getaway at 285 u/s held her ~70 u back without it)
+        const [ax, ay] = aside(e.x + [1, 0, -1, 0][dir] * sp * lead, e.y + [0, 1, 0, -1][dir] * sp * lead, d > 180 ? 70 : 0);
+        return seek(ax, ay);
+      }
       case 'heli': { B.band = nearestBand(e.z); return seek(e.x, e.y, { slow: 160 }); }
-      case 'rings': { const r = e.rings[e.next]; if (!r) return null; B.band = nearestBand(r.z); return seek(r.x, r.y); }
-      case 'kitten': { B.band = 0; const d = m.dist(); B.perch = d < 50 && h.speed < 130; return seek(e.x, e.y, { stopAt: 4, slow: 260 }); }
+      case 'rings': {
+        // hold off short of a hoop until she's at its height (she used to fly past it, high or low, and circle)
+        const r = e.rings[e.next]; if (!r) return null; B.band = nearestBand(r.z);
+        // and ease off while the hoop isn't ahead: at high-patrol speed her turn circle is wider than
+        // the course, so she orbited a hoop for 25 s
+        const off = Math.abs(h.z - r.z) > 60, d = Math.hypot(r.x - h.x, r.y - h.y);
+        let da = Math.atan2(r.y - h.y, r.x - h.x) - h.ang; da = Math.atan2(Math.sin(da), Math.cos(da));
+        // a low hoop sits among the towers (at skim height she got stuck on a facade ~100 u short of it):
+        // come in over the roofs and drop onto it from above
+        if (B.band === 0) { B.band = d < 80 ? 0 : 1; const w = seek(r.x, r.y, { slow: 260 }), q = Math.abs(da) > 0.5 ? 0.25 : 1; return { x: w.x * q, y: w.y * q }; }
+        const v = seek(r.x, r.y, off ? { stopAt: 140, slow: 220 } : { slow: 160 }), k = Math.abs(da) > 0.5 ? 0.25 : 1;
+        return { x: v.x * k, y: v.y * k };
+      }
+      case 'kitten': {
+        // over the roof at a height that clears it (band 0 sits below most kitten roofs: she hit the wall),
+        // slow down on top, perch
+        const d = m.dist(), roof = e.z || 0, bz = BANDZ();
+        B.band = d < 30 ? null : (bz[0] > roof + 30 ? 0 : bz[1] > roof + 30 ? 1 : 2);
+        B.perch = d < 40 && h.speed < 130;
+        B.boost = d > 900;
+        const [ax, ay] = aside(e.x, e.y, d > 130 ? 60 : 0);
+        return seek(ax, ay, { stopAt: 6, slow: 300 });
+      }
       default: {
         if (!t) return null;
         if (t.band != null) B.band = t.band;
@@ -81,7 +111,19 @@ function installBot() {
         return seek(t.x, t.y, { stopAt: t.stopAt || 0, slow: t.slow || 0 });
       }
     }
+    };
+    const v = act();
+    B.warp = (e?.t ?? 99) < 3 ? 0.35 : 1;
+    // a player's reaction beat: the first ~2.5 s of a moment she eases toward it (no boost) and takes its band,
+    // so the strip gets an approach with the target in view before the catch (they spawn 80-160 m ahead)
+    if (v && m.kind !== 'impostor' && (e?.t ?? 99) < B.react) { B.boost = false; B.perch = false; return { x: v.x * 0.15, y: v.y * 0.15 }; } // (she drops to its band first: from cruise height a street target 100 m out is below the frame)
+    return v;
   };
+  B.react = 2.5;
+  // the harness's "slow camera": a moment's first 3 s run at 0.35× sim speed against the wall clock, so
+  // the screenshots (each costs real time) catch the approach; the game itself is unchanged
+  const tick0 = ow.moments.tick.bind(ow.moments);
+  ow.moments.tick = (rdt) => tick0(rdt) * (B.warp || 1);
   inp.axis = () => {
     if (!B.on) return ax();
     let a = null;
@@ -167,7 +209,14 @@ async function playMoment(browser, kind, sc) {
       await clearModals(page);
       const s = await page.evaluate((k) => {
         const ow = window.__game.overworld, m = ow.moments.live.find((q) => q.kind === k);
-        return { t: +ow.t.toFixed(2), result: m ? m.result : 'gone', state: m?.state || m?.e?.phase || null, d: m ? Math.round(m.dist()) : null, z: Math.round(ow.hero.z), slow: ow.moments.scale };
+        // is the target on screen (in the frame, clear of her figure)? the strips want an approach frame with it in view
+        let view = false;
+        try {
+          const e = m && m.e, r = e && e.rings ? e.rings[e.next] : null, p = r || e || m;
+          const P = ow.view3d.projector(), [sx, sy, front] = P.proj(p.x, p.y, p.z ?? 0), W = innerWidth, H = innerHeight, hs = ow.heroScreen || { x: W / 2, y: H / 2 };
+          view = !!m && front && sx > W * 0.06 && sx < W * 0.94 && sy > H * 0.1 && sy < H * 0.94 && Math.hypot(sx - hs.x, sy - hs.y) > 45;
+        } catch (err) { /* no 3D view */ }
+        return { t: +ow.t.toFixed(2), result: m ? m.result : 'gone', state: m?.state || m?.e?.phase || null, d: m ? Math.round(m.dist()) : null, z: Math.round(ow.hero.z), slow: ow.moments.scale, view };
       }, kind);
       const f = `f${String(n).padStart(3, '0')}_${Math.round(s.t * 1000)}.png`;
       await shotTo(page, path.join(dir, f));
@@ -175,7 +224,7 @@ async function playMoment(browser, kind, sc) {
       n++;
       if (s.result && !settled) settled = Date.now();
       if (settled && Date.now() - settled > (sc.after || 2500)) break;
-      await page.waitForTimeout(sc.gap || 500);
+      await page.waitForTimeout(sc.gap || 300);
     }
     r.result = r.frames.length ? r.frames[r.frames.length - 1].result : null;
     r.log = await page.evaluate(() => window.__game.overworld.moments.log);
@@ -195,9 +244,17 @@ function strip(kind, r) {
   fs.rmSync(sel, { recursive: true, force: true }); fs.mkdirSync(sel, { recursive: true });
   const F = r.frames;
   if (!F.length) return null;
-  const end = F.findIndex((q) => q.result) + 3, last = Math.min(F.length - 1, end > 2 ? end : F.length - 1);
-  const pickN = 7, idx = new Set();
+  const res = F.findIndex((q) => q.result), end = res + 3, last = Math.min(F.length - 1, end > 2 ? end : F.length - 1);
+  const pickN = 6, idx = new Set();
   for (let i = 0; i < pickN; i++) idx.add(Math.round((i / (pickN - 1)) * last));
+  // plus the approach with the target in view: the first and the closest in-view frames before the resolution
+  const seen = F.map((q, i) => (q.view && !q.result && (res < 0 || i < res) ? i : -1)).filter((i) => i >= 0);
+  if (seen.length) { idx.add(seen[0]); idx.add(seen.reduce((a, i) => (F[i].d != null && F[i].d < F[a].d ? i : a), seen[0])); }
+  if (res >= 0) idx.add(Math.min(F.length - 1, res + 1)); // (the verdict panel)
+  // the stills for the blind pairs (travel/): the approach with the target in view, the verdict
+  const still = (i, tag) => { if (i >= 0 && F[i]) fs.copyFileSync(path.join(src, F[i].f), path.join(OUT, 'travel', `${kind}_${tag}.png`)); };
+  if (seen.length) { still(seen[0], 'a_approach'); still(seen.reduce((a, i) => (F[i].d < F[a].d ? i : a), seen[0]), 'b_close'); }
+  if (res >= 0) still(Math.min(F.length - 1, res + 1), 'c_verdict');
   for (const i of idx) fs.copyFileSync(path.join(src, F[i].f), path.join(sel, F[i].f));
   const out = path.join(OUT, 'strips', `${kind}.png`);
   try { execFileSync('python', [path.join(__dirname, 'sheet.py'), sel, out, '4', '420'], { stdio: 'pipe' }); } catch (e) { return null; }
@@ -224,6 +281,9 @@ function commuteSetup(every) {
     const legs = window.__legs, t = legs[window.__leg % 2];
     if (!ow.nav.target || Math.hypot(t.x - ow.hero.x, t.y - ow.hero.y) < 400) { window.__leg++; const n = legs[window.__leg % 2]; ow.nav.set({ x: n.x, y: n.y, name: n.name }); }
     B.band = 1;
+    // a long leg: BOOST in bursts (6 s of every 16), like a player in a hurry (the strip shows the speed lines)
+    const tw = legs[window.__leg % 2];
+    B.boost = Math.hypot(tw.x - ow.hero.x, tw.y - ow.hero.y) > 1400 && (M.clock % 16) < 6;
     return { x: 0, y: 0 }; // (autopilot flies the waypoint)
   };
   const plan0 = B.plan;
@@ -251,7 +311,7 @@ async function commute(browser) {
     const tEnd = SECS, timeline = [];
     while (true) {
       await clearModals(page);
-      const s = await page.evaluate(() => { const ow = window.__game.overworld; return { t: ow.moments.clock, live: ow.moments.live.filter((m) => !m.result).map((m) => m.kind) }; });
+      const s = await page.evaluate(() => { const ow = window.__game.overworld; return { t: ow.moments.clock, live: ow.moments.live.filter((m) => !m.result).map((m) => m.kind), boost: !!ow.hero.wasBoosting }; });
       if (prev && prev.live.length) liveSecs += Math.max(0, s.t - prev.t); // (seconds with a live offer up)
       if (!prev || prev.live.join() !== s.live.join()) timeline.push(`${s.t.toFixed(1)}s ${s.live.join('+') || '-'}`);
       prev = s;
@@ -282,13 +342,15 @@ async function commute(browser) {
   try {
     if (COMMUTE) {
       report.commute = await commute(browser);
+      report.commute.boostFrames = report.commute.frames.filter((q) => q.boost).length;
+      try { execFileSync('python', [path.join(__dirname, 'sheet.py'), path.join(OUT, 'frames', 'commute'), path.join(OUT, 'strips', 'commute.png'), '6', '300'], { stdio: 'pipe' }); } catch (e) { /* no python */ }
       console.log('commute', JSON.stringify({ ...report.commute, frames: report.commute.frames.length }));
     } else {
       for (const [kind, sc] of Object.entries(SCENES)) {
         if (ONLY && !ONLY.split(',').includes(kind)) continue;
         const r = await playMoment(browser, kind, sc);
         r.strip = strip(kind, r);
-        report[kind] = { ...r, frames: r.frames.length, path: r.frames.map((q) => `${q.t}s ${q.state || ''} d${q.d} z${q.z}${q.result ? ' ' + q.result : ''}`) };
+        report[kind] = { ...r, frames: r.frames.length, path: r.frames.map((q) => `${q.t}s ${q.state || ''} d${q.d} z${q.z}${q.view ? " V" : ""}${q.result ? ' ' + q.result : ''}`) };
         console.log(kind, JSON.stringify({ result: r.result, frames: r.frames.length, errors: r.errors.slice(0, 3), fail: r.fail, metrics: r.metrics, log: r.log }));
       }
     }

@@ -882,6 +882,10 @@ body.c3-xray #xray-tint::after { content: ""; position: absolute; left: 0; right
 .c3-struggle .st-say.miss { background: #f3e9ee; color: #7a0618; font-size: 18px; font-style: italic; }
 
 /* === r11 F === */
+/* the LIVE clip over the 3D flight: Chromium culled the WebGL canvas in a box the clip's size, mirrored
+   below it (the "black box" in the harness frames: the page background showing through). A no-op filter
+   draws the clip through its own surface, which avoids it; the panel itself is unchanged. */
+#feed video { filter: contrast(1.001); }
 /* the air events' verdict panel (src/moments/verdict.js): left of centre, clear of the LIVE panel and the controls */
 #mo-verdict { position: absolute; left: calc(16px + var(--sl, 0px)); top: 30%; width: min(480px, calc(100vw - 330px)); min-width: 240px; padding: 8px 18px 9px; z-index: 54; pointer-events: none; text-align: center; border: 4px solid #0b0b12; box-shadow: 6px 6px 0 rgba(0, 0, 0, .55); transform: rotate(-2deg) scale(.3); opacity: 0; transition: opacity .12s, transform .16s cubic-bezier(.2, 1.6, .4, 1); background-image: radial-gradient(rgba(0, 0, 0, .16) 1.2px, transparent 1.4px); background-size: 7px 7px; }
 #mo-verdict.won { background-color: #ffd84d; color: #12081c; }
