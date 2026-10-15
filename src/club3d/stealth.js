@@ -378,7 +378,10 @@ export const stealthMethods = {
     const s = best && bd > 1.6 && this.screenOf({ x: best.x, y: best.y || 0, z: best.z }, 2.9);
     if (!s) { el.classList.remove('on'); return; }
     const W = this.g.w, H = this.g.h;
-    el.style.transform = `translate(${Math.round(clamp(s.x, 24, W - 24))}px,${Math.round(clamp(s.y, 60, H - 40))}px)`;
+    let x = clamp(s.x, 24, W - 24), y = clamp(s.y, 60, H - 40);
+    // (never under the stats, the title card or the case list: drop just below the panel instead)
+    for (const r of this._avoid || []) if (x > r.left - 22 && x < r.right + 22 && y > r.top - 22 && y < r.bottom + 22 && r.bottom < H * 0.5) y = r.bottom + 26;
+    el.style.transform = `translate(${Math.round(x)}px,${Math.round(y)}px)`;
     el.classList.add('on');
   },
 

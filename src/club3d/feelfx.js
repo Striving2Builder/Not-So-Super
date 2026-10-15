@@ -79,12 +79,12 @@ export const feelFxMethods = {
     const L = $('comic-layer');
     const els = L ? [...L.querySelectorAll('.bubble:not(.out)')] : [];
     const taps = (this.taps || []).filter((b) => !b.gone && b.el.isConnected && b.by != null);
-    if (!els.length && !taps.length) return;
     const now = performance.now();
-    if (now - this._avoidT > 250 || !this._avoid) {
+    if (now - this._avoidT > 250 || !this._avoid) { // (also read by the X-ray LEAD beacon, stealth.js)
       this._avoidT = now;
       this._avoid = [...document.querySelectorAll(AVOID)].map((e) => e.getBoundingClientRect()).filter((r) => r.width && r.height);
     }
+    if (!els.length && !taps.length) return;
     const W = innerWidth, H = innerHeight, taken = [...this._avoid];
     // and her: nobody's line sits on top of the girl the player is steering
     const hp = this.hero?.position, f = hp && this.screenOf(hp, 0), t = hp && this.screenOf(hp, 1.75);
