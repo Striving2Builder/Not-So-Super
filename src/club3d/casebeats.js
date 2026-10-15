@@ -25,6 +25,7 @@ const SNAP_ROOMS = ['restroom', 'lounge', 'storage', 'dark'];
 export const beatMethods = {
   startBeats() {
     const G = this.caseDef.gen;
+    this._kh = { knot: null, leaving: null }; // (the knot outside a generated case: the idle ring, the cage; danger.js)
     this.gb = G ? { i: 0, t: +(new URLSearchParams(location.search).get('club3beat') || rand(...BEAT.first)), knot: null, refused: 0, drank: 0, repeats: 0, photo: null, snapper: null, proof: false, phoneBack: false, headline: false } : null;
   },
 
@@ -36,7 +37,7 @@ export const beatMethods = {
     if (B.deadline && this.t >= B.deadline) { B.deadline = 0; this.closeQuick?.('slow'); }
     this.stepKnot(dt);
     this.stepSnapper(dt);
-    if (B.knot || this.busy || this.sub || this.sedating || this.quickOn || this.room || this.escapeT > 0) return;
+    if ((B.knot && !B.knot.idle) || this.busy || this.sub || this.sedating || this.quickOn || this.room || this.escapeT > 0) return;
     B.t -= dt;
     if (B.t > 0) return;
     const list = this.caseDef.gen.beats;
@@ -60,34 +61,42 @@ export const beatMethods = {
   },
 
   // ------------------------------------------------------------------ the knot
+  /** Where the knot lives: the generated case's beat state, else the visit's own (the idle ring, the cage). */
+  knotHost() { return this.gb || this._kh || (this._kh = { knot: null, leaving: null }); },
+
   /** n dancers nearest her close in to a ring of radius r (north of her: the camera sees them). */
   formKnot(n, r = BEAT.r, phones = true) {
-    const h = this.hero.position, P = this.crowd.people;
-    const near = P.filter((p) => p.pose === 'dance' && !p.fixed && !p.left && Math.hypot(p.hx - h.x, p.hz - h.z) < 9)
-      .sort((a, b) => Math.hypot(a.hx - h.x, a.hz - h.z) - Math.hypot(b.hx - h.x, b.hz - h.z)).slice(0, n);
+    const B = this.knotHost(), h = this.hero.position, P = this.crowd.people;
+    if (B.knot) this.releaseKnot(); // (a beat's knot takes over the idle ring's dancers)
+    // dancers still drifting home from the last knot: their real home spots are in `leaving`
+    const was = new Map((B.leaving || []).map((q) => [q.p, q]));
+    const home = (p) => was.get(p) || p;
+    const near = P.filter((p) => p.pose === 'dance' && !p.fixed && !p.left && Math.hypot(home(p).hx - h.x, home(p).hz - h.z) < 9)
+      .sort((a, b) => Math.hypot(home(a).hx - h.x, home(a).hz - h.z) - Math.hypot(home(b).hx - h.x, home(b).hz - h.z)).slice(0, n);
     const k = near.map((p, i) => {
       const a = -1.9 + (3.8 * (i + 0.5)) / near.length; // a fan of angles, none between her and the camera
-      const q = { p, hx: p.hx, hz: p.hz, rot: p.rot, col: p.col.getHex(), a, r };
+      const o = was.get(p), q = o ? { ...o, a, r } : { p, hx: p.hx, hz: p.hz, rot: p.rot, col: p.col.getHex(), a, r };
       p.col.setHex(0xcfe8ff); // (lit by their own phone screens: the knot reads against the crowd)
       return q;
     });
+    if (B.leaving) B.leaving = B.leaving.filter((q) => !near.includes(q.p));
     this.crowd.repickT = 0;
-    this.gb.knot = { k, t: 0, phones, r, flashT: 0.4 };
+    B.knot = { k, t: 0, phones, r, flashT: 0.4, rate: 1 };
     if (phones) this.phoneMesh(k.length);
-    return this.gb.knot;
+    return B.knot;
   },
 
   releaseKnot() {
-    const K = this.gb?.knot;
+    const B = this.knotHost(), K = B.knot;
     if (!K) return;
-    this.gb.knot = null;
-    this.gb.leaving = K.k;
-    this.gb.leaveT = 2;
+    B.knot = null;
+    B.leaving = [...(B.leaving || []), ...K.k];
+    B.leaveT = 2;
     if (this.phones) this.phones.visible = false;
   },
 
   stepKnot(dt) {
-    const B = this.gb, K = B.knot, h = this.hero.position, ease = Math.min(1, dt * 3);
+    const B = this.knotHost(), K = B.knot, h = this.hero.position, ease = Math.min(1, dt * 3);
     if (B.leaving) {
       B.leaveT -= dt;
       for (const q of B.leaving) { q.p.hx += (q.hx - q.p.hx) * ease; q.p.hz += (q.hz - q.p.hz) * ease; }
@@ -110,7 +119,7 @@ export const beatMethods = {
       ph.count = K.k.length; ph.instanceMatrix.needsUpdate = true; ph.visible = true;
       K.flashT -= dt;
       if (K.flashT <= 0) {
-        K.flashT = rand(0.35, 0.9);
+        K.flashT = rand(0.35, 0.9) / (K.rate || 1); // (the idle ring: faster the longer she stands there)
         const q = pick(K.k), s = this.screenOf({ x: q.p.x, y: 1.9, z: q.p.z }, 0);
         if (s) comic.pow(pick(['SNAP!', 'FLASH', 'CLICK!']), s.x, s.y, { size: 0.5, colors: ['#ffffff', '#ffd84d'] });
         ph.material.color.setHex(0xffffff); setTimeout(() => this.phones?.material.color.setHex(0x9fd8ff), 90);
