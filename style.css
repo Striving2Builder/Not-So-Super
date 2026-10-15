@@ -880,3 +880,14 @@ body.c3-xray #xray-tint::after { content: ""; position: absolute; left: 0; right
 .c3-struggle .st-say.on { opacity: 1; transform: none; }
 .c3-struggle .st-say.win { background: #ffd84d; font-size: 26px; }
 .c3-struggle .st-say.miss { background: #f3e9ee; color: #7a0618; font-size: 18px; font-style: italic; }
+
+/* === r11 F === */
+/* the air events' verdict panel (src/moments/verdict.js): left of centre, clear of the LIVE panel and the controls */
+#mo-verdict { position: absolute; left: calc(16px + var(--sl, 0px)); top: 30%; width: min(480px, calc(100vw - 330px)); min-width: 240px; padding: 8px 18px 9px; z-index: 54; pointer-events: none; text-align: center; border: 4px solid #0b0b12; box-shadow: 6px 6px 0 rgba(0, 0, 0, .55); transform: rotate(-2deg) scale(.3); opacity: 0; transition: opacity .12s, transform .16s cubic-bezier(.2, 1.6, .4, 1); background-image: radial-gradient(rgba(0, 0, 0, .16) 1.2px, transparent 1.4px); background-size: 7px 7px; }
+#mo-verdict.won { background-color: #ffd84d; color: #12081c; }
+#mo-verdict.lost { background-color: #e8323f; color: #fff; }
+#mo-verdict.on { opacity: 1; transform: rotate(-2deg) scale(1); }
+#mo-verdict b { display: block; font: 400 54px/1 "Bangers", Impact, sans-serif; letter-spacing: .05em; -webkit-text-stroke: 2px #0b0b12; text-shadow: 3px 3px 0 #0b0b12; }
+#mo-verdict.won b { color: #fff; }
+#mo-verdict small { display: block; margin-top: 2px; font: 800 13px/1.2 system-ui, sans-serif; letter-spacing: .03em; text-transform: uppercase; }
+@media (max-height: 480px) { #mo-verdict b { font-size: 44px; } #mo-verdict small { font-size: 11px; } }

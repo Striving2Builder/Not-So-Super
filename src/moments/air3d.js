@@ -8,15 +8,22 @@ import { tag, reticle } from './hud.js';
 import { RUN, FLAIL } from './actors3d.js';
 import { BANDS } from '../flight.js';
 import { M } from '../city3d.js';
+import { DIRECTOR } from './director.js';
+import { verdict } from './verdict.js';
 
 const COL = { faller: '#ffd23f', car: '#ff8a3d', getaway: '#ff3d3d', heli: '#ff5a5a', rings: '#6ff7ff', kitten: '#ffb36b' };
 const HOOP = 26; // hoop radius, m (the pass test is 62 world units wide)
+/** r11 F2a: targets read from the chase camera: actors at BIG × their size (ink hull included), a beacon over each. */
+const BIG = { person: 2, car: 2, rig: 1.7, heli: 1.5, cat: 2.2 }, BEAM = 520;
 
 /** An air event in the director's schedule (AirEvents runs it; this tracks it for pacing and the banner). */
 export class AirMoment extends Moment {
   static offer(dir, kind, forced) {
-    const at = dir.ahead(forced ? 450 : 750, forced ? 850 : 1400, { cone: forced ? 0.35 : 0.7 }) || null;
-    const e = dir.ow.events.spawn(kind, at);
+    const S = DIRECTOR.spawn, h = dir.ow.hero, lead = Math.min(S.leadMax, (h.speed || 0) * S.lead);
+    // in frame: the cone ahead of her heading, 80-160 m past her lead point; the event's maker
+    // snaps it to the nearest building / crossing there (test: null = try another spot)
+    const e = dir.ahead(S.d[0] / M + lead, S.d[1] / M + lead, { cone: S.cone, tries: 20, clear: forced ? 200 : DIRECTOR.clear, test: (x, y) => dir.ow.events.spawn(kind, { x, y, near: true }) })
+      || dir.ow.events.spawn(kind, dir.ahead(S.d[1] / M + lead, 700 + lead, { cone: S.cone * 1.4 })); // (nothing that close: a bit further out)
     return e ? new AirMoment(dir, kind, e) : null;
   }
 
@@ -32,7 +39,10 @@ export class AirMoment extends Moment {
     const e = this.e;
     if (!this.result) this.sync();
     if (!this.taken && (this.dist() < 520 || (e.kind === 'rings' && e.next > 0))) this.take();
-    if (!this.result && !this.ow.events.list.includes(e)) { if (e.outcome === 'won') this.win(0.2); else this.lose(0.2); }
+    if (!this.result && !this.ow.events.list.includes(e)) {
+      if (e.outcome === 'won') this.win(0.2); else this.lose(0.2);
+      if (e.outcome === 'won' || (e.outcome === 'lost' && (e.kind !== 'rings' || e.next > 0))) verdict(this.dir, e.kind, e.outcome === 'won'); // (r11 F2a: freeze + panel)
+    }
   }
 
   marker() { return null; } // (AirEvents.markers() lists it)
@@ -54,7 +64,12 @@ export class AirMoment extends Moment {
 /** Per-event actors this frame (pooled; released when the event is gone). */
 export function drawAir3d(dir, kit, view) {
   const ow = dir.ow, h = ow.hero, A = dir.airA || (dir.airA = new Map()), seen = new Set(), t = ow.t;
-  const slot = (e, n, role) => { let s = A.get(e); if (!s) A.set(e, (s = {})); seen.add(e); return s[n] || (s[n] = kit.take(role)); };
+  const slot = (e, n, role) => {
+    let s = A.get(e); if (!s) A.set(e, (s = {})); seen.add(e);
+    if (!s[n]) { const a = s[n] = kit.take(role); a.group.scale.setScalar(a.base * (e === ow.events.carry ? 1 : BIG[role.split(':')[0]] || 1)); }
+    return s[n];
+  };
+  for (const e of ow.events.list) { const p = e.kind === 'rings' ? e.rings[e.next] : e; if (p) kit.beam(p.x, p.y, COL[e.kind], BEAM); }
   const every = (e, k, s) => { e[k] = (e[k] || 0) - 1 / 60; if (e[k] <= 0) { e[k] = s; return true; } return false; };
   for (const e of ow.events.list) {
     if (e.kind === 'faller') {

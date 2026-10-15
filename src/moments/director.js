@@ -17,6 +17,9 @@ import * as THREE from 'three';
 
 /** Pacing tunables (seconds of commuting, world units). */
 export const DIRECTOR = {
+  // r11 F2a: air events come up in frame: within ±cone (rad) of her heading, d (m) out from where
+  // she'll be `lead` s from now (at cruise she covers ~280 m/s), capped at leadMax world units
+  spawn: { cone: 0.61, d: [80, 160], lead: 1.1, leadMax: 640 },
   first: [9, 14],      // before the first offer of a flight
   gap: [20, 40],       // between offers
   maxLive: 2,          // at once (only one story-sized)
@@ -84,11 +87,13 @@ export class MomentDirector {
   /** The time scale for this frame (slow motion), from the real frame time. */
   tick(rdt) {
     const S = DIRECTOR.slow;
+    if (this.freezeT > 0) { this.freezeT -= rdt; this.scale = 0.03; return this.scale; } // (r11 F2a: a verdict's freeze frame)
     if (this.slowT > 0) this.slowT = Math.max(0, this.slowT - rdt);
     this.scale = this.slowT > S.ease ? S.k : this.slowT > 0 ? lerp(1, S.k, this.slowT / S.ease) : 1;
     return this.scale;
   }
   slowmo() { this.slowT = DIRECTOR.slow.hold + DIRECTOR.slow.ease; }
+  freeze(s) { this.freezeT = Math.max(this.freezeT || 0, s); this.slowT = Math.max(this.slowT, DIRECTOR.slow.ease); } // (then eases back in)
 
   // ------------------------------------------------------------------ per frame
   update(dt) {
@@ -112,7 +117,7 @@ export class MomentDirector {
       this.offer('impostor', false);
     }
     // ?moment=<kind>: the harness (and a tester) can call one up on demand
-    if (this.forceKind && !this.forced && this.flyT > 1.2) { this.forced = true; this.force(this.forceKind); }
+    if (this.forceKind && !this.forced && this.flyT > 1.2 && (this.forceTry = (this.forceTry || 0) - dt) <= 0) { this.forceTry = 1; this.forced = !!this.force(this.forceKind); } // (nothing placeable here yet: retry each second)
     // the commute clock: time flying with nothing on (or only an offer she's ignoring)
     const t = ow.nav.target, arriving = t && dist(t.x, t.y, h.x, h.y) < DIRECTOR.arriving;
     const busy = this.live.filter((m) => !m.result && (m.taken || m.t < DIRECTOR.ignored)).length;
@@ -243,9 +248,10 @@ export class MomentDirector {
    * of that heading, inside the city, clear of incident markers and other moments. test(x, y) may
    * refine it (e.g. snap to a roof) and return the placed object or null.
    */
-  ahead(d0, d1, { cone = 0.65, tries = 16, test = null, clear = DIRECTOR.clear } = {}) {
+  ahead(d0, d1, { cone = 0.65, tries = 16, test = null, clear = DIRECTOR.clear, toward = false } = {}) {
     const ow = this.ow, h = ow.hero, city = this.g.city, t = ow.nav.target;
-    const base = t && dist(t.x, t.y, h.x, h.y) > d1 * 0.8 ? Math.atan2(t.y - h.y, t.x - h.x) : h.ang;
+    // r11 F2a: around her own heading (what the chase camera sees), unless asked toward the waypoint
+    const base = toward && t && dist(t.x, t.y, h.x, h.y) > d1 * 0.8 ? Math.atan2(t.y - h.y, t.x - h.x) : h.ang;
     for (let i = 0; i < tries; i++) {
       const a = base + rand(-cone, cone) * (i < tries / 2 ? 1 : 1.8), d = rand(d0, d1);
       const x = h.x + Math.cos(a) * d, y = h.y + Math.sin(a) * d;

@@ -81,19 +81,37 @@ export function avoidHud(x, y, pad = 18) {
   return [x, y];
 }
 
+/**
+ * One toast at a time (r11 F2a): the rest wait in a short queue (a repeat of the one showing or
+ * waiting is dropped; past 3 waiting, the oldest goes). A toast with others behind it shows 1.6 s.
+ */
+const _tq = [];
+let _tShow = null;
 export function toast(msg, kind = 'info') {
   const host = $('toasts');
   if (!host) return;
-  // the same message twice just refreshes the one on screen
-  for (const old of host.children) if (old.textContent === msg && !old.classList.contains('out')) old.remove();
+  if ((_tShow && _tShow.msg === msg) || _tq.some((q) => q.msg === msg)) return;
+  _tq.push({ msg, kind });
+  while (_tq.length > 3) _tq.shift();
+  if (!_tShow) _nextToast(host);
+}
+function _nextToast(host) {
+  const q = _tq.shift();
+  _tShow = q || null;
+  if (!q) return;
   const d = document.createElement('div');
-  d.className = 'toast ' + kind;
-  d.textContent = msg;
-  host.appendChild(d);
-  const max = innerHeight < 480 ? 2 : 4; // phones: don't stack a wall of toasts over the view
-  while (host.children.length > max) host.firstChild.remove();
-  setTimeout(() => d.classList.add('out'), 2600);
-  setTimeout(() => d.remove(), 3100);
+  d.className = 'toast ' + q.kind;
+  d.textContent = q.msg;
+  host.replaceChildren(d);
+  const hold = _tq.length ? 1600 : 2600;
+  let held = 0;
+  const step = () => { // (a toast that's alone stays its full time; one with a queue behind it cuts to 1.6 s)
+    held += 200;
+    if (held < (_tq.length ? 1600 : hold)) return setTimeout(step, 200);
+    d.classList.add('out');
+    setTimeout(() => { d.remove(); _nextToast(host); }, 380);
+  };
+  setTimeout(step, 200);
 }
 
 export function banner(text, sub = '', color = '#fff') {
