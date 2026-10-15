@@ -8,7 +8,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { Cape, stripModelCape } from './cape.js';
 import { HERO_SKIN, HERO_LOOK } from './settings.js';
-import { dressHero, inkHull } from './herolook3d.js';
+import { dressHero, inkHull, shapeSkirt, SkirtSway } from './herolook3d.js';
 import { inkCharacter, LOOK } from './look3d.js';
 import { renderToCanvas } from './offscreen3d.js';
 
@@ -40,7 +40,7 @@ export function loadHero() {
       for (const c of anims.animations) asset.clips[c.name] = c;
       asset.scene.traverse((o) => {
         if (o.isMesh) { o.frustumCulled = false; if (o.material) o.material.side = THREE.DoubleSide; }
-        if (o.isSkinnedMesh) stripModelCape(o); // replaced by the simulated cloth cape
+        if (o.isSkinnedMesh) { stripModelCape(o); shapeSkirt(o); } // cape: replaced by the simulated cloth cape; skirt: shortened, flutter shapes
       });
       asset.ready = true;
       return true;
@@ -71,7 +71,17 @@ export class HeroModel {
       if (o.isSkinnedMesh) mat = o.material;
     });
     this.cape = new Cape(this.root, this.bones, mat);
+    this.skirt = new SkirtSway(this.root);
   }
+
+  /**
+   * Her skirt flares up and out and settles (~1 s): power ~1 is a full flip (a gust, the crowd's
+   * prank). Shown wherever her model is stepped (the zones; flight via skirtStep).
+   */
+  flip(power = 1) { this.skirt.flip(power); }
+
+  /** Step only the skirt's flutter (for callers that run the mixer themselves, like flight). */
+  skirtStep(dt) { this.skirt.step(dt, null); }
 
   /** Relative wind on the cape, in her own frame: +z is the way she faces (so -z streams behind). */
   setWind(x, y, z) { this.cape.wind.set(x, y, z); }
@@ -147,6 +157,7 @@ export class HeroModel {
     this.mixer.update(dt);
     this.cape.step(Math.min(dt, 1 / 20));
     this.cape.last = performance.now();
+    this.skirt.step(dt, this.cape.wind);
   }
 
   /** Rotate `bone` so that the direction to `child` points along worldDir (blend 0..1). */

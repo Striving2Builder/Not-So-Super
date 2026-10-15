@@ -3,9 +3,12 @@
 // Everything runs in the hero root's local space: +y up, +z = the direction she faces.
 import * as THREE from 'three';
 
-const COLS = 7, ROWS = 11;
-const LENGTH = 1.02;           // metres, shoulders → hem
-const TOP_W = 0.36, HEM_W = 0.78;
+/** ?cape=long: the old full-length capes (zones and flight), for a phone A/B. */
+export const CAPE_LONG = typeof location !== 'undefined' && new URLSearchParams(location.search).get('cape') === 'long';
+const COLS = 7, ROWS = CAPE_LONG ? 11 : 7;
+const LENGTH = CAPE_LONG ? 1.02 : 0.5; // metres, shoulders → hem (short: to about her mid-back; long it flowed into view and hid her)
+const TOP_W = 0.36, HEM_W = CAPE_LONG ? 0.78 : 0.56;
+const LIFT = (70 * Math.PI) / 180; // the most it may swing up from hanging (never straight up, never over her head)
 const ITER = 4;
 const GRAVITY = 9.8;
 
@@ -187,6 +190,7 @@ export class Cape {
         }
         this.collide(cols, f);
       }
+      this.clampLift(f);
     }
     this.upload();
   }
@@ -218,6 +222,26 @@ export class Cape {
         const dx = p[i] - c.x, dy = p[i + 1] - c.y, dz = p[i + 2] - c.z, d = Math.hypot(dx, dy, dz);
         if (d < r && d > 1e-6) { const k = r / d; p[i] = c.x + dx * k; p[i + 1] = c.y + dy * k; p[i + 2] = c.z + dz * k; }
       }
+    }
+  }
+
+  /**
+   * Each particle's line from its own collar pin may lift at most LIFT from hanging (down her back):
+   * past that it is eased back (half way per step) and its velocity damped, so no gust stands it up.
+   */
+  clampLift(f) {
+    const p = this.p, q = this.prev, hx = -f.up.x, hy = -f.up.y, hz = -f.up.z, cl = Math.cos(LIFT), sl = Math.sin(LIFT);
+    for (let r = 1; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const i = (r * COLS + c) * 3, a = c * 3;
+      const dx = p[i] - p[a], dy = p[i + 1] - p[a + 1], dz = p[i + 2] - p[a + 2], d = Math.hypot(dx, dy, dz) || 1e-6;
+      const along = (dx * hx + dy * hy + dz * hz) / d;
+      if (along >= cl) continue;
+      let px = dx / d - along * hx, py = dy / d - along * hy, pz = dz / d - along * hz;
+      const pl = Math.hypot(px, py, pz) || 1e-6; px /= pl; py /= pl; pz /= pl;
+      const tx = p[a] + (hx * cl + px * sl) * d, ty = p[a + 1] + (hy * cl + py * sl) * d, tz = p[a + 2] + (hz * cl + pz * sl) * d;
+      const mx = (tx - p[i]) * 0.5, my = (ty - p[i + 1]) * 0.5, mz = (tz - p[i + 2]) * 0.5;
+      p[i] += mx; p[i + 1] += my; p[i + 2] += mz;
+      q[i] += mx + (p[i] - q[i] - mx) * 0.4; q[i + 1] += my + (p[i + 1] - q[i + 1] - my) * 0.4; q[i + 2] += mz + (p[i + 2] - q[i + 2] - mz) * 0.4;
     }
   }
 

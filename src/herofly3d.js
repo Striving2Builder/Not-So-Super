@@ -142,7 +142,7 @@ export class FlyHero3D {
     const perched = this.pose.perched;
     if (perched || hover) m.play('idle', { fade: 0.3 });
     else m.play('fly', { fade: 0.3 });
-    m.mixer.update(dt); // (not m.update: the zones' simulated cloth cape is hidden in flight, don't step it)
+    m.mixer.update(dt); m.skirtStep(dt); // (not m.update: the zones' simulated cloth cape is hidden in flight, don't step it; the skirt flutters with her speed)
     for (const f of ['LeftFoot', 'RightFoot']) m.bones[f]?.scale.setScalar(POSE.boot); // (the boots read oversized from behind; after the clip, which keys scale)
     const fly = perched || hover ? 0 : fk;
     // the idle clip faces 90° off her heading: turn her root back (eased with the clip's cross-fade),
