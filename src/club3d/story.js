@@ -302,6 +302,7 @@ export const storyMethods = {
   stepCage(dt) {
     const C = this.caged;
     if (!C || C.done) return;
+    if (this.sedating) return this.cageOut(); // (a blackout takes her out of the show)
     const h = this.hero.position, cg = C.cg, inp = this.g.input, B = this.B;
     C.t += dt;
     h.set(cg.x, CAGE.y, cg.z);

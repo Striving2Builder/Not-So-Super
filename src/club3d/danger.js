@@ -135,6 +135,7 @@ export const dangerMethods = {
     } else {
       // the crowd surges and carries her off her spot
       h.x += rand(-1.4, 1.4); h.z += rand(-1.1, 1.1);
+      if (this.idleRing) { this.idleRing.x = h.x; this.idleRing.z = h.z; } // (the ring goes with her)
       me(pick(['Whoa, whoa!', 'Stop pushing!', 'I can\'t see!'])); st.addIntox(DOSE.bump);
     }
   },
