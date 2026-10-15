@@ -235,7 +235,7 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     for (const [i, spot] of (await V.page.evaluate(() => window.__game.mode.debugSpots())).entries()) {
       await V.page.evaluate((s) => { const m = window.__game.mode; m.hero.position.set(s.x, 0, s.z); m.yaw = s.yaw; }, spot);
       await V.page.waitForTimeout(1200);
-      await V.shot(`hotel_${i + 1}_${spot.name}`);
+      await V.shot(`hotel_${i + 1}_${spot.name}`); report.gl[`hotel_${i + 1}`] = await glOf(V);
     }
     report.hotelMem = await V.page.evaluate(() => ({ heap: Math.round((performance.memory?.usedJSHeapSize || 0) / 1e6), posters: window.__game.mode.posters.filter((p) => p.canvas).length, info: window.__game.mode.renderer.info.memory }));
     console.log('mem', JSON.stringify(report.hotelMem));
