@@ -89,7 +89,7 @@ export class AirEvents {
 
   /** A box building of height [lo, hi] (as shown) roughly `near`..`far` from c (default: her). */
   pickBuilding(lo, hi, near, far, c = this.hero) {
-    const h = this.hero, city = this.g.city, out = [];
+    const h = this.hero, city = this.g.city, out = [], close = c.near ? 150 : 300; // (c.near: the director's in-frame spot, take the closest)
     const r = Math.ceil(far / BLOCK) + 1, bx = Math.floor(c.x / BLOCK), by = Math.floor(c.y / BLOCK);
     for (let y = by - r; y <= by + r; y++) for (let x = bx - r; x <= bx + r; x++) {
       const b = city.block(x, y);
@@ -99,15 +99,16 @@ export class AirEvents {
         const hh = this.hOf(o);
         if (hh < lo || hh > hi) continue;
         const d = dist(o.x + o.w / 2, o.y + o.d / 2, c.x, c.y);
-        if (d > near && d < far && dist(o.x + o.w / 2, o.y + o.d / 2, h.x, h.y) > 300) out.push(o);
+        if (d > near && d < far && dist(o.x + o.w / 2, o.y + o.d / 2, h.x, h.y) > close) out.push(c.near ? Object.assign(o, { _d: d }) : o);
       }
     }
+    if (c.near) return out.sort((a, b) => a._d - b._d)[0] || null;
     return out.length ? pick(out) : null;
   }
 
   // ------------------------------------------------------------------ falling window-washer
   make_faller(kind, at) {
-    const lo = this.ow.view3d ? 180 : 110, b = at ? this.pickBuilding(lo, 760, 0, 520, at) : this.pickBuilding(lo, 9999, 450, 1100);
+    const lo = this.ow.view3d ? 180 : 110, b = at ? this.pickBuilding(lo, 760, 0, at.near ? 150 : 520, at) : this.pickBuilding(lo, 9999, 450, 1100);
     if (!b) return null;
     const top = this.hOf(b);
     return { b, top, x: b.x + b.w * rand(0.3, 0.7), y: b.y + b.d + 4, z: top - 6, phase: 'dangle', vz: 0, ttl: 60, hint: 'catch them at their height' };
@@ -128,15 +129,16 @@ export class AirEvents {
 
   // ------------------------------------------------------------------ runaway / getaway car
   make_car(kind, at) {
-    const h = this.hero, city = this.g.city, c = at || h, R = at ? 2 : 6;
+    const h = this.hero, city = this.g.city, c = at || h, R = at ? (at.near ? 0.6 : 2) : 6;
     const getaway = kind === 'getaway';
     for (let tries = 0; tries < 30; tries++) {
       const ix = clamp(Math.round((c.x - ROAD / 2) / BLOCK) + Math.round(rand(-R, R)), 0, city.landCols);
       const iy = clamp(Math.round((c.y - ROAD / 2) / BLOCK) + Math.round(rand(-R, R)), 0, city.rows);
       const x = ix * BLOCK + ROAD / 2, y = iy * BLOCK + ROAD / 2, d = dist(x, y, h.x, h.y);
-      if (d < (at ? 350 : 500) || d > (at ? 1700 : 1200)) continue;
+      if (d < (at ? (at.near ? 150 : 350) : 500) || d > (at ? 1700 : 1200)) continue;
       const e = { ix, iy, x, y, dir: 0, spd: getaway ? 285 : 235, ttl: getaway ? 34 : 28, getaway, label: getaway ? 'Getaway car' : 'Runaway car', hint: 'drop to rooftop height to grab it' };
       this.pickDir(e);
+      if (at?.near) this.crossDir(e); // (r11 F2a: across her heading, so it crosses the frame)
       return e;
     }
     return null;
@@ -157,6 +159,15 @@ export class AirEvents {
     else e.dir = chance(0.6) && choices.includes(e.dir) ? e.dir : pick(choices);
     e.tx = e.ix + [1, 0, -1, 0][e.dir];
     e.ty = e.iy + [0, 1, 0, -1][e.dir];
+  }
+
+  /** Turn a fresh car across her heading (from the side it is on, through the view ahead), if that road exists. */
+  crossDir(e) {
+    const h = this.hero, city = this.g.city, side = Math.sin(Math.atan2(e.y - h.y, e.x - h.x) - h.ang) >= 0 ? 1 : -1;
+    const a = h.ang - side * Math.PI / 2, d = ((Math.round(a / (Math.PI / 2)) % 4) + 4) % 4;
+    const ok = [e.ix < city.landCols, e.iy < city.rows, e.ix > 0, e.iy > 0][d];
+    if (!ok) return;
+    e.dir = d; e.tx = e.ix + [1, 0, -1, 0][d]; e.ty = e.iy + [0, 1, 0, -1][d];
   }
 
   step_car(e, dt) {
@@ -246,7 +257,7 @@ export class AirEvents {
 
   // ------------------------------------------------------------------ kitten on a roof
   make_kitten(kind, at) {
-    const b = at ? this.pickBuilding(40, 260, 0, 520, at) : this.pickBuilding(40, 230, 500, 1400);
+    const b = at ? this.pickBuilding(40, 260, 0, at.near ? 150 : 520, at) : this.pickBuilding(40, 230, 500, 1400);
     if (!b) return null;
     return { b, x: b.x + b.w * rand(0.25, 0.75), y: b.y + b.d * rand(0.25, 0.75), z: this.hOf(b), ttl: 160, hint: 'perch on its roof' };
   }

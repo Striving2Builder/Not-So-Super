@@ -92,6 +92,7 @@ function installBot() {
     }
     if (B.boost) inp.btnHeld.add('boost'); else inp.btnHeld.delete('boost');
     if (B.perch && !h.perch) inp.pressedSet.add('perch');
+    else if (!B.perch && h.perch && now - B.last > 450) { inp.pressedSet.add('perch'); B.last = now; } // (a won rooftop rescue: take off again)
     if (B.dive !== false && ow.moments.diveTarget()) inp.pressedSet.add('dive');
     return a || ax();
   };
@@ -246,11 +247,14 @@ async function commute(browser) {
     await page.evaluate(() => { const g = window.__game; g.state.clock = 17 * 60 + 30; g.state.rep = 160; });
     await page.evaluate(installBot);
     await page.evaluate(commuteSetup);
-    let next = 0, n = 0;
-    const tEnd = SECS;
+    let next = 0, n = 0, prev = null, liveSecs = 0;
+    const tEnd = SECS, timeline = [];
     while (true) {
       await clearModals(page);
       const s = await page.evaluate(() => { const ow = window.__game.overworld; return { t: ow.moments.clock, live: ow.moments.live.filter((m) => !m.result).map((m) => m.kind) }; });
+      if (prev && prev.live.length) liveSecs += Math.max(0, s.t - prev.t); // (seconds with a live offer up)
+      if (!prev || prev.live.join() !== s.live.join()) timeline.push(`${s.t.toFixed(1)}s ${s.live.join('+') || '-'}`);
+      prev = s;
       if (s.t >= next) {
         const f = `f${String(n).padStart(3, '0')}_${Math.round(s.t * 1000)}.png`;
         await shotTo(page, path.join(dir, f)); r.frames.push({ f, ...s }); n++; next += EVERY;
@@ -259,6 +263,8 @@ async function commute(browser) {
       await page.waitForTimeout(250);
     }
     r.log = await page.evaluate(() => window.__game.overworld.moments.log);
+    r.liveSecs = +liveSecs.toFixed(1); r.timeline = timeline;
+    r.offers = r.log.filter((q) => q.ev === 'offered').length;
     r.commute = await page.evaluate(() => ({ commuteSecs: window.__game.overworld.moments.commute, clock: window.__game.overworld.moments.clock }));
   } catch (e) { r.fail = String(e.message || e).split('\n')[0]; }
   await ctx.close();
