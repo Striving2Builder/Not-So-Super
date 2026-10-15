@@ -53,6 +53,8 @@ function installBot() {
     const fx = Math.cos(cam.yaw), fy = Math.sin(cam.yaw);
     return { x: -fy * xw + fx * yw, y: -(fx * xw + fy * yw) };
   };
+  /** (x, y) moved `off` units sideways of her line to it: a target dead ahead hides behind her figure in the chase camera. */
+  const aside = (x, y, off) => { const h = ow.hero, dx = x - h.x, dy = y - h.y, d = Math.hypot(dx, dy) || 1; return [x - (dy / d) * off, y + (dx / d) * off]; };
   const seek = (x, y, { stopAt = 0, slow = 0 } = {}) => {
     const h = ow.hero, dx = x - h.x, dy = y - h.y, d = Math.hypot(dx, dy) || 1;
     let mag = 1;
@@ -64,7 +66,7 @@ function installBot() {
   B.plan = () => {
     const h = ow.hero, M = ow.moments, m = M.live.find((q) => !q.result && q.kind === B.kind) || M.live.find((q) => !q.result);
     B.boost = false; B.band = null; B.perch = false;
-    if (!m) return B.idle ? B.idle() : null;
+    if (!m) { B.warp = 1; return B.idle ? B.idle() : null; }
     const e = m.e, t = m.target ? m.target() : null;
     const act = () => { switch (m.kind) {
       case 'impostor': { B.band = 0; const d = m.dist(); B.boost = d > 700; return seek(m.x, m.y, { slow: 260 }); }
@@ -74,7 +76,8 @@ function installBot() {
         // 55 u grab), aimed a beat ahead of the car on its road; high over the towers until close
         const d = m.dist(), lead = Math.min(0.6, d / 900), sp = e.spd || 0, dir = e.dir || 0;
         B.band = d < 420 ? 0 : 1; B.boost = d > 50; // (a getaway at 285 u/s held her ~70 u back without it)
-        return seek(e.x + [1, 0, -1, 0][dir] * sp * lead, e.y + [0, 1, 0, -1][dir] * sp * lead);
+        const [ax, ay] = aside(e.x + [1, 0, -1, 0][dir] * sp * lead, e.y + [0, 1, 0, -1][dir] * sp * lead, d > 180 ? 70 : 0);
+        return seek(ax, ay);
       }
       case 'heli': { B.band = nearestBand(e.z); return seek(e.x, e.y, { slow: 160 }); }
       case 'rings': {
@@ -84,6 +87,9 @@ function installBot() {
         // the course, so she orbited a hoop for 25 s
         const off = Math.abs(h.z - r.z) > 60, d = Math.hypot(r.x - h.x, r.y - h.y);
         let da = Math.atan2(r.y - h.y, r.x - h.x) - h.ang; da = Math.atan2(Math.sin(da), Math.cos(da));
+        // a low hoop sits among the towers (at skim height she got stuck on a facade ~100 u short of it):
+        // come in over the roofs and drop onto it from above
+        if (B.band === 0) { B.band = d < 80 ? 0 : 1; const w = seek(r.x, r.y, { slow: 260 }), q = Math.abs(da) > 0.5 ? 0.25 : 1; return { x: w.x * q, y: w.y * q }; }
         const v = seek(r.x, r.y, off ? { stopAt: 140, slow: 220 } : { slow: 160 }), k = Math.abs(da) > 0.5 ? 0.25 : 1;
         return { x: v.x * k, y: v.y * k };
       }
@@ -94,7 +100,8 @@ function installBot() {
         B.band = d < 30 ? null : (bz[0] > roof + 30 ? 0 : bz[1] > roof + 30 ? 1 : 2);
         B.perch = d < 40 && h.speed < 130;
         B.boost = d > 900;
-        return seek(e.x, e.y, { stopAt: 6, slow: 300 });
+        const [ax, ay] = aside(e.x, e.y, d > 130 ? 60 : 0);
+        return seek(ax, ay, { stopAt: 6, slow: 300 });
       }
       default: {
         if (!t) return null;
@@ -106,12 +113,17 @@ function installBot() {
     }
     };
     const v = act();
-    // a player's reaction beat: the first ~2 s of a moment she eases toward it (no boost, same band),
+    B.warp = (e?.t ?? 99) < 3 ? 0.35 : 1;
+    // a player's reaction beat: the first ~2.5 s of a moment she eases toward it (no boost) and takes its band,
     // so the strip gets an approach with the target in view before the catch (they spawn 80-160 m ahead)
-    if (v && m.kind !== 'impostor' && (e?.t ?? 99) < B.react) { B.boost = false; B.band = null; B.perch = false; return { x: v.x * 0.4, y: v.y * 0.4 }; }
+    if (v && m.kind !== 'impostor' && (e?.t ?? 99) < B.react) { B.boost = false; B.perch = false; return { x: v.x * 0.15, y: v.y * 0.15 }; } // (she drops to its band first: from cruise height a street target 100 m out is below the frame)
     return v;
   };
-  B.react = 2;
+  B.react = 2.5;
+  // the harness's "slow camera": a moment's first 3 s run at 0.35× sim speed against the wall clock, so
+  // the screenshots (each costs real time) catch the approach; the game itself is unchanged
+  const tick0 = ow.moments.tick.bind(ow.moments);
+  ow.moments.tick = (rdt) => tick0(rdt) * (B.warp || 1);
   inp.axis = () => {
     if (!B.on) return ax();
     let a = null;
