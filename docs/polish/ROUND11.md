@@ -280,3 +280,8 @@ the beats' lines in `casebeats.js`) and may edit them by hand: add new lines, ne
   shadows (`floor.js`), dressed DJ booth (`booth.js`); +1-1.5% calls, +2.3-2.6% tris over 5 rooms. Merge smoke: rave +
   centre, stealth/touch/caught/idle/cage, 0 errors. Pack `shots/r11L2a/` in its worktree. Still mannequins (stick
   limbs, plain heads); idle-ring bubbles overlap (as the user saw). L2b launched.
+- 2026-10-15: the monthly spend limit stopped L2b and F2a-finish mid-work (user: resume). F2a-finish merged (3dfb474):
+  black box fixed (Chromium skipped the GL canvas in the LIVE video's mirrored rect; `#feed video` no-op filter), bot
+  plays car/rings/kitten/faller to wins with approach frames, commute boosts; flybench ±3.5% (noise). The director runs
+  its critic pack (r11F2a + 180 s commute). L2b: WIP saved (b10883d, unverified); the director runs its flows, then a
+  fresh agent finishes from `handoff/l2b-r11.md`.
