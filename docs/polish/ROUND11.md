@@ -107,7 +107,7 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
 | Track | Branch | Round | Last critic | State |
 |---|---|---|---|---|
 | T tech debt | `worktree-agent-a047ac9311b1f985f` | 1 done | n/a (regression pack `shots/r11T-pack/`) | **merged** (78030b3): v1 + v2 gone, -6,052 lines, -176 KB JS at startup, 0 errors in every area |
-| F travel | `worktree-agent-a4e919b8e12914483` | 1 done | not yet run | **merged** (a6f223a): moment director, air events in 3D, impostor rooftop chase. **F-1: NOT YET**: 1/8 (tie), vs AAA 3, vs HTML5 6, feel 4; commute ~85% dead air (`critiques/r11/F-1.md`) |
+| F travel | `worktree-agent-a4e919b8e12914483` | 1 done | not yet run | **merged** (a6f223a): moment director, air events in 3D, impostor rooftop chase. **F-1: NOT YET**: 1/8 (tie), vs AAA 3, vs HTML5 6, feel 4; commute ~85% dead air (`critiques/r11/F-1.md`) **F-2: NOT YET**: 1/8 (tie), 3 / 6 / feel 4.5; commute ~70% dead air (`critiques/r11/F-2.md`) |
 | L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | **L-1: NOT YET**: 0/8 pairs, vs AAA 2.5, vs HTML5 6, feel 5.5 (`critiques/r11/L-1.md`) | **merged**: readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
 | V club variety | `r11-variety` | 1 done | **V-1: NOT YET**: 0/8, vs AAA 2.5, vs HTML5 5, feel 4, variety 3 (`critiques/r11/V-1.md`) | **merged** (a17368d): casegen (8 suspects × 6 clue types × 5 twists), crowd scandal beats (shots, gotcha selfie, planted glass, ringed in, GONE WILD? headline, snapper, morning paper); 8 gen + 21 old flows, 0 errors; +0.8% calls, +5-10% during a beat. Weak: the knot is hard to read at phone size |
 | D device fixes | D1 (748f379), D4 (4d2bff6), D2+D3 (1dc374b), D5 (ee53a17) merged | **done; phone-tested OK by the user 2026-10-15** | n/a (the user's phone test) | **queued 2026-10-14**, from the user's device test: D1 S-shield struggle, D4 Supergirl look (wave 1); D2 idle crowd + D3 cage dance (one builder), D5 camera distance setting (wave 2). Specs under "Device test fixes" below |
@@ -290,3 +290,11 @@ the beats' lines in `casebeats.js`) and may edit them by hand: add new lines, ne
   F2b fixes it first). The critic's commute strip is cropped to 0-66 s. F-2 critic running. L2b flows by the director
   on b10883d: 6/6, 0 errors, calls +3-4%; idle-ring bubbles still overlap, near-lens ring members fill the frame.
   L2b-finish running (~120k budget).
+- 2026-10-15: F-2 NOT YET (1/8 tie; 3 / 6 / 4.5, was 3 / 6 / 4): small gain only; one more flat round = stalled (change
+  approach + tell the user). Targets still never in frame (car never visible; its win is a +7 REP toast). The harness
+  saved the same getaway frame as approach and close (pair2_B = pair8_B). F2b brief (ranked): perch bug in --commute;
+  target in frame (1.5× more, ink outline + halo, screen-edge arrow, a lens FOV widen while one is in reach); payoff on
+  screen (grab freeze, car lifted, washer in her arms, wig flying, UNMASKED! panel instead of the Continue box); one
+  message lane during a moment (mute ticker/captions, toasts off the banner, captions clear of the joystick); threat
+  before the clock (rig snaps, a crosswalk for the car, one miss + recovery); speed (speed lines visible, wind streaks,
+  near-miss pop); next offer 6-8 s after a resolution; the brown lump on roofs; key hints on touch. F2b launched.
