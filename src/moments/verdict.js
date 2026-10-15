@@ -12,7 +12,7 @@ const WORDS = {
   rings: { won: ['NAILED IT!', 'Stunt course cleared'], lost: ['OUT OF TIME!', 'The course closed on her'] },
   kitten: { won: ['SAVED!', 'One very grateful kitten'], lost: null },
 };
-export const VERDICT = { freeze: 0.3, hold: 1.5 }; // freeze: real seconds the sim nearly stops; hold: the panel's time on screen
+export const VERDICT = { freeze: 0.3, hold: 2.8 }; // freeze: real seconds the sim nearly stops; hold: the panel's time on screen (r11 F2c: as long as the payoff rides with her, payoff.js)
 
 let el = null, timer = 0;
 
@@ -33,5 +33,7 @@ export function verdict(dir, kind, won) {
   void el.offsetWidth; // (restart the slam)
   el.classList.add('on');
   clearTimeout(timer);
-  timer = setTimeout(() => el.classList.remove('on'), (VERDICT.freeze + VERDICT.hold) * 1000);
+  // r11 F2c: and never before the payoff in her hands has gone (the carry runs on game time)
+  const off = () => { if (dir.ow?.events?.carry) timer = setTimeout(off, 150); else el.classList.remove('on'); };
+  timer = setTimeout(off, (VERDICT.freeze + VERDICT.hold) * 1000);
 }

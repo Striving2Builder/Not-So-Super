@@ -932,3 +932,8 @@ body[data-mode="club3"] #hud-left.c3-calm { opacity: .5; }
 #c3-beacon i { position: absolute; inset: 5px; background: #ffd84d; border: 3px solid #111; rotate: 45deg; box-shadow: 0 0 14px 5px rgba(255, 216, 77, .8); animation: c3-beac .7s ease-in-out infinite alternate; }
 #c3-beacon b { position: absolute; left: 50%; top: 31px; translate: -50% 0; font: 400 13px "Bangers", Impact, sans-serif; letter-spacing: .08em; color: #ffd84d; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000; white-space: nowrap; }
 @keyframes c3-beac { from { scale: .8; } to { scale: 1.2; } }
+/* === r11 F2c === */
+/* the verdict panel shares the frame with the payoff in her hands (car overhead, kitten held up): smaller, up in the top-left corner, clear of her */
+#mo-verdict { top: 18%; width: min(310px, calc(100vw - 420px)); min-width: 220px; padding: 6px 14px 7px; }
+#mo-verdict b { font-size: 46px; }
+@media (max-height: 480px) { #mo-verdict { top: 16%; } #mo-verdict b { font-size: 38px; } #mo-verdict small { font-size: 10px; } }

@@ -29,6 +29,7 @@ import { sfx } from './sfx.js';
 import { diveFx } from './divefx.js';
 import { stepPolaroids, grabPolaroid, strayLost } from './polaroids.js';
 import { MomentDirector } from './moments/director.js';
+import { laneBusy } from './moments/frame.js';
 
 const TILT = 0.2;    // oblique view: perspective centre sits this fraction of the screen below centre
 const PERCH_EVERY = 40; // seconds between super-hearing reveals
@@ -431,7 +432,7 @@ export class Overworld {
       if (VENUES[venueName]?.club || VENUES[venueName]?.kind === 'club') this.clubCase(z, '');
     }
     this.zones.push(z);
-    if (!initial && !this.attract && kind !== 'street') toast(`New ${z.mode === 'nightcase' ? 'night case' : kind === 'case' ? 'investigation' : 'special zone'}: ${z.name} (${DISTRICTS[z.district].name})`, 'info');
+    if (!initial && !this.attract && kind !== 'street' && !laneBusy()) toast(`New ${z.mode === 'nightcase' ? 'night case' : kind === 'case' ? 'investigation' : 'special zone'}: ${z.name} (${DISTRICTS[z.district].name})`, 'info');
     return z;
   }
 
@@ -600,7 +601,7 @@ export class Overworld {
       const D = DISTRICTS[d];
       if (D && !this.attract) {
         if (D.vice) toast('📸 Tabloid photographers lurk in this district', 'bad');
-        this.g.commentary.onDistrict(d); // "MEANWHILE, IN THE DOCKS…" caption with the crime report
+        if (!laneBusy()) this.g.commentary.onDistrict(d); // "MEANWHILE, IN THE DOCKS…" caption with the crime report
         this.feed.onDistrict(d, D.name, st ? st.intox : 0);
       }
     }
@@ -620,7 +621,7 @@ export class Overworld {
         z.t += dt;
         if (z.mode === 'nightcase' && !st.isNight && z !== this.near) {
           this.removeZone(z);
-          toast(`Closing time: ${z.name} is off until tonight.`, 'info');
+          if (!laneBusy()) toast(`Closing time: ${z.name} is off until tonight.`, 'info'); // (r11 F2c: one text lane during a moment)
           break;
         }
         if (z.t > z.ttl) {
@@ -628,7 +629,7 @@ export class Overworld {
           if (z.kind === 'street') st.addRep(-2, `${z.name} went unanswered`);
           else if (z.polaroid) strayLost(st, z);
           else if (z.impostor) this.g.act?.sightingLost(z);
-          else toast(`${z.name} has gone cold.`, 'info');
+          else if (!laneBusy()) toast(`${z.name} has gone cold.`, 'info');
           break;
         }
       }

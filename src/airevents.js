@@ -14,6 +14,7 @@ import { clamp, pick, chance, rand, dist, rgba } from './util.js';
 import { toast } from './ui.js';
 import { comic } from './comic.js';
 import { sfx } from './sfx.js';
+import { PAYOFF } from './moments/payoff.js';
 
 const TAU = Math.PI * 2;
 const LOW_ENOUGH = 260; // cars can only be grabbed from about rooftop-skim height
@@ -73,7 +74,7 @@ export class AirEvents {
       if (res === 'won') this.win(e);
       else if (res === 'lost' || e.t > e.ttl) this.lose(e, res === 'lost');
     }
-    if (this.carry) { this.carry.t += dt; if (this.carry.t > 2.2) { if (this.carry.done) toast(this.carry.done, 'good'); this.carry = null; } }
+    if (this.carry) { this.carry.t += dt; if (this.carry.t > PAYOFF.hold) this.carry = null; } // (r11 F2c: the verdict panel says it: no toast)
   }
 
   /** at: { x, y } to place it near (the director's spot ahead of her), else round her. */
@@ -112,8 +113,13 @@ export class AirEvents {
   make_faller(kind, at) {
     const lo = this.ow.view3d ? 180 : 110, b = at ? this.pickBuilding(lo, 760, 0, at.near ? 150 : 520, at) : this.pickBuilding(lo, 9999, 450, 1100);
     if (!b) return null;
-    const top = this.hOf(b);
-    return { b, top, x: b.x + b.w * rand(0.3, 0.7), y: b.y + b.d + 4, z: top - 6, phase: 'dangle', vz: 0, ttl: 60, hint: 'catch them at their height' };
+    const top = this.hOf(b), h = this.hero;
+    // r11 F2c: on the face she can see (the one toward her), not always the +y face (the halo circled
+    // an empty wall while he dangled round the back)
+    const cx = b.x + b.w / 2, cy = b.y + b.d / 2, ux = (h.x - cx) / b.w, uy = (h.y - cy) / b.d;
+    const nx = Math.abs(ux) > Math.abs(uy) ? Math.sign(ux) : 0, ny = nx ? 0 : Math.sign(uy) || 1, f = rand(0.3, 0.7);
+    const x = nx ? (nx > 0 ? b.x + b.w : b.x) + nx * 4 : b.x + b.w * f, y = ny ? (ny > 0 ? b.y + b.d : b.y) + ny * 4 : b.y + b.d * f;
+    return { b, top, x, y, nx, ny, z: top - 6, phase: 'dangle', vz: 0, ttl: 60, hint: 'catch them at their height' };
   }
 
   step_faller(e, dt) {
@@ -262,7 +268,9 @@ export class AirEvents {
 
   // ------------------------------------------------------------------ kitten on a roof
   make_kitten(kind, at) {
-    const b = at ? this.pickBuilding(40, 260, 0, at.near ? 150 : 520, at) : this.pickBuilding(40, 230, 500, 1400);
+    // r11 F2c: in 3D, a roof just under her flight height first (in the chase frame, not below it)
+    const hz = this.hero.z, high = at && this.ow.view3d && hz > 300 ? this.pickBuilding(Math.max(60, hz - 320), hz - 50, 0, at.near ? 150 : 520, at) : null;
+    const b = high || (at ? this.pickBuilding(40, 260, 0, at.near ? 150 : 520, at) : this.pickBuilding(40, 230, 500, 1400));
     if (!b) return null;
     return { b, x: b.x + b.w * rand(0.25, 0.75), y: b.y + b.d * rand(0.25, 0.75), z: this.hOf(b), ttl: 160, hint: 'perch on its roof' };
   }
