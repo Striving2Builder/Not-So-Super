@@ -469,11 +469,15 @@ const GEN = (() => { const g = arg('--gen', ''); if (!g) return []; const [a, b]
       await V.pin(gi, spot.x, spot.z - 4.5, 0);
       await P.waitForFunction((i) => window.__game.mode.guards[i].st === 'alert', gi, { timeout: 30000, polling: 30 });
       await V.gwait(0.3); await V.strip('caught', 1); log.push(await V.minds());
+      // r11 L2b: the grab, in the world, before the struggle panel
+      const grabbed = await P.waitForFunction(() => window.__game.mode.grabbing && window.__game.mode.grabK > 0.6, null, { timeout: 30000, polling: 30 }).then(() => true).catch(() => false);
+      if (grabbed) { await V.strip('caught', 2); await V.shot('loop_grab'); }
+      log.push({ grabbed });
       await P.waitForFunction(() => window.__struggle, null, { timeout: 30000, polling: 50 });
-      await P.waitForTimeout(700); await V.strip('caught', 2);
+      await P.waitForTimeout(700); await V.strip('caught', 3);
       const cx = 560, cy = 230, r = 46;
       await P.mouse.move(cx + r, cy); await P.mouse.down();
-      let k = 0, n = 3, last = null, a = 0;
+      let k = 0, n = 4, last = null, a = 0;
       const t0 = await P.evaluate(() => window.__struggle.state().t);
       for (let i = 0; i < 4000; i++) {
         const s = await P.evaluate(() => window.__struggle && window.__struggle.state());
@@ -482,15 +486,15 @@ const GEN = (() => { const g = arg('--gen', ''); if (!g) return []; const [a, b]
         last = s.t;
         const target = Math.floor((s.t - t0) / 1.3); // (one S per ~1.3 s: see the touch flow)
         while (a < target) { a++; await P.evaluate(() => window.__struggle?.trace()); }
-        if (++k === 14 && n === 3) await V.strip('caught', n++);
+        if (++k === 14 && n === 4) await V.strip('caught', n++);
       }
       await P.mouse.up();
-      await P.waitForTimeout(250); await V.strip('caught', 4);
+      await P.waitForTimeout(250); await V.strip('caught', 5);
       await P.waitForFunction(() => !document.querySelector('.c3-struggle'), null, { timeout: 30000 });
-      await V.gwait(0.25); await V.strip('caught', 5); await V.shot('loop_free'); log.push(await V.minds());
-      await V.stick(-0.7, -0.45); await V.gwait(0.9); await V.strip('caught', 6);
+      await V.gwait(0.25); await V.strip('caught', 6); await V.shot('loop_free'); log.push(await V.minds());
+      await V.stick(-0.7, -0.45); await V.gwait(0.9); await V.strip('caught', 7);
       await V.stick(null); await P.keyboard.down('KeyG');
-      await V.gwait(1.0); await V.strip('caught', 7); log.push(await V.minds());
+      await V.gwait(1.0); await V.strip('caught', 8); log.push(await V.minds());
       await P.keyboard.up('KeyG');
       return { log, sedations: await P.evaluate(() => window.__game.mode.sedations), freeAt: await P.evaluate(() => window.__game.mode.freeAt) };
     });
@@ -511,6 +515,30 @@ const GEN = (() => { const g = arg('--gen', ''); if (!g) return []; const [a, b]
       for (let i = 0; i < 40 && !(await ev(() => window.__game.mode.idleFlips > 0)); i++) { await ev(() => { const m = window.__game.mode; m.incT = 0; m.stunT = 0; }); await V.gwait(0.15); inc++; }
       await V.gwait(0.1); await V.strip('idle', 2); log.push({ incidents: inc, ...(await ring()) });
       await V.gwait(1.2); await V.strip('idle', 3);
+      // r11 L2b: the busy ring: the crowd tries six lines in a row; at most 2 bubbles show, apart, clear of the HUD
+      const talk = () => ev(() => {
+        const sel = '#comic-layer .bubble:not(.out), #c3-chat .c3b:not(.out)';
+        const bs = [...document.querySelectorAll(sel)].map((e) => e.getBoundingClientRect());
+        const hud = [...document.querySelectorAll('#hud-top, #hud-left, #hud-right, #objectives, #c3-tip.on')].map((e) => e.getBoundingClientRect()).filter((r) => r.width && r.height);
+        const x = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+        let over = 0, onHud = 0;
+        bs.forEach((a, i) => { bs.slice(i + 1).forEach((b) => { if (x(a, b)) over++; }); if (hud.some((h) => x(a, h))) onHud++; });
+        return { bubbles: bs.length, over, onHud, at: bs.map((r) => [r.left, r.top, r.width, r.height].map(Math.round).join(',')).join(' ') };
+      });
+      const busy = [];
+      for (let i = 0; i < 6; i++) { await ev(() => { const m = window.__game.mode; if (m.idleRing) m.idleRing.sayT = 0; m.sayAt = -9; }); await V.gwait(0.12); busy.push(await talk()); }
+      await V.gwait(0.35); busy.push(await talk());
+      // the director's frame: two tap bubbles from one dancer, then four crowd lines at one spot (the cap and the de-overlap)
+      await ev(async () => {
+        const { comic } = await import(new URL('src/comic.js', location.href).href), m = window.__game.mode, h = m.hero.position;
+        const p = m.crowd.nearest(h.x, h.z - 1.5, 6, (q) => !q.talking), an = () => m.screenOf({ x: p.x, y: 0, z: p.z }, 2.05);
+        m.tapBubble(p, an, { id: 'r11l2b-a', text: 'Bouncers lose it at the drop.' }, 'rumour');
+        m.tapBubble(p, an, { id: 'r11l2b-b', text: 'Rico in VIP only drinks the blue ones.' }, 'rumour');
+        const s = m.screenOf(h, 2.3);
+        for (let i = 0; i < 4; i++) { m.sayAt = -9; comic.say(['Is that her?!', 'Phones UP!', 'Get her side!', 'Look this way!'][i], s.x + 30, s.y - 40); }
+      });
+      await V.gwait(0.4); busy.push(await talk()); await V.shot('flow_idle_talk');
+      log.push({ busy });
       // she walks off: the ring breaks, the dancers drift home
       await ev(() => { window.__game.mode.stunT = 0; });
       await V.stick(0.9, 0); await V.gwait(0.5); await V.stick(null); log.push(await ring());

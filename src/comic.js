@@ -102,13 +102,16 @@ export const comic = {
    * anchor: optional () => {x, y} | null, called every frame so the bubble rides along with a
    * speaker in a scrolling world; returning null pops the bubble early.
    */
-  say(text, x, y, { kind = 'speech', speaker = '', ms, anchor } = {}) {
+  say(text, x, y, opts = {}) {
+    const { kind = 'speech', speaker = '', ms, anchor } = opts;
     if (!enabled) return;
+    if (comic.gate && comic.gate(text, kind, opts) === false) return; // (r11 L2b: a zone may cap its bubbles)
     const l = layer();
     const max = innerHeight < 480 ? 2 : MAX_BUBBLES; // phones: two voices at a time is plenty
     while (count('bubble') >= max) l.querySelector('.bubble').remove();
     const el = document.createElement('div');
     el.className = `bubble ${kind}`;
+    if (opts.prio) el.dataset.k = String(opts.prio);
     el.innerHTML = `${speaker ? `<b>${esc(speaker)}</b>` : ''}${esc(text)}`;
     l.appendChild(el);
     // Place above the point (or below if too close to the top), keeping it on screen.

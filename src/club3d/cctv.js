@@ -60,6 +60,7 @@ export const cctvMethods = {
   stepCctv(dt) {
     const want = !!this.cctvWant && !this.room && !this.sub && !this.done;
     const k = (this.cctvK = clamp((this.cctvK || 0) + (want ? dt * 2.5 : -dt * 1.6), 0, 1));
+    this.stageLightsCut(k > 0.35);
     if (!k && !this._camOn) return;
     this._camOn = k > 0;
     const mats = this.camScreens(), ov = overlayTex(this.undercover ? 'SUBJECT: UNKNOWN' : `SUBJECT: ${HERO.toUpperCase()}`);
@@ -90,14 +91,53 @@ export const cctvMethods = {
     const mats = this.camScreens(), r = this.renderer;
     // (a screen can't sample the target it's being drawn into: they show the clip for this pass)
     for (const m of mats) if (m.userData.screen.camMap) m.userData.screen.camMap.value = this.video.tex;
+    // (r11 L2b: the stage's glow, beams, haze and lasers wash a security camera's picture out: off for its pass)
+    const glow = this.camGlow || (this.camGlow = this.glowObjects());
+    for (const o of glow) { o.userData.camVis = o.visible; o.visible = false; }
     r.setRenderTarget(this.camRT);
     r.render(this.scene, C);
     r.setRenderTarget(null);
+    for (const o of glow) o.visible = o.userData.camVis;
     for (const m of mats) if (m.userData.screen.camMap) m.userData.screen.camMap.value = this.camRT.texture;
     this.camFed = true;
   },
 
+  /**
+   * r11 L2b: security has the screens, so the show's air lights (beams, haze, lasers) cut out: in front
+   * of the DJ wall they washed the feed of her out to a white block. The floor's own glow stays, and so
+   * do the bouncers' torches (gameplay).
+   */
+  stageLightsCut(on) {
+    if (!!on === !!this._lightsCut) return;
+    this._lightsCut = !!on;
+    if (!this._air) {
+      const v = new THREE.Vector3();
+      this._air = this.glowObjects().filter((o) => {
+        for (let p = o; p; p = p.parent) if (p.userData.noX) return false;
+        o.geometry?.computeBoundingSphere?.();
+        v.copy(o.geometry?.boundingSphere?.center || v.set(0, 0, 0)).applyMatrix4(o.matrixWorld);
+        return v.y > 1.5;
+      });
+    }
+    for (const o of this._air) {
+      if (on) { o.userData.cutVis = o.visible; o.visible = false; } else if (o.userData.cutVis !== undefined) { o.visible = o.userData.cutVis; o.userData.cutVis = undefined; }
+    }
+  },
+
+  /** Everything additive in the hall (beams, haze, pools, lasers, glows): left out of the camera's picture. */
+  glowObjects() {
+    const out = [], screens = this.camScreens();
+    this.scene.traverse((o) => {
+      const m = o.material;
+      if (!m || Array.isArray(m) || screens.includes(m) || o === this.hero) return;
+      if (m.blending === THREE.AdditiveBlending || (m.transparent && m.depthWrite === false && (o.isSprite || o.isPoints))) out.push(o);
+    });
+    return out;
+  },
+
   endCctv() {
+    this.stageLightsCut(false);
+    this.camGlow = null; this._air = null;
     this.camRT?.dispose(); this.camRT = null; this.camCam = null; this.camFed = false;
     this._camMats = null; this.cctvK = 0; this._camOn = false;
   },

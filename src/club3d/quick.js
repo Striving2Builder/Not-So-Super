@@ -18,7 +18,7 @@ export const quickMethods = {
     const anchor = () => (p ? this.screenOf({ x: p.x, y: p.y ?? 0, z: p.z }, 2.05) : null);
     const a = anchor();
     if (!a || a.x < 30 || a.x > this.g.w - 30 || a.y < 60 || a.y > this.g.h - 40) { toast(speaker ? `${speaker}: ${text}` : text, 'info'); return; }
-    comic.say(text, a.x, a.y, { kind: 'speech', ms, anchor });
+    comic.say(text, a.x, a.y, { kind: 'speech', ms, anchor, prio: 1 }); // (a named voice: past the crowd's bubble cap)
   },
 
   /**

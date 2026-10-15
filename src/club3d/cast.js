@@ -272,6 +272,9 @@ export const castMethods = {
     if (!tk || this.done) { el.classList.remove('on'); return; }
     const p = this.screenOf({ x: tk.pos.x, y: floorY(this.plan, tk.pos.x, tk.pos.z), z: tk.pos.z }, 2.7);
     if (!p) { el.classList.remove('on'); return; }
+    // (r11 L2b: never over the title card: below it instead)
+    const top = (this._topR && this.t - this._topRt < 0.5) ? this._topR : (this._topRt = this.t, this._topR = $('hud-top')?.getBoundingClientRect());
+    if (top && p.y - 52 < top.bottom && Math.abs(p.x - (top.left + top.right) / 2) < top.width / 2 + 72) p.y = top.bottom + 54;
     el.style.transform = `translate(${Math.round(p.x)}px,${Math.round(p.y)}px)`;
     el.querySelector('.ev').style.width = clamp(tk.ev, 0, 100) + '%';
     el.querySelector('.su').style.width = clamp(tk.sus, 0, 100) + '%';

@@ -104,7 +104,9 @@ void main(){
     float inF = step(0.0, fu.x) * step(fu.x, 1.0);
     vec2 fc = clamp(fu, 0.0, 1.0);
     float l = dot(texture2D(camMap, fc).rgb, vec3(0.3, 0.59, 0.11));
-    vec3 cc = vec3(0.62, 1.0, 0.72) * (0.05 + pow(l, 0.8) * 1.35);
+    // (r11 L2b: a hard contrast curve, so she reads as a shape on the wall instead of a white wash)
+    float lc = smoothstep(0.03, 0.8, l);
+    vec3 cc = vec3(0.5, 1.0, 0.62) * (0.03 + lc * lc * 1.05);
     cc = mix(vec3(h(floor(fc * vec2(170.0, 96.0)) + fract(t * 13.0)) * 0.42), cc, camLive);
     cc *= 0.84 + 0.16 * sin(fc.y * 300.0 + t * 10.0);
     cc += (h(fc * vec2(330.0, 190.0) + fract(t * 7.0)) - 0.5) * 0.12;
@@ -121,9 +123,9 @@ void main(){
     float k = step(h(vec2(floor(vUv.y * 22.0), floor(t * 18.0))) * 0.98, cam);
     c = mix(c, camC * 1.1, k);
   }
-  ${led ? 'vec2 cell = fract(vUv * vec2(260.0, 72.0)); c *= 0.55 + 0.45 * smoothstep(0.5, 0.2, length(cell - 0.5));' : ''}
+  ${led ? 'vec2 cell = fract(vUv * vec2(260.0, 72.0)); c *= mix(0.55 + 0.45 * smoothstep(0.5, 0.2, length(cell - 0.5)), 1.0, cam * 0.6);' : ''}
   ${scan ? 'c = vec3(dot(c, vec3(0.3, 0.59, 0.11))) * vec3(0.75, 1.05, 0.85); c *= 0.8 + 0.2 * sin(vUv.y * 360.0 + t * 8.0); c += (h(vUv * 300.0 + t) - 0.5) * 0.12;' : ''}
-  c = c * bright + flash;
+  c = c * bright + flash * (1.0 - cam);
   gl_FragColor = vec4(c, 1.0);
   #include <colorspace_fragment>
 }`,
