@@ -12,3 +12,4 @@
 - `travel.js` full run can report "impostor was never offered" after the other moments; `--only impostor` offers and wins it (harness ordering, not the game; round 11).
 - club3d.js: all 5 rooms + flows + --gen in one run can crash the SwiftShader tab ("Target crashed") and take every later flow down with it; run --gen with `--rooms rave --flows none` (passes in isolation, 2026-10-13).
 - club3d knot (casebeats.js) runs outside generated cases via `knotHost()` (idle ring, cage); formKnot releases a running knot first, so a beat takes over the idle ring's dancers (round 11 D2).
+- The harness "black box" (bottom-right, under the LIVE panel) was Chromium culling the WebGL canvas in the LIVE <video>'s rect mirrored vertically (body bg #05070d showing); not in the GL or 2D canvas. Fix: `#feed video { filter: contrast(1.001) }` (style.css r11 F). Count it with a #05070d pixel scan (round 11 F2a-finish).
