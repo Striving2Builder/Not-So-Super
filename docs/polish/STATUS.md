@@ -198,6 +198,8 @@ dodging guard flashlight cones; user refs: foggy club, laser beams, DJ booth, ba
 
 - `testdrive-2026-10-15` (also on main): round 11 track D, the user's device-test fixes. The struggle is now tracing the S on her chest (draw an S anywhere; the bead runs on the shield; "I'm Supergirl!"); a cape to mid-back (flight too; `?cape=long` = old) and a skirt at upper thigh on every costume (`?skirt=0` = as modelled, `?skirt=0.15` shorter) that flutters; the club crowd rings her when she stands still; the cage dance in the Gilded Cage (-8 rep); Camera Far/Medium/Close/Closest in the pause menu (`?camdist=closest`). **The user should phone-test all five.**
 
+- `testdrive-2026-10-16` (also on main): round 11 L2a/L2b, V2, F2a-F2c. Club: colourful crowd, LED floor, phones up, SPOTTED!/LOST THEM!, GRABBED!, her outline through the crowd, ≤2 crowd bubbles; eight different generated visits with a real paper photo and per-venue fog + landmark. Flight: moments ahead with a halo + edge arrow, payoffs in her hands, inked verdict panels, hoops/slipstreams/pigeons/smoke between moments. Smoke: every area 0 errors.
+
 ## Device testing (2026-10-03, iPad, real device)
 - "Plays but crashes and is a bit janky." Diving from flight into a brawler/activity: very long load or freeze. 3D flight: after a few freezes or a black screen it goes back to 2D.
 - Director's read: no `webglcontextlost` handling; 4 WebGL contexts (special3d shared, HeroSprite, brawlsprite, an unreleased `hasWebGL()` probe); the 3D flight scene stays in GPU memory inside zones; High runs the canvas at full Retina density. A stability builder is on it (WebKit iPad repro, context-loss recovery, fewer contexts, iOS caps, staged zone loading).

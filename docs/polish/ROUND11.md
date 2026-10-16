@@ -335,3 +335,4 @@ the beats' lines in `casebeats.js`) and may edit them by hand: add new lines, ne
   F2c all 7 moments won, commute 13 offers (6 moments + 7 route pieces), longest dead gap 19.4 s (was ~110 s), flybench
   ±3.7%. Smoke on the merge: club rave + tunnel flows, gen 5-6, travel car/faller/impostor, act 11 flows: 0 errors.
   **Paused by the user** after this wave; resume list at the top of the board.
+- 2026-10-16: published to main as testdrive-2026-10-16 (user asked); shoot.js all (39 scenes) 0 errors.
