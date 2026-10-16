@@ -19,7 +19,7 @@ you can build"). This file is the build board. A new thread picks the build up f
 |---|---|---|---|
 | 1 | **A**: the Act 2 skeleton (`src/act/act2.js`, the runtime per act, state, board page 2, `?act=` params, Act 2 opening after `act.complete()`, the opening scandal: rep set to −50) | A | **merged** 5ca5eed (`act2run.js`; flows act1save/act2/act2gates/act2handoff pass, 0 errors) |
 | 1 | **I**: RLD Walks, the level (H-shaped red-light street on the asylum engine, rescues, perfume, tied-up capture, lead doors + "Which one is hers?", the waking-captured opening variant, try the over-the-shoulder camera) | I | **merged** 7c78493 (`src/rld/`; `node tools/shots/rld.js` 5 flows 0 errors; debug `?zone=rldwalk&opening=1`) |
-| 2 | C1: the crop-top Supergirl in Blender (needs blender-mcp + the user's Blender open; `docs/references/user/act2-croptop-sg.jpg`, red boots, no cape) | C | next |
+| 2 | **C1**: the crop-top Supergirl in Blender (`docs/references/user/act2-croptop-sg.jpg`, red boots, no cape) | C | running (handoff `act2-c1.md`; Blender connected 2026-10-16) |
 | 2 | **B**: the pendulum (negative-rep doors, impostors' rep → Polaroids, promotions as map events) | B | **merged** c872e85 (`DISGRACED_DOORS` in act2.js = the user's table; flows incl. act2promo pass, 0 errors) |
 | 3 | C2: the knockoff switch, the 5 × 5 suit finds, the act board's suit | C | |
 | 3 | **D**: the casino (High-Roller Suite plan, high card, 21, stakes) | D | **merged** 749cd64 (`src/club3d/casino.js`, `cards.js`; `node tools/shots/casino.js` 3 flows 0 errors; debug `?zone=casino&casinorig=win|lose`) |
@@ -62,3 +62,4 @@ you can build"). This file is the build board. A new thread picks the build up f
   recall tick in act2run's update). H1 restarted as a fresh agent from phase-2.
 - 2026-10-16: H1 merged (2nd try, ~215k tokens). Perf: gallery 162 calls / 77k tris (twins in the glass; cut the
   hunters' twins in `glass.js` `setupGlass` if phones struggle). Stale branch `act2-h1` (1st try, no code) can go. H2 launched.
+- 2026-10-16: director fix 6738f65 (clubzone `uploadTextures` race when a zone is left mid-compile). User: Blender MCP on; C1 launched next to H2.
