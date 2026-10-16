@@ -80,3 +80,4 @@ you can build"). This file is the build board. A new thread picks the build up f
    keeps beating the Act 2 crop top during testing (the user decides later).
 - 2026-10-16: user decisions: the boss door opens when the hall of mirrors is complete (H2's rule, confirmed); keep
   `DISGRACED_DOORS`; keep the player's costume choice for now. Publish to main for a weekend phone test.
+- 2026-10-16: published to main as `testdrive-2026-10-16b` (user asked; phone test this weekend). shoot.js all: 40 scenes, 0 errors.
