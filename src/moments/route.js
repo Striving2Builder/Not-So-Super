@@ -41,7 +41,8 @@ export class RouteFX {
   constructor(dir) { this.dir = dir; this.reset(); }
   get ow() { return this.dir.ow; }
 
-  reset() { this.p = null; this.since = 0; this.wait = rand(...ROUTE.after); this.burst = 0; this.trail = 0; this.hide(); }
+  reset() { this.p = null; this.since = 0; this.wait = ROUTE.after[1]; // (no Math.random here: the sim's random stream stays as it was)
+    this.burst = 0; this.trail = 0; this.hide(); }
 
   // ------------------------------------------------------------------ meshes (built once per scene)
   build(scene) {
