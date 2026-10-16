@@ -27,7 +27,7 @@ you can build"). This file is the build board. A new thread picks the build up f
 | 4 | **G**: Recall + drug finds | G | **merged** 2731420 (`src/act/recall.js`; `node tools/shots/recall.js` 3 flows 0 errors) |
 | 3 | **E**: the factory lines (hotel engine, 4 levers, the foreman) | E | **merged** 05c9773 (`src/factory/`; `node tools/shots/factory.js` 4 flows; debug `?zone=factory&act=act2lair&flight=2d`) |
 | 5 | **H1**: the hotel's new floor, the hall of mirrors (games, puzzles, traps, fake reflections) | H | **merged** (`src/mirrors/`, branch act2-h1-mirrors 262ba3f; `node tools/shots/mirrors.js` 4 flows; debug `?zone=mirrors&act=act2lair&flight=2d`) |
-| 5 | **H2**: the Supergurl boss fight (coat + mask off, the drug meter, the mirror call, the back-and-forth, the act's end) | H | running (handoff `act2-h2.md`) |
+| 5 | **H2**: the Supergurl boss fight (coat + mask off, the drug meter, the mirror call, the back-and-forth, the act's end) | H | **merged** (`src/mirrors/boss.js`, `gurl.js`, `lines.js`, `bossroom.js`; mirrors flow `boss` to the End of Act 2 card; debug `?act=act2boss&zone=mirrors&flight=2d`) |
 
 ## The contract between A and I (wave 1)
 - I owns `src/rld/` (new folder) and registers a zone mode **`rldwalk`** in `main.js` (`modes`,
@@ -64,3 +64,16 @@ you can build"). This file is the build board. A new thread picks the build up f
   hunters' twins in `glass.js` `setupGlass` if phones struggle). Stale branch `act2-h1` (1st try, no code) can go. H2 launched.
 - 2026-10-16: director fix 6738f65 (clubzone `uploadTextures` race when a zone is left mid-compile). User: Blender MCP on; C1 launched next to H2.
 - 2026-10-16: C1 merged. Director: act2 flow now asserts `wornSkin() === 'croptop'` after the opening (passes); in-game shot: no cape, look matches the user's reference. Open: cuffs read faint at game size; a costume the player picked (pause menu / `?hero=`) beats the Act 2 crop top.
+- 2026-10-16: H2 merged: **every Act 2 phase is built.** mirrors 5 flows (boss to the end) + act hotel, ballroom, act1save,
+  act2*, 0 errors. H2's rule for the user to confirm: the boss door opens once the floor's done (both rails + 3 portraits),
+  since nothing in normal play set `bossReady`.
+
+## Follow-ups (from the director's screenshot checks; for the phone test)
+1. **The mirror call (boss.js):** the numbered rings sit on the figures' heads and two land on the X-RAY / USE buttons;
+   Supergurl is hidden behind her own ring. Put the rings below the feet or on a strip, keep them off the controls.
+2. Supergurl in her coat reads as a small dark shape from the play camera; a rim light or the camera push of the
+   club beats when the fight starts.
+3. Perf: the boss fight is 126 calls / 241k tris with 5 reflections (model clones ~25k each); the casino 288-327 calls;
+   the mirrors gallery 77k tris. Phone check, then cut `FIGHT.decoys`, the hunters' twins, the casino's slot banks.
+4. The crop top's silver cuffs read faint at game size. The knockoff only loses its cape visibly.
+5. Open with the user: the `DISGRACED_DOORS` list; a picked costume beats the Act 2 crop top (or force it?).
