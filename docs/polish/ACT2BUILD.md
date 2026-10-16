@@ -17,10 +17,10 @@ you can build"). This file is the build board. A new thread picks the build up f
 ## Waves
 | Wave | Job | Phase | Status |
 |---|---|---|---|
-| 1 | **A**: the Act 2 skeleton (`src/act/act2.js`, the runtime per act, state, board page 2, `?act=` params, Act 2 opening after `act.complete()`, the opening scandal: rep set to −50) | A | running |
+| 1 | **A**: the Act 2 skeleton (`src/act/act2.js`, the runtime per act, state, board page 2, `?act=` params, Act 2 opening after `act.complete()`, the opening scandal: rep set to −50) | A | **merged** 5ca5eed (`act2run.js`; flows act1save/act2/act2gates/act2handoff pass, 0 errors) |
 | 1 | **I**: RLD Walks, the level (H-shaped red-light street on the asylum engine, rescues, perfume, tied-up capture, lead doors + "Which one is hers?", the waking-captured opening variant, try the over-the-shoulder camera) | I | running |
 | 2 | C1: the crop-top Supergirl in Blender (needs blender-mcp + the user's Blender open; `docs/references/user/act2-croptop-sg.jpg`, red boots, no cape) | C | next |
-| 2 | B: the pendulum (negative-rep doors, impostors' rep → Polaroids, promotions as map events) | B | next |
+| 2 | **B**: the pendulum (negative-rep doors, impostors' rep → Polaroids, promotions as map events) | B | running (handoff `act2-b.md`) |
 | 3 | C2: the knockoff switch, the 5 × 5 suit finds, the act board's suit | C | |
 | 3 | D: the casino (High-Roller Suite plan, high card, 21, stakes) | D | |
 | 4 | F: the Act 2 asylum · G: Recall + drug finds | F, G | |
@@ -42,3 +42,4 @@ you can build"). This file is the build board. A new thread picks the build up f
 
 ## Log
 - 2026-10-16: design approved; wave 1 = A + I launched.
+- 2026-10-16: A merged (5ca5eed); its contract notes sent to I. B launched in A's slot.
