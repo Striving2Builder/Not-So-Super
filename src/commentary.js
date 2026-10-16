@@ -66,6 +66,7 @@ const ZONE_OPEN = {
   special: ['Meanwhile, inside {V}… a sinister {T} plot unfolds!', 'Deep inside {V}… a trap awaits!', 'Somewhere in {V}… VILLAINY!'],
   vice: ['Meanwhile, inside {V}… a sinister {T} plot unfolds!', 'Behind the velvet rope of {V}… VILLAINY!', 'Deep inside {V}… a trap awaits!'],
   asylum: ['Behind the walls of {V}… nobody hears you scream.', 'Meanwhile, at {V}… the case of {T}!', 'The lights flicker at {V}. Somebody here is hiding something…'],
+  rldwalk: ['Meanwhile, in {D}… red lights, red doors, and somebody behind every one.', 'The canal smells of perfume tonight. Something is very wrong in {D}.'], // (src/rld/)
   nightcase: ['Meanwhile, after hours at {V}… the case of {T}!', 'Midnight at {V}. The music is loud, the secrets louder…', '{V} after dark… somebody here knows something!'],
   hotel: ['Thirteen floors up… the Puzzle Maker is expecting her.', 'Floor 13. Neon, velvet, and a man with a kryptonite ray.', 'The elevator doors open on the 13th floor. Every face on the walls is hers.'],
 };
