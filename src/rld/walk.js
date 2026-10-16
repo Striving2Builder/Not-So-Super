@@ -33,7 +33,7 @@ export const RLD = {
   captives: [3, 5], minders: 2, hostesses: 2, vents: 5,
   easy: { traces: 2, time: 14, slip: 0.2, idle: 0.3 }, // the tied-up struggle: easy, no spiral
 };
-const MOOD = { bg: 0x0a0306, fog: [0x1a0610, 12, 34], hemi: [0xff8aa0, 0x1a0610, 0.55], amb: 0.1, key: 0xffc0d0, keyK: 0.7 };
+const MOOD = { bg: 0x0a0306, fog: [0x1a0610, 12, 34], hemi: [0xffa0b4, 0x2a0a18, 0.8], amb: 0.16, key: 0xffc0d0, keyK: 0.7 };
 const THANKS = ['"They took my passport. I thought nobody was coming."', '"Is it over? Can I go home?"', '"There are more of us. Behind the other doors."', '"Supergirl? They said you were one of them now."'];
 
 /** Zone fields for an RLD Walk on the map (the caller supplies the position; the district is redlight). */

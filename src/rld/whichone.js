@@ -80,8 +80,8 @@ function style() {
   if (styled) return;
   styled = true;
   const s = document.createElement('style');
-  s.textContent = `.rld-which .modal{max-width:min(96vw,760px)}
-.rld-which .opts{display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
+  s.textContent = `.rld-which .modal{width:min(96vw,760px);padding:12px 14px 10px}
+.rld-which .opts{display:flex;flex-direction:row;flex-wrap:wrap;justify-content:center;gap:6px}
 .rld-which .opt.rld-c{width:calc(25% - 6px);min-width:0;padding:4px;flex-direction:column;align-items:center}
 .rld-which .opt.rld-c .l{width:100%}
 .rld-which .opt:not(.rld-c){width:100%}
