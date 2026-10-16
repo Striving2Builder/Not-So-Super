@@ -23,6 +23,7 @@ import { comic } from '../comic.js';
 import { sfx } from '../sfx.js';
 import { showNewspaper } from '../newspaper.js';
 import { quality } from '../settings.js';
+import { lightPool } from '../look3d.js';
 import { INTOX_HAZE } from '../state.js';
 import { pick, rand, shuffle, clamp, $ } from '../util.js';
 import { PIECES, FINDS } from '../act/act2.js';
@@ -104,6 +105,7 @@ export const bossMethods = {
     b.gurl = gurl;
     gurl.pos.set(0, 0, R.z0 + 2.4); gurl.group.rotation.y = 0;
     gurl.play('combatIdle');
+    const pool = lightPool(0xff2a4a, 1.5, 0.45); pool.position.y = 0.025; gurl.group.add(pool); // (red light at her feet: she reads in the dark)
     this.scene.add(gurl.group);
     const q = quality().look3d;
     b.side = []; b.decoys = [];
@@ -529,7 +531,7 @@ export const bossMethods = {
     if (lbl) lbl.textContent = 'Supergurl';
     const max = FIGHT.hp[b.phase] || 1;
     if (al) al.style.width = (b.phase === 'down' ? 0 : clamp((b.hp ?? max) / max, 0, 1) * 100) + '%';
-    $('hud-sub').textContent = [b.phase === 'coat' ? 'In the coat' : b.phase === 'haze' ? 'THE HAZE' : 'In your suit', b.right ? `Called ${b.right}/${b.right + b.wrong}` : '', b.captures ? `Held ${b.captures}×` : ''].filter(Boolean).join(' · ');
+    $('hud-sub').textContent = [b.gurl?.coatOn ? 'In the coat' : b.phase === 'haze' ? 'THE HAZE' : 'In your suit', b.right ? `Called ${b.right}/${b.right + b.wrong}` : '', b.captures ? `Held ${b.captures}×` : ''].filter(Boolean).join(' · ');
   },
 
   /** ?act=act2boss&zone=mirrors and tools/shots/mirrors.js: open the door and walk in. */

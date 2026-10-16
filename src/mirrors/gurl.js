@@ -87,13 +87,17 @@ function dressCoat(model) {
     coat.push(limb(b[`${s}ForeArm`], b[`${s}Hand`], 0.066, 0.07, 0, 0.95, M.coat));
   }
   // the hood, the drape over the shoulders, the mask (and its eyes)
-  const hood = new THREE.SphereGeometry(0.135, 14, 10); hood.scale(1, 1.18, 1.08);
-  coat.push(put(b.Head, hood, M.coat, V(head.x, head.y + 0.08, head.z - 0.025)));
-  coat.push(put(b.Neck, new THREE.CylinderGeometry(0.12, 0.2, 0.16, 12, 1, true), M.coat, V(neck.x, neck.y + 0.0, neck.z - 0.01)));
-  const mask = new THREE.SphereGeometry(0.1, 16, 12, 0, Math.PI * 2, 0, Math.PI); mask.scale(0.82, 1.1, 0.6);
-  coat.push(put(b.Head, mask, M.mask, V(head.x, head.y + 0.08, head.z + 0.085)));
-  const eye = (x) => new THREE.BoxGeometry(0.034, 0.011, 0.02).translate(x, 0, 0);
-  coat.push(put(b.Head, mergeGeometries([eye(-0.033), eye(0.033)]), M.eyes, V(head.x, head.y + 0.105, head.z + 0.142)));
+  // (her head is bigger than its bone says: size the hood and mask from the model's real top)
+  const crown = new THREE.Raycaster(V(head.x, 4, head.z), V(0, -1, 0)).intersectObject(root, true).find((q) => q.object.isSkinnedMesh && !q.object.userData.ink);
+  const top = crown ? crown.point.y : new THREE.Box3().setFromObject(root, true).max.y, hr = Math.max(0.1, (top - neck.y) / 2), hc = neck.y + hr * 1.02;
+  const hood = new THREE.SphereGeometry(hr * 1.24, 16, 12, Math.PI / 2 + 0.85, Math.PI * 2 - 1.7); hood.scale(1.05, 1.12, 1.1); // (open at the face)
+  coat.push(put(b.Head, hood, M.coat, V(head.x, hc + 0.015, head.z - hr * 0.12)));
+  const cowl = new THREE.CylinderGeometry(hr * 1.1, hr * 1.9, 0.34, 14, 1, true); cowl.scale(1.15, 1, 0.95); // (the hood's cowl: over the shoulders, over her hair)
+  coat.push(put(b.Neck, cowl, M.coat, V(neck.x, neck.y - 0.05, neck.z - 0.02)));
+  const mask = new THREE.SphereGeometry(hr * 0.86, 16, 12, 0, Math.PI * 2, 0, Math.PI); mask.scale(0.84, 1.08, 0.5);
+  coat.push(put(b.Head, mask, M.mask, V(head.x, hc, head.z + hr * 0.78)));
+  const eye = (x) => new THREE.BoxGeometry(hr * 0.26, hr * 0.08, 0.02).translate(x, 0, 0);
+  coat.push(put(b.Head, mergeGeometries([eye(-hr * 0.26), eye(hr * 0.26)]), M.eyes, V(head.x, hc + hr * 0.18, head.z + hr * 1.2)));
   // the red braided cord on her LEFT shoulder (+x: the model faces +z), draped across the chest
   const cord = new THREE.CatmullRomCurve3([V(sh.x + 0.06, sh.y + 0.05, sh.z), V(sh.x + 0.03, sh.y + 0.0, sh.z + 0.11), V(sh.x - 0.03, sh.y - 0.12, sh.z + 0.14), V(sh.x - 0.07, sh.y - 0.22, sh.z + 0.13), V(sh.x - 0.02, sh.y - 0.26, sh.z + 0.135), V(sh.x + 0.05, sh.y - 0.14, sh.z + 0.13)]);
   coat.push(put(b.Spine2 || b.Spine1, new THREE.TubeGeometry(cord, 24, 0.017, 6, false), M.cord, V(0, 0, 0)));
