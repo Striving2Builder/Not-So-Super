@@ -38,7 +38,7 @@ function style() {
   if (styled) return;
   styled = true;
   const s = document.createElement('style');
-  s.textContent = `#cas-table{position:fixed;inset:0;z-index:54;display:flex;align-items:center;justify-content:center;padding:max(8px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));background:rgba(8,2,4,.55);font-family:system-ui,sans-serif;color:#fff;touch-action:manipulation;user-select:none}
+  s.textContent = `#cas-table{position:fixed;inset:0;z-index:56;display:flex;align-items:center;justify-content:center;padding:max(8px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));background:rgba(8,2,4,.55);font-family:system-ui,sans-serif;color:#fff;touch-action:manipulation;user-select:none}
 #cas-table .ct{display:flex;width:min(100%,860px);height:min(100%,420px);border:3px solid #111;border-radius:16px;overflow:hidden;box-shadow:6px 6px 0 rgba(0,0,0,.6),inset 0 0 0 2px #e0b040}
 #cas-table .felt{flex:1 1 62%;position:relative;display:flex;flex-direction:column;justify-content:space-between;padding:10px 14px;background:radial-gradient(ellipse at 50% 40%,#1f7a46,#0b3a22 75%);min-width:0}
 #cas-table .felt:after{content:'';position:absolute;inset:8px;border:2px solid rgba(255,216,77,.35);border-radius:40% / 22%;pointer-events:none}
@@ -49,7 +49,7 @@ function style() {
 #cas-table .row{display:flex;align-items:center;gap:8px;min-height:30%;z-index:1}
 #cas-table .who{width:64px;font:400 15px Bangers,Impact,sans-serif;letter-spacing:.05em;color:#ffe9a8}
 #cas-table .who small{display:block;font:600 11px system-ui,sans-serif;color:#cfe8d8}
-#cas-table .c{width:clamp(44px,12vh,64px);aspect-ratio:5/7;border-radius:7px;background:#fbf7ee;border:2px solid #111;box-shadow:2px 3px 0 rgba(0,0,0,.5);display:flex;flex-direction:column;align-items:center;justify-content:center;font:800 clamp(16px,4.6vh,24px) Georgia,serif;color:#111;animation:ct-in .25s ease-out both}
+#cas-table .c{width:clamp(48px,17vh,88px);aspect-ratio:5/7;border-radius:7px;background:#fbf7ee;border:2px solid #111;box-shadow:2px 3px 0 rgba(0,0,0,.5);display:flex;flex-direction:column;align-items:center;justify-content:center;font:800 clamp(18px,6.4vh,34px) Georgia,serif;color:#111;animation:ct-in .25s ease-out both}
 #cas-table .c.r{color:#c4102a}
 #cas-table .c i{font-style:normal;font-size:.9em;line-height:1}
 #cas-table .c.down{background:repeating-linear-gradient(45deg,#8a0c1e 0 6px,#5a0610 6px 12px);color:transparent}
@@ -170,7 +170,7 @@ export function sitAt(kind, opts, api = {}) {
       if (r === 'win') {
         sfx.pickup();
         say(kind === 'bj' && total(H.mine) === 21 && H.mine.length === 2 ? 'Twenty-one!' : 'You win the table!', 'good');
-        line(await opts.onWin());
+        line(await opts.onWin()); draw(); // (the kit line: tables won)
         await ask([{ label: 'Leave the table', value: 1 }]);
         return close('win');
       }

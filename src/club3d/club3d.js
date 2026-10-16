@@ -46,7 +46,7 @@ import { cctvMethods } from './cctv.js';
 import { selfTalkMethods } from './selftalk.js';
 import { feelFxMethods, L2B } from './feelfx.js';
 import { INTOX_HAZE } from '../state.js';
-import { casinoMethods } from './casino.js';
+import { casinoMethods, CASINO_CROWD } from './casino.js';
 
 const SPEED = 4.6;          // her walk (m/s); a packed crowd slows her by up to 40%
 const IDLE_FACE = 1.5;      // seconds standing still before she turns to the viewer
@@ -146,8 +146,8 @@ export class Club3D extends Special3D {
     this.placeGameplay();
     // everyone in the crowd: the hall's dancers + the DJs, the dark room's, the VIP's entourage, the loungers
     const Q = quality().club3;
-    const keepOut = [[plan.spawn.x, plan.spawn.z, 2.6], ...this.inter.map((o) => [o.pos.x, o.pos.z, 1.4]), ...this.castSpots()];
-    const people = placeCrowd(plan, Math.round(Q.crowd * (this.caseDef.gen?.profile.crowd || 1)), this.colliders, keepOut).map((p) => ({ ...p, pose: 'dance' }));
+    const keepOut = [[plan.spawn.x, plan.spawn.z, 2.6], ...this.inter.map((o) => [o.pos.x, o.pos.z, 1.4]), ...this.castSpots(), ...(this.casinoKeepOut?.() || [])];
+    const people = placeCrowd(plan, Math.round(Q.crowd * (this.caseDef.gen?.profile.crowd || 1) * (this.casino ? CASINO_CROWD : 1)), this.colliders, keepOut).map((p) => ({ ...p, pose: this.casino && Math.abs(p.z - V.floor.z) > V.floor.d ? 'stand' : 'dance' })); // (the casino: gamblers stand, only the stand's floor dances)
     const near = (p, cx, cz, r) => Math.hypot(p.x - cx, p.z - cz) < r;
     for (const p of people) if (near(p, this.hallA.spots.bar.x, this.hallA.spots.bar.z, 3)) p.pose = 'stand';
     people.push(...X.people, ...(this.roomA.dark?.dancers || []), ...(this.roomA.lounge?.loungers || []));

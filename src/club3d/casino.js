@@ -8,7 +8,7 @@
 // out, the night lost. Content line: accessories only, never below the top and skirt.
 import * as THREE from 'three';
 import { toon } from '../look3d.js';
-import { neonText, TAU } from '../nlkit.js';
+import { neonText, TAU, tex, cnv } from '../nlkit.js';
 import { npcLook } from '../art.js';
 import { dialog, toast, banner } from '../ui.js';
 import { sfx } from '../sfx.js';
@@ -20,6 +20,7 @@ import { pick } from '../util.js';
 import { caseMethods } from './casework.js';
 import { sitAt } from './cards.js';
 
+export const CASINO_CROWD = 0.35; // the gaming floor is quieter than a club's (fewer people, the tables in sight)
 export const KNOCKOFF = 'dark'; // the knockoff's placeholder model (hero3d.js costume files)
 export const CASINO = {
   dose: 20,        // a lost hand's Super Squirt (+intoxication)
@@ -84,6 +85,19 @@ export function buildCasinoHall(zn, plan, M, X) {
     for (const r of [2.2, 1.4]) X.prop(new THREE.TorusGeometry(r, 0.07, 6, 32).rotateX(Math.PI / 2).translate(cx, y, 1), gold);
     for (let k = 0; k < 12; k++) { const a = (k / 12) * TAU, r = k % 2 ? 1.4 : 2.2; X.prop(new THREE.OctahedronGeometry(0.13).translate(cx + Math.cos(a) * r, y - 0.35, 1 + Math.sin(a) * r), 0xfff4d0); }
   }
+  // casino carpet over the hall's floor (not the singer's dance floor): red, a gold lattice, one repeat tile
+  const F = V.floor, carpet = tex(cnv(128, 128, (c) => {
+    c.fillStyle = '#5a0a16'; c.fillRect(0, 0, 128, 128);
+    c.strokeStyle = '#c8962c'; c.lineWidth = 3; c.globalAlpha = 0.55;
+    c.beginPath(); c.moveTo(64, 0); c.lineTo(128, 64); c.lineTo(64, 128); c.lineTo(0, 64); c.closePath(); c.stroke();
+    c.globalAlpha = 0.8; c.fillStyle = '#e0b040'; c.beginPath(); c.arc(64, 64, 7, 0, TAU); c.fill(); c.fillStyle = '#2a0408'; c.fillRect(0, 0, 10, 10);
+  }), { repeat: true });
+  carpet.repeat.set(V.hw / 2, V.hd / 2);
+  const cm = toon(0xffffff, { map: carpet }, { halftone: 0.3 });
+  for (const [z0, z1] of [[-V.hd, F.z - F.d / 2 - 0.3], [F.z + F.d / 2 + 0.3, V.hd]]) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(V.hw * 2, z1 - z0).rotateX(-Math.PI / 2), cm);
+    m.position.set(0, 0.008, (z0 + z1) / 2); m.userData.noInk = true; S.add(m); zn._static.push(m);
+  }
   // the house's name over the singer's stand, and a red carpet up the room
   X.sign(0, H - 0.9, -V.hd + 0.4, 0, 0.9, signTex(X, 'HIGH-ROLLER SUITE', '#ffd84d', 768, 120, 86), 0xffc840, 0.5);
   const run = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 18).rotateX(-Math.PI / 2), red);
@@ -99,6 +113,13 @@ export const casinoMethods = {
     this.casino = { won: {}, losses: 0, night: false, rig: q.get('casinorig'), api: {} };
     this.clubName = 'The High-Roller Suite';
     zone.name = 'A night at the High-Roller Suite';
+  },
+
+  /** The crowd keeps clear of the tables, the wheel and the cage (club3d.js buildWorld). */
+  casinoKeepOut() {
+    const V = this.plan.V;
+    if (!this.casino || !V.tables) return [];
+    return [...V.tables.map((t) => [t.x, t.z, 3.4]), [V.roulette.x, V.roulette.z, 2.4], [V.cashier.x, V.cashier.z + 1, 2.6]];
   },
 
   /** Her model for tonight: the knockoff, if it loaded (Special3D builds her from it). */
@@ -126,7 +147,7 @@ export const casinoMethods = {
   /** The knockoff's accessories still on her (the HUD line). */
   kitHtml() {
     const n = this.casino?.losses || 0;
-    return `Knockoff: ${CASINO.kit.map(([, name], i) => (i < n ? `<s>${name}</s>` : name)).join(' · ')}<br>Lost hands ${n}/${CASINO.kit.length} · Tables ${Object.keys(this.casino?.won || {}).length}/2`;
+    return `Kit: ${CASINO.kit.map(([, name], i) => (i < n ? `<s>${name}</s>` : name)).join(' ')}<br>Hands lost ${n}/${CASINO.kit.length} · Tables ${Object.keys(this.casino?.won || {}).length}/2`;
   },
   casinoHud() {
     if (!this.casino) return;
