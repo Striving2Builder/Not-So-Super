@@ -23,6 +23,12 @@ on the user's machine with blender-mcp connected (2026-10-16): a default scene, 
   `shoot.js selfbuilt3d --only warehouse --query hero=croptop` (no page errors); download size noted.
 
 ## Done
-(nothing yet)
+- Branch `act2-c1` off phase-2 0410567. Models: `assets/models/hero_croptop.glb` (comic, 2.24 MB, 14266 tris,
+  supergirl.glb's hair shell with a soft wave) + `hero_croptop_real.glb` (2.91 MB, original hair cards); 1 mesh,
+  1 material, two 1024² PNGs; same 51 nodes / bone names; both without the modelled cape.
+- Rebuild: `tools/heroskins/croptop_blender.py` (prep_croptop, build_comic_ct / build_real_ct, export_croptop,
+  pose_ct) + `paint_croptop.py` (comic from supergirl.glb's atlas, real from the original's; masks in mesh
+  space: HEM 1.215, waistband BAND + V dip, cuffs = the sleeve's last 7 cm, also bulged 4 mm in Blender).
+- Pose check (Running / Flying / Jump): no tearing; edge stretch at the midriff / cuffs = the source's.
 
 ## Next / notes
