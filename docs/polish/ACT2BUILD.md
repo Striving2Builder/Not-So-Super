@@ -25,8 +25,9 @@ you can build"). This file is the build board. A new thread picks the build up f
 | 3 | **D**: the casino (High-Roller Suite plan, high card, 21, stakes) | D | **merged** 749cd64 (`src/club3d/casino.js`, `cards.js`; `node tools/shots/casino.js` 3 flows 0 errors; debug `?zone=casino&casinorig=win|lose`) |
 | 3 | **F**: the Act 2 asylum (always high, powers lost, costume clue, the spree counter) | F | **merged** 5af8b89 (`src/asylum2.js`; flow act2asylum; debug `?act=act2&zone=asylum&flight=2d`) |
 | 4 | **G**: Recall + drug finds | G | running (handoff `act2-g.md`) |
-| 3 | **E**: the factory lines (hotel engine, 4 levers, the foreman) | E | running (handoff `act2-e.md`) |
-| 5 | H: the hall of mirrors + Supergurl | H | |
+| 3 | **E**: the factory lines (hotel engine, 4 levers, the foreman) | E | **merged** 05c9773 (`src/factory/`; `node tools/shots/factory.js` 4 flows; debug `?zone=factory&act=act2lair&flight=2d`) |
+| 5 | **H1**: the hotel's new floor, the hall of mirrors (games, puzzles, traps, fake reflections) | H | running (handoff `act2-h1.md`) |
+| 5 | H2: the Supergurl boss fight (coat + mask off, the drug meter, the mirror call, the back-and-forth, the act's end) | H | next |
 
 ## The contract between A and I (wave 1)
 - I owns `src/rld/` (new folder) and registers a zone mode **`rldwalk`** in `main.js` (`modes`,
@@ -53,3 +54,6 @@ you can build"). This file is the build board. A new thread picks the build up f
   196-259 (tris same ~400k): batch the slot banks/chandeliers in a follow-up; phone check. **To do (director, after E
   merges):** `ensureCasino` in act2run.js (keep a High-Roller Suite night on the map while the casino gate is short, like
   `ensureWalk`). Only the cape comes off visibly (Supergirl_Dark has no separate gloves/belt/boots). G launched.
+- 2026-10-16: E merged (05c9773; director resolved the `debugZone` conflict again). Director added `ensureCasino`
+  (e92324f). All harnesses 0 errors: factory 4, act 8 (hotel, kell, act1save, act2*), casino 3, rld 5. Factory perf:
+  230 calls / 63k tris vs the hotel's 192 / 35k at the same spot (hunters + workers; phones get fewer). H1 launched.
