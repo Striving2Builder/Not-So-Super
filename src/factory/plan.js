@@ -43,7 +43,6 @@ function layout(M) {
     rooms.push(r);
     return r;
   };
-  let num = 1;
   for (const w of LINES) {
     const inner = w.side * HW, outer = w.side * (HW + LINE_L);
     const hall = R(w.id, Math.min(inner, outer), w.zc - WHW, Math.max(inner, outer), w.zc + WHW, M.hallFloor, M.hallWall, { hall: true, wing: w.id });

@@ -2,7 +2,7 @@
 // through in headless Chromium: entering, a locked lever, the four keys and levers, the walk out (the
 // act's factory gate counts it); a trap + the struggle and a dart (she wakes in a bay, a lever back in
 // the red); the act keeping a factory line on the map while the gate is short.
-//   node tools/shots/factory.js [--label factory] [--port 8898] [--flows all|lines,dart,map] [--w 844 --h 390] [--shots 0]
+//   node tools/shots/factory.js [--label factory] [--port 8898] [--flows all|lines,dart,map,reach] [--w 844 --h 390] [--shots 0]
 // -> shots/<label>/factory/*.png + report.json (errors per flow; draw calls/triangles per view)
 const path = require('path');
 const fs = require('fs');
@@ -27,7 +27,7 @@ const EXTRA = arg('--query', '');
 const SHOTS = arg('--shots', '1') !== '0';
 const glOf = (V) => V.page.evaluate(() => { const r = window.__game.mode.renderer.info.render; return { calls: r.calls, tris: r.triangles }; });
 const OUT = path.join(ROOT, 'shots', LABEL, 'factory');
-const ALL = ['lines', 'dart', 'map'];
+const ALL = ['lines', 'dart', 'map', 'reach'];
 const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
 
 (async () => {
@@ -166,6 +166,54 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     await V.through(() => window.__game.overworld.zones.some((z) => z.mode === 'factory') && !document.querySelector('#modal-root .modal-back'), 40000);
     report.map = await V.page.evaluate(() => { const z = window.__game.overworld.zones.filter((q) => q.mode === 'factory'); return { n: z.length, district: z[0]?.district, gate: z[0]?.actGate }; });
     if (report.map.n !== 1 || report.map.district !== 'factory') throw new Error(`no factory line on the map: ${JSON.stringify(report.map)}`);
+    return V;
+  });
+
+  await flow('reach', async () => {
+    // every interaction and every hunter's graph node within reach of the floor she can walk to
+    const V = await game('zone=factory&flight=2d');
+    await ready(V);
+    report.reach = await V.page.evaluate(() => {
+      // walk her capsule (the game's own collide) along a route; how far from the goal she ends up
+      const m = window.__game.mode, far = [];
+      for (const d of m.doors) m.openDoor(d, true);
+      for (const d of m.doors) d.col.disabled = true;
+      const walk = (pts, r = 0.38) => {
+        const p = pts[0].clone(); p.y = 0; m._lastGood = null;
+        for (const q of pts.slice(1)) for (let i = 0; i < 400; i++) {
+          const dx = q.x - p.x, dz = q.z - p.z, rem = Math.hypot(dx, dz);
+          if (rem < 0.05) break;
+          const st = Math.min(0.08, rem); p.x += (dx / rem) * st; p.z += (dz / rem) * st;
+          m.collide(p, r);
+        }
+        const g = pts[pts.length - 1]; return Math.hypot(g.x - p.x, g.z - p.z);
+      };
+      const V3 = (x, z) => m.hero.position.clone().set(x, 0, z);
+      for (const r of m.club.rooms) {
+        const out = V3(r.door.x - r.inward.x * 1.2, r.door.z - r.inward.z * 1.2), inn = V3(r.door.x + r.inward.x * 0.9, r.door.z + r.inward.z * 0.9);
+        for (const o of m.inter) {
+          if (!(o.pos.x > r.x0 && o.pos.x < r.x1 && o.pos.z > r.z0 && o.pos.z < r.z1)) continue;
+          const d = walk([out, inn, o.pos]); if (d > 1.6) far.push(`${r.num} ${o.label} ${d.toFixed(2)}`);
+        }
+      }
+      for (const L of m.leverObjs) {
+        const w = m.club.wings.find((q) => q.id === L.line), s = w.side;
+        const d = walk([V3(0, w.zc), V3(s * 2.4, w.zc), V3(s * 2.7, w.zc + 1.6), V3(s * 14.6, w.zc + 1.6), L.pos]); if (d > 1.6) far.push(`lever ${L.name} ${d.toFixed(2)}`);
+      }
+      for (const n of m.kellNodes) for (const q of n.nb) { const d = walk([n.p, q.p], 0.3); if (d > 0.3) far.push(`edge ${n.rect} ${n.p.x.toFixed(1)},${n.p.z.toFixed(1)} -> ${q.p.x.toFixed(1)},${q.p.z.toFixed(1)} ${d.toFixed(2)}`); }
+      return { inter: m.inter.length, nodes: m.kellNodes.length, far };
+    });
+    if (report.reach.far.length) throw new Error(`out of reach: ${report.reach.far.join(' | ')}`);
+    // a worker who sees her shouts, and the nearest hunter comes running; a punch from behind puts him down
+    await V.page.evaluate(() => {
+      const m = window.__game.mode, w = m.workers[0], f = w.mesh.rotation.y;
+      for (const d of m.doors) d.col.disabled = d.open = false;
+      m.grace = 0; m.hero.position.set(w.mesh.position.x + Math.sin(f) * 2, 0, w.mesh.position.z + Math.cos(f) * 2);
+      for (const k of m.hunters) k.mesh.position.set(0, 0, 3); // (all in the dock, out of sight)
+    });
+    await V.page.waitForTimeout(600);
+    report.shout = await V.page.evaluate(() => { const m = window.__game.mode, w = m.workers[0]; const r = { shoutT: Math.round(w.shoutT), hunting: m.hunters.filter((k) => k.state === 'hunt').length }; m.hero.position.copy(w.mesh.position).add({ x: -Math.sin(w.mesh.rotation.y) * 1.0, y: 0, z: -Math.cos(w.mesh.rotation.y) * 1.0 }); m.hero.rotation.y = w.mesh.rotation.y; r.punched = m.punchCrew(); r.stun = Math.round(w.stun); return r; });
+    if (!report.shout.shoutT || !report.shout.hunting || !report.shout.punched) throw new Error(`the worker didn't raise the alarm / go down: ${JSON.stringify(report.shout)}`);
     return V;
   });
 

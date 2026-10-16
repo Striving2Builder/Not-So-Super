@@ -30,7 +30,7 @@ const LOOKS = {
   guard: { skin: '#c8a040', top: '#7a0c1a', gown: true, hairStyle: 'beanie', capCol: '#5a0812', hair: '#5a0812', tie: '#c8a040', boots: '#151515' },
   worker: { skin: '#0e0c10', top: '#8a1020', gown: true, hairStyle: 'beanie', capCol: '#6a0a16', hair: '#6a0a16', tie: '#2a1408', boots: '#151515' },
 };
-const WORKER = { see: 3.2, fov: Math.PI * 0.6, shout: 9, stun: 10 };
+const WORKER = { see: 3.2, fov: Math.PI * 0.6, shout: 9, stun: 10, draw: 12, close: 0.9 };
 
 export const crewMethods = {
   /** The hall graph (as Kell's): the dock, the main hall's spine, two lanes down every line. */
@@ -89,7 +89,7 @@ export const crewMethods = {
     this.hunters = [this.makeHunter('foreman', V(0, MAIN_N + 1.5)), ...posts.slice(0, guards).map((p) => this.makeHunter('guard', p))];
     this.kell = this.hunters[0];
     // the workers: two at every line's belt, robes to the floor, masks down at the work
-    const per = quality().look3d === 'min' ? 1 : 2;
+    const per = quality().look3d === 'full' ? 2 : 1; // (phones: one a line)
     this.workers = [];
     for (const l of c.wings) for (let i = 0; i < per; i++) {
       const s = i % 2 ? 1 : -1, x = l.side * (5.5 + i * 4.4), z = l.zc + s * (BELT.w / 2 + 0.45);
@@ -132,6 +132,7 @@ export const crewMethods = {
       const m = w.mesh;
       w.t += dt;
       w.shoutT = Math.max(0, w.shoutT - dt);
+      m.visible = m.position.distanceToSquared(h) < WORKER.draw * WORKER.draw; // (far down another line: not drawn)
       if (w.stun > 0) {
         if ((w.stun -= dt) <= 0) { m.rotation.x = 0; m.position.copy(w.home); m.rotation.y = w.face; }
         continue;
@@ -144,7 +145,7 @@ export const crewMethods = {
       if (d > WORKER.see || d < 0.01) continue;
       const fx = Math.sin(m.rotation.y), fz = Math.cos(m.rotation.y);
       const front = (dx * fx + dz * fz) / d > Math.cos(WORKER.fov / 2);
-      if (!(front || d < 1.4) || !this.clearLOS(m.position, h)) continue;
+      if (!(front || d < WORKER.close) || !this.clearLOS(m.position, h)) continue;
       w.shoutT = WORKER.shout;
       m.rotation.y = Math.atan2(dx, dz);
       sfx.alarm();
