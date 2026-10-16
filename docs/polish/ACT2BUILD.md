@@ -76,4 +76,7 @@ you can build"). This file is the build board. A new thread picks the build up f
 3. Perf: the boss fight is 126 calls / 241k tris with 5 reflections (model clones ~25k each); the casino 288-327 calls;
    the mirrors gallery 77k tris. Phone check, then cut `FIGHT.decoys`, the hunters' twins, the casino's slot banks.
 4. The crop top's silver cuffs read faint at game size. The knockoff only loses its cape visibly.
-5. Open with the user: the `DISGRACED_DOORS` list; a picked costume beats the Act 2 crop top (or force it?).
+5. ~~Open with the user~~ decided 2026-10-16: the `DISGRACED_DOORS` list stays as it is; a costume the player picked
+   keeps beating the Act 2 crop top during testing (the user decides later).
+- 2026-10-16: user decisions: the boss door opens when the hall of mirrors is complete (H2's rule, confirmed); keep
+  `DISGRACED_DOORS`; keep the player's costume choice for now. Publish to main for a weekend phone test.

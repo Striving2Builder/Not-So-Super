@@ -269,6 +269,7 @@ the act), `?act=act2lair` (every gate met), `?act=act2boss`.
   neon tubes, graffiti, wet tiles, the reflection.
 - **What's on it** **(user)**: Supergirl or Impostor games, original-costume puzzles, doing drugs, traps
   and captive moments (the S-shield struggle).
+- **The boss door** opens once the hall of mirrors is complete (both costume rails + 3 portraits) **(user, 2026-10-16)**.
 - **The boss fight** is built around getting drugged up and intoxicated **(user)**. Proposal: the
   cult leader in the real suit fights with the drug. Every hit or trap raises intoxication, and the
   mirrors multiply her and the leader as it climbs. Over the haze line, Supergirl has to pick the real
