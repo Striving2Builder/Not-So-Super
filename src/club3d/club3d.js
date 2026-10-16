@@ -47,6 +47,7 @@ import { selfTalkMethods } from './selftalk.js';
 import { feelFxMethods, L2B } from './feelfx.js';
 import { INTOX_HAZE } from '../state.js';
 import { casinoMethods, CASINO_CROWD } from './casino.js';
+import { memoryClue } from '../act/recall.js';
 
 const SPEED = 4.6;          // her walk (m/s); a packed crowd slows her by up to 40%
 const IDLE_FACE = 1.5;      // seconds standing still before she turns to the viewer
@@ -144,6 +145,7 @@ export class Club3D extends Special3D {
     this.exitRing.rotation.x = -Math.PI / 2; this.exitRing.position.set(0, 0.04, V.hd - 1.3);
     S.add(this.exitRing);
     this.placeGameplay();
+    { const b = this.hallA.spots.bar; if (b) memoryClue(this, { x: b.x + 1.2, z: b.z }, this.casino ? 'A glass on the casino floor' : 'A glass by the bar'); } // (Act 2 Recall: reads over the haze line)
     // everyone in the crowd: the hall's dancers + the DJs, the dark room's, the VIP's entourage, the loungers
     const Q = quality().club3;
     const keepOut = [[plan.spawn.x, plan.spawn.z, 2.6], ...this.inter.map((o) => [o.pos.x, o.pos.z, 1.4]), ...this.castSpots(), ...(this.casinoKeepOut?.() || [])];

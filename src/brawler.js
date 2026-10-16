@@ -17,6 +17,7 @@ import { loadingPanel } from './gfx.js';
 import { EN, DZ } from './brawldata.js';
 import { actorDraw } from './brawlactors.js';
 import { fxDraw } from './brawlfx.js';
+import { recallOf, stashTaken } from './act/recall.js';
 
 // Zone loading: per-frame bake budget (ms), the longest the card may stay up, and how long to wait
 // for crook models that are still downloading before fighting the procedural stand-ins.
@@ -49,6 +50,7 @@ export class Brawler {
     this.fires = [];
     this.breakables = [];
     this.pickups = [];
+    this.stashes = 0; // (Act 2: Super Squirt in the crates, act/recall.js)
     this.rng = new RNG(zone.uid * 7919 + 13);
     const diff = zone.diff || 1;
     const nWaves = this.fire ? 2 : Math.min(4, 1 + diff);
@@ -515,6 +517,7 @@ export class Brawler {
     const r = Math.random();
     if (r < 0.4) this.pickups.push({ x: b.x, z: b.z, kind: 'food', t: 0 });
     else if (r < 0.65) this.pickups.push({ x: b.x, z: b.z, kind: 'power', t: 0 });
+    if (recallOf(this.g) && (!this.stashes || chance(0.12))) { this.stashes++; this.pickups.push({ x: b.x + 26, z: b.z, kind: 'stash', t: 0 }); } // (Act 2: the first crate always has one)
   }
 
   updatePickups(dt) {
@@ -525,6 +528,7 @@ export class Brawler {
       if (!k.got && k.t > 0.35 && Math.abs(k.x - p.x) < 34 && Math.abs(k.z - p.z) < 0.1 && p.y < 30) {
         k.got = true; sfx.pickup();
         if (k.kind === 'food') { p.hp = Math.min(100, p.hp + 20); this.fx.push({ kind: 'text', x: p.x, y: 140, z: p.z, t: 0, max: 1, txt: '+20 HEALTH', col: '#3ee08a', vy: 60 }); }
+        else if (k.kind === 'stash') { this.fx.push({ kind: 'text', x: p.x, y: 140, z: p.z, t: 0, max: 1.2, txt: 'SUPER SQUIRT!', col: '#ff5fd0', vy: 60 }); stashTaken(this.g, 'A stash in the street'); }
         else { p.en = Math.min(100, p.en + 35); this.fx.push({ kind: 'text', x: p.x, y: 140, z: p.z, t: 0, max: 1, txt: '+POWER', col: '#39c6ff', vy: 60 }); }
       }
     }

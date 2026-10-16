@@ -26,6 +26,7 @@ import { sfx } from '../sfx.js';
 import { lightPool } from '../look3d.js';
 import { pick, shuffle, chance, rand, $ } from '../util.js';
 import { HERO } from '../data.js';
+import { memoryClue, stainRead, recallOf } from '../act/recall.js';
 
 export const RLD = {
   venue: 'Red Light Den',       // (data.js VENUES: the district's look and vice flag)
@@ -208,6 +209,7 @@ export class RldWalk extends ClubZone {
     for (const r of rooms.splice(0, nCap)) this.placeCaptive(r);
     for (const r of rooms.splice(0, this.isOpening ? 1 : RLD.minders)) this.placeMinderIn(r);
     this.placeVents(rooms.splice(0, RLD.vents - (this.isOpening ? 1 : 0)));
+    if (rooms[0]) memoryClue(this, rooms[0].sit, 'A red room', 'A spilled drink on the floor'); // (Act 2 Recall: behind a red door, reads over the haze line)
     const startStreet = this.isOpening ? 'X' : 'W';
     this.placeMinders(startStreet);
     this.placeHostesses(RLD.hostesses);
@@ -329,7 +331,7 @@ export class RldWalk extends ClubZone {
   async pickPiece(L) {
     if (!L.copies) { await dialog({ title: 'The rail', text: 'Empty hangers. Whatever hung here is gone.' }); L.solved = true; return; }
     const st = this.g.state;
-    const res = await whichOne(L.piece, L.copies, { haze: st.intox >= INTOX_HAZE, flash: st.intox >= INTOX_HAZE });
+    const res = await whichOne(L.piece, L.copies, { haze: st.intox >= INTOX_HAZE, flash: st.intox >= INTOX_HAZE && (recallOf(this.g) ? 'recall' : true) });
     if (!res) return;
     L.solved = true;
     for (const m of L.cards) m.visible = false;
@@ -339,6 +341,7 @@ export class RldWalk extends ClubZone {
       this.g.act?.suitFind?.(L.piece, true);
       this.zone.finds = [...(this.zone.finds || []), L.piece];
       toast(`A find for her ${L.piece}.`, 'good');
+      await stainRead(this.g, 'The stain on her ' + L.piece); // (Act 2 Recall: read high, the stain is a memory clue)
     } else sfx.lose();
   }
 

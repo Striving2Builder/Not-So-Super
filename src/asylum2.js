@@ -19,6 +19,7 @@ import { sfx } from './sfx.js';
 import { makePolaroid } from './polaroids.js';
 import { spotCall, fakeStrength } from './act/spot.js';
 import { posterCanvas, posterFrames } from './hotel/art.js';
+import { memoryClue } from './act/recall.js';
 
 const HOLD = INTOX_HAZE + 12;      // the meter never drops below this in here
 const ENTER_AT = INTOX_HAZE + 25;  // where it starts (if she came in soberer)
@@ -219,6 +220,8 @@ export class Act2Asylum {
     z.anims.push((t) => { ring.material.opacity = this.powers ? 0 : 0.3 + Math.sin(t * 4) * 0.2; });
     z.addInter(P.pos, 'Look at the poster', () => !this.powers && !!P.canvas, () => this.examine(), 'clue');
     this.paint();
+    const mc = cells.find((c) => c !== z.wakeCell && c !== cell); // (Act 2 Recall: always high in here, so it reads)
+    if (mc) memoryClue(z, mc.bed.clone().lerp(mc.center, 0.6), 'A cell in Ravenmoor', 'A Polaroid under the bed');
   }
 
   /** A picture for the poster: real or a fake (the call decides if she remembers). */

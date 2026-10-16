@@ -122,7 +122,8 @@ export async function whichOne(piece, copies, { haze = false, flash = false } = 
   if (v === null || v === undefined) return null;
   const copy = copies[v];
   if (copy.real) {
-    const stain = flash ? `<br><br>The stain on it pulls at something. <i>${pick(FLASHES)}</i>` : '<br><br>A stain on it she can\'t place. Not yet.';
+    const stain = flash === 'recall' ? '<br><br>The stain on it pulls at something, and the room starts to tilt…' // (Act 2: act/recall.js plays the next beat after the pick)
+      : flash ? `<br><br>The stain on it pulls at something. <i>${pick(FLASHES)}</i>` : '<br><br>A stain on it she can\'t place. Not yet.';
     await dialog({ title: 'That one is hers.', text: `The right red, the right weight, the seams where she sewed them.${stain}` });
     return { right: true, copy };
   }

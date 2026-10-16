@@ -436,7 +436,7 @@ export const actorDraw = {
     if (blink) return;
     ctx.save(); ctx.translate(x, y - 10 * s + bob - (1 - pop) * 30 * s); ctx.scale(pop, pop);
     ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5;
-    ctx.drawImage(glow(q.kind === 'food' ? '#ffe070' : '#39c6ff'), -22 * s, -30 * s, 44 * s, 44 * s);
+    ctx.drawImage(glow(q.kind === 'food' ? '#ffe070' : q.kind === 'stash' ? '#ff5fd0' : '#39c6ff'), -22 * s, -30 * s, 44 * s, 44 * s);
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     ctx.strokeStyle = INK; ctx.lineWidth = 2;
     if (q.kind === 'food') {
@@ -445,6 +445,11 @@ export const actorDraw = {
       ctx.fillStyle = '#c8742a'; ctx.beginPath(); ctx.ellipse(0, -8 * s, 12 * s, 8 * s, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#ffd08a'; ctx.beginPath(); ctx.ellipse(-3 * s, -11 * s, 5 * s, 2.5 * s, -0.3, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#fff'; ctx.fillRect(9 * s, -14 * s, 6 * s, 3 * s); ctx.strokeRect(9 * s, -14 * s, 6 * s, 3 * s);
+    } else if (q.kind === 'stash') {
+      // a zip baggie of Super Squirt: pink pills (act/recall.js)
+      ctx.fillStyle = 'rgba(235,240,255,.85)'; ctx.fillRect(-10 * s, -22 * s, 20 * s, 22 * s); ctx.strokeRect(-10 * s, -22 * s, 20 * s, 22 * s);
+      ctx.fillStyle = '#c0306a'; ctx.fillRect(-10 * s, -22 * s, 20 * s, 3 * s);
+      for (let i = 0; i < 5; i++) { ctx.fillStyle = i % 2 ? '#ff5fd0' : '#ff9ad0'; ctx.beginPath(); ctx.arc((-5 + (i % 3) * 5) * s, (-6 - Math.floor(i / 3) * 6) * s, 2.6 * s, 0, Math.PI * 2); ctx.fill(); }
     } else {
       ctx.fillStyle = '#39c6ff'; ctx.beginPath(); ctx.moveTo(2 * s, -24 * s); ctx.lineTo(-8 * s, -8 * s); ctx.lineTo(0, -8 * s); ctx.lineTo(-3 * s, 4 * s); ctx.lineTo(9 * s, -13 * s); ctx.lineTo(1 * s, -13 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
     }
