@@ -1,34 +1,40 @@
 # Act 2 job H2: the Supergurl boss fight and the act's end (handoff)
 
-Brief: docs/polish/ACT2BUILD.md (job H2); design: docs/design/act2.md ("The hotel's new floor and the
-boss", "The cast", the content line). Built on H1 (`src/mirrors/`, see `act2-h1.md` "Next (H2)").
+Brief: docs/polish/ACT2BUILD.md (job H2); design: docs/design/act2.md ("The hotel's new floor and the boss", "The cast",
+the content line). Built on H1 (`src/mirrors/`, `act2-h1.md`).
 
-## Scope
-- **The boss room** behind the antechamber's sealed door (cut the gap at `ANTE.z0` in
-  `src/mirrors/plan.js`); `bossDoor()` opens only when `two.B.bossReady` (else the stub line). Mirrors
-  all round; same look as the floor.
-- **Supergurl** (user): the cult's leader, real name unknown. A long black coat with red braided cord on
-  the shoulder, a black hood, a glossy red sculpted mask, black riding boots, **over Supergirl's stolen
-  original suit** (reference, local and git-ignored:
-  `C:/Users/ngnic/Documents/App Projects/Sandbox - Top Down Super Flying Game/docs/references/user/act2-cult-leader.jpg`).
-  Stand-in: the hero's own classic model (`supergirl.glb`, cloned like H1's twin) with a procedural
-  coat, hood and mask on top. **The coat and mask come off during the fight** (the reveal).
-- **The fight is built around the drug** (user): reuse Act 1's ballroom fight shape
-  (`src/hotel/ballroom.js`: phases, interactions, the struggle, the meter). Every hit or trap raises
-  intoxication; as it climbs, the mirrors multiply her and Supergurl (`twinOf` in `glass.js`). Over the
-  haze line, Supergirl has to pick the real Supergurl out of the reflections (the call: tap the real one,
-  or `spotCall`). Captive moments use the S-shield struggle. No dead ends: failure hands control back
-  within ~8 s and changes the situation.
-- **The dialogue** (user): a lot of back and forth. Supergurl insults the real Supergirl and accuses her
-  of the things Supergurl did herself: the Polaroids, the tape, the crime spree, Super Squirt, the stolen
-  suit. Supergirl answers back each time. One exchange per phase, harder to deny as she gets higher.
-  Lines in a data file (`src/mirrors/lines.js`), comic boxes like Act 1's beats. PG-13.
-- **The end:** win = her real suit back, stains and all (`two.B.done`, a final beat: the papers, an
-  "End of Act 2: Not So Super" card). Hand back to the overworld like Act 1's `complete()` does.
-- Debug entry `?act=act2boss&zone=mirrors` straight to the fight + a harness flow (the fight to the win,
-  a capture + struggle, the reveal, the mirror call).
+## Done (2026-10-16, branch worktree-agent-ad245ed7e84e885dc off phase-2 5ba12ff)
+- `bossroom.js`: Supergurl's room north of the antechamber (16 x 12 m), the sealed door's gap cut (plan.js hooks:
+  `bossLayout`/`bossDress`; the old solid frame box is now posts + lintel), mirrors down both long walls with the room
+  built again behind each glass (+ the dais/throne copies), purple tubes, the throne.
+- `gurl.js`: Supergurl = a `HeroModel` of supergirl.glb (own mixer) + procedural coat (torso, long skirt, sleeves),
+  open-faced hood + cowl over her hair, glossy red mask + eye slits, red braided cord on the LEFT shoulder, black
+  riding boots; sized from her real head (raycast crown). `reveal()` = coat/hood/mask off (they land on the floor),
+  cape + a lipstick kiss on the left of the S show. Reflections = `twinOf` clones mirrored across vertical planes
+  through the room's centre (everything backwards: the call's tell); decoys skip the ink hulls.
+- `boss.js` (mixed into MirrorsZone): `bossDoor()` opens when `B.bossReady`, or (no dead end: nothing else sets it in
+  normal play) once the floor's done: both rails checked + 3 portraits called (sets `bossReady`, saves). Phases
+  coat (3 hits) → reveal → suit (3) → haze (2 right calls) → down. Her moves: run the ring, pink Super Squirt kisses
+  (dodge), strikes up close (push + dose), 3 pink floor vents (puff every 6 s). Reflections appear as intox climbs
+  (punch one = glass + dose); over `INTOX_HAZE` punches/timer bring the call (numbered rings over her and the
+  reflections, pushed apart for thumbs; keys 1-n): right = a hit, wrong = held. Captive moments (wrong call, intox
+  100 via `capture()`, her hold at intox ≥ 70) = the S-shield struggle; free or not the room changes (back by the
+  door, new reflections and vents; a fail gives her a hit back, rep −3, next struggle easier).
+- `lines.js`: 5 exchanges (door: the Polaroids; reveal: the stolen suit; mirrors: the tape + crime spree; haze: Super
+  Squirt; end), her line then Supergirl's answer as the button (hazier above the haze line), fight bubbles, the call,
+  the ending (paper "THE REAL ONE" + "END OF ACT 2 / NOT SO SUPER" card).
+- The end: win → `endZone(win)` → main.js (now `zone.hotel || zone.mirrors`) → `act.complete()` → `two.complete()`
+  (act2run.js, 1 method) → `endAct2` (boss.js): B.done, B.suitBack, every piece at 5 finds, rep +80, intox 0, papers, card.
+- Hooks outside my files: `main.js` endZone condition (1 line), `act.js` complete() (1 line), `act2run.js` complete()
+  (3 lines), `mirrors.js` (import/mixin, placeBossRoom, punch/update/objectives/hud delegation, stub bossDoor moved,
+  debug in announce), `plan.js` (3 lines), `tools/shots/mirrors.js` (flow `boss`).
+- Debug: `?act=act2boss&zone=mirrors&flight=2d` (straight into the fight; `debugBossWanted()` in boss.js).
 
-## Done
-(nothing yet)
+## Perf (headless, full look): coat phase 116 calls / 172k tris; mirrors + 5 reflections 126 / 241k (decoys
+without ink hulls; it was 270k with them). Balanced: 3 reflections, side twins only in the nearer wall; saver: 2, no side twins.
+Tris are the model clones (~25k each with ink): if phones struggle, cut `FIGHT.decoys`.
 
 ## Next / notes
+- Not phone-tested. The Act 2 hero is still the classic model (C1's crop top isn't in), so Supergurl and Supergirl
+  look alike once the coat's off apart from the stain and the cape: the call relies on the backwards cord/kiss + flicker.
+- Supergurl's hands-behind-the-back pose isn't there (no clip); she uses combatIdle.

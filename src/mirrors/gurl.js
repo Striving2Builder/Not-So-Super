@@ -141,8 +141,8 @@ export class Gurl {
 }
 
 /** A twin of `src` (twinOf) mirrored across the vertical plane through `c` with normal angle `th`. */
-export function reflection(src, c, th) {
-  const t = twinOf(src);
+export function reflection(src, c, th, hide = []) {
+  const t = twinOf(src, hide);
   setPlane(t, c, th);
   return t;
 }

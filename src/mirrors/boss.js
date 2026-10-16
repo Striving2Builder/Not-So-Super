@@ -112,7 +112,8 @@ export const bossMethods = {
     if (q !== 'min') for (const src of [this.hero, gurl.group]) for (const s of [-1, 1]) { const t = reflection(src, new THREE.Vector3(s * BOSS_W, 0, 0), 0); Object.assign(t, { src, s }); this.scene.add(t.holder); b.side.push(t); }
     b.sideAll = q === 'full'; // (else only the twin in the nearer wall)
     const n = FIGHT.decoys[q === 'full' ? 'full' : q === 'min' ? 'min' : 'mid'];
-    for (let i = 0; i < n; i++) { const t = reflection(gurl.group, R.c, 0); t.holder.visible = false; t.off = 0; this.scene.add(t.holder); b.decoys.push(t); }
+    const ink = []; gurl.group.traverse((o) => { if (o.userData.ink) ink.push(o); }); // (reflections skip the ink hulls: half the triangles)
+    for (let i = 0; i < n; i++) { const t = reflection(gurl.group, R.c, 0, ink); t.holder.visible = false; t.off = 0; this.scene.add(t.holder); b.decoys.push(t); }
     this.rollPlanes();
   },
 
