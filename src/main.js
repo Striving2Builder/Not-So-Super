@@ -18,7 +18,7 @@ import { UI, dialog, toast, clearToasts } from './ui.js';
 import { sfx } from './sfx.js';
 import { ambience } from './ambience.js';
 import { $, pick, chance, fmtTime } from './util.js';
-import { loadHero, loadSkin, skinScene, HERO_SKIN, HERO_LOOK } from './hero3d.js';
+import { loadHero, loadSkin, skinScene, HERO_SKIN, HERO_LOOK, setActSkin, actSkinPending, ACT2_SKIN } from './hero3d.js';
 import { KNOCKOFF } from './club3d/casino.js';
 import { loadEnemies } from './enemies.js';
 import { playCutscene, playScreenScene } from './cutscene.js';
@@ -116,8 +116,10 @@ game.startZone = (z) => {
   // (Act 1's High-Roller Suite stays the special zone it always was)
   const two = game.act?.two;
   if (!z.casino && z.mode === 'special' && VENUES[z.venue]?.kind === 'casino' && two?.on?.() && two.B?.opening === 'done') z.casino = true;
-  if (z.casino && !skinScene(KNOCKOFF) && z._suitWait !== 'done') { // (the knockoff loads once, ~2 MB: wait for it, 8 s at most)
-    if (!z._suitWait) { z._suitWait = 'pending'; Promise.race([loadSkin(KNOCKOFF), new Promise((r) => setTimeout(r, 8000))]).then(() => { z._suitWait = 'done'; game.startZone(z); }); }
+  setActSkin(two?.on?.() ? ACT2_SKIN : null); // (Act 2's default costume: the crop top)
+  const suit = z.casino ? (!skinScene(KNOCKOFF) && KNOCKOFF) : actSkinPending();
+  if (suit && z._suitWait !== 'done') { // (the knockoff / the crop top load once, ~2 MB: wait for it, 8 s at most)
+    if (!z._suitWait) { z._suitWait = 'pending'; Promise.race([loadSkin(suit), new Promise((r) => setTimeout(r, 8000))]).then(() => { z._suitWait = 'done'; game.startZone(z); }); }
     return; // (the dive's safety net calls again meanwhile: ignored)
   }
   const mode = modeFor(z);
@@ -331,7 +333,7 @@ async function pauseMenu() {
       { label: `Graphics: ${settings.graphicsLabel}`, note: 'Battery saver: 30 fps, lighter clubs', value: 'g' },
       { label: `Camera: ${CAM_STEP_LABELS[settings.camDist]}`, note: 'Far / Medium / Close / Closest, in the 3D zones', value: 'm' },
       { label: `City feed videos: ${settings.cityFeed ? 'ON' : 'OFF'}`, note: 'Clips in the minimap corner', value: 'f' },
-      { label: `Hero: ${HERO_SKIN_LABELS[settings.hero]}`, note: settings.hero === HERO_SKIN ? 'Supergirl / Classic / Ponytail / Supergirl_Dark costume' : 'Reload the page to change costume', value: 'v' },
+      { label: `Hero: ${HERO_SKIN_LABELS[settings.hero]}`, note: settings.hero === HERO_SKIN ? 'Supergirl / Classic / Ponytail / Supergirl_Dark / Crop top costume' : 'Reload the page to change costume', value: 'v' },
       { label: `Hero render: ${HERO_LOOK_LABELS[settings.heroLook]}`, note: settings.heroLook === HERO_LOOK ? 'Comic or realistic, for testing' : 'Reload the page to change render', value: 'l' },
       ...(st.act || game.modeName === 'overworld' ? [{ label: 'Act board', note: game.act.title(), value: 'b' }] : []),
       { label: 'How to play', value: 'h' },
@@ -483,7 +485,7 @@ function frame(now) {
       if (game.state && !game.title) {
         if (m.hud) m.hud();
         hudT -= dt;
-        if (hudT <= 0) { hudT = 0.1; updateHUD(); }
+        if (hudT <= 0) { hudT = 0.1; updateHUD(); setActSkin(game.act?.two?.on?.() ? ACT2_SKIN : null); } // (Act 2: the crop top, hero3d)
       }
     } catch (e) { console.error(e); }
   }

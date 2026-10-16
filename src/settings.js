@@ -66,8 +66,8 @@ export const PROFILES = {
 
 export const GRAPHICS_MODES = ['auto', 'high', 'saver'];
 /** Her costume variants (assets/models/, files per render in hero3d.js), same rig. */
-export const HERO_SKINS = ['supergirl', 'classic', 'ponytail', 'dark'];
-export const HERO_SKIN_LABELS = { supergirl: 'Supergirl', classic: 'Classic', ponytail: 'Ponytail', dark: 'Supergirl_Dark' };
+export const HERO_SKINS = ['supergirl', 'classic', 'ponytail', 'dark', 'croptop'];
+export const HERO_SKIN_LABELS = { supergirl: 'Supergirl', classic: 'Classic', ponytail: 'Ponytail', dark: 'Supergirl_Dark', croptop: 'Crop top' };
 /** How her model is drawn: the comic cel look with ink, or realistic textures under plain PBR light. */
 export const HERO_LOOKS = ['comic', 'real'];
 export const HERO_LOOK_LABELS = { comic: 'Comic', real: 'Realistic' };

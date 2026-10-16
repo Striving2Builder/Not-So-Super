@@ -12,14 +12,15 @@ import { dressHero, inkHull, shapeSkirt, SkirtSway } from './herolook3d.js';
 import { inkCharacter, LOOK } from './look3d.js';
 import { renderToCanvas } from './offscreen3d.js';
 
-// Her costume (pause menu, or ?hero=supergirl|classic|ponytail|dark) and render (pause menu, or
+// Her costume (pause menu, or ?hero=supergirl|classic|ponytail|dark|croptop) and render (pause menu, or
 // ?look=comic|real). Same rig and atlas layout in every file, so the clips, the cape and the flight
 // shaders work on every variant. Realistic: the original-texture models under their own PBR
 // materials, no cel look or ink (Classic and Ponytail use one file for both).
 const HERO_FILES = {
-  comic: { supergirl: 'supergirl.glb', classic: 'hero_classic.glb', ponytail: 'hero_ponytail.glb', dark: 'hero_dark.glb' },
-  real: { supergirl: 'supergirl_real.glb', classic: 'hero_classic.glb', ponytail: 'hero_ponytail.glb', dark: 'hero_dark_real.glb' },
+  comic: { supergirl: 'supergirl.glb', classic: 'hero_classic.glb', ponytail: 'hero_ponytail.glb', dark: 'hero_dark.glb', croptop: 'hero_croptop.glb' },
+  real: { supergirl: 'supergirl_real.glb', classic: 'hero_classic.glb', ponytail: 'hero_ponytail.glb', dark: 'hero_dark_real.glb', croptop: 'hero_croptop_real.glb' },
 };
+const NO_CAPE = new Set(['croptop']); // costumes without a cape: the cloth cape and the flight ribbon are skipped
 export { HERO_SKIN, HERO_LOOK };
 export const HERO_COMIC = HERO_LOOK === 'comic';
 const MODEL_URL = 'assets/models/' + HERO_FILES[HERO_LOOK][HERO_SKIN];
@@ -36,7 +37,7 @@ export function loadHero() {
   const L = new GLTFLoader();
   loading = Promise.all([L.loadAsync(MODEL_URL), L.loadAsync(ANIMS_URL)])
     .then(([model, anims]) => {
-      asset.scene = prepScene(model.scene);
+      asset.scene = prepScene(model.scene, HERO_SKIN);
       for (const c of anims.animations) asset.clips[c.name] = c;
       asset.ready = true;
       return true;
@@ -45,7 +46,8 @@ export function loadHero() {
   return loading;
 }
 
-function prepScene(scene) {
+function prepScene(scene, skin) {
+  scene.userData.skin = skin;
   scene.traverse((o) => {
     if (o.isMesh) { o.frustumCulled = false; if (o.material) o.material.side = THREE.DoubleSide; }
     if (o.isSkinnedMesh) { stripModelCape(o); shapeSkirt(o); } // cape: replaced by the simulated cloth cape; skirt: shortened, flutter shapes
@@ -58,10 +60,26 @@ function prepScene(scene) {
 const skins = {};
 export function loadSkin(skin) {
   if (skin === HERO_SKIN) return loading || loadHero();
-  if (!skins[skin]) skins[skin] = { scene: null, p: new GLTFLoader().loadAsync('assets/models/' + HERO_FILES[HERO_LOOK][skin]).then((m) => { skins[skin].scene = prepScene(m.scene); return true; }).catch((e) => { console.warn(`The ${skin} costume failed to load`, e); return false; }) };
+  if (!skins[skin]) skins[skin] = { scene: null, p: new GLTFLoader().loadAsync('assets/models/' + HERO_FILES[HERO_LOOK][skin]).then((m) => { skins[skin].scene = prepScene(m.scene, skin); return true; }).catch((e) => { console.warn(`The ${skin} costume failed to load`, e); return false; }) };
   return skins[skin].p;
 }
 export const skinScene = (skin) => (skin === HERO_SKIN ? asset.scene : skins[skin]?.scene || null);
+
+// Act 2's default costume (main.js sets it while game.act.two.on()): the crop top over her own suit, for
+// every HeroModel built without a `src` (zones, flight, sprites) once it has loaded. A costume picked in
+// the pause menu / ?hero= wins, and so does a zone's own (the casino's knockoff, heroSrc).
+export const ACT2_SKIN = 'croptop';
+let actSkin = null;
+export function setActSkin(skin) {
+  if (HERO_SKIN !== 'supergirl') skin = null;
+  if (skin === actSkin) return;
+  actSkin = skin;
+  if (skin) loadSkin(skin);
+}
+/** The costume a HeroModel wears by default: the act's once loaded, else her chosen one. */
+export const wornSkin = () => (actSkin && skinScene(actSkin) ? actSkin : HERO_SKIN);
+/** The act's costume while it's still loading (callers can wait for it, as for the knockoff), else null. */
+export const actSkinPending = () => (actSkin && !skinScene(actSkin) && skins[actSkin] ? actSkin : null);
 
 export const heroReady = () => asset.ready;
 
@@ -74,7 +92,10 @@ const _res = new THREE.Vector2();
 export class HeroModel {
   /** `src`: another costume's loaded scene (skinScene), same rig; her own costume by default. */
   constructor(src = null) {
-    this.root = clone(src || asset.scene);
+    src = src || skinScene(wornSkin()) || asset.scene;
+    this.skin = src.userData.skin || HERO_SKIN;
+    this.noCape = NO_CAPE.has(this.skin);
+    this.root = clone(src);
     this.mixer = new THREE.AnimationMixer(this.root);
     this.actions = {};
     this.cur = null;
@@ -86,6 +107,10 @@ export class HeroModel {
       if (o.isSkinnedMesh) mat = o.material;
     });
     this.cape = new Cape(this.root, this.bones, mat);
+    if (this.noCape) { // (kept as an object for the callers that hide / settle it; never shown, never stepped)
+      Object.defineProperty(this.cape.mesh, 'visible', { get: () => false, set() {} });
+      this.cape.step = this.cape.tick = this.cape.settle = this.cape.reset = () => {};
+    }
     this.skirt = new SkirtSway(this.root);
   }
 
@@ -216,18 +241,26 @@ export class HeroSprite {
     const rim = new THREE.DirectionalLight(0x9fd0ff, 1.2);
     rim.position.set(-3, 2, -4);
     this.scene.add(rim);
-    this.hero = new HeroModel();
     // her comic surface (cel bands, rim, blonde hair mass) like the 3D flight view, not the raw PBR
     // + the inner ink hull (the callers ink her silhouette in 2D; this draws the lines inside it:
     // an arm across her body, the skirt over a leg), sized for the sprite in render()
-    const look = { self: 0.18, rim: { value: 1.1 }, key: { value: key.position.clone().normalize() }, toneMapped: false };
-    if (HERO_COMIC) inkHull(inkCharacter(dressHero(this.hero.root, look), { skip: [this.hero.cape.mesh] }));
+    this.look = { self: 0.18, rim: { value: 1.1 }, key: { value: key.position.clone().normalize() }, toneMapped: false };
     this.pivot = new THREE.Group();
-    this.pivot.add(this.hero.root);
     this.scene.add(this.pivot);
+    this.wear();
     this.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 50);
     this.setSize(w, h);
   }
+
+  /** (Re)build her model in the costume she wears now (Act 2's crop top arrives after the sprite was made). */
+  wear() {
+    if (this._hero) this.pivot.remove(this._hero.root);
+    const h = this._hero = new HeroModel();
+    if (HERO_COMIC) inkHull(inkCharacter(dressHero(h.root, this.look), { skip: [h.cape.mesh] }));
+    this.pivot.add(h.root);
+  }
+
+  get hero() { if (this._hero.skin !== wornSkin()) this.wear(); return this._hero; }
 
   setSize(w, h) {
     if (this.w === w && this.h === h) return;
