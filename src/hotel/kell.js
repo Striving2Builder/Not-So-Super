@@ -126,7 +126,7 @@ export const kellMethods = {
       k.state = 'charge'; k.charge = 0; k.seen = h.clone();
       sfx.alarm();
       const s = this.screenOf(m.position, 2.1);
-      if (s) comic.say(pick(LINES.spot), s.x, s.y, { kind: 'shout', speaker: 'DR KELL' });
+      if (s) comic.say(pick((k.lines || LINES).spot), s.x, s.y, { kind: 'shout', speaker: k.speaker || 'DR KELL' });
     } else {
       k.glow.material.opacity = 0; k.glow.scale.setScalar(1);
       // walk: the path if he has one, else a new patrol leg (or back to patrolling after a hunt)
@@ -140,7 +140,7 @@ export const kellMethods = {
         }
       } else {
         const tgt = k.path[0], tx = tgt.x - m.position.x, tz = tgt.z - m.position.z, td = Math.hypot(tx, tz);
-        const v = k.state === 'hunt' ? KELL.hunt : KELL.walk;
+        const v = (k.state === 'hunt' ? KELL.hunt : KELL.walk) * (k.pace || 1);
         if (td < 0.25) { k.path.shift(); if (!k.path.length && k.state === 'hunt') k.seenT = 0; } else {
           m.position.x += (tx / td) * Math.min(td, v * dt); m.position.z += (tz / td) * Math.min(td, v * dt);
           let da = Math.atan2(tx, tz) - m.rotation.y;
@@ -153,7 +153,7 @@ export const kellMethods = {
         if (k.state === 'hunt' && (k.talkT -= dt) <= 0) {
           k.talkT = 9;
           const s = this.screenOf(m.position, 2.1);
-          if (s && s.x > 0 && s.x < this.g.w && s.y > 0 && s.y < this.g.h) comic.say(pick(LINES.hunt), s.x, s.y, { speaker: 'DR KELL' });
+          if (s && s.x > 0 && s.x < this.g.w && s.y > 0 && s.y < this.g.h) comic.say(pick((k.lines || LINES).hunt), s.x, s.y, { speaker: k.speaker || 'DR KELL' });
         }
       }
     }
@@ -180,7 +180,7 @@ export const kellMethods = {
     if (hit) { this.kellHit(); return; }
     k.path = this.kellPath(k.seen || h); k.seenT = 0;
     const s = this.screenOf(m.position, 2.1);
-    if (s) comic.say(pick(LINES.miss), s.x, s.y, { speaker: 'DR KELL' });
+    if (s) comic.say(pick((k.lines || LINES).miss), s.x, s.y, { speaker: k.speaker || 'DR KELL' });
   },
 
   /** A punch from behind: he goes down for a few seconds (the ray clatters to the floor). */
@@ -195,7 +195,7 @@ export const kellMethods = {
     sfx.hit();
     const s = this.screenOf(m.position, 1.2);
     if (s) this.g.commentary.hit(s.x, s.y, { big: true });
-    toast(`Dr Kell is down. Not for long: ${KELL.stun} seconds.`, 'good');
+    toast(`${k.name || 'Dr Kell'} is down. Not for long: ${KELL.stun} seconds.`, 'good');
     return true;
   },
 

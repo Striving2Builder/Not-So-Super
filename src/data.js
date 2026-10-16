@@ -140,6 +140,8 @@ export const VENUES = {
   'Underground Lair':  { districts: ['lair'], themes: ['mindcontrol', 'hypnosis', 'weapons', 'trafficking'], vice: true, kind: 'lair', bg: '#030805', floor: '#1a201c', wall: '#2a322c', lights: [0x39ff6a, 0xa0ff39, 0x39ffd0] },
   // The act bosses' hotel (src/act/, src/hotel/): opened by the act, never rolled at random.
   'Slutty Little Red Mini Skirt': { districts: ['lair'], themes: [], vice: false, kind: 'hotel', hotel: true, bg: '#07030a', floor: '#2a1420', wall: '#3a1a2a', lights: [0x39ff6a, 0xc050ff, 0xff2a5a] },
+  // Act 2's drug factory (src/factory/): placed by the act while its gate is short, never rolled at random.
+  'Super Squirt Plant': { districts: ['factory'], themes: [], vice: false, kind: 'factory', factory: true, bg: '#0a0608', floor: '#5a5a5e', wall: '#3a3e46', lights: [0xffb020, 0xff3fb8, 0xbfe8ff] },
 };
 
 export const THEMES = {

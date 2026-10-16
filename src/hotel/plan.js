@@ -11,7 +11,7 @@ import { makeMaterials, NEON } from './art.js';
 
 export const WALL_H = 3.2;
 export const DOOR_W = 1.2, DOOR_H = 2.3;
-const HW = 1.6;            // hall half-width
+export const HW = 1.6;          // hall half-width
 const RD = 4.2, RW = 4;    // room depth, width
 const WING_L = 3 * RW + 2.4;
 export const BALL = { x0: -14, x1: 14, z0: -70, z1: -46, stage: -64 };
@@ -26,7 +26,7 @@ export const WINGS = [
 
 // ---------------------------------------------------------------- geometry helpers
 /** A quad through 4 points, UV-tiled every `tile` metres, facing `normal`. */
-function quad(pts, normal, uLen, vLen, tileU, tileV = tileU) {
+export function quad(pts, normal, uLen, vLen, tileU, tileV = tileU) {
   const g = new THREE.BufferGeometry();
   const [a, b, c, d] = pts;
   const e1 = new THREE.Vector3().subVectors(b, a), e2 = new THREE.Vector3().subVectors(c, a);
@@ -44,7 +44,7 @@ const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 function pushBack(m) { m.polygonOffset = true; m.polygonOffsetFactor = 1; m.polygonOffsetUnits = 1; }
 
 /** A rectangle of floor with walls round it; `open[side]` = [from, to] gaps along that side. */
-class Rect {
+export class Rect {
   constructor(id, x0, z0, x1, z1, floor, wall, extra = {}) {
     Object.assign(this, { id, x0, z0, x1, z1, floor, wall, open: { n: [], s: [], e: [], w: [] }, ...extra });
   }
@@ -54,7 +54,7 @@ class Rect {
   gap(s, c, w, lintel = true) { this.open[s].push([c - w / 2, c + w / 2, lintel]); return this; }
 }
 
-class Builder {
+export class Builder {
   constructor(M) { this.M = M; this.parts = new Map(); }
   add(mat, geo) { if (!this.parts.has(mat)) this.parts.set(mat, []); this.parts.get(mat).push(geo); }
   box(mat, w, h, d, x, y, z, ry = 0) { const g = new THREE.BoxGeometry(w, h, d); if (ry) g.rotateY(ry); g.translate(x, y, z); this.add(mat, g.toNonIndexed()); }
