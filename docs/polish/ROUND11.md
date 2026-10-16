@@ -319,3 +319,10 @@ the beats' lines in `casebeats.js`) and may edit them by hand: add new lines, ne
   between offers ≤15 s with cheap route content (hoop strings, slipstream ribbons, pigeon flocks, smoke plumes); 4) every
   moment ends on an inked panel (washer had a toast, getaway nothing); 5) mute MEANWHILE / closing-time / new-case toasts
   during a moment. V2 launched (builder) with F-3 (critic).
+- 2026-10-15: the spend limit stopped V2 and F2c again (user: resume). Both nearly done; all work committed (director
+  saved F2c's last route.js edit). V2 (`worktree-agent-abbacccd4eff984fb`): beats per twist (runner roles: booth / double /
+  breakout; snapper only for a real photo), seeds differ (pace, need 5-7, titles + headlines, venues), real-frame paper
+  photo, flashes/glass/beat camera push, per-venue fog + landmark (`venue.js`), generated leads at real venues. F2c
+  (`worktree-agent-a638615b8eaae9db4`): payoff in screen space round her (proof frames in its handoff), LOS halo, washer
+  on the facing facade, route content every 5-7 s (`route.js`), one text lane. The director runs both packs + V2's
+  regression itself, then merges, then the critics (V-2, F-4).
