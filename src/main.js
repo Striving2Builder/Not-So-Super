@@ -311,7 +311,7 @@ async function pauseMenu() {
       { label: `City feed videos: ${settings.cityFeed ? 'ON' : 'OFF'}`, note: 'Clips in the minimap corner', value: 'f' },
       { label: `Hero: ${HERO_SKIN_LABELS[settings.hero]}`, note: settings.hero === HERO_SKIN ? 'Supergirl / Classic / Ponytail / Supergirl_Dark costume' : 'Reload the page to change costume', value: 'v' },
       { label: `Hero render: ${HERO_LOOK_LABELS[settings.heroLook]}`, note: settings.heroLook === HERO_LOOK ? 'Comic or realistic, for testing' : 'Reload the page to change render', value: 'l' },
-      ...(st.act || game.modeName === 'overworld' ? [{ label: 'Act board', note: 'Act 1: The Puzzle Maker', value: 'b' }] : []),
+      ...(st.act || game.modeName === 'overworld' ? [{ label: 'Act board', note: game.act.title(), value: 'b' }] : []),
       { label: 'How to play', value: 'h' },
       ...(inMission ? [{ label: 'Abort mission', note: '−3 reputation', value: 'a', cls: 'bad' }] : []),
       ...(game.modeName === 'overworld' ? [{ label: 'Save & quit to title', value: 'q' }] : []),

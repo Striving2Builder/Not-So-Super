@@ -25,7 +25,7 @@ const W = +arg('--w', 844), H = +arg('--h', 390);
 const EXTRA = arg('--query', ''); // e.g. --query '&camdist=closest' (appended to every page's query)
 const glOf = (V) => V.page.evaluate(() => { const r = window.__game.mode.renderer.info.render; return { calls: r.calls, tris: r.triangles }; });
 const OUT = path.join(ROOT, 'shots', LABEL, 'act');
-const ALL = ['board', 'trail', 'gates', 'polaroid', 'unmask', 'sighting', 'tower', 'hotel', 'kell', 'seal', 'ballroom'];
+const ALL = ['board', 'trail', 'gates', 'polaroid', 'unmask', 'sighting', 'tower', 'hotel', 'kell', 'seal', 'ballroom', 'act1save', 'act2', 'act2gates'];
 const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
 
 (async () => {
@@ -316,6 +316,81 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     await V.shot('act_complete');
     report.ballroomEnd = { ended, done: await V.page.evaluate(() => window.__game.state.act.done), hotelZone: await V.page.evaluate(() => window.__game.overworld.zones.some((z) => z.hotel)) };
     return V;
+  });
+
+  // ---------------------------------------------------------------- Act 2 (src/act/act2*.js)
+  // An Act 1 save from before Act 2 existed (no act2 field): Continue, and it plays on as Act 1.
+  await flow('act1save', async () => {
+    const V = await game('flight=2d');
+    const before = await V.page.evaluate(() => {
+      const save = { seed: 4242, rep: 170, stats: { saves: 3, cases: 2, specials: 1, captures: 1, photos: 0 }, clock: 1200, lockouts: {}, leads: [], leadsDone: [], cases: {}, photosLost: 0, stashVenue: null, stash: null,
+        act: { id: 'act1', counts: { clubs: 3, warehouses: 1, asylum: 0, factory: 0, entertainment: 1 }, unmasked: { fixer: true }, trails: { queen: 1 }, fakes: 4, unsorted: 1, beats: { start: true, local: true, guardian: true }, lairOpen: false, done: false, pm: { mask: 'gold', gloves: 'no gloves', cane: 'a cane', flower: 'a white rose', hat: 'no hat', ring: 'no ring' }, seals: {}, posterBest: 0, caught: 0 } };
+      localStorage.setItem('sg-city-patrol-v1', JSON.stringify(save));
+      return save.act;
+    });
+    await V.page.reload();
+    await V.page.waitForFunction(() => window.__game && document.querySelector('#btn-continue'), null, { timeout: 30000 });
+    await V.page.evaluate(async () => { (await import('/src/settings.js')).autoTune.done = true; const c = document.querySelector('#cutscene'); if (c) for (let i = 0; i < 4; i++) c.click(); });
+    await V.page.waitForTimeout(600);
+    await V.page.click('#btn-continue');
+    await V.page.waitForTimeout(3000);
+    await V.through(() => !document.querySelector('#modal-root .modal-back'), 15000);
+    V.page.evaluate(() => window.__game.act.openBoard());
+    await V.page.waitForTimeout(700);
+    const head = await V.page.evaluate(() => document.querySelector('.ab .cb-head')?.innerText);
+    await V.shot('act1save_board');
+    await V.press('.ab-x');
+    const after = await V.page.evaluate(() => { const A = window.__game.state.act; return { title: window.__game.act.title(), act2: A.act2 || null, done: A.done, counts: A.counts, fakes: A.fakes, rep: window.__game.state.rep }; });
+    report.act1save = { head, ...after, same: JSON.stringify(after.counts) === JSON.stringify(before.counts) && after.fakes === before.fakes };
+    if (after.act2 || after.done || !report.act1save.same || !/Puzzle Maker/.test(head || '')) throw new Error(`Act 1 save changed: ${JSON.stringify(report.act1save)}`);
+    return V;
+  });
+
+  // ?act=act2: Act 1 done, the opening (title card, the scandal: rep -50, the walk or its toast, the papers), the board's Act 2 page.
+  await flow('act2', async () => {
+    const V = await game('act=act2&flight=2d');
+    await V.page.waitForTimeout(1500);
+    await V.through(() => { const B = window.__game.state.act?.act2; return B && B.opening === 'done' && !document.querySelector('#modal-root .modal-back'); }, 60000);
+    V.page.evaluate(() => window.__game.act.openBoard());
+    await V.page.waitForTimeout(800);
+    const head = await V.page.evaluate(() => document.querySelector('.ab .cb-head')?.innerText);
+    await V.shot('act2_board');
+    await V.press('.ab-x');
+    report.act2 = { head, rep: await V.page.evaluate(() => window.__game.state.rep), mode: await V.page.evaluate(() => window.__game.modeName), B: await V.page.evaluate(() => window.__game.state.act.act2) };
+    if (report.act2.rep !== -50 || !/Not So Super/.test(head || '')) throw new Error(`Act 2 start wrong: ${JSON.stringify(report.act2).slice(0, 300)}`);
+    return V;
+  });
+
+  // The gate counting and the suit hook, then ?act=act2lair's beat and ?act=act2boss's state.
+  await flow('act2gates', async () => {
+    const V = await game('act=act2&flight=2d');
+    await V.through(() => window.__game.state.act?.act2?.opening === 'done' && !document.querySelector('#modal-root .modal-back'), 60000);
+    const counted = await V.page.evaluate(async () => {
+      const act = window.__game.act;
+      for (const z of [{ mode: 'rldwalk', venue: 'Red Light Den' }, { mode: 'asylum', venue: 'Ravenmoor Asylum' }, { mode: 'special', venue: 'High-Roller Suite' }, { mode: 'investigate', def: { id: 'spiked', crime: 'the spiked-drinks scandal' } }]) await act.onZoneWin(z);
+      act.count('promotions');
+      const finds = [act.suitFind('cape', true), act.suitFind('red skirt'), act.suitFind('boots', false), act.suitFind('nonsense')];
+      for (let i = 0; i < 6; i++) act.suitFind('briefs');
+      return { counts: window.__game.state.act.act2.counts, suit: window.__game.state.act.act2.suit, finds };
+    });
+    report.act2gates = counted;
+    const c = counted.counts, s = counted.suit;
+    if (c.rldwalk !== 1 || c.asylum !== 1 || c.casino !== 1 || c.clubs !== 0 || c.investigations !== 1 || c.promotions !== 1 || s.cape !== 1 || s.skirt !== 1 || s.boots !== 1 || s.briefs !== 5) throw new Error(`gate counts wrong: ${JSON.stringify(counted)}`);
+    const errs = [...V.errors];
+    await V.close();
+    const L = await game('act=act2lair&flight=2d');
+    await L.page.waitForTimeout(1500);
+    const lit = await L.through(() => window.__game.state.act?.act2?.beats?.lair && !document.querySelector('#modal-root .modal-back'), 40000);
+    report.act2lair = { lit, lairOpen: await L.page.evaluate(() => window.__game.state.act.act2.lairOpen), rep: await L.page.evaluate(() => window.__game.state.rep) };
+    if (!lit) throw new Error('act2lair: the lair beat never played');
+    errs.push(...L.errors);
+    await L.close();
+    const Bo = await game('act=act2boss&flight=2d');
+    await Bo.page.waitForTimeout(1500);
+    report.act2boss = await Bo.page.evaluate(() => { const B = window.__game.state.act.act2; return { bossReady: B.bossReady, lairOpen: B.lairOpen, met: window.__game.act.two.gatesMet() }; });
+    if (!report.act2boss.bossReady || !report.act2boss.met) throw new Error('act2boss state wrong');
+    Bo.errors.unshift(...errs);
+    return Bo;
   });
 
   fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(report, null, 2));

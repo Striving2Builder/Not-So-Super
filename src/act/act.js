@@ -3,7 +3,11 @@
 // story beats on the rank-ups, runs the Polaroid calls and the impostor sightings, opens the hotel's
 // 13th floor once every gate is met, and shows it all on the act board. State lives in
 // state.act (saved with the game). game.act is the one instance; the overworld ticks it.
+// The game runs one act at a time: Act 1 until complete(), then Act 2 (act2run.js, its state in
+// state.act.act2; this class hands its hooks over to this.two once Act 1 is done).
 import { ACT1, LIEUTENANTS, MASQ, GATES, BEATS, TRAILS } from './act1.js';
+import { ACT2 } from './act2.js';
+import { Act2 } from './act2run.js';
 import { spotCall, impostorize, fakeStrength } from './spot.js';
 import { makePolaroid } from '../polaroids.js';
 import { showNewspaper } from '../newspaper.js';
@@ -49,7 +53,13 @@ export class Act {
     this.queue = [];
     this.sightT = SIGHT.first;
     this.busy = false;
+    this.two = new Act2(this); // Act 2, once Act 1 is complete
   }
+
+  /** Act 2's state once it has begun (null during Act 1). */
+  get A2() { return this.two.B; }
+  /** The act running now (the pause menu's note). */
+  title() { return this.A2 ? ACT2.title : ACT1.title; }
 
   /** This game's act state (made on first use, so old saves pick the story up where they are). */
   get A() {
@@ -65,14 +75,16 @@ export class Act {
     const m = /[?&]act=(\w+)/.exec(location.search);
     if (!m) return;
     const A = st.act;
-    if (m[1] === 'lair' || m[1] === 'boss') {
+    const two = /^act2(lair|boss)?$/.test(m[1]);
+    if (m[1] === 'lair' || m[1] === 'boss' || two) {
       Object.assign(A.counts, { clubs: GATES.clubs, warehouses: GATES.warehouses, asylum: GATES.asylum, factory: GATES.factory, entertainment: GATES.entertainment });
       for (const l of LIEUTENANTS) A.unmasked[l.id] = true;
       A.fakes = Math.max(A.fakes, GATES.fakes);
       for (const b of BEATS) A.beats[b.id] = true;
       st.rep = Math.max(st.rep, GATES.rep);
-      if (m[1] === 'boss') for (let i = 0; i < 5; i++) A.seals[i] = true;
+      if (m[1] === 'boss' || two) for (let i = 0; i < 5; i++) A.seals[i] = true;
     }
+    if (two) this.two.applyDebug(st, m[1]); // (Act 1 done, then Act 2's start, its gates met, or its boss)
     if (m[1] === 'local' || m[1] === 'guardian') {
       st.rep = Math.max(st.rep, m[1] === 'local' ? 60 : 150);
     }
@@ -111,6 +123,7 @@ export class Act {
   /** A mission won (from main.js endZone): count it toward the gates; a club case unmasks. */
   async onZoneWin(zone) {
     const A = this.A;
+    if (A?.done && A.act2) return this.two.onZoneWin(zone);
     if (!A || A.done) return;
     const c = A.counts, V = VENUES[zone.venue];
     if (zone.clubCase || V?.club || V?.kind === 'club') c.clubs++;
@@ -194,8 +207,9 @@ export class Act {
     const A = this.A, st = this.g.state;
     if (!A || ow.attract) return;
     const band = ow.view3d?.city3?.hotelBand;
-    if (band) band.visible = !!A.lairOpen; // the hotel's 13th floor, lit
-    if (!A.done) {
+    if (band) band.visible = !!(A.lairOpen || A.act2?.lairOpen); // the hotel's 13th floor, lit (Act 2: its new floor)
+    if (A.done) this.two.update(dt, ow); // Act 2 (nothing until Act 1 is complete)
+    else {
       for (const b of BEATS) if (!A.beats[b.id] && !this.queue.some((q) => q.beat === b) && st.rep >= b.rep) this.queue.push({ beat: b });
       if (!A.lairOpen && A.beats.guardian && this.gatesMet()) { A.lairOpen = true; st.save(); this.queue.push({ lair: true }); }
       if (A.lairOpen) this.ensureHotel(ow);
@@ -211,6 +225,7 @@ export class Act {
 
   async play(ev, ow) {
     const A = this.A, st = this.g.state;
+    if (ev.two) return this.two.play(ev, ow);
     if (ev.beat) {
       const b = ev.beat;
       A.beats[b.id] = true; st.save();
@@ -253,13 +268,19 @@ export class Act {
 
   // ------------------------------------------------------------------ Polaroids in the city
   /** After Local Hero, Polaroids turn up whatever her reputation (the frame-up): most are fakes. */
-  straysOn() { const A = this.A; return !!(A && A.beats.local && !A.done); }
+  straysOn() { const A = this.A; return !!(A && A.beats.local && !A.done) || this.two.straysOn(); }
   /** Until the fakes gate is met, Polaroids turn up faster and stay longer (polaroids.js stepStrays). */
-  straysShort() { return this.straysOn() && this.A.fakes < GATES.fakes; }
-  strayFake() { return chance(this.straysShort() ? STRAY_FAKE_SHORT : STRAY_FAKE); }
+  straysShort() { return this.two.on() ? this.two.straysShort() : this.straysOn() && this.A.fakes < GATES.fakes; }
+  strayFake() { return this.two.on() ? this.two.strayFake() : chance(this.straysShort() ? STRAY_FAKE_SHORT : STRAY_FAKE); }
+
+  /** Act 2: a find toward a piece of her stolen suit (act2run.js; the RLD Walks' "Which one is hers?"). */
+  suitFind(piece, real = true) { return this.two.suitFind(piece, real); }
+  /** Act 2: one toward a gate from elsewhere (e.g. 'promotions', 'casino'). */
+  count(id, n = 1) { return this.two.count(id, n); }
 
   /** She dove on a Polaroid: the call. Returns once it's settled. */
   async callPolaroid(z) {
+    if (this.two.on()) return this.two.callPolaroid(z);
     const A = this.A, st = this.g.state;
     const pic = await makePolaroid();
     const fakePic = z.fake ? impostorize(pic, fakeStrength(A.fakes), POL_RECT) : null;
@@ -369,6 +390,7 @@ export class Act {
   /** The act's end (hotel.js, after the boss). */
   async complete() {
     const A = this.A, st = this.g.state;
+    if (A.done && A.act2) return; // (Act 2's ending is phase H's)
     A.done = true; A.lairOpen = false;
     st.addRep(100, 'The Puzzle Maker is behind bars');
     st.save();
@@ -378,13 +400,16 @@ export class Act {
       body: [`The man behind the city's drug ring, and behind months of doctored photos of its heroine, was led out of the hotel's 13th floor in cuffs at dawn. Dr Amos Kell, the chemist behind ${ACT1.drug}, followed in a kryptonite-proof van.`,
         `Police found a gallery of fake Polaroids, a wardrobe of knockoff costumes and a ballroom full of masks. "Every one of those pictures was a lie," said the Commissioner. "Well. Most of them."`],
     });
-    await dialog({ title: 'ACT 1 COMPLETE', text: `<b>The Puzzle Maker</b> and <b>Dr Kell</b> are locked up. The impostors are out of work, and the city believes in its hero again.<span class="hint">But ${ACT1.drug} is still out there… More acts to come. Your patrol goes on.</span>` });
+    await dialog({ title: 'ACT 1 COMPLETE', text: `<b>The Puzzle Maker</b> and <b>Dr Kell</b> are locked up. The impostors are out of work, and the city believes in its hero again.<span class="hint">But ${ACT1.drug} is still out there… and someone has been cooking a stronger cut.</span>` });
+    this.two.begin(); // Act 2: its opening plays back in the sky
   }
 
   // ------------------------------------------------------------------ the act board
-  openBoard() {
+  /** The act board: Act 2's page once Act 2 has begun (page 1 = Act 1's, from its button). */
+  openBoard(page) {
     const A = this.A;
     if (!A) return Promise.resolve();
+    if (A.act2 && page !== 1) return this.two.openBoard();
     const n = Object.keys(A.unmasked).length;
     const cards = LIEUTENANTS.map((l, i) => {
       const on = A.unmasked[l.id];
@@ -408,7 +433,7 @@ export class Act {
             <div class="ab-gates">${rows}</div>
           </div>
         </div>
-        <div class="cb-foot"><span>${status}</span>${A.unsorted ? `<button class="cb-close ab-again">Look again (${A.unsorted})</button>` : ''}<button class="cb-close ab-x">Close</button></div>
+        <div class="cb-foot"><span>${status}</span>${A.unsorted ? `<button class="cb-close ab-again">Look again (${A.unsorted})</button>` : ''}${A.act2 ? '<button class="cb-close ab-p2">Act 2</button>' : ''}<button class="cb-close ab-x">Close</button></div>
       </div>`, 'caseboard actboard');
     el.querySelectorAll('.ab-lt').forEach((c) => c.querySelector('.ab-ph').appendChild(portrait(lookOf(LIEUTENANTS[+c.dataset.i]))));
     drawJigsaw(el.querySelector('.ab-jig canvas'), Math.min(A.fakes, GATES.fakes), GATES.fakes, A.lairOpen || A.done);
@@ -417,7 +442,8 @@ export class Act {
       const key = (e) => { if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); close(); } };
       addEventListener('keydown', key, true);
       el.querySelector('.ab-x').addEventListener('click', () => close());
-      el.querySelector('.ab-again')?.addEventListener('click', async () => { close(); await this.lookAgain(); this.openBoard(); });
+      el.querySelector('.ab-p2')?.addEventListener('click', () => { removeEventListener('keydown', key, true); closeModal(el); sfx.click(); resolve(this.two.openBoard()); });
+      el.querySelector('.ab-again')?.addEventListener('click', async () => { close(); await this.lookAgain(); this.openBoard(1); });
     });
   }
 }
