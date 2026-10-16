@@ -356,8 +356,8 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     const head = await V.page.evaluate(() => document.querySelector('.ab .cb-head')?.innerText);
     await V.shot('act2_board');
     await V.press('.ab-x');
-    report.act2 = { head, walk: await V.page.evaluate(() => window.__walkSeen || null), rep: await V.page.evaluate(() => window.__game.state.rep), mode: await V.page.evaluate(() => window.__game.modeName), B: await V.page.evaluate(() => window.__game.state.act.act2) };
-    if (report.act2.rep !== -50 || !report.act2.walk?.opening || !/Not So Super/i.test(head || '')) throw new Error(`Act 2 start wrong: ${JSON.stringify(report.act2).slice(0, 300)}`);
+    report.act2 = { head, walk: await V.page.evaluate(() => window.__walkSeen || null), skin: await V.page.evaluate(async () => { const h = await import('/src/hero3d.js'); for (let i = 0; i < 100 && h.wornSkin() !== h.ACT2_SKIN; i++) await new Promise((r) => setTimeout(r, 100)); return h.wornSkin(); }), rep: await V.page.evaluate(() => window.__game.state.rep), mode: await V.page.evaluate(() => window.__game.modeName), B: await V.page.evaluate(() => window.__game.state.act.act2) };
+    if (report.act2.rep !== -50 || !report.act2.walk?.opening || report.act2.skin !== 'croptop' || !/Not So Super/i.test(head || '')) throw new Error(`Act 2 start wrong: ${JSON.stringify(report.act2).slice(0, 300)}`);
     return V;
   });
 
