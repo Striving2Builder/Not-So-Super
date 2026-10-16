@@ -140,6 +140,8 @@ export class Act2 {
   suitFind(piece, real = true) {
     const B = this.B;
     if (!B || B.done) return null;
+    // act2.md: finds only happen while her rep is negative (the pendulum's price)
+    if (this.g.state.rep >= 0) { toast(LINES.cold, 'info'); return null; }
     let id = pieceOf(piece);
     if (!id) id = ['cape', 'boots', 'briefs'].sort((a, b) => B.suit[a] - B.suit[b])[0]; // (an unknown piece: the one furthest behind)
     const P = PIECES.find((p) => p.id === id);

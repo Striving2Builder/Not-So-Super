@@ -92,6 +92,7 @@ export const BEATS = {
 
 /** suitFind's toasts: a copy (finds 1-4) or the real piece (find 5). */
 export const LINES = {
+  cold: "The trail's gone cold. Her suit only turns up where a hero isn't welcome (rep below zero).",
   copy: [
     'A stained copy, but the stitching points to the next one.',
     'Close, but not hers. A laundry tag on it names another address.',
