@@ -156,6 +156,7 @@ export class Act2 {
     const B = this.B;
     if (!B || B.done) return;
     const q = this.act.queue, queued = () => q.some((e) => e.two);
+    for (const z of ow.zones) if (z.hotel && !z.act2) ow.removeZone(z); // (Act 1's floor 13, if it was still on the map)
     if (B.opening !== 'done') {
       if (!queued() && !this.act.busy && this.g.modeName === 'overworld') q.push({ two: 'start' }); // (the wake-up, or the papers after it)
       return;
@@ -281,7 +282,7 @@ export class Act2 {
       return card(back, i, P.glyph, P.name, `Finds ${n}/${FINDS}`, back ? 'Hers. Stained, but hers.' : esc(P.from), back ? 'BACK' : '');
     }).join('');
     const clueOn = CLUES.some((c) => B.clues[c.id]);
-    const clues = card(clueOn, 5, clueOn ? CLUES.map((c) => c.glyph).join('') : '?', 'The first clues', clueOn ? 'Polaroids and a note' : 'Not found yet',
+    const clues = card(clueOn, 5, clueOn ? CLUES[0].glyph : '?', 'The first clues', clueOn ? 'Polaroids and a note' : 'Not found yet',
       clueOn ? CLUES.map((c) => c.line).join(' ') : 'Wake up first.', '');
     const rows = this.gates().map((r) => `<div class="ab-gate${r.have >= r.need ? ' ok' : ''}"><span>${r.have >= r.need ? '✓' : '•'} ${esc(r.label)}</span><b>${Math.min(r.have, r.need)}/${r.need}</b></div>`).join('');
     const suitTxt = PIECES.map((P) => `${P.name} ${Math.min(FINDS, B.suit[P.id] || 0)}/${FINDS}`).join(' · ');

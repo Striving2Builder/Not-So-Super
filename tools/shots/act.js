@@ -25,7 +25,7 @@ const W = +arg('--w', 844), H = +arg('--h', 390);
 const EXTRA = arg('--query', ''); // e.g. --query '&camdist=closest' (appended to every page's query)
 const glOf = (V) => V.page.evaluate(() => { const r = window.__game.mode.renderer.info.render; return { calls: r.calls, tris: r.triangles }; });
 const OUT = path.join(ROOT, 'shots', LABEL, 'act');
-const ALL = ['board', 'trail', 'gates', 'polaroid', 'unmask', 'sighting', 'tower', 'hotel', 'kell', 'seal', 'ballroom', 'act1save', 'act2', 'act2gates'];
+const ALL = ['board', 'trail', 'gates', 'polaroid', 'unmask', 'sighting', 'tower', 'hotel', 'kell', 'seal', 'ballroom', 'act1save', 'act2', 'act2gates', 'act2handoff'];
 const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
 
 (async () => {
@@ -342,7 +342,7 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     await V.press('.ab-x');
     const after = await V.page.evaluate(() => { const A = window.__game.state.act; return { title: window.__game.act.title(), act2: A.act2 || null, done: A.done, counts: A.counts, fakes: A.fakes, rep: window.__game.state.rep }; });
     report.act1save = { head, ...after, same: JSON.stringify(after.counts) === JSON.stringify(before.counts) && after.fakes === before.fakes };
-    if (after.act2 || after.done || !report.act1save.same || !/Puzzle Maker/.test(head || '')) throw new Error(`Act 1 save changed: ${JSON.stringify(report.act1save)}`);
+    if (after.act2 || after.done || !report.act1save.same || !/Puzzle Maker/i.test(head || '')) throw new Error(`Act 1 save changed: ${JSON.stringify(report.act1save)}`);
     return V;
   });
 
@@ -357,7 +357,18 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     await V.shot('act2_board');
     await V.press('.ab-x');
     report.act2 = { head, rep: await V.page.evaluate(() => window.__game.state.rep), mode: await V.page.evaluate(() => window.__game.modeName), B: await V.page.evaluate(() => window.__game.state.act.act2) };
-    if (report.act2.rep !== -50 || !/Not So Super/.test(head || '')) throw new Error(`Act 2 start wrong: ${JSON.stringify(report.act2).slice(0, 300)}`);
+    if (report.act2.rep !== -50 || !/Not So Super/i.test(head || '')) throw new Error(`Act 2 start wrong: ${JSON.stringify(report.act2).slice(0, 300)}`);
+    return V;
+  });
+
+  // Act 1's ending (the boss beaten, act.complete()) hands over to Act 2's opening.
+  await flow('act2handoff', async () => {
+    const V = await game('act=boss&flight=2d');
+    await V.through(() => window.__game.overworld.zones.some((z) => z.hotel) && !document.querySelector('#modal-root .modal-back'), 60000);
+    V.page.evaluate(() => window.__game.act.complete());
+    const ok = await V.through(() => window.__game.state.act.act2?.opening === 'done' && !document.querySelector('#modal-root .modal-back'), 60000);
+    report.act2handoff = await V.page.evaluate(() => ({ done: window.__game.state.act.done, opening: window.__game.state.act.act2?.opening, rep: window.__game.state.rep, hotel: window.__game.overworld.zones.some((z) => z.hotel), title: window.__game.act.title() }));
+    if (!ok || report.act2handoff.rep !== -50) throw new Error(`hand-off: ${JSON.stringify(report.act2handoff)}`);
     return V;
   });
 
@@ -365,6 +376,20 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
   await flow('act2gates', async () => {
     const V = await game('act=act2&flight=2d');
     await V.through(() => window.__game.state.act?.act2?.opening === 'done' && !document.querySelector('#modal-root .modal-back'), 60000);
+    // with the level registered (a stand-in for job I's mode): the opening starts a walk with opening: true
+    report.act2walk = await V.page.evaluate(async () => {
+      const g = window.__game, B = g.state.act.act2, real = g.startZone;
+      let got = null;
+      g.modes.rldwalk = {}; g.rldWalkFields = (o) => ({ kind: 'special', venue: 'Red Light Den', name: 'RLD Walk', fromFields: true, ...o });
+      g.startZone = (z) => { got = z; };
+      B.opening = 'pending'; g.act.two.walkLive = false;
+      for (let i = 0; i < 300 && !got; i++) { const el = [...document.querySelectorAll('#modal-root .modal-back')].pop(); if (el) (el.querySelector('.opt, button') || el).click(); await new Promise((r) => setTimeout(r, 100)); }
+      g.startZone = real; delete g.modes.rldwalk; delete g.rldWalkFields;
+      if (!got) return { why: { q: g.act.queue.length, busy: g.act.busy, mode: g.modeName, rising: g.overworld.rising, diving: !!g.overworld.diving, opening: B.opening, modal: document.querySelector('#modal-root .modal-back')?.innerText.slice(0, 80) } };
+      return got && { mode: got.mode, opening: got.opening, district: got.district, fromFields: got.fromFields, x: Math.round(got.x) };
+    });
+    if (!report.act2walk?.opening || report.act2walk.mode !== 'rldwalk' || report.act2walk.district !== 'redlight') throw new Error(`opening walk not started: ${JSON.stringify(report.act2walk)}`);
+    await V.through(() => window.__game.state.act.act2.opening === 'done' && !document.querySelector('#modal-root .modal-back'), 30000);
     const counted = await V.page.evaluate(async () => {
       const act = window.__game.act;
       for (const z of [{ mode: 'rldwalk', venue: 'Red Light Den' }, { mode: 'asylum', venue: 'Ravenmoor Asylum' }, { mode: 'special', venue: 'High-Roller Suite' }, { mode: 'investigate', def: { id: 'spiked', crime: 'the spiked-drinks scandal' } }]) await act.onZoneWin(z);
@@ -374,6 +399,12 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
       return { counts: window.__game.state.act.act2.counts, suit: window.__game.state.act.act2.suit, finds };
     });
     report.act2gates = counted;
+    V.page.evaluate(() => window.__game.act.callPolaroid({ fake: true, where: 'pinned to a lamp post' })); // (the cult's Polaroids)
+    await V.page.waitForSelector('.spot', { timeout: 15000 });
+    await V.page.waitForTimeout(400);
+    await V.press('.spot-b.fake');
+    await V.through(() => !document.querySelector('#modal-root .modal-back') && !document.querySelector('.spot'), 15000);
+    report.act2polaroid = await V.page.evaluate(() => { const B = window.__game.state.act.act2; return { polaroids: B.counts.polaroids, unsorted: B.unsorted, on: window.__game.act.straysOn(), short: window.__game.act.straysShort() }; });
     const c = counted.counts, s = counted.suit;
     if (c.rldwalk !== 1 || c.asylum !== 1 || c.casino !== 1 || c.clubs !== 0 || c.investigations !== 1 || c.promotions !== 1 || s.cape !== 1 || s.skirt !== 1 || s.boots !== 1 || s.briefs !== 5) throw new Error(`gate counts wrong: ${JSON.stringify(counted)}`);
     const errs = [...V.errors];
