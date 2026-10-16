@@ -23,9 +23,10 @@ you can build"). This file is the build board. A new thread picks the build up f
 | 2 | **B**: the pendulum (negative-rep doors, impostors' rep → Polaroids, promotions as map events) | B | **merged** c872e85 (`DISGRACED_DOORS` in act2.js = the user's table; flows incl. act2promo pass, 0 errors) |
 | 3 | C2: the knockoff switch, the 5 × 5 suit finds, the act board's suit | C | |
 | 3 | **D**: the casino (High-Roller Suite plan, high card, 21, stakes) | D | running (handoff `act2-d.md`) |
-| 3 | **F**: the Act 2 asylum (always high, powers lost, costume clue, the spree counter) | F | running (handoff `act2-f.md`) |
+| 3 | **F**: the Act 2 asylum (always high, powers lost, costume clue, the spree counter) | F | **merged** 5af8b89 (`src/asylum2.js`; flow act2asylum; debug `?act=act2&zone=asylum&flight=2d`) |
 | 4 | G: Recall + drug finds | G | |
-| 5 | E: the factory lines · H: the hall of mirrors + Supergurl | E, H | |
+| 3 | **E**: the factory lines (hotel engine, 4 levers, the foreman) | E | running (handoff `act2-e.md`) |
+| 5 | H: the hall of mirrors + Supergurl | H | |
 
 ## The contract between A and I (wave 1)
 - I owns `src/rld/` (new folder) and registers a zone mode **`rldwalk`** in `main.js` (`modes`,
@@ -46,3 +47,4 @@ you can build"). This file is the build board. A new thread picks the build up f
 - 2026-10-16: A merged (5ca5eed); its contract notes sent to I. B launched in A's slot.
 - 2026-10-16: B merged (c872e85). Director: `suitFind` refuses while rep ≥ 0 (act2.md rule), so jobs I/C2/D needn't check. Open for the user: which clubs go in `DISGRACED_DOORS`; Blender open for C1.
 - 2026-10-16: I merged (7c78493). Director fixed `tools/shots/act.js` for the real walk (flows leave it by abort; act2 asserts the walk opened with `opening`). All 11 Act 1 + 5 Act 2 + 5 RLD flows: 0 errors. Wave 3: D + F launched (C1 waits on Blender, C2 after D).
+- 2026-10-16: F merged (5af8b89); act 6 flows + rld 5 flows 0 errors. E launched in F's slot.
