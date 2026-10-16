@@ -89,11 +89,13 @@ export class RouteFX {
     if (!plain || !ow.view3d) { this.since = 0; return; }
     this.since += dt;
     if (this.since < this.wait || this.dir.clock - (this.dir.lastAny ?? -99) < this.wait) return;
-    const kind = this.pickKind(), p = this.place(kind);
+    // (r11 F2c: every kind in turn, at her height then a band up: dense towers used to block it for ~28 s)
+    let p = null;
+    for (const kind of [this.pickKind(), ...KINDS]) { if (kind === this.last) continue; p = this.place(kind) || (kind !== 'smoke' ? this.place(kind, 160) : null); if (p) break; }
     this.since = this.wait - 2; // (nowhere to put it here: try again in a couple of seconds)
     if (!p) return;
-    this.p = p; this.since = 0; this.wait = rand(...ROUTE.after); this.last = kind;
-    this.dir.note({ kind: `route:${kind}` }, 'offered');
+    this.p = p; this.since = 0; this.wait = rand(...ROUTE.after); this.last = p.kind;
+    this.dir.note({ kind: `route:${p.kind}` }, 'offered');
     this.dir.lastAny = this.dir.clock;
   }
 
@@ -112,8 +114,8 @@ export class RouteFX {
     return true;
   }
 
-  place(kind) {
-    const ow = this.ow, h = ow.hero, city = ow.g.city, a0 = this.line(), z = Math.max(h.z, 140);
+  place(kind, up = 0) {
+    const ow = this.ow, h = ow.hero, city = ow.g.city, a0 = this.line(), z = Math.max(h.z, 140) + up;
     for (let i = 0; i < 6; i++) {
       const ang = a0 + rand(-0.12, 0.12), d = rand(...ROUTE.ahead);
       const x = h.x + Math.cos(ang) * d, y = h.y + Math.sin(ang) * d;
