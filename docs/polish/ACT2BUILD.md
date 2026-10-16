@@ -24,9 +24,9 @@ you can build"). This file is the build board. A new thread picks the build up f
 | 3 | C2: the knockoff switch, the 5 × 5 suit finds, the act board's suit | C | |
 | 3 | **D**: the casino (High-Roller Suite plan, high card, 21, stakes) | D | **merged** 749cd64 (`src/club3d/casino.js`, `cards.js`; `node tools/shots/casino.js` 3 flows 0 errors; debug `?zone=casino&casinorig=win|lose`) |
 | 3 | **F**: the Act 2 asylum (always high, powers lost, costume clue, the spree counter) | F | **merged** 5af8b89 (`src/asylum2.js`; flow act2asylum; debug `?act=act2&zone=asylum&flight=2d`) |
-| 4 | **G**: Recall + drug finds | G | running (handoff `act2-g.md`) |
+| 4 | **G**: Recall + drug finds | G | **merged** 2731420 (`src/act/recall.js`; `node tools/shots/recall.js` 3 flows 0 errors) |
 | 3 | **E**: the factory lines (hotel engine, 4 levers, the foreman) | E | **merged** 05c9773 (`src/factory/`; `node tools/shots/factory.js` 4 flows; debug `?zone=factory&act=act2lair&flight=2d`) |
-| 5 | **H1**: the hotel's new floor, the hall of mirrors (games, puzzles, traps, fake reflections) | H | running (handoff `act2-h1.md`) |
+| 5 | **H1**: the hotel's new floor, the hall of mirrors (games, puzzles, traps, fake reflections) | H | running, 2nd try (the 1st hit the spend limit before writing code) |
 | 5 | H2: the Supergurl boss fight (coat + mask off, the drug meter, the mirror call, the back-and-forth, the act's end) | H | next |
 
 ## The contract between A and I (wave 1)
@@ -57,3 +57,6 @@ you can build"). This file is the build board. A new thread picks the build up f
 - 2026-10-16: E merged (05c9773; director resolved the `debugZone` conflict again). Director added `ensureCasino`
   (e92324f). All harnesses 0 errors: factory 4, act 8 (hotel, kell, act1save, act2*), casino 3, rld 5. Factory perf:
   230 calls / 63k tris vs the hotel's 192 / 35k at the same spot (hunters + workers; phones get fewer). H1 launched.
+- 2026-10-16: the monthly spend limit stopped G (nearly done) and H1 (still reading). User: "resume". Director committed
+  G's harness, ran it (3 flows, 0 errors), wrote its handoff, merged (2731420; kept both the map helpers and the
+  recall tick in act2run's update). H1 restarted as a fresh agent from phase-2.

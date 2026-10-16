@@ -21,7 +21,15 @@ Brief: docs/polish/ACT2BUILD.md (job G); design: docs/design/act2.md ("The drug:
   wiring; leave it alone).
 - Act 1 unchanged. A harness flow: a stash taken, a memory clue read over the haze line, the board line.
 
-## Done
-(nothing yet)
+## Done (branch act2-g; the builder hit the spend limit while writing the flows; the director committed the
+harness, ran it and merged: 2731420)
+- `src/act/recall.js` (`Recall`, `game.act.two.recall`): `NIGHT` = the five beats; `RECALL` tuning; the board
+  line "The night: n/5 remembered · <beat>"; `feed(beat)` = a clips.js frame on the LIVE feed + an ink-wash card.
+- Memory clues: `memoryClue(zone, pos, where, what)` (sober: "it means something…", over the haze: a flashback);
+  placed in club3d (club3d.js), the casino (casino.js), RLD Walks (walk.js), the Act 2 asylum (asylum2.js).
+- Stain reads: `stainRead(g, where)` from Which one is hers? (whichone.js) and a won casino table (casino.js).
+- Stashes: `STASH_ITEM` (+18 intox, a squirt); a rooftop stash on the map (`spawnStash`, `actDive: 'stash'`),
+  in the brawler's streets (brawler.js, brawlactors.js) and the 2D investigations (investigate.js).
+- Harness `node tools/shots/recall.js` (flows sky, club, act1): 0 errors.
 
 ## Next / notes
