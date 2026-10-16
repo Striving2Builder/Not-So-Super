@@ -29,6 +29,7 @@ function layout(M) {
   const ante = R('ante', ANTE.x0, ANTE.z0, ANTE.x1, ANTE.z1, M.lobbyFloor, M.ballWall, { hall: true });
   lobby.gap('n', 0, GHW * 2, false); gallery.gap('s', 0, GHW * 2, false);
   gallery.gap('n', 0, GHW * 2, false); ante.gap('s', 0, GHW * 2, false);
+  const boss = bossLayout(R, M, ante); // (job H2: Supergurl's room behind the sealed door)
   let ri = 0;
   for (let k = 0; k < SLOTS; k++) {
     const z1 = -1 - SLOT * k, z0 = z1 - SLOT, zc = (z0 + z1) / 2;

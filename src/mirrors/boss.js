@@ -34,7 +34,7 @@ export const FIGHT = {
   melee: { reach: 2.1, wind: 0.5, land: 1.7, dose: 8, push: 1.8 },
   vent: { n: 3, cycle: 6, on: 1.7, r: 1.1, rate: 20 },
   reach: 1.9, shard: 6, callEvery: 6,
-  decoys: { full: 5, mid: 4, min: 2 },
+  decoys: { full: 5, mid: 3, min: 2 },
 };
 const PINK = 0xff3fb8;
 const HAZE_FLOOR = INTOX_HAZE + 10; // (the haze phase is fought high)
@@ -107,7 +107,8 @@ export const bossMethods = {
     this.scene.add(gurl.group);
     const q = quality().look3d;
     b.side = []; b.decoys = [];
-    if (q !== 'min') for (const src of [this.hero, gurl.group]) for (const s of [-1, 1]) { const t = reflection(src, new THREE.Vector3(s * BOSS_W, 0, 0), 0); t.src = src; this.scene.add(t.holder); b.side.push(t); }
+    if (q !== 'min') for (const src of [this.hero, gurl.group]) for (const s of [-1, 1]) { const t = reflection(src, new THREE.Vector3(s * BOSS_W, 0, 0), 0); Object.assign(t, { src, s }); this.scene.add(t.holder); b.side.push(t); }
+    b.sideAll = q === 'full'; // (else only the twin in the nearer wall)
     const n = FIGHT.decoys[q === 'full' ? 'full' : q === 'min' ? 'min' : 'mid'];
     for (let i = 0; i < n; i++) { const t = reflection(gurl.group, R.c, 0); t.holder.visible = false; t.off = 0; this.scene.add(t.holder); b.decoys.push(t); }
     this.rollPlanes();
@@ -204,7 +205,7 @@ export const bossMethods = {
     if (!gurl) return;
     gurl.update(dt);
     // the side mirrors: anyone in the room has a twin in the glass
-    for (const t of b.side || []) { t.holder.visible = t.src.visible && t.src.position.z < R.z1 + 0.5; if (t.holder.visible) t.sync(); }
+    for (const t of b.side || []) { t.holder.visible = t.src.visible && t.src.position.z < R.z1 + 0.5 && (b.sideAll || t.s * t.src.position.x >= 0); if (t.holder.visible) t.sync(); }
     this.updateDecoys(dt);
     if (!b.fighting || b.phase === 'down') return;
     if (this.busy) return;
@@ -382,7 +383,10 @@ export const bossMethods = {
     for (const t of b.decoys) t.off = 0;
     const pts = [{ p: g.clone(), real: true }, ...b.decoys.map((t) => ({ p: reflectPoint(g, c, t.th), t }))];
     const pickN = Math.max(2, Math.min(pts.length, b.phase === 'haze' ? pts.length : 1 + this.decoysUp()));
-    const cand = shuffle([pts[0], ...shuffle(pts.slice(1)).slice(0, pickN - 1)]);
+    const apart = [pts[0]]; // (reflections standing on top of her, or of each other, sit this one out)
+    for (const q of shuffle(pts.slice(1))) if (apart.length < pickN && apart.every((o) => o.p.distanceTo(q.p) > 1.2)) apart.push(q);
+    if (apart.length < 2) { b.gurl.pos.set(c.x + 2.5, 0, c.z - 1.5); g.copy(b.gurl.pos); apart.push(...pts.slice(1, 2).map((q) => ({ p: reflectPoint(g, c, q.t.th), t: q.t }))); }
+    const cand = shuffle(apart);
     for (const t of b.decoys) { const on = cand.some((q) => q.t === t); t.holder.visible = on; if (on) t.sync(); }
     this.callTruth = cand.findIndex((q) => q.real); // (the harness reads it)
     const i = await this.callOverlay(cand.map((q) => this.screenOf(q.p, 1.0)));
@@ -420,8 +424,18 @@ export const bossMethods = {
       el.className = 'mcall';
       el.style.cssText = 'position:fixed;inset:0;z-index:60;pointer-events:none';
       el.innerHTML = `<div style="position:absolute;left:50%;top:8px;transform:translateX(-50%);max-width:92vw;text-align:center;font:900 22px Impact,'Arial Black',sans-serif;color:#ffd21a;text-shadow:2px 2px 0 #000,-1px -1px 0 #000;letter-spacing:1px">${CALL.title}<div style="font:700 13px system-ui,sans-serif;color:#fff;text-shadow:1px 1px 0 #000;letter-spacing:0">${CALL.hint}</div></div>`;
-      spots.forEach((s, i) => {
-        const x = s ? clamp(s.x, 36, this.g.w - 36) : 60 + i * 70, y = s ? clamp(s.y, 70, this.g.h - 40) : this.g.h / 2;
+      const P = spots.map((s, i) => ({ x: s ? s.x : 60 + i * 70, y: s ? s.y : this.g.h / 2 }));
+      for (let it = 0; it < 24; it++) for (let i = 0; i < P.length; i++) { // (push overlapping rings apart: thumbs need 64 px)
+        for (let j = i + 1; j < P.length; j++) {
+          let dx = P[j].x - P[i].x, dy = P[j].y - P[i].y; const d = Math.hypot(dx, dy) || 0.01;
+          if (d >= 68) continue;
+          if (d < 0.5) { dx = 1; dy = 0.3 * (j - i); }
+          const k = (68 - d) / 2 / Math.hypot(dx, dy);
+          P[i].x -= dx * k; P[i].y -= dy * k; P[j].x += dx * k; P[j].y += dy * k;
+        }
+        for (const p of P) { p.x = clamp(p.x, 36, this.g.w - 36); p.y = clamp(p.y, 76, this.g.h - 36); }
+      }
+      P.forEach(({ x, y }, i) => {
         const bt = document.createElement('button');
         bt.className = 'mc-b'; bt.dataset.i = i;
         bt.style.cssText = `position:absolute;left:${x - 30}px;top:${y - 30}px;width:60px;height:60px;border-radius:50%;border:4px solid #120a16;background:rgba(255,210,26,.28);box-shadow:0 0 0 3px #ffd21a,0 0 16px #ff3fb8;color:#fff;font:900 22px Impact,sans-serif;text-shadow:2px 2px 0 #000;pointer-events:auto;touch-action:manipulation`;
