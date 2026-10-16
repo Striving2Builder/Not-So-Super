@@ -42,7 +42,7 @@ judging blind side-by-side against the AAA games, is wowed (the bar is below).
 | Track | Owns |
 |---|---|
 | T tech debt | `src/main.js` zone flow (club version switch, `modeFor`, `startZone` fallback); `src/clubzone.js` premade-club loading (the `ClubZone` base stays: the asylum and the hotel use it); `src/clubdress.js`, `src/clubmood.js`, `src/nightcase.js` if dead; `src/nightclub/*` except `cases/` and anything v3 imports; premade-only lines in `data.js`, `overworld.js`, `settings.js`, `special3d.js`; `tools/` scripts for the premade clubs; README and ARCHITECTURE.md |
-| L club loop | `worktree-agent-acf0df8fc46297e1d` | 1 done | **L-2: NOT YET**: 2/8 (1 win, 1 tie), 3 / 6.5 / feel 5.5 (L-1 was 0/8, 2.5 / 6 / 5.5) (`critiques/r11/L-2.md`) | **merged** (L2a 42a6e7f, L2b a18038b; round 1): readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
+| L club loop | L2a + L2b merged | 1 done | **L-2: NOT YET**: 2/8 (1 win, 1 tie), 3 / 6.5 / feel 5.5 (L-1 was 0/8, 2.5 / 6 / 5.5) (`critiques/r11/L-2.md`) | **merged** (L2a 42a6e7f, L2b a18038b; round 1): readable bouncer states, tension layer, CCTV on the screens, takedowns, self-talk, touch struggle winnable on hard; 21/21 flows, 0 errors, calls/tris flat. Phone-check: CCTV washed out by stage lights; X-ray tag can sit on her head |
 | V club variety | `src/club3d/`: `plan.js`, `events.js`, `casework.js`, `chatter.js`, `backrooms.js`, `office.js`, `vip.js`, `rooms.js`, `build.js`, `dressing.js`, `vices.js`, `undercover.js`; `src/nightclub/cases/`; new `src/club3d/casegen.js` (+ data files); `CLUB_CASE_LABELS` in `data.js`; `clubCase` in `overworld.js` |
 | F travel | `src/overworld.js` (not the camera), `src/airevents.js`, `src/paparazzi.js`, `src/nav.js`, `src/flightmarks.js`, `src/flightfx3d.js`, `src/polaroids.js` strays, the sightings in `src/act/act.js`, `src/airspace.js`, `src/flightaudio.js`, new flight-moment files |
 | D device fixes (2026-10-14) | D1 `src/club3d/struggle.js` · D2 `src/club3d/danger.js` (+ `formKnot` in `casebeats.js`) · D3 the cages in `build.js` + `story.js` · D4 `src/cape.js`, `src/capefly3d.js`, `src/herolook3d.js`, `src/hero3d.js` · D5 the camera in `club3d.js` `render()`, `zonekit.js` camera constants, the crowd dither in `crowd.js` |
@@ -103,7 +103,12 @@ T 8911–8919 · L 8921–8929 · V 8931–8939 · F 8941–8949 · director and
 4. After merges: push `phase-2`. Publishing to `main` and the `testdrive-*` tags only when the user asks.
 5. Keep this board current after every merge or decision. Stop the loop when every track is done.
 
-## Board (2026-10-15: track D phone-tested OK; wave = V-1 critic + L2a + F2a)
+## Board (PAUSED 2026-10-15 by the user after the V2 + F2c wave; nothing running)
+**Resume here (in order):** 1) V-2 critic on V2's pack (`--gen 1-8` frames in `worktree-agent-abbacccd4eff984fb`'s
+`shots/r11V2/`: build pairs with blind.py from that worktree, ≤5 strips); 2) F-4 critic on F2c's pack (`shots/r11F2c/`
+in `worktree-agent-a638615b8eaae9db4`: curate approach/close/verdict/payoff stills into a `-crit` label first, look at a
+sheet before the critic: verification-first); 3) L round 3 (brief in the Log, 2026-10-15 L-2 entry); 4) F/V next rounds
+from their critics; 5) T round 2. The spend limit stopped 4 builders this round: keep jobs ≤150k, ≤2 at once.
 | Track | Branch | Round | Last critic | State |
 |---|---|---|---|---|
 | T tech debt | `worktree-agent-a047ac9311b1f985f` | 1 done | n/a (regression pack `shots/r11T-pack/`) | **merged** (78030b3): v1 + v2 gone, -6,052 lines, -176 KB JS at startup, 0 errors in every area |
@@ -326,3 +331,7 @@ the beats' lines in `casebeats.js`) and may edit them by hand: add new lines, ne
   (`worktree-agent-a638615b8eaae9db4`): payoff in screen space round her (proof frames in its handoff), LOS halo, washer
   on the facing facade, route content every 5-7 s (`route.js`), one text lane. The director runs both packs + V2's
   regression itself, then merges, then the critics (V-2, F-4).
+- 2026-10-16: V2 + F2c merged (director ran their packs): V2 gen 1-8 + 27 regular flows, 0 errors, calls ≤+3% / tris ≤+0.5%;
+  F2c all 7 moments won, commute 13 offers (6 moments + 7 route pieces), longest dead gap 19.4 s (was ~110 s), flybench
+  ±3.7%. Smoke on the merge: club rave + tunnel flows, gen 5-6, travel car/faller/impostor, act 11 flows: 0 errors.
+  **Paused by the user** after this wave; resume list at the top of the board.

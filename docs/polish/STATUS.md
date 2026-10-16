@@ -10,6 +10,9 @@ critique + cloud handover). The companion docs are [BRIEF.md](BRIEF.md) (the bui
 [handoff/](handoff/) and the critic reports in [critiques/](critiques/).
 
 ## Pick up here (new thread)
+**Round 11 (2026-10-11 → paused 2026-10-15):** start with "Continue round 11: read docs/polish/ROUND11.md"; its board
+has a "Resume here" list. The notes below are from round 10 and older.
+
 **Cloud sessions (2026-10-04):** the next rounds run as Claude Code cloud sessions on the user's cloud
 credit. Read [CLOUD.md](CLOUD.md): setup, what needs the local machine (Blender, iPad, blind critics),
 branch rules (`cloud/<area>-r10`, never push phase-2/main) and the session order: **1) buildings/city
