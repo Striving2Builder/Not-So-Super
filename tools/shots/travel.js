@@ -70,7 +70,7 @@ function installBot() {
     const e = m.e, t = m.target ? m.target() : null;
     const act = () => { switch (m.kind) {
       case 'impostor': { B.band = 0; const d = m.dist(); B.boost = d > 700; return seek(m.x, m.y, { slow: 260 }); }
-      case 'faller': { B.band = nearestBand(e.z); return seek(e.x, e.y + 4, { stopAt: 10, slow: 200 }); } // (up at the washer's height: catch the rig, or them as they fall)
+      case 'faller': { B.band = nearestBand(e.z); return seek(e.vis ? e.vis.x : e.x, e.vis ? e.vis.y : e.y + 4, { stopAt: 10, slow: 200 }); } // (up at the washer's height: catch the rig, or them as they fall)
       case 'car': case 'getaway': {
         // chase at full speed (a "slow" ramp let the 235 u/s car hold her ~60 u off, just outside the
         // 55 u grab), aimed a beat ahead of the car on its road; high over the towers until close
@@ -120,10 +120,11 @@ function installBot() {
     return v;
   };
   B.react = 2.5;
+  B.seek = seek; B.nearestBand = nearestBand;
   // the harness's "slow camera": a moment's first 3 s run at 0.35× sim speed against the wall clock, so
   // the screenshots (each costs real time) catch the approach; the game itself is unchanged
   const tick0 = ow.moments.tick.bind(ow.moments);
-  ow.moments.tick = (rdt) => tick0(rdt) * (B.warp || 1);
+  ow.moments.tick = (rdt) => tick0(rdt) * (ow.events.carry ? 0.3 : B.warp || 1); // (r11 F2c: and the payoff hold, so the stills catch it in her hands)
   inp.axis = () => {
     if (!B.on) return ax();
     let a = null;
@@ -216,14 +217,14 @@ async function playMoment(browser, kind, sc) {
           const P = ow.view3d.projector(), [sx, sy, front] = P.proj(p.x, p.y, p.z ?? 0), W = innerWidth, H = innerHeight, hs = ow.heroScreen || { x: W / 2, y: H / 2 };
           view = !!m && front && sx > W * 0.06 && sx < W * 0.94 && sy > H * 0.1 && sy < H * 0.94 && Math.hypot(sx - hs.x, sy - hs.y) > 45;
         } catch (err) { /* no 3D view */ }
-        return { t: +ow.t.toFixed(2), result: m ? m.result : 'gone', state: m?.state || m?.e?.phase || null, d: m ? Math.round(m.dist()) : null, z: Math.round(ow.hero.z), slow: ow.moments.scale, view, mo: document.body.classList.contains("mo-on"), focus: ow.moments.focus?.kind || null, lens: +(ow.view3d?.cam?.lens || 0).toFixed(1) };
+        return { t: +ow.t.toFixed(2), result: m ? m.result : 'gone', state: m?.state || m?.e?.phase || null, d: m ? Math.round(m.dist()) : null, z: Math.round(ow.hero.z), slow: ow.moments.scale, view, mo: document.body.classList.contains("mo-on"), focus: ow.moments.focus?.kind || null, lens: +(ow.view3d?.cam?.lens || 0).toFixed(1), carry: ow.events.carry?.kind || null, panel: !!document.querySelector('#mo-verdict.on, #mo-unmask.on') };
       }, kind);
       const f = `f${String(n).padStart(3, '0')}_${Math.round(s.t * 1000)}.png`;
       await shotTo(page, path.join(dir, f));
       r.frames.push({ f, ...s });
       n++;
       if (s.result && !settled) settled = Date.now();
-      if (settled && Date.now() - settled > (sc.after || 2500)) break;
+      if (settled && Date.now() - settled > (sc.after || 4500)) break; // (r11 F2c: through the payoff hold)
       await page.waitForTimeout(sc.gap || 300);
     }
     r.result = r.frames.length ? r.frames[r.frames.length - 1].result : null;
@@ -258,7 +259,13 @@ function strip(kind, r) {
     const close = seen.length > 1 ? seen.slice(1).reduce((a, i) => (F[i].d < F[a].d ? i : a), seen[1]) : (res > seen[0] + 1 ? res - 1 : -1);
     still(seen[0], 'a_approach'); if (close >= 0 && close !== seen[0]) { still(close, 'b_close'); idx.add(close); }
   }
-  if (res >= 0) still(Math.min(F.length - 1, res + 1), 'c_verdict');
+  // r11 F2c: the verdict still = the payoff in her hands with the panel up (else the panel, else the frame after)
+  if (res >= 0) {
+    const post = F.map((q, i) => i).filter((i) => i > res);
+    const pay = post.find((i) => F[i].carry && F[i].panel) ?? post.find((i) => F[i].panel) ?? Math.min(F.length - 1, res + 1);
+    still(pay, 'c_verdict'); idx.add(pay);
+    const late = post.filter((i) => F[i].carry && i !== pay).pop(); if (late != null) { still(late, 'd_payoff'); idx.add(late); }
+  }
   for (const i of idx) fs.copyFileSync(path.join(src, F[i].f), path.join(sel, F[i].f));
   const out = path.join(OUT, 'strips', `${kind}.png`);
   try { execFileSync('python', [path.join(__dirname, 'sheet.py'), sel, out, '4', '420'], { stdio: 'pipe' }); } catch (e) { return null; }
@@ -286,6 +293,12 @@ function commuteSetup(every) {
     const legs = window.__legs, t = legs[window.__leg % 2];
     if (!ow.nav.target || Math.hypot(t.x - ow.hero.x, t.y - ow.hero.y) < 400) { window.__leg++; const n = legs[window.__leg % 2]; ow.nav.set({ x: n.x, y: n.y, name: n.name }); }
     B.band = 1;
+    // r11 F2c: a player takes the route content on her line (hoops, slipstream, pigeons, smoke)
+    const rp = M.route?.p;
+    if (rp && !rp.hit || rp?.kind === 'hoops' && rp.next < 3) {
+      const q = rp.kind === 'hoops' ? rp.hoops[rp.next] : rp.kind === 'slip' ? rp.pts[4] : rp;
+      if (q) { B.band = rp.kind === 'smoke' ? 1 : B.nearestBand(q.z); return B.seek(q.x, q.y); }
+    }
     // a long leg: BOOST in bursts (6 s of every 16), like a player in a hurry (the strip shows the speed lines)
     const tw = legs[window.__leg % 2];
     B.boost = Math.hypot(tw.x - ow.hero.x, tw.y - ow.hero.y) > 1400 && (M.clock % 16) < 6;
@@ -330,6 +343,18 @@ async function commute(browser) {
     r.log = await page.evaluate(() => window.__game.overworld.moments.log);
     r.liveSecs = +liveSecs.toFixed(1); r.timeline = timeline;
     r.offers = r.log.filter((q) => q.ev === 'offered').length;
+    // r11 F2c: moments vs route pieces, and the longest stretch of sky with nothing new offered
+    const offT = r.log.filter((q) => q.ev === 'offered').map((q) => q.t);
+    r.momentOffers = r.log.filter((q) => q.ev === 'offered' && !q.kind.startsWith('route:')).length; r.routeOffers = offT.length - r.momentOffers;
+    r.routeTaken = r.log.filter((q) => q.ev === 'taken' && q.kind.startsWith('route:')).map((q) => `${q.t}s ${q.kind}`);
+    // dead air: the longest stretch with no moment live and nothing new offered (a taken moment isn't dead air)
+    let live = 0, from = 0; r.longestGap = 0;
+    for (const q of [...r.log, { t: SECS, ev: 'end', kind: '' }]) {
+      const route = q.kind.startsWith('route:');
+      if (q.ev === 'offered' || q.ev === 'end') { if (!live) r.longestGap = Math.max(r.longestGap, q.t - from); from = q.t; if (q.ev === 'offered' && !route) live++; }
+      else if (!route && q.ev !== 'taken') { live = Math.max(0, live - 1); if (!live) from = q.t; }
+    }
+    r.longestGap = +r.longestGap.toFixed(1);
     r.commute = await page.evaluate(() => ({ commuteSecs: window.__game.overworld.moments.commute, clock: window.__game.overworld.moments.clock }));
   } catch (e) { r.fail = String(e.message || e).split('\n')[0]; }
   await ctx.close();
@@ -355,7 +380,7 @@ async function commute(browser) {
         if (ONLY && !ONLY.split(',').includes(kind)) continue;
         const r = await playMoment(browser, kind, sc);
         r.strip = strip(kind, r);
-        report[kind] = { ...r, frames: r.frames.length, path: r.frames.map((q) => `${q.t}s ${q.state || ''} d${q.d} z${q.z}${q.view ? " V" : ""}${q.mo ? " MO" : ""} f:${q.focus} L${q.lens}${q.result ? ' ' + q.result : ''}`) };
+        report[kind] = { ...r, frames: r.frames.length, path: r.frames.map((q) => `${q.t}s ${q.state || ''} d${q.d} z${q.z}${q.view ? " V" : ""}${q.mo ? " MO" : ""}${q.carry ? " C:" + q.carry : ""}${q.panel ? " P" : ""} f:${q.focus} L${q.lens}${q.result ? ' ' + q.result : ''}`) };
         console.log(kind, JSON.stringify({ result: r.result, frames: r.frames.length, errors: r.errors.slice(0, 3), fail: r.fail, metrics: r.metrics, log: r.log }));
       }
     }

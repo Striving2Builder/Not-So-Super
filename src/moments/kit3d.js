@@ -14,7 +14,7 @@ import { figurePoses, LOOKS, carGeo, heliGeo, rotorGeo, droneGeo, catGeo, stroll
 export const KIT = {
   scale: { person: 1.55, car: 1.35, van: 1.35, heli: 1.0, drone: 2.4, cat: 3.2, stroller: 2.2, wig: 1.6, rig: 1.4, stack: 2.4 },
   card: 2.6,       // Polaroid card size (× its 0.88 × 1.05 m face)
-  max: { drones: 10, cards: 8, hoops: 8, glows: 72, puffs: 64, rings: 5, beams: 6 },
+  max: { drones: 10, cards: 8, hoops: 12, glows: 72, puffs: 64, rings: 5, beams: 6 },
   ink: 2.0,        // ink hull width, CSS px at arm's length (thins with distance)
   inkBold: 4.4,    // r11 F2b: a moment's target (car, washer, chopper, kitten) gets the thick comic outline
 };
