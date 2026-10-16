@@ -32,3 +32,5 @@ on the user's machine with blender-mcp connected (2026-10-16): a default scene, 
 - Pose check (Running / Flying / Jump): no tearing; edge stretch at the midriff / cuffs = the source's.
 
 ## Next / notes
+- User eye: cuffs read as a pale band at game size (could go wider / brighter); V depth `VDIP` in paint_croptop.
+- Not verified in a screenshot that Act 2 swaps the costume live (logic only; flows pass).
