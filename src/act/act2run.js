@@ -30,7 +30,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 export function freshAct2() {
   return {
     id: ACT2.id, opening: 'pending', counts: Object.fromEntries(Object.keys(GATES).filter((k) => k !== 'suit').map((k) => [k, 0])),
-    suit: Object.fromEntries(PIECES.map((p) => [p.id, 0])), clues: {}, beats: {}, unsorted: 0, impAdj: 0, lairOpen: false, bossReady: false, done: false,
+    suit: Object.fromEntries(PIECES.map((p) => [p.id, 0])), clues: {}, beats: {}, unsorted: 0, impAdj: 0, spree: 0, lairOpen: false, bossReady: false, done: false,
   };
 }
 
@@ -152,6 +152,15 @@ export class Act2 {
     if (n >= FINDS) { sfx.win(); toast(`${P.glyph} ${P.name}: ${LINES.real} Your ${P.name.toLowerCase()} is back (${this.suitFinds()}/${GATES.suit})`, 'good'); }
     else toast(`${P.glyph} ${P.name} · find ${n}/${FINDS}: ${LINES.copy[(n - 1) % LINES.copy.length]}`, 'good');
     return { piece: id, n, back: n >= FINDS };
+  }
+
+  /** The cult's crime spree while she's locked up in the asylum (job F): +n, the new total (or null). */
+  spree(n = 1) {
+    const B = this.B;
+    if (!B || B.done) return null;
+    B.spree = (B.spree || 0) + n;
+    this.g.state.save();
+    return B.spree;
   }
 
   // ------------------------------------------------------------------ the pendulum (act2.md "The reputation pendulum")
@@ -400,7 +409,7 @@ export class Act2 {
           <div class="ab-lts">${pieces}${clues}</div>
           <div class="ab-side">
             <div class="ab-boss"><i class="cb-pin"></i><div class="ab-q">${B.done ? '✓' : '?'}</div><b>${ACT2.boss.toUpperCase()}</b><small>${B.done ? 'Behind bars' : 'The cult\'s leader, in your stolen suit'}</small></div>
-            <div class="ab-jig"><small>Your rep <b>${st.rep}</b> · The impostors' rep <b>${this.impRep()}</b></small><br><small>${this.impRep() > 0 ? 'The cult\'s Polaroids are everywhere' : 'The cult\'s Polaroids are drying up'} · Disgraced-only doors <b>${st.rep < 0 ? 'open' : 'shut'}</b></small><br><small>Suit: ${this.suitFinds()}/${GATES.suit} finds · ${suitTxt}</small></div>
+            <div class="ab-jig"><small>Your rep <b>${st.rep}</b> · The impostors' rep <b>${this.impRep()}</b></small><br><small>${this.impRep() > 0 ? 'The cult\'s Polaroids are everywhere' : 'The cult\'s Polaroids are drying up'} · Disgraced-only doors <b>${st.rep < 0 ? 'open' : 'shut'}</b></small><br><small>Suit: ${this.suitFinds()}/${GATES.suit} finds · ${suitTxt}</small>${B.spree ? `<br><small>The crime spree while you were locked up: <b>${B.spree}</b> crimes, "Supergirl" seen at every one</small>` : ''}</div>
             <div class="ab-gates">${rows}</div>
           </div>
         </div>
