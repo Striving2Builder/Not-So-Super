@@ -19,6 +19,7 @@ import { sfx } from '../sfx.js';
 import { LOT } from '../city.js';
 import { pick, clamp, dist, chance, rand, randi } from '../util.js';
 import { laneBusy } from '../moments/frame.js';
+import { Recall } from './recall.js';
 
 const POL_RECT = [14, 14, 232, 232]; // the photo inside a Polaroid (blackout.js polaroid())
 const STRAY_FAKE = 0.6;              // share of the cult's Polaroids that are fakes
@@ -57,6 +58,7 @@ export class Act2 {
     this.seen = new WeakSet();
     this.promoT = PROMO.first;
     this.lineup = null; // the truth of the promotion lineup on screen (the harness reads it)
+    this.recall = new Recall(this); // the night she lost, remembered (job G: memory clues, flashbacks, stashes)
   }
 
   /** Act 2's state, or null while Act 1 is still running. */
@@ -198,6 +200,7 @@ export class Act2 {
     }
     if (!B.lairOpen && this.gatesMet()) { B.lairOpen = true; this.g.state.save(); q.push({ two: 'lair' }); }
     if ((this.walkT -= dt) <= 0) { this.walkT = WALK_EVERY; this.ensureWalk(ow); }
+    this.recall.update(dt, ow); // (a rooftop stash of Super Squirt on the map)
     if (!ow.attract && !ow.zones.some((z) => z.promo) && (this.promoT -= dt) <= 0) {
       this.promoT = rand(...PROMO.every) * (B.counts.promotions >= GATES.promotions ? 1.5 : 1);
       this.spawnPromo(ow);
@@ -337,6 +340,7 @@ export class Act2 {
 
   /** DIVE on an act map event (only promotions so far). */
   async dive(ow, z) {
+    if (z.actDive === 'stash') return this.recall.diveStash(ow, z);
     if (z.actDive !== 'promo' || this.promoBusy) return;
     ow.removeZone(z);
     this.promoBusy = true;
@@ -409,7 +413,7 @@ export class Act2 {
           <div class="ab-lts">${pieces}${clues}</div>
           <div class="ab-side">
             <div class="ab-boss"><i class="cb-pin"></i><div class="ab-q">${B.done ? '✓' : '?'}</div><b>${ACT2.boss.toUpperCase()}</b><small>${B.done ? 'Behind bars' : 'The cult\'s leader, in your stolen suit'}</small></div>
-            <div class="ab-jig"><small>Your rep <b>${st.rep}</b> · The impostors' rep <b>${this.impRep()}</b></small><br><small>${this.impRep() > 0 ? 'The cult\'s Polaroids are everywhere' : 'The cult\'s Polaroids are drying up'} · Disgraced-only doors <b>${st.rep < 0 ? 'open' : 'shut'}</b></small><br><small>Suit: ${this.suitFinds()}/${GATES.suit} finds · ${suitTxt}</small>${B.spree ? `<br><small>The crime spree while you were locked up: <b>${B.spree}</b> crimes, "Supergirl" seen at every one</small>` : ''}</div>
+            <div class="ab-jig"><small>Your rep <b>${st.rep}</b> · The impostors' rep <b>${this.impRep()}</b></small><br><small>${this.impRep() > 0 ? 'The cult\'s Polaroids are everywhere' : 'The cult\'s Polaroids are drying up'} · Disgraced-only doors <b>${st.rep < 0 ? 'open' : 'shut'}</b></small><br><small>Suit: ${this.suitFinds()}/${GATES.suit} finds · ${suitTxt}</small>${B.spree ? `<br><small>The crime spree while you were locked up: <b>${B.spree}</b> crimes, "Supergirl" seen at every one</small>` : ''}${this.recall.boardLine()}</div>
             <div class="ab-gates">${rows}</div>
           </div>
         </div>

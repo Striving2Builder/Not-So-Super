@@ -18,6 +18,7 @@ import { loadingPanel } from './gfx.js';
 import { SETTINGS, CONTAINERS, SURFACES, ANIM, drawProp, drawPropAnim, shadeProp, contactShadow, tent } from './sceneprops.js';
 import { ScanView } from './scanview.js';
 import { LensFX } from './lensfx.js';
+import { recallOf, stashTaken, STASH_ITEM } from './act/recall.js';
 
 export class Investigate {
   constructor(g) { this.g = g; this.dust = makeDust(); this.lay = null; }
@@ -97,7 +98,7 @@ export class Investigate {
     const th = surf.length ? pick(surf) : pick(this.props);
     const item = pick(INTOX_ITEMS);
     const [bx, by] = sc ? sc.bait : [th.x + th.w * 0.72, th.y + 2];
-    this.trap = { item, x: bx - 18, y: by - 36, w: 36, h: 36, taken: false, givesClue: chance(0.5) };
+    this.trap = { item: recallOf(this.g) ? STASH_ITEM : item, x: bx - 18, y: by - 36, w: 36, h: 36, taken: false, givesClue: chance(0.5) }; // (Act 2: the bait is Super Squirt)
     this.chalk = sc ? { x: sc.chalk[0], y: sc.chalk[1], wallX: sc.chalk[2] } : this.freeFloorSpot();
   }
 
@@ -268,6 +269,7 @@ export class Investigate {
     st.addIntox(it.intox);
     toast(`🥴 Intoxication +${it.intox}`, 'bad');
     if (it.perk === 'energy') { this.en = 100; toast('Power fully recharged', 'good'); }
+    if (it.squirt) await stashTaken(this.g, 'A stash at the scene', { dose: 0 }); // (Act 2 Recall: sometimes a flashback)
     if (tr.givesClue) {
       const c = this.clues.find((c) => !c.found && c.method !== 'witness');
       if (c) await this.case.reveal(c, 'The note tucked under it reads:');

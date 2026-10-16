@@ -19,6 +19,7 @@ import { skinScene } from '../hero3d.js';
 import { pick } from '../util.js';
 import { caseMethods } from './casework.js';
 import { sitAt } from './cards.js';
+import { stainRead } from '../act/recall.js';
 
 export const CASINO_CROWD = 0.35; // the gaming floor is quieter than a club's (fewer people, the tables in sight)
 export const KNOCKOFF = 'dark'; // the knockoff's placeholder model (hero3d.js costume files)
@@ -176,6 +177,7 @@ export const casinoMethods = {
       this.setupControls(); this.envHud?.();
     }
     if (r === 'out') return this.thrownOut();
+    if (r === 'win') await stainRead(g, `The stain on the ${CASINO.pieces[t.id]} the house paid out`); // (Act 2 Recall: read high, a memory clue)
     if (C.night && r === 'win') {
       banner('THE NIGHT IS YOURS', 'Cash out at the cashier, or walk out the front', '#ffd84d');
     }
