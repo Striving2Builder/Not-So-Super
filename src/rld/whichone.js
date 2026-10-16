@@ -39,15 +39,15 @@ function copyCanvas(img, P, defect) {
     const d = g.getImageData(0, 0, CW, CH), q = d.data, orange = Math.random() < 0.5;
     for (let i = 0; i < q.length; i += 4) {
       if (q[i + 3] < 20 || q[i] < 90 || q[i] < q[i + 1] * 1.5 || q[i] < q[i + 2] * 1.5) continue;
-      if (orange) q[i + 1] = Math.min(255, q[i + 1] + q[i] * 0.32); else q[i + 2] = Math.min(255, q[i + 2] + q[i] * 0.42);
+      if (orange) q[i + 1] = Math.min(255, q[i + 1] + q[i] * 0.2); else q[i + 2] = Math.min(255, q[i + 2] + q[i] * 0.26);
     }
     g.putImageData(d, 0, 0);
   }
   g.globalCompositeOperation = 'source-atop'; // everything below lands on the fabric only
   if (defect === 'sheen') {
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 2; k++) {
       const x = rand(0.1, 0.8) * CW, gr = g.createLinearGradient(x, 0, x + 40, CH);
-      gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, 'rgba(255,255,255,.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, 'rgba(255,255,255,.32)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
       g.fillStyle = gr; g.fillRect(0, 0, CW, CH);
     }
   }

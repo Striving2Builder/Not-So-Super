@@ -20,7 +20,10 @@ docs/design/act2.md ("RLD Walks" under The venues, and "The night she lost the s
 - Hooks: main.js (import, `modes.rldwalk`, resize, `modeFor`, `game.rldWalkFields`, `?zone=rldwalk`
   `&opening=1` after the welcome), commentary.js (ZONE_OPEN.rldwalk captions). No data.js/style.css.
 - Harness `tools/shots/rld.js` (flows walk, opening, capture, lead, asylum; port 8897: 8884 is taken
-  on this machine): all 0 errors.
+  on this machine): all 0 errors. A's act.js flows act2handoff/act2gates now enter the real walk (0
+  errors) but assert the old stub outcome (opening 'done', rep -50): they need updating (A/director).
+- Perf (SwiftShader, 844x390): walk 87-96 draw calls / 40-45k tris vs the asylum's 101-111 / 44-49k
+  (captives drawn only near or with the door open, minders hidden till they come out, vents instanced).
 
 ## Next / notes
 - Device check: the close camera in the narrow streets, the which-one cards at 844×390, perfume rate.

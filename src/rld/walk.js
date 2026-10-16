@@ -225,7 +225,7 @@ export class RldWalk extends ClubZone {
     person.rotation.y = r.faceDoor;
     const ropes = new THREE.Group();
     const ropeMat = this.ropeMat || (this.ropeMat = new THREE.MeshLambertMaterial({ color: 0xb08a5a }));
-    for (const y of [0.75, 1.05]) { const t = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.03, 6, 18), ropeMat); t.rotation.x = Math.PI / 2; t.position.y = y; ropes.add(t); }
+    const rope = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.035, 6, 18), ropeMat); rope.rotation.x = Math.PI / 2; rope.position.y = 0.9; ropes.add(rope);
     ropes.position.copy(person.position);
     this.scene.add(ropes);
     const ghost = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 1.0, 4, 8), new THREE.MeshBasicMaterial({ color: 0x40e0ff, depthTest: false, transparent: true, opacity: 0.55 }));
@@ -254,12 +254,14 @@ export class RldWalk extends ClubZone {
     const ghost = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1.0, 4, 8), new THREE.MeshBasicMaterial({ color: 0xff3030, depthTest: false, transparent: true, opacity: 0.55 }));
     ghost.position.set(r.sit.x, 0.85, r.sit.z); ghost.renderOrder = 10; ghost.visible = false;
     this.scene.add(ghost); this.hidden.push(ghost);
+    mesh.visible = false; // (behind a shut door nobody sees him: not drawn till he comes out)
     r.minder = { mesh, ghost, out: false };
   }
 
   minderOut(r) {
     const M = r.minder;
     M.out = true;
+    M.mesh.visible = true;
     M.ghost.visible = false;
     this.hidden = this.hidden.filter((h) => h !== M.ghost);
     sfx.alarm();
@@ -389,12 +391,12 @@ export class RldWalk extends ClubZone {
   }
 
   /** The struggle: easy, and either way she's out (a fail just costs rep: no dead ends). */
-  async tiedStruggle({ title, text }) {
+  async tiedStruggle({ title, text, free: noCost = false }) {
     await clipsReady;
     const free = await struggle({ clip: nextClip(CLIPS.captive), title, text, diff: RLD.easy });
     if (free) { sfx.win(); banner('FREE!', '', '#3ee08a'); } else {
       sfx.lose();
-      this.g.state.addRep(-2, 'Left tied up for an hour');
+      if (!noCost) this.g.state.addRep(-2, 'Left tied up for an hour'); // (not in the act's opening: its rep is set)
       toast('It takes an hour, but the knots give in the end.', 'bad');
     }
     return free;
@@ -422,6 +424,9 @@ export class RldWalk extends ClubZone {
     if (this.warming || this.done || !this.scene) return;
     if (this.isOpening && !this.openingRun && this.t > 0.4) { this.openingRun = true; this.runOpening(); }
     this.updatePerfume(dt);
+    // a held woman is drawn once her door is open or she's close (else she's only X-ray's ghost: draw calls)
+    const h = this.hero.position;
+    for (const cap of this.captives) if (!cap.freed) cap.person.visible = cap.cage.visible = cap.room.doorRef.open || Math.abs(h.x - cap.x) + Math.abs(h.z - cap.z) < 6;
     if (this.xray) for (const cap of this.captives) if (!cap.seen && !cap.freed && cap.person.position.distanceTo(this.hero.position) < 14) cap.seen = true;
   }
 

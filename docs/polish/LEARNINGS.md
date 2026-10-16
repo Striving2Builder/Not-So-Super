@@ -14,3 +14,4 @@
 - club3d knot (casebeats.js) runs outside generated cases via `knotHost()` (idle ring, cage); formKnot releases a running knot first, so a beat takes over the idle ring's dancers (round 11 D2).
 - The harness "black box" (bottom-right, under the LIVE panel) was Chromium culling the WebGL canvas in the LIVE <video>'s rect mirrored vertically (body bg #05070d showing); not in the GL or 2D canvas. Fix: `#feed video { filter: contrast(1.001) }` (style.css r11 F). Count it with a #05070d pixel scan (round 11 F2a-finish).
 - comic.js bubbles and the club's tap bubbles (#c3-chat .c3b, chatter.js) are two layers: any de-overlap must place both in one pass (feelfx.js layoutBubbles). Bouncers aren't crowd, so the crowd's see-through dither never thins them (round 11 L2b).
+- Port 8884 on the director's machine is another service (it answers JSON): a harness there times out waiting for `#btn-new` with no page errors; `tools/shots/rld.js` uses 8897 (Act 2 I).

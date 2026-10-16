@@ -71,7 +71,7 @@ export const openingMethods = {
     banner('WAKE UP', `Room ${o.room.num} · the red-light district`, '#ff6688');
     await new Promise((r) => setTimeout(r, 1300));
     if (this.g.mode !== this || this.done) return;
-    await this.tiedStruggle({ title: 'TIED UP', text: `You come to on a red-lit floor, wrists tied to the bedpost. This isn't your suit. <b>Your suit is gone.</b>` });
+    await this.tiedStruggle({ title: 'TIED UP', text: `You come to on a red-lit floor, wrists tied to the bedpost. This isn't your suit. <b>Your suit is gone.</b>`, free: true });
     if (this.g.mode !== this || this.done) return;
     this.heroClip('getUp', 2.6);
     // the house perfume, straight from the vent over this room's door

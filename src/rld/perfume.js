@@ -13,6 +13,7 @@ import { puffTex } from './art.js';
 import { DOOR_H } from './plan.js';
 import { capsulePush } from '../clubgeo.js';
 
+const VENT_COL = { idle: new THREE.Color(0x8a6a30), warn: new THREE.Color(0xff7ab8), warn2: new THREE.Color(0xc04080) };
 const PUFF = { n: 48, life: 1.4, col: new THREE.Color(0xff7ab8) };
 const SPRAY = { hostess: 8, vent: 6, reach: 1.5, seeAt: 5.5, cd: 5, step: 1.5 };
 const HOSTESS_LINES = ['"Try the house perfume, darling."', '"On the house, sweetheart."', '"Mm. You smell like trouble. Let me fix that."', '"Relax. Everybody here does."'];
@@ -28,7 +29,7 @@ export const perfumeMethods = {
     this.scene.add(pts);
     this.puffs = { pts, life: new Float32Array(n), vel: new Float32Array(n * 3), i: 0 };
     this.hostesses = [];
-    this.vents = [];
+    this.vents = []; this.ventMesh = null;
     this.sprayToastT = 0;
     this.hazeTold = false;
     // the neon smear: a ghost of the signs, drifting round them over the haze line
@@ -70,16 +71,21 @@ export const perfumeMethods = {
 
   /** Brass vents over a few of the red doors (street side), each on its own hiss timer. */
   placeVents(rooms) {
-    const mat0 = new THREE.MeshBasicMaterial({ color: 0x8a6a30, toneMapped: false });
+    // one instanced mesh for every vent this visit (one draw call), each with its own colour
+    const n = rooms.length + this.vents.length, old = this.ventMesh;
+    const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.7, 0.2, 0.22), new THREE.MeshBasicMaterial({ toneMapped: false }), n);
+    mesh.raycast = () => {}; mesh.frustumCulled = false;
+    this.scene.add(mesh);
+    if (old) { this.scene.remove(old); old.geometry.dispose(); old.material.dispose(); }
+    this.ventMesh = mesh;
     for (const r of rooms) {
       const out = r.inward.clone().multiplyScalar(-0.2), p = r.door.clone().add(out).setY(DOOR_H + 0.28);
-      const mat = mat0.clone();
-      const mesh = new THREE.Mesh(r.alongX ? new THREE.BoxGeometry(0.7, 0.2, 0.22) : new THREE.BoxGeometry(0.22, 0.2, 0.7), mat);
-      mesh.position.copy(p); mesh.raycast = () => {};
-      this.scene.add(mesh);
       const period = rand(6, 9);
-      this.vents.push({ room: r, pos: r.door.clone().add(out.multiplyScalar(3)), top: p, mesh, mat, period, ph: rand(0, period), last: 0 });
+      this.vents.push({ room: r, pos: r.door.clone().add(out.multiplyScalar(3)), top: p, period, ph: rand(0, period), last: 0, ry: r.alongX ? 0 : Math.PI / 2 });
     }
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1);
+    this.vents.forEach((v, i) => { mesh.setMatrixAt(i, m4.compose(v.top, q.setFromAxisAngle(up, v.ry), one)); mesh.setColorAt(i, VENT_COL.idle); });
+    mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor.needsUpdate = true;
   },
 
   placeHostesses(n) {
@@ -114,15 +120,16 @@ export const perfumeMethods = {
     if (!this.puffs) return;
     this.stepPuffs(dt);
     // the vents: glow pink for the last second, then hiss
-    for (const v of this.vents) {
+    this.vents.forEach((v, i) => {
       const ph = (t + v.ph) % v.period, warn = ph > v.period - 1;
-      v.mat.color.setHex(warn ? (Math.sin(t * 30) > 0 ? 0xff7ab8 : 0xc04080) : 0x8a6a30);
+      this.ventMesh.setColorAt(i, warn ? (Math.sin(t * 30) > 0 ? VENT_COL.warn : VENT_COL.warn2) : VENT_COL.idle);
       if (ph < v.last) {
         this.emitPuff(v.top, new THREE.Vector3(0, -0.8, 0).addScaledVector(v.room.inward, -0.6), 12);
         if (!this.busy && Math.hypot(h.x - v.pos.x, h.z - v.pos.z) < SPRAY.reach + 0.3) this.spray(SPRAY.vent, 'A vent over the door hisses: the house perfume.');
       }
       v.last = ph;
-    }
+    });
+    if (this.ventMesh) this.ventMesh.instanceColor.needsUpdate = true;
     // the hostesses: stroll their street; close enough and in sight, they come over and spray
     for (const s of this.hostesses) {
       const m = s.mesh;
