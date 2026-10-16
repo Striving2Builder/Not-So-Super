@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { buildCollider, scanFloor } from '../clubgeo.js';
 import { Rect, Builder, quad, DOOR_W, DOOR_H } from '../hotel/plan.js';
 import { makeMirrorMaterials } from './art.js';
+import { bossLayout, bossDress } from './bossroom.js';
 
 export const GHW = 2;           // the gallery's half-width (a mirror box is the gallery's width deep)
 const SLOT = 4, SLOTS = 9, RD = 4.2;
@@ -51,7 +52,7 @@ function layout(M) {
       }
     }
   }
-  return { rects, rooms, mirrors, posters, lobby, gallery, ante };
+  return { rects, rooms, mirrors, posters, lobby, gallery, ante, boss };
 }
 
 /** The static dressing: the frames, glass and tubes of the mirrors, the room in each glass, the rooms. */
@@ -108,7 +109,7 @@ function dress(B, L) {
     B.box(M.neon[2], 0.4, 0.12, 0.4, sx, 1.06, ANTE.z0 + 1.2);
     B.box(M.neon[0], 0.05, 2.4, 0.05, sx * 0.62, 1.3, ANTE.z0 + 0.1);
   }
-  B.box(M.frame, 3.0, 2.9, 0.16, 0, 1.45, ANTE.z0 + 0.06);
+  bossDress(B, L); // (the sealed door's frame, Supergurl's room)
 }
 
 /** Posters ("mirror portraits") on the gallery's walls, between the doors and the mirrors. */
@@ -144,7 +145,7 @@ export function buildMirrors() {
       const { floor, mainY } = scanFloor(scene, collider);
       return {
         scene, collider, floor, mainY, box: new THREE.Box3().setFromObject(scene), M,
-        rooms: L.rooms, mirrors: L.mirrors, posters: L.posters, gallery: L.gallery, lobby: L.lobby, ante: L.ante,
+        rooms: L.rooms, mirrors: L.mirrors, posters: L.posters, gallery: L.gallery, lobby: L.lobby, ante: L.ante, boss: L.boss,
         wings: [], sealDoor: V3(0, 0, ANTE.z0 + 1.0),
         entrance: { pos: V3(0, 0, 4.0), heading: Math.PI },
         halls: L.rects.filter((r) => r.hall),

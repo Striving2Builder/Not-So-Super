@@ -78,6 +78,9 @@ export class Act2 {
     this.g.state.save();
   }
 
+  /** The act's end (act.js complete(), after the Supergurl fight): the suit back, the papers, the card. */
+  async complete() { const { endAct2 } = await import('../mirrors/boss.js'); return endAct2(this); }
+
   /** ?act=act2 (the start of the act), act2lair (every gate met), act2boss (and the boss is next). */
   applyDebug(st, which) {
     const A = st.act;

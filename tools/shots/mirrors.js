@@ -2,7 +2,9 @@
 // headless Chromium: entering, the views (draw calls), her twin in the glass, a portrait call, a rail
 // (Which one is hers?), the shrine's stash, the sealed door; a trap + the struggle and a dart (she wakes
 // in a room); the act putting the floor on the hotel once the lair is open; everything within reach.
-//   node tools/shots/mirrors.js [--label mirrors] [--port 8897] [--flows all|floor,dart,map,reach] [--w 844 --h 390] [--shots 0]
+// boss (job H2): ?act=act2boss&zone=mirrors straight into the Supergurl fight: the reveal, the mirror call
+// (right and wrong), a capture + the struggle, the haze, the win and Act 2 done.
+//   node tools/shots/mirrors.js [--label mirrors] [--port 8897] [--flows all|floor,dart,map,reach,boss] [--w 844 --h 390] [--shots 0]
 // -> shots/<label>/mirrors/*.png + report.json (errors per flow; draw calls/triangles per view)
 const path = require('path');
 const fs = require('fs');
@@ -27,7 +29,7 @@ const EXTRA = arg('--query', '');
 const SHOTS = arg('--shots', '1') !== '0';
 const glOf = (V) => V.page.evaluate(() => { const r = window.__game.mode.renderer.info.render; return { calls: r.calls, tris: r.triangles }; });
 const OUT = path.join(ROOT, 'shots', LABEL, 'mirrors');
-const ALL = ['floor', 'dart', 'map', 'reach'];
+const ALL = ['floor', 'dart', 'map', 'reach', 'boss'];
 const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
 
 (async () => {
@@ -215,6 +217,68 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
       return { inter: m.inter.length, nodes: m.kellNodes.length, far };
     });
     if (report.reach.far.length) throw new Error(`out of reach: ${report.reach.far.join(' | ')}`);
+    return V;
+  });
+
+  await flow('boss', async () => {
+    const V = await game('zone=mirrors&act=act2boss&flight=2d');
+    await ready(V);
+    const P = V.page, no = () => !document.querySelector('#modal-root .modal-back');
+    await P.waitForFunction(() => window.__game.mode.boss?.started, null, { timeout: 30000 });
+    if (!(await V.through(() => window.__game.mode.boss?.fighting && !document.querySelector('#modal-root .modal-back'), 40000))) throw new Error('the fight never started');
+    const R = report.boss = { gl: {} };
+    R.start = await P.evaluate(() => { const b = window.__game.mode.boss; return { phase: b.phase, model: !!b.gurl.model, coat: b.gurl.coatOn, side: b.side.length, decoys: b.decoys.length, said: Object.keys(b.said) }; });
+    // calm her down for the test: no kisses, no strikes, sober
+    const calm = () => P.evaluate(() => { const m = window.__game.mode, b = m.boss; b.kissT = 1e9; b.ai = 'pose'; b.st = 1e9; window.__game.state.intox = 0; });
+    const hit = () => P.evaluate(() => { const m = window.__game.mode, b = m.boss, g = b.gurl.pos; m.hero.position.set(g.x, 0, g.z + 1.1); b.pinned = 0; window.__game.state.intox = 0; return m.bossPunch(); });
+    await calm();
+    await P.evaluate(() => { const m = window.__game.mode, g = m.boss.gurl.pos; m.hero.position.set(g.x + 1.5, 0, g.z + 3.2); m.yaw = 0.35; m.camPitch = null; });
+    await P.waitForTimeout(1200);
+    R.gl.coat = await glOf(V);
+    await shot(V, 'boss_coat');
+    for (let i = 0; i < 3; i++) { await hit(); await P.waitForTimeout(400); }
+    if (!(await V.through(() => window.__game.mode.boss.phase === 'suit' && !document.querySelector('#modal-root .modal-back'), 30000))) throw new Error('no reveal');
+    await calm();
+    R.reveal = await P.evaluate(() => { const b = window.__game.mode.boss; return { coat: b.gurl.coatOn, said: Object.keys(b.said), hp: b.hp }; });
+    // over the haze line: the reflections, the mirrors exchange, then the call (right)
+    await P.evaluate(() => { window.__game.state.intox = 55; });
+    await V.through(() => window.__game.mode.boss.said.mirrors && !window.__game.mode.busy && !document.querySelector('#modal-root .modal-back'), 20000);
+    const call = async (right) => {
+      await P.evaluate(() => { const m = window.__game.mode; m.boss.kissT = 1e9; m.boss.ai = 'pose'; m.boss.st = 1e9; if (!m.boss.calling) m.mirrorCall(); });
+      await P.waitForSelector('.mc-b', { timeout: 8000 });
+      const n = await P.evaluate(() => document.querySelectorAll('.mc-b').length), t = await P.evaluate(() => window.__game.mode.callTruth);
+      return { n, t, go: () => P.click(`.mc-b[data-i="${right ? t : (t + 1) % n}"]`) };
+    };
+    await P.evaluate(() => { const m = window.__game.mode, g = m.boss.gurl.pos; m.hero.position.set(g.x, 0, g.z + 3.5); m.yaw = 0; m.camPitch = null; });
+    await P.waitForTimeout(800);
+    R.gl.mirrors = await glOf(V);
+    let c = await call(true);
+    R.call = { candidates: c.n };
+    await shot(V, 'boss_call');
+    await c.go();
+    await P.waitForTimeout(600);
+    R.call.after = await P.evaluate(() => { const b = window.__game.mode.boss; return { hp: b.hp, right: b.right }; });
+    // a wrong call: held, the struggle, free
+    await V.through(() => !window.__game.mode.busy && !document.querySelector('#modal-root .modal-back'), 10000);
+    c = await call(false);
+    await c.go();
+    await P.waitForFunction(() => document.querySelector('.c3-struggle') && window.__struggle, null, { timeout: 20000 });
+    await P.waitForTimeout(500);
+    await shot(V, 'boss_struggle');
+    await P.evaluate(() => window.__struggle.win());
+    await P.waitForFunction(() => !document.querySelector('.c3-struggle'), null, { timeout: 8000 });
+    await V.through(() => !window.__game.mode.busy && !document.querySelector('#modal-root .modal-back'), 15000);
+    R.wrong = await P.evaluate(() => { const b = window.__game.mode.boss; return { wrong: b.wrong, captures: b.captures, hp: b.hp, phase: b.phase }; });
+    // right calls to the end (the haze phase is fought high: calls only)
+    for (let i = 0; i < 8 && (await P.evaluate(() => window.__game.modeName === 'mirrors' && window.__game.mode.boss?.fighting)); i++) {
+      await V.through(() => { const m = window.__game.mode; return !m.boss?.fighting || (!m.busy && !document.querySelector('#modal-root .modal-back')); }, 30000);
+      if (!(await P.evaluate(() => window.__game.mode.boss?.fighting))) break;
+      if (await P.evaluate(() => window.__game.mode.boss.phase === 'haze')) R.haze = await P.evaluate(() => ({ intox: Math.round(window.__game.state.intox), said: window.__game.mode.boss.said.haze }));
+      c = await call(true); await c.go(); await P.waitForTimeout(500);
+    }
+    if (!(await V.through(() => window.__game.modeName === 'overworld' && !document.querySelector('#modal-root .modal-back'), 60000))) throw new Error('the fight never ended');
+    R.end = await P.evaluate(() => { const B = window.__game.state.act.act2; return { done: B.done, suitBack: B.suitBack, rep: window.__game.state.rep, mirrorsOnMap: window.__game.overworld.zones.some((z) => z.mirrors) }; });
+    if (!R.end.done || R.reveal.coat || !R.call.after.right || !R.wrong.captures) throw new Error(`the fight didn't play: ${JSON.stringify(R)}`);
     return V;
   });
 

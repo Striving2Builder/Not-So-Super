@@ -401,7 +401,7 @@ export class Act {
   /** The act's end (hotel.js, after the boss). */
   async complete() {
     const A = this.A, st = this.g.state;
-    if (A.done && A.act2) return; // (Act 2's ending is phase H's)
+    if (A.done && A.act2) return this.two.complete(); // (Act 2's ending: Supergurl, src/mirrors/boss.js)
     A.done = true; A.lairOpen = false;
     st.addRep(100, 'The Puzzle Maker is behind bars');
     st.save();

@@ -156,7 +156,7 @@ game.endZone = async (zone, res) => {
   const st = game.state;
   game.overworld.removeZone(zone);
   if (res.outcome === 'captured') { await captureFlow(zone, res.reason); return; }
-  if (res.outcome === 'win' && zone.hotel) { // the act's boss: its own ending
+  if (res.outcome === 'win' && (zone.hotel || zone.mirrors)) { // the act's boss: its own ending (Act 1's floor 13, Act 2's hall of mirrors)
     await game.act.complete();
     st.save();
     game.setMode('overworld', { returnFrom: zone });

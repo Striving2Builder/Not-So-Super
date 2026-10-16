@@ -9,7 +9,7 @@
 //   * the cult's shrine: a stash of Super Squirt and a memory clue (act/recall.js);
 //   * parlours baited with a Polaroid of her: traps (the S-shield struggle, club3d/struggle.js);
 //   * Supergurl's acolytes in red robes hunting the gallery (cult.js, Kell's brain): a dart = a dose;
-//   * the antechamber and the sealed door of the boss room (job H2 builds what's behind it: bossDoor()).
+//   * the antechamber and the sealed door of the boss room: Supergurl's fight behind it (boss.js, job H2).
 import * as THREE from 'three';
 import { ClubZone } from '../clubzone.js';
 import { HotelZone } from '../hotel/hotel.js';
@@ -17,6 +17,7 @@ import { buildMirrors, ANTE, GN } from './plan.js';
 import { VIOLET, VIOLET_CSS, sealCanvas } from './art.js';
 import { cultMethods } from './cult.js';
 import { glassMethods } from './glass.js';
+import { bossMethods, debugBossWanted } from './boss.js';
 import { crewMethods } from '../factory/crew.js';
 import { DOOR_W, DOOR_H } from '../hotel/plan.js';
 import { posterCanvas, posterFrames } from '../hotel/art.js';
@@ -83,6 +84,7 @@ export class MirrorsZone extends HotelZone {
       if (this.done) return;
       toast('Every face in the glass is yours, or one of hers. The sealed door is at the end of the gallery. Red robes: break their line of sight, or punch them from behind.', 'info');
     }, 1800);
+    if (debugBossWanted()) setTimeout(() => { if (!this.done && this.scene) this.debugBoss(); }, 400);
   }
 
   // ---------------------------------------------------------------- world
@@ -141,6 +143,7 @@ export class MirrorsZone extends HotelZone {
     this.placePortraits();
     this.placeRooms();
     this.placeSealDoor();
+    this.placeBossRoom();
     this.placeCrew();
   }
 
@@ -303,24 +306,14 @@ export class MirrorsZone extends HotelZone {
     return false;
   }
 
-  /** The sealed door of the boss room (job H2 builds the room and the fight; this is the stub). */
+  /** The sealed door of the boss room (boss.js: bossDoor opens it once she's ready). */
   placeSealDoor() {
     const tex = new THREE.CanvasTexture(sealCanvas()); tex.colorSpace = THREE.SRGBColorSpace;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6 * 1.25 * 0.86), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
     m.position.set(0, 1.45, ANTE.z0 + 0.16);
     this.scene.add(m);
     this.sealMesh = m;
-    this.addInter(this.club.sealDoor, 'The sealed door', () => !this.busy, () => this.bossDoor(), 'seal');
-  }
-
-  async bossDoor() {
-    const first = !this.reached;
-    this.reached = true;
-    if (first) { sfx.alarm(); flash(VIOLET_CSS); this.g.state.save(); }
-    await dialog({
-      title: 'The sealed door', cls: 'villain',
-      text: `A mirror the size of a door, your S cracked across it, and no handle on this side. Through the glass, a voice like yours, but sweeter:<div class="h13-note">“Not yet, little copy. Come back when you can't tell us apart.”<i>— Supergurl</i></div><span class="hint">The boss room is sealed for now (it opens in a later update).</span>`,
-    });
+    this.addInter(this.club.sealDoor, 'The sealed door', () => !this.busy && !this.bossOpen, () => this.bossDoor(), 'seal');
   }
 
   async leave() {
@@ -359,6 +352,7 @@ export class MirrorsZone extends HotelZone {
   }
 
   punch() {
+    if (this.bossPunch()) return;
     if (this.punchCrew()) {
       this.punchT = 0.25;
       if (this.heroModel) { this.heroModel.play('punch', { fade: 0.08, restart: true, from: 1.3 }); this.landT = 0.45; }
@@ -371,17 +365,19 @@ export class MirrorsZone extends HotelZone {
     super.update(dt);
     if (this.warming || this.done || !this.scene || !this.hero) return;
     this.updateGlass();
+    this.updateBoss(dt);
   }
 
   // ---------------------------------------------------------------- the HUD
   objectives() {
+    if (this.boss?.started) return this.bossObjectives();
     const rails = this.rails.filter((L) => L.solved).length;
     const next = this.rails.find((L) => !L.solved);
     return [
       { t: `Which one is hers? Rails checked: ${rails}/${this.rails.length}`, done: rails >= this.rails.length, target: next ? next.room.rail : null },
       { t: `Portraits: ${this.right}/${this.called} called right`, done: false },
       { t: `The cult's Polaroids burned: ${this.polaroids}`, done: false, skip: !this.polaroids },
-      { t: this.reached ? 'The sealed door: not yet' : 'Find the sealed door at the end of the gallery', done: this.reached, final: true, target: this.club.sealDoor },
+      { t: this.bossOpen ? 'Through the sealed door: Supergurl' : this.reached ? 'The sealed door: not yet' : 'Find the sealed door at the end of the gallery', done: false, final: true, target: this.club.sealDoor },
     ].filter((o) => !o.skip);
   }
 
@@ -391,6 +387,7 @@ export class MirrorsZone extends HotelZone {
     $('hud-sub').textContent = [this.crewStatus(), this.darts ? `Darted ${this.darts}×` : '', this.xray ? 'X-RAY' : ''].filter(Boolean).join(' · ');
     const ch = Math.max(0, ...this.hunters.map((k) => (k.stun <= 0 && k.state === 'charge' ? k.charge : 0)));
     const al = $('b-alert'); if (al) al.style.width = Math.min(100, ch * 100) + '%';
+    if (this.boss?.started) this.bossHud();
   }
 
   /** Named viewpoints for the harness (tools/shots/mirrors.js). */
@@ -419,4 +416,4 @@ function plateTex(label) {
   return t;
 }
 
-Object.assign(MirrorsZone.prototype, crewMethods, cultMethods, glassMethods);
+Object.assign(MirrorsZone.prototype, crewMethods, cultMethods, glassMethods, bossMethods);
