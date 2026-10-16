@@ -394,7 +394,7 @@ export class Overworld {
     else if (kind === 'street') { def = pick(STREET_CRIMES); districts = def.districts; }
     else if (night) districts = NIGHT_DISTRICTS;
     else if (kind === 'case') { def = only?.def || pick(CASES); districts = only?.districts || def.districts; }
-    else { venueName = forceVenue || pick(Object.keys(VENUES).filter((v) => !VENUES[v].asylum && !VENUES[v].hotel)); def = VENUES[venueName]; districts = def.districts; }
+    else { venueName = forceVenue || pick(Object.keys(VENUES).filter((v) => !VENUES[v].asylum && !VENUES[v].hotel && !VENUES[v].factory)); def = VENUES[venueName]; districts = def.districts; }
     const cands = city.blocks.filter((b) => {
       if (b.river || (districts !== '*' && !districts.includes(b.d))) return false;
       const cx = b.x0 + LOT / 2, cy = b.y0 + LOT / 2;

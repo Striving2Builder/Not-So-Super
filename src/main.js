@@ -10,6 +10,7 @@ import { AsylumZone } from './asylum.js';
 import { Club3D } from './club3d/club3d.js';
 import { HotelZone } from './hotel/hotel.js';
 import { RldWalk, rldWalkFields } from './rld/walk.js';
+import { FactoryZone, factoryFields } from './factory/factory.js';
 import { showNewspaper } from './newspaper.js';
 import { HERO, DISTRICTS, THEMES, DEALS, BOSSES, VENUES, BILLBOARDS, CAPTURE_VIDEOS } from './data.js';
 import { UI, dialog, toast, clearToasts } from './ui.js';
@@ -44,9 +45,11 @@ game.modes = {
   club3: new Club3D(game),
   hotel: new HotelZone(game), // the act's boss floor (src/hotel/)
   rldwalk: new RldWalk(game), // Act 2's RLD Walks (src/rld/)
+  factory: new FactoryZone(game), // Act 2's drug factory lines (src/factory/)
 };
 game.overworld = game.modes.overworld;
 game.rldWalkFields = rldWalkFields; // (the act places the walks: src/act/act2run.js)
+game.factoryFields = factoryFields; // (and a factory line while its gate is short)
 game.act = new Act(game); // the story (docs/design/act1.md)
 game.commentary = new Commentary(game);
 window.__game = game; // handy for debugging from the console
@@ -62,6 +65,7 @@ function resize() {
   game.modes.club3.resize();
   game.modes.hotel.resize();
   game.modes.rldwalk.resize();
+  game.modes.factory.resize();
 }
 addEventListener('resize', resize);
 settings.onChange(() => resize()); // resolution follows the graphics profile
@@ -98,7 +102,7 @@ game.gfxFailed = () => {
 function modeFor(z) {
   const clubVenue = VENUES[z.venue]?.club || VENUES[z.venue]?.kind === 'club';
   if (clubVenue && (z.mode === 'special' || z.mode === 'nightcase')) return 'club3';
-  return { brawl: 'brawler', investigate: 'investigate', special: 'special', asylum: 'asylum', hotel: 'hotel', rldwalk: 'rldwalk' }[z.mode];
+  return { brawl: 'brawler', investigate: 'investigate', special: 'special', asylum: 'asylum', hotel: 'hotel', rldwalk: 'rldwalk', factory: 'factory' }[z.mode];
 }
 
 game.startZone = (z) => {
@@ -386,6 +390,11 @@ function debugZone() {
     if (B && B.opening !== 'done') { B.opening = 'done'; game.state.rep = -50; }
     const z = game.overworld.zones.find((k) => k.mode === 'asylum') || game.overworld.spawn('asylum', true);
     if (z) game.startZone(z);
+    return;
+  }
+  if (q.get('zone') === 'factory') { // ?zone=factory: the Super Squirt lines (Act 2 job E)
+    const ow = game.overworld, b = game.city.blocks.find((k) => k.d === 'factory' && !k.river);
+    game.startZone({ uid: ow.uid++, t: 0, ...factoryFields(), x: b ? b.x0 + 60 : ow.hero.x, y: b ? b.y0 + 60 : ow.hero.y, district: b ? b.d : 'factory' });
     return;
   }
   if (q.get('zone') !== 'rldwalk') return;
