@@ -18,12 +18,13 @@ you can build"). This file is the build board. A new thread picks the build up f
 | Wave | Job | Phase | Status |
 |---|---|---|---|
 | 1 | **A**: the Act 2 skeleton (`src/act/act2.js`, the runtime per act, state, board page 2, `?act=` params, Act 2 opening after `act.complete()`, the opening scandal: rep set to −50) | A | **merged** 5ca5eed (`act2run.js`; flows act1save/act2/act2gates/act2handoff pass, 0 errors) |
-| 1 | **I**: RLD Walks, the level (H-shaped red-light street on the asylum engine, rescues, perfume, tied-up capture, lead doors + "Which one is hers?", the waking-captured opening variant, try the over-the-shoulder camera) | I | running |
+| 1 | **I**: RLD Walks, the level (H-shaped red-light street on the asylum engine, rescues, perfume, tied-up capture, lead doors + "Which one is hers?", the waking-captured opening variant, try the over-the-shoulder camera) | I | **merged** 7c78493 (`src/rld/`; `node tools/shots/rld.js` 5 flows 0 errors; debug `?zone=rldwalk&opening=1`) |
 | 2 | C1: the crop-top Supergirl in Blender (needs blender-mcp + the user's Blender open; `docs/references/user/act2-croptop-sg.jpg`, red boots, no cape) | C | next |
 | 2 | **B**: the pendulum (negative-rep doors, impostors' rep → Polaroids, promotions as map events) | B | **merged** c872e85 (`DISGRACED_DOORS` in act2.js = the user's table; flows incl. act2promo pass, 0 errors) |
 | 3 | C2: the knockoff switch, the 5 × 5 suit finds, the act board's suit | C | |
-| 3 | D: the casino (High-Roller Suite plan, high card, 21, stakes) | D | |
-| 4 | F: the Act 2 asylum · G: Recall + drug finds | F, G | |
+| 3 | **D**: the casino (High-Roller Suite plan, high card, 21, stakes) | D | running (handoff `act2-d.md`) |
+| 3 | **F**: the Act 2 asylum (always high, powers lost, costume clue, the spree counter) | F | running (handoff `act2-f.md`) |
+| 4 | G: Recall + drug finds | G | |
 | 5 | E: the factory lines · H: the hall of mirrors + Supergurl | E, H | |
 
 ## The contract between A and I (wave 1)
@@ -44,3 +45,4 @@ you can build"). This file is the build board. A new thread picks the build up f
 - 2026-10-16: design approved; wave 1 = A + I launched.
 - 2026-10-16: A merged (5ca5eed); its contract notes sent to I. B launched in A's slot.
 - 2026-10-16: B merged (c872e85). Director: `suitFind` refuses while rep ≥ 0 (act2.md rule), so jobs I/C2/D needn't check. Open for the user: which clubs go in `DISGRACED_DOORS`; Blender open for C1.
+- 2026-10-16: I merged (7c78493). Director fixed `tools/shots/act.js` for the real walk (flows leave it by abort; act2 asserts the walk opened with `opening`). All 11 Act 1 + 5 Act 2 + 5 RLD flows: 0 errors. Wave 3: D + F launched (C1 waits on Blender, C2 after D).

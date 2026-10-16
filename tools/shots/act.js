@@ -97,7 +97,7 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     await V.page.waitForTimeout(1500);
     await V.through(() => window.__game.state.act?.beats?.guardian && !document.querySelector('#modal-root .modal-back'), 60000);
     await V.page.evaluate(() => { const A = window.__game.act.A; A.unmasked.fixer = true; A.unmasked.queen = true; A.fakes = 4; A.unsorted = 1; A.counts.clubs = 3; });
-    V.page.evaluate(() => window.__game.act.openBoard());
+    V.page.evaluate(() => window.__game.act.openBoard()).catch(() => {});
     await V.page.waitForTimeout(900);
     await V.shot('board');
     await V.press('.ab-x');
@@ -112,7 +112,7 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
       for (let i = 0; i < 40 && !(z && z.thread); i++) { if (z) ow.removeZone(z); z = ow.spawn('case', true); const r = Math.random; Math.random = () => 0.1; g.act.tagZone(z); Math.random = r; }
       window.__tz = z; return z.name;
     });
-    V.page.evaluate(() => window.__game.act.onZoneWin(window.__tz));
+    V.page.evaluate(() => window.__game.act.onZoneWin(window.__tz)).catch(() => {});
     await V.page.waitForSelector('#modal-root .modal-back', { timeout: 5000 });
     await V.shot('trail_step');
     await V.through(() => !document.querySelector('#modal-root .modal-back'), 8000);
@@ -141,7 +141,7 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
   await flow('polaroid', async () => {
     const V = await game('act=local&flight=2d');
     await V.through(() => window.__game.state.act?.beats?.local && !document.querySelector('#modal-root .modal-back'), 60000);
-    V.page.evaluate(() => window.__game.act.callPolaroid({ fake: true, where: 'pinned to a lamp post' }));
+    V.page.evaluate(() => window.__game.act.callPolaroid({ fake: true, where: 'pinned to a lamp post' })).catch(() => {});
     await V.page.waitForSelector('.spot', { timeout: 15000 });
     await V.page.waitForTimeout(500);
     await V.shot('polaroid_call');
@@ -149,7 +149,7 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     await V.page.waitForTimeout(700);
     await V.shot('polaroid_wrong');
     await V.press('.spot-b');
-    V.page.evaluate(() => window.__game.act.callPolaroid({ fake: true, where: 'in a newsstand rack' }));
+    V.page.evaluate(() => window.__game.act.callPolaroid({ fake: true, where: 'in a newsstand rack' })).catch(() => {});
     await V.page.waitForSelector('.spot', { timeout: 15000 });
     await V.page.waitForTimeout(400);
     await V.press('.spot-b.fake');
@@ -163,7 +163,7 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
   await flow('unmask', async () => {
     const V = await game('act=guardian&flight=2d');
     await V.through(() => window.__game.state.act?.beats?.guardian && !document.querySelector('#modal-root .modal-back'), 60000);
-    V.page.evaluate(async () => { const { LIEUTENANTS } = await import('/src/act/act1.js'); window.__game.act.unmask(LIEUTENANTS[1]); });
+    V.page.evaluate(async () => { const { LIEUTENANTS } = await import('/src/act/act1.js'); window.__game.act.unmask(LIEUTENANTS[1]); }).catch(() => {});
     await V.page.waitForSelector('.um', { timeout: 8000 });
     await V.page.waitForTimeout(900);
     await V.shot('unmask');
@@ -240,7 +240,7 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     report.hotelMem = await V.page.evaluate(() => ({ heap: Math.round((performance.memory?.usedJSHeapSize || 0) / 1e6), posters: window.__game.mode.posters.filter((p) => p.canvas).length, info: window.__game.mode.renderer.info.memory }));
     console.log('mem', JSON.stringify(report.hotelMem));
     // a poster call
-    V.page.evaluate(() => { const m = window.__game.mode; m.examinePoster(m.posters.find((p) => p.canvas) || m.posters[0]); });
+    V.page.evaluate(() => { const m = window.__game.mode; m.examinePoster(m.posters.find((p) => p.canvas) || m.posters[0]); }).catch(() => {});
     await V.page.waitForSelector('.spot', { timeout: 20000 }).catch(() => {});
     await V.page.waitForTimeout(400);
     await V.shot('hotel_poster');
@@ -335,7 +335,7 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     await V.page.click('#btn-continue');
     await V.page.waitForTimeout(3000);
     await V.through(() => !document.querySelector('#modal-root .modal-back'), 15000);
-    V.page.evaluate(() => window.__game.act.openBoard());
+    V.page.evaluate(() => window.__game.act.openBoard()).catch(() => {});
     await V.page.waitForTimeout(700);
     const head = await V.page.evaluate(() => document.querySelector('.ab .cb-head')?.innerText);
     await V.shot('act1save_board');
@@ -350,14 +350,14 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
   await flow('act2', async () => {
     const V = await game('act=act2&flight=2d');
     await V.page.waitForTimeout(1500);
-    await V.through(() => { const B = window.__game.state.act?.act2; return B && B.opening === 'done' && !document.querySelector('#modal-root .modal-back'); }, 60000);
-    V.page.evaluate(() => window.__game.act.openBoard());
+    await V.through(() => { ((g) => { const m = g.modes?.rldwalk; if (g.modeName === 'rldwalk' && m?.zone && !m.done) { window.__walkSeen = { opening: !!m.zone.opening, mode: g.modeName }; m.done = true; g.endZone(m.zone, { outcome: 'abort', rep: 0 }); } })(window.__game); const B = window.__game.state.act?.act2; return B && B.opening === 'done' && !document.querySelector('#modal-root .modal-back'); }, 60000);
+    V.page.evaluate(() => window.__game.act.openBoard()).catch(() => {});
     await V.page.waitForTimeout(800);
     const head = await V.page.evaluate(() => document.querySelector('.ab .cb-head')?.innerText);
     await V.shot('act2_board');
     await V.press('.ab-x');
-    report.act2 = { head, rep: await V.page.evaluate(() => window.__game.state.rep), mode: await V.page.evaluate(() => window.__game.modeName), B: await V.page.evaluate(() => window.__game.state.act.act2) };
-    if (report.act2.rep !== -50 || !/Not So Super/i.test(head || '')) throw new Error(`Act 2 start wrong: ${JSON.stringify(report.act2).slice(0, 300)}`);
+    report.act2 = { head, walk: await V.page.evaluate(() => window.__walkSeen || null), rep: await V.page.evaluate(() => window.__game.state.rep), mode: await V.page.evaluate(() => window.__game.modeName), B: await V.page.evaluate(() => window.__game.state.act.act2) };
+    if (report.act2.rep !== -50 || !report.act2.walk?.opening || !/Not So Super/i.test(head || '')) throw new Error(`Act 2 start wrong: ${JSON.stringify(report.act2).slice(0, 300)}`);
     return V;
   });
 
@@ -365,8 +365,8 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
   await flow('act2handoff', async () => {
     const V = await game('act=boss&flight=2d');
     await V.through(() => window.__game.overworld.zones.some((z) => z.hotel) && !document.querySelector('#modal-root .modal-back'), 60000);
-    V.page.evaluate(() => window.__game.act.complete());
-    const ok = await V.through(() => window.__game.state.act.act2?.opening === 'done' && !document.querySelector('#modal-root .modal-back'), 60000);
+    V.page.evaluate(() => window.__game.act.complete()).catch(() => {});
+    const ok = await V.through(() => (((g) => { const m = g.modes?.rldwalk; if (g.modeName === 'rldwalk' && m?.zone && !m.done) { window.__walkSeen = { opening: !!m.zone.opening, mode: g.modeName }; m.done = true; g.endZone(m.zone, { outcome: 'abort', rep: 0 }); } })(window.__game), window.__game.state.act.act2?.opening === 'done') && !document.querySelector('#modal-root .modal-back'), 60000);
     report.act2handoff = await V.page.evaluate(() => ({ done: window.__game.state.act.done, opening: window.__game.state.act.act2?.opening, rep: window.__game.state.rep, hotel: window.__game.overworld.zones.some((z) => z.hotel), title: window.__game.act.title() }));
     if (!ok || report.act2handoff.rep !== -50) throw new Error(`hand-off: ${JSON.stringify(report.act2handoff)}`);
     return V;
@@ -375,21 +375,20 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
   // The gate counting and the suit hook, then ?act=act2lair's beat and ?act=act2boss's state.
   await flow('act2gates', async () => {
     const V = await game('act=act2&flight=2d');
-    await V.through(() => window.__game.state.act?.act2?.opening === 'done' && !document.querySelector('#modal-root .modal-back'), 60000);
-    // with the level registered (a stand-in for job I's mode): the opening starts a walk with opening: true
+    await V.through(() => (((g) => { const m = g.modes?.rldwalk; if (g.modeName === 'rldwalk' && m?.zone && !m.done) { window.__walkSeen = { opening: !!m.zone.opening, mode: g.modeName }; m.done = true; g.endZone(m.zone, { outcome: 'abort', rep: 0 }); } })(window.__game), window.__game.state.act?.act2?.opening === 'done') && !document.querySelector('#modal-root .modal-back'), 60000);
+    // the real level (job I) is registered: re-run the opening with startZone stubbed to catch its zone (opening: true)
     report.act2walk = await V.page.evaluate(async () => {
       const g = window.__game, B = g.state.act.act2, real = g.startZone;
       let got = null;
-      g.modes.rldwalk = {}; g.rldWalkFields = (o) => ({ kind: 'special', venue: 'Red Light Den', name: 'RLD Walk', fromFields: true, ...o });
       g.startZone = (z) => { got = z; };
       B.opening = 'pending'; g.act.two.walkLive = false;
       for (let i = 0; i < 300 && !got; i++) { const el = [...document.querySelectorAll('#modal-root .modal-back')].pop(); if (el) (el.querySelector('.opt, button') || el).click(); await new Promise((r) => setTimeout(r, 100)); }
-      g.startZone = real; delete g.modes.rldwalk; delete g.rldWalkFields;
+      g.startZone = real;
       if (!got) return { why: { q: g.act.queue.length, busy: g.act.busy, mode: g.modeName, rising: g.overworld.rising, diving: !!g.overworld.diving, opening: B.opening, modal: document.querySelector('#modal-root .modal-back')?.innerText.slice(0, 80) } };
       return got && { mode: got.mode, opening: got.opening, district: got.district, fromFields: got.fromFields, x: Math.round(got.x) };
     });
     if (!report.act2walk?.opening || report.act2walk.mode !== 'rldwalk' || report.act2walk.district !== 'redlight') throw new Error(`opening walk not started: ${JSON.stringify(report.act2walk)}`);
-    await V.through(() => window.__game.state.act.act2.opening === 'done' && !document.querySelector('#modal-root .modal-back'), 30000);
+    await V.through(() => (((g) => { const m = g.modes?.rldwalk; if (g.modeName === 'rldwalk' && m?.zone && !m.done) { window.__walkSeen = { opening: !!m.zone.opening, mode: g.modeName }; m.done = true; g.endZone(m.zone, { outcome: 'abort', rep: 0 }); } })(window.__game), window.__game.state.act.act2.opening === 'done') && !document.querySelector('#modal-root .modal-back'), 30000);
     const counted = await V.page.evaluate(async () => {
       const act = window.__game.act;
       for (const z of [{ mode: 'rldwalk', venue: 'Red Light Den' }, { mode: 'asylum', venue: 'Ravenmoor Asylum' }, { mode: 'special', venue: 'High-Roller Suite' }, { mode: 'investigate', def: { id: 'spiked', crime: 'the spiked-drinks scandal' } }]) await act.onZoneWin(z);
@@ -429,7 +428,7 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
   // open below 0, the cult's Polaroid rate following the impostors' rep, and Act 1 untouched.
   await flow('act2promo', async () => {
     const V = await game('act=act2&flight=2d');
-    await V.through(() => window.__game.state.act?.act2?.opening === 'done' && !window.__game.act.busy && !window.__game.act.queue.length && !document.querySelector('#modal-root .modal-back'), 60000); // (the morning papers too)
+    await V.through(() => (((g) => { const m = g.modes?.rldwalk; if (g.modeName === 'rldwalk' && m?.zone && !m.done) { window.__walkSeen = { opening: !!m.zone.opening, mode: g.modeName }; m.done = true; g.endZone(m.zone, { outcome: 'abort', rep: 0 }); } })(window.__game), window.__game.state.act?.act2?.opening === 'done') && !window.__game.act.busy && !window.__game.act.queue.length && !document.querySelector('#modal-root .modal-back'), 60000); // (the morning papers too)
     const promo = () => V.page.evaluate(() => {
       const g = window.__game, ow = g.overworld, h = ow.hero;
       for (const q of [...ow.zones]) if (q.promo) ow.removeZone(q);
