@@ -86,6 +86,11 @@ function keyOnto(frame, plate) {
 
 /** A made-up polaroid of her (a canvas). Always resolves: with no clip to hand it's a club plate. */
 export async function makePolaroid(caption = pick(SCRAWL)) {
+  return polaroid(await makeStill(), caption);
+}
+
+/** The picture inside one (a frame of a clip, keyed onto a club plate), unframed. Always resolves. */
+export async function makeStill() {
   const all = await mediaFolders();
   const dance = all.ClubDance || [], tipsy = (all.Flying || []).filter((u) => /Intoxicated/i.test(u));
   const plate = await load(() => { const i = new Image(); i.src = pick(PLATES); return i; });
@@ -94,7 +99,7 @@ export async function makePolaroid(caption = pick(SCRAWL)) {
     if (dance.length && (!tipsy.length || Math.random() < 0.6)) { const f = await frameOf(pick(dance)); if (f) pic = keyOnto(f, plate); }
     else if (tipsy.length) pic = await frameOf(pick(tipsy));
   } catch (e) { pic = null; }
-  return polaroid(pic || plate || Object.assign(document.createElement('canvas'), { width: 8, height: 8 }), caption);
+  return pic || plate || Object.assign(document.createElement('canvas'), { width: 8, height: 8 });
 }
 
 const the = (v) => (/^the /i.test(v || '') ? v : `the ${v || 'club'}`);
@@ -168,7 +173,8 @@ function stepStrays(ow, st, dt) {
   const act = ow.g.act?.straysOn() ? ow.g.act : null; // the act's frame-up: they turn up whatever her reputation, most of them fakes
   if (st.rep >= 0 && !act) { ow.strayT = rand(...STRAYS.every) * 0.5; return; }
   const short = act?.straysShort() ? STRAYS.short : null;
-  ow.strayT = (ow.strayT ?? rand(...STRAYS.every) * 0.5) - dt * (short ? short.rate : st.rep < -50 ? 1.6 : st.rep < 0 ? 1 : 0.7); // (the act's, at a good reputation: a little slower)
+  const rate = act?.strayRate?.() ?? (short ? short.rate : st.rep < -50 ? 1.6 : st.rep < 0 ? 1 : 0.7); // (the act's, at a good reputation: a little slower; Act 2: the impostors' rep sets it)
+  ow.strayT = (ow.strayT ?? rand(...STRAYS.every) * 0.5) - dt * rate;
   if (ow.strayT > 0 || strays.length >= (short ? short.max : STRAYS.max)) return;
   ow.strayT = rand(...STRAYS.every);
   const h = ow.hero, cands = ow.g.city.blocks.filter((b) => {

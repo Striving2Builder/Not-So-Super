@@ -8,27 +8,29 @@
 // if either exists, else a stand-in zone; the opening zone carries `opening: true`. Without the
 // mode, the opening skips the walk with a toast. A won walk counts (zone.mode === 'rldwalk'), and a
 // right "Which one is hers?" pick calls game.act.suitFind(piece, true).
-import { ACT2, GATES, GATE_LABELS, FINDS, PIECES, PIECE_ALIAS, CLUES, BEATS, LINES } from './act2.js';
+import { ACT2, GATES, GATE_LABELS, FINDS, PIECES, PIECE_ALIAS, CLUES, BEATS, LINES, DISGRACED_DOORS, DOOR_HINT, IMP, strayRate, PROMO, PROMO_VENUES, PROMO_LINES } from './act2.js';
 import { spotCall, impostorize, fakeStrength } from './spot.js';
-import { makePolaroid } from '../polaroids.js';
+import { makePolaroid, makeStill } from '../polaroids.js';
 import { showNewspaper } from '../newspaper.js';
-import { VENUES } from '../data.js';
+import { VENUES, DISTRICTS } from '../data.js';
 import { dialog, toast, openModal, closeModal } from '../ui.js';
 import { comic } from '../comic.js';
 import { sfx } from '../sfx.js';
 import { LOT } from '../city.js';
-import { pick, clamp, dist, chance } from '../util.js';
+import { pick, clamp, dist, chance, rand, randi } from '../util.js';
+import { laneBusy } from '../moments/frame.js';
 
 const POL_RECT = [14, 14, 232, 232]; // the photo inside a Polaroid (blackout.js polaroid())
 const STRAY_FAKE = 0.6;              // share of the cult's Polaroids that are fakes
 const WALK_EVERY = 3;                // s between checks for a walk on the map
+const STAGE_RECT = [0, 44, 300, 296]; // the photo inside a promotion's stage card (stageCard)
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /** A new Act 2 (made when Act 1 completes). `opening`: 'pending' → 'walk' → 'done'. */
 export function freshAct2() {
   return {
     id: ACT2.id, opening: 'pending', counts: Object.fromEntries(Object.keys(GATES).filter((k) => k !== 'suit').map((k) => [k, 0])),
-    suit: Object.fromEntries(PIECES.map((p) => [p.id, 0])), clues: {}, beats: {}, unsorted: 0, lairOpen: false, bossReady: false, done: false,
+    suit: Object.fromEntries(PIECES.map((p) => [p.id, 0])), clues: {}, beats: {}, unsorted: 0, impAdj: 0, lairOpen: false, bossReady: false, done: false,
   };
 }
 
@@ -53,6 +55,8 @@ export class Act2 {
     this.walkLive = false; // the opening walk was started this session (vs a reload mid-walk)
     this.walkT = 0;
     this.seen = new WeakSet();
+    this.promoT = PROMO.first;
+    this.lineup = null; // the truth of the promotion lineup on screen (the harness reads it)
   }
 
   /** Act 2's state, or null while Act 1 is still running. */
@@ -148,8 +152,28 @@ export class Act2 {
     return { piece: id, n, back: n >= FINDS };
   }
 
-  /** The impostors' reputation (a placeholder until the pendulum, phase B): roughly the inverse of hers. */
-  impRep() { return clamp(-this.g.state.rep - 10 * (this.B?.counts.promotions || 0), -100, 300); }
+  // ------------------------------------------------------------------ the pendulum (act2.md "The reputation pendulum")
+  /** The impostors' reputation: the inverse of hers, plus what she's done to them (B.impAdj, saved). */
+  impRep() { return Math.round(clamp(-this.g.state.rep + (this.B?.impAdj || 0), IMP.min, IMP.max)); }
+  impBy(n) { const B = this.B; if (B) B.impAdj = clamp((B.impAdj || 0) + n, -200, 200); }
+
+  /** How fast the cult's Polaroids turn up (polaroids.js): the impostors' rep, a little faster while the gate is short. */
+  strayRate() { return strayRate(this.impRep()) * (this.straysShort() ? 1.4 : 1); }
+
+  /** The row of DISGRACED_DOORS a map mission falls under, or null. */
+  doorOf(z) {
+    const V = VENUES[z.venue], casino = !!(z.casino || z.mode === 'casino' || V?.kind === 'casino');
+    const caseId = (z.mode === 'investigate' || z.mode === 'nightcase') && z.def?.id;
+    return DISGRACED_DOORS.find((r) => r.on !== false && (!r.districts || r.districts.includes(z.district))
+      && ((r.casino && casino) || (r.venue && r.venue === z.venue && !z.storyId) || (r.story && r.story === z.storyId) || (r.cases && caseId && r.cases.includes(caseId)))) || null;
+  }
+  /** Why the door is shut (her rep is 0 or more and it's a disgraced-only door), or null. */
+  doorShut(z) {
+    const B = this.B;
+    if (!B || B.done || B.opening !== 'done' || this.g.state.rep < 0 || !z || z.actDive) return null;
+    return this.doorOf(z)?.why || null;
+  }
+  doorHint() { return DOOR_HINT; }
 
   // ------------------------------------------------------------------ per frame (act.js update)
   update(dt, ow) {
@@ -163,6 +187,10 @@ export class Act2 {
     }
     if (!B.lairOpen && this.gatesMet()) { B.lairOpen = true; this.g.state.save(); q.push({ two: 'lair' }); }
     if ((this.walkT -= dt) <= 0) { this.walkT = WALK_EVERY; this.ensureWalk(ow); }
+    if (!ow.attract && !ow.zones.some((z) => z.promo) && (this.promoT -= dt) <= 0) {
+      this.promoT = rand(...PROMO.every) * (B.counts.promotions >= GATES.promotions ? 1.5 : 1);
+      this.spawnPromo(ow);
+    }
   }
 
   async play(ev, ow) {
@@ -254,7 +282,7 @@ export class Act2 {
     const fakePic = z.fake ? impostorize(pic, fakeStrength(B.counts.polaroids), POL_RECT) : null;
     const fake = !!fakePic;
     const r = await spotCall({ img: fakePic || pic, fake, sub: `It was ${z.where}.`, tell: fakePic?.tell, score: `Cult Polaroids called ${B.counts.polaroids}/${GATES.polaroids}` });
-    if (fake && r.right) { B.counts.polaroids++; st.addRep(4, 'Proved a cult Polaroid was a fake'); }
+    if (fake && r.right) { B.counts.polaroids++; this.impBy(IMP.polaroidRight); st.addRep(4, 'Proved a cult Polaroid was a fake'); }
     else if (fake) { B.unsorted++; toast('It\'s pinned to your act board: look at it again later', 'info'); }
     else if (r.right) st.addRep(2, 'Got a polaroid back');
     st.save();
@@ -267,7 +295,80 @@ export class Act2 {
     const fakePic = impostorize(pic, fakeStrength(B.counts.polaroids), POL_RECT);
     if (!fakePic) { toast('Too blurry to tell. Try again.', 'info'); return; }
     const r = await spotCall({ img: fakePic, fake: true, sub: 'Pinned to your board. Look closely this time.', tell: fakePic.tell });
-    if (r.right) { B.unsorted--; B.counts.polaroids++; this.g.state.addRep(4, 'Proved a cult Polaroid was a fake'); }
+    if (r.right) { B.unsorted--; B.counts.polaroids++; this.impBy(IMP.polaroidRight); this.g.state.addRep(4, 'Proved a cult Polaroid was a fake'); }
+    this.g.state.save();
+  }
+
+  // ------------------------------------------------------------------ promotions and grand openings
+  /** A promotion on the map (like Act 1's sightings): the cult's "Supergirls" at a club in a vice district. */
+  spawnPromo(ow, at = null) {
+    const city = this.g.city, h = ow.hero;
+    const free = (x, y) => ow.zones.every((z) => dist(z.x, z.y, x, y) > 400);
+    if (!at) {
+      const blocks = city.blocks.filter((b) => !b.river && PROMO.districts.includes(b.d));
+      const b = pick(blocks.filter((q) => dist(q.x0 + LOT / 2, q.y0 + LOT / 2, h.x, h.y) > 450 && free(q.x0 + LOT / 2, q.y0 + LOT / 2))) || pick(blocks);
+      if (!b) return null;
+      at = { x: b.x0 + LOT / 2, y: b.y0 + LOT / 2, district: b.d };
+    }
+    const d = PROMO.districts.includes(at.district) ? at.district : PROMO.districts[0];
+    const venue = pick(PROMO_VENUES[d]), what = pick(PROMO_LINES.what);
+    const z = {
+      uid: ow.uid++, kind: 'promo', promo: true, actDive: 'promo', actGate: 'promotions', district: d, t: 0, x: at.x, y: at.y, ttl: PROMO.ttl,
+      name: `"Supergirl" at ${what} ${venue}`, venueName: venue, what, color: PROMO.color, glyph: PROMO.glyph, risk: 'Impostors',
+      reward: PROMO.rep, lockKey: 'Promotions', blurb: PROMO_LINES.blurb,
+    };
+    ow.zones.push(z);
+    sfx.alarm();
+    if (!laneBusy()) toast(`🎤 Tonight: "Supergirl" at ${what} ${venue} (${DISTRICTS[d]?.name || 'the city'}). That's not you!`, 'bad');
+    comic.headline(`SUPERGIRL AT ${venue.toUpperCase()}!`, { tone: 'bad', kicker: 'TONIGHT' });
+    return z;
+  }
+
+  /** DIVE on an act map event (only promotions so far). */
+  async dive(ow, z) {
+    if (z.actDive !== 'promo' || this.promoBusy) return;
+    ow.removeZone(z);
+    this.promoBusy = true;
+    try { await this.promotion(z); } finally { this.promoBusy = false; this.lineup = null; }
+  }
+
+  /** The stage: a lineup of "Supergirls", one call each (spot.js). One wrong call is the cult's photo op. */
+  async promotion(z) {
+    const B = this.B, st = this.g.state, n = PROMO.lineup, fakeAt = randi(0, n - 1);
+    if (!B) return;
+    sfx.hit();
+    this.lineup = [];
+    let right = true;
+    for (let i = 0; i < n && right; i++) {
+      const card = stageCard(await makeStill(), z.venueName, z.what);
+      const fakePic = i === fakeAt || chance(0.35) ? impostorize(card, fakeStrength(B.counts.promotions * 3), STAGE_RECT) : null;
+      const fake = !!fakePic;
+      this.lineup.push(fake);
+      const r = await spotCall({ img: fakePic || card, fake, sub: PROMO_LINES.sub(i + 1, n, z.venueName), tell: fakePic?.tell, score: `Impostors caught at promotions ${Math.min(B.counts.promotions, GATES.promotions)}/${GATES.promotions}` });
+      right = !!r?.right;
+    }
+    if (right) {
+      const c = this.count('promotions');
+      this.impBy(IMP.promoCaught);
+      st.addRep(PROMO.rep, `Caught the impostors at ${z.venueName}`);
+      comic.headline('IMPOSTORS UNMASKED!', { tone: 'good', kicker: 'CAUGHT!' });
+      toast(`${PROMO_LINES.caught} (${Math.min(c, GATES.promotions)}/${GATES.promotions})`, 'good');
+    } else {
+      this.impBy(IMP.promoLost);
+      st.addRep(-PROMO.lostRep, `The cult's photo op at ${z.venueName}`);
+      comic.headline(`"SUPERGIRL" PARTIES AT ${z.venueName.toUpperCase()}`, { tone: 'bad', kicker: 'SCANDAL!' });
+      toast(PROMO_LINES.photoOp, 'bad');
+    }
+    st.save();
+  }
+
+  /** A promotion nobody stopped: the photos ran. */
+  diveLost(z) {
+    if (z.actDive !== 'promo' || !this.B) return;
+    this.impBy(IMP.promoMissed);
+    this.g.state.addRep(-PROMO.missedRep, `Nobody stopped the "Supergirl" at ${z.venueName}`);
+    comic.headline(`"SUPERGIRL" OPENS ${z.venueName.toUpperCase()}`, { tone: 'bad', kicker: 'SCANDAL!' });
+    if (!laneBusy()) toast(PROMO_LINES.missed, 'bad');
     this.g.state.save();
   }
 
@@ -297,7 +398,7 @@ export class Act2 {
           <div class="ab-lts">${pieces}${clues}</div>
           <div class="ab-side">
             <div class="ab-boss"><i class="cb-pin"></i><div class="ab-q">${B.done ? '✓' : '?'}</div><b>${ACT2.boss.toUpperCase()}</b><small>${B.done ? 'Behind bars' : 'The cult\'s leader, in your stolen suit'}</small></div>
-            <div class="ab-jig"><small>Your rep <b>${st.rep}</b> · The impostors' rep <b>${this.impRep()}</b></small><br><small>Suit: ${this.suitFinds()}/${GATES.suit} finds · ${suitTxt}</small></div>
+            <div class="ab-jig"><small>Your rep <b>${st.rep}</b> · The impostors' rep <b>${this.impRep()}</b></small><br><small>${this.impRep() > 0 ? 'The cult\'s Polaroids are everywhere' : 'The cult\'s Polaroids are drying up'} · Disgraced-only doors <b>${st.rep < 0 ? 'open' : 'shut'}</b></small><br><small>Suit: ${this.suitFinds()}/${GATES.suit} finds · ${suitTxt}</small></div>
             <div class="ab-gates">${rows}</div>
           </div>
         </div>
@@ -312,4 +413,25 @@ export class Act2 {
       el.querySelector('.ab-again')?.addEventListener('click', () => close(async () => { await this.lookAgain(); return this.openBoard(); }));
     });
   }
+}
+
+/** A promotion's stage photo: a marquee over a frame of "her" under the lights (STAGE_RECT is the photo). */
+function stageCard(src, venue, what) {
+  const c = document.createElement('canvas'); c.width = 300; c.height = 340;
+  const g = c.getContext('2d'), [x, y, w, h] = STAGE_RECT;
+  g.fillStyle = '#12060c'; g.fillRect(0, 0, 300, 340);
+  const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height, s = Math.max(w / sw, h / sh);
+  g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
+  g.drawImage(src, x + (w - sw * s) / 2, y + (h - sh * s) / 2, sw * s, sh * s);
+  const spot = g.createRadialGradient(150, y + 40, 10, 150, y + 120, 220); // the stage light
+  spot.addColorStop(0, 'rgba(255,250,235,.16)'); spot.addColorStop(1, 'rgba(0,0,0,.28)');
+  g.fillStyle = spot; g.fillRect(x, y, w, h);
+  g.restore();
+  const m = g.createLinearGradient(0, 0, 0, 44); m.addColorStop(0, '#ffe680'); m.addColorStop(1, '#d99a1a');
+  g.fillStyle = m; g.fillRect(0, 0, 300, 44);
+  for (let i = 0; i < 15; i++) { g.fillStyle = i % 2 ? '#fff6c8' : '#ff4d6a'; g.beginPath(); g.arc(10 + i * 20, 4, 2.5, 0, Math.PI * 2); g.fill(); } // the marquee's bulbs
+  g.fillStyle = '#2a0a12'; g.textAlign = 'center';
+  g.font = '900 17px Impact, "Arial Black", sans-serif'; g.fillText(what.toUpperCase().replace(/ (OF|AT)$/, ''), 150, 24);
+  g.font = 'italic 700 13px Georgia, serif'; g.fillText(venue, 150, 39);
+  return c;
 }

@@ -278,6 +278,17 @@ export class Act {
   /** Act 2: one toward a gate from elsewhere (e.g. 'promotions', 'casino'). */
   count(id, n = 1) { return this.two.count(id, n); }
 
+  // Act 2's pendulum (act2run.js); in Act 1 these are no-ops, so Act 1 plays exactly as before.
+  /** The cult's Polaroid rate (polaroids.js stepStrays); undefined = the usual rule. */
+  strayRate() { return this.two.on() ? this.two.strayRate() : undefined; }
+  /** Why a map mission's door is shut (a disgraced-only venue while her rep is 0+), or null. */
+  doorShut(z) { return this.two.on() ? this.two.doorShut(z) : null; }
+  doorHint() { return this.two.doorHint(); }
+  /** DIVE on an act map event (`z.actDive`, e.g. a promotion); overworld.js tryDive. */
+  dive(ow, z) { return this.two.dive(ow, z); }
+  /** An act map event nobody came to (its ttl ran out). */
+  diveLost(z) { return this.two.diveLost(z); }
+
   /** She dove on a Polaroid: the call. Returns once it's settled. */
   async callPolaroid(z) {
     if (this.two.on()) return this.two.callPolaroid(z);
