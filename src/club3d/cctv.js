@@ -63,7 +63,7 @@ export const cctvMethods = {
     this.stageLightsCut(k > 0.35);
     if (!k && !this._camOn) return;
     this._camOn = k > 0;
-    const mats = this.camScreens(), ov = overlayTex(this.undercover ? 'SUBJECT: UNKNOWN' : `SUBJECT: ${HERO.toUpperCase()}`);
+    const mats = this.camScreens(), ov = overlayTex(this.camLabel || (this.undercover ? 'SUBJECT: UNKNOWN' : `SUBJECT: ${HERO.toUpperCase()}`)); // (r11 V2 hook: a beat's own caption)
     for (const m of mats) {
       const U = m.userData.screen;
       U.cam.value = k;
@@ -83,7 +83,7 @@ export const cctvMethods = {
       this.camCam = new THREE.PerspectiveCamera(CCTV.fov, CCTV.size[0] / CCTV.size[1], 0.2, 70);
       this.camPos = null;
     }
-    const h = this.hero.position, C = this.camCam, [ox, oy, oz] = CCTV.at;
+    const h = this.camSubject || this.hero.position, C = this.camCam, [ox, oy, oz] = CCTV.at; // (r11 V2 hook: a beat can aim it at someone else)
     // a dome camera on the rig in front of her: it pans after her, a beat behind
     const want = new THREE.Vector3(h.x + ox * Math.sign(h.x || 1) * 4, h.y + oy, h.z + oz);
     if (!this.camPos) this.camPos = want.clone(); else this.camPos.lerp(want, 0.35);

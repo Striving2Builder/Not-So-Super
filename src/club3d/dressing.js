@@ -9,6 +9,7 @@ import { toon } from '../look3d.js';
 import { quality } from '../settings.js';
 import { reflectMat } from './video.js';
 import { floorY } from './plan.js';
+import { dressVenue } from './venue.js';
 
 const SEC = 0.4;          // the truss towers' section (m)
 
@@ -160,6 +161,7 @@ export function dressHall(zn, plan, M, X, video, A) {
   const gw = Math.min(hw * 2, W.w + 14), glowQ = new THREE.Mesh(new THREE.PlaneGeometry(gw, H), glowM);
   glowQ.position.set(0, H / 2, -hd + 0.6); S.add(glowQ);
 
+  const venueStep = dressVenue(zn, plan); // (r11 V2: the room's own air + landmark)
   let tuned = false;
   return (t, dt, B, drop, flash, cA, cB) => {
     if (!tuned && X.cones.mesh) { X.cones.mesh.material.uniforms.uNear.value = 6; tuned = true; } // (no beam washes the screen)
@@ -170,6 +172,7 @@ export function dressHall(zn, plan, M, X, video, A) {
       X.cones.flush();
     }
     for (const c of thump) c.scale.setScalar(1 + 0.08 * e);
+    venueStep?.(t);
     for (const a of artE) art.set(a.e, Math.sin(t * 23 + a.i * 7) > 0.97 ? 0.25 : 0.7 + 0.35 * e * (a.i % 2 ? 1 : 0.6)); // (a flicker now and then)
     art.flush();
     mistM.uniforms.t.value = t; mistM.uniforms.k.value = 0.032 + 0.026 * e + flash * 0.12;

@@ -18,15 +18,17 @@ import { CLIPS } from './clips.js';
 import { showNewspaper } from '../newspaper.js';
 import { HERO } from '../data.js';
 import { TWISTS } from './casedata.js';
+import { stageMethods, genPaper } from './casestage.js';
 
 export const BEAT = { first: [14, 20], gap: [20, 28], again: [38, 50], hold: 7, phones: 8, r: 1.9 };
 const SNAP_ROOMS = ['restroom', 'lounge', 'storage', 'dark'];
 
 export const beatMethods = {
+  ...stageMethods, // (r11 V2: the twist's own beats, the staging, the paper's photo)
   startBeats() {
     const G = this.caseDef.gen;
     this._kh = { knot: null, leaving: null }; // (the knot outside a generated case: the idle ring, the cage; danger.js)
-    this.gb = G ? { i: 0, t: +(new URLSearchParams(location.search).get('club3beat') || rand(...BEAT.first)), knot: null, refused: 0, drank: 0, repeats: 0, photo: null, snapper: null, proof: false, phoneBack: false, headline: false } : null;
+    this.gb = G ? { i: 0, t: +(new URLSearchParams(location.search).get('club3beat') || (G?.pace ? rand(G.pace[0], G.pace[0] + 5) : rand(...BEAT.first))), knot: null, refused: 0, drank: 0, repeats: 0, photo: null, snapper: null, proof: false, phoneBack: false, headline: false } : null;
   },
 
   stepBeats(dt) {
@@ -37,6 +39,7 @@ export const beatMethods = {
     if (B.deadline && this.t >= B.deadline) { B.deadline = 0; this.closeQuick?.('slow'); }
     this.stepKnot(dt);
     this.stepSnapper(dt);
+    this.stepStage(dt);
     if ((B.knot && !B.knot.idle) || this.busy || this.sub || this.sedating || this.quickOn || this.room || this.escapeT > 0) return;
     B.t -= dt;
     if (B.t > 0) return;
@@ -44,10 +47,11 @@ export const beatMethods = {
     let kind = list[B.i];
     if (!kind) {
       if (B.repeats >= 2) { B.t = 1e9; return; }
-      B.repeats++; kind = 'shots'; // (the crowd comes back for more, pushier)
+      B.repeats++; kind = this.caseDef.gen.again || 'shots'; // (the crowd comes back for more, pushier; r11 V2: the twist's own repeat)
     }
     B.i++;
-    B.t = rand(...(B.i > list.length ? BEAT.again : BEAT.gap));
+    const P = this.caseDef.gen.pace; // (r11 V2: each suspect's own pace)
+    B.t = B.i > list.length ? rand(...BEAT.again) : P ? rand(P[1], P[1] + 6) : rand(...BEAT.gap);
     this.run(() => this.beat(kind));
   },
 
@@ -58,6 +62,10 @@ export const beatMethods = {
     if (kind === 'selfie') return this.beatSelfie();
     if (kind === 'push') return this.beatPush();
     if (kind === 'trap') return this.beatTrap();
+    if (kind === 'stream') return this.beatStream();
+    if (kind === 'booth') return this.beatBooth();
+    if (kind === 'double') return this.beatDouble();
+    if (kind === 'breakout') return this.beatBreakout();
   },
 
   // ------------------------------------------------------------------ the knot
@@ -97,6 +105,7 @@ export const beatMethods = {
 
   stepKnot(dt) {
     const B = this.knotHost(), K = B.knot, h = this.hero.position, ease = Math.min(1, dt * 3);
+    if (this.flashSpr?.visible && performance.now() > this.flashUntil) this.flashSpr.visible = false;
     if (B.leaving) {
       B.leaveT -= dt;
       for (const q of B.leaving) { q.p.hx += (q.hx - q.p.hx) * ease; q.p.hz += (q.hz - q.p.hz) * ease; }
@@ -123,6 +132,7 @@ export const beatMethods = {
         K.flashT = rand(0.35, 0.9) / (K.rate || 1); // (the idle ring: faster the longer she stands there)
         const q = pick(K.k), s = this.screenOf({ x: q.p.x, y: 1.9, z: q.p.z }, 0);
         if (s && this.t - (K.powAt ?? -9) > 1.2) { K.powAt = this.t; comic.pow(pick(['SNAP!', 'FLASH', 'CLICK!']), s.x, s.y, { size: 0.5, colors: ['#ffffff', '#ffd84d'] }); } // (r11 L2b: one SNAP! word a beat, the flashes keep coming)
+        this.stageFlash(q.p.x + Math.sin(q.p.rot) * 0.38, (q.p.fy || 0) + 1.95, q.p.z + Math.cos(q.p.rot) * 0.38); // (r11 V2: the flash lights the room)
         ph.material.color.setHex(0xffffff); setTimeout(() => this.phones?.material.color.setHex(0x9fd8ff), 90);
         sfx.shutter?.();
       }
@@ -160,11 +170,14 @@ export const beatMethods = {
     sfx.crowd?.();
     const s = this.screenOf(this.hero.position, 2.2);
     if (s) comic.pow(B.refused ? 'DRINK! DRINK!' : 'SHOTS!', s.x, s.y - 30, { size: 1 });
+    this.stageGlass(3, 0xfff2c0); // (r11 V2: the shot glass, pushed into her hand)
     await this.wait(0.6);
-    const v = await this.quickT({ speaker: B.refused ? 'The fans, louder' : 'The fans', text: B.refused ? `"Come ON, ${HERO}! You can't say no twice!"` : `"OMG it's ${HERO}! One shot with us! Just one!"`,
+    const own = !B.refused && this.caseDef.gen.lines?.shot; // (r11 V2: the suspect's crew push their own way)
+    const v = await this.quickT({ speaker: own ? this.caseDef.gen.crew : B.refused ? 'The fans, louder' : 'The fans', text: own || (B.refused ? `"Come ON, ${HERO}! You can't say no twice!"` : `"OMG it's ${HERO}! One shot with us! Just one!"`),
       options: [{ label: 'Down it', note: '+18 intoxication · they talk', value: 'drink', cls: 'risky' }, { label: 'Palm it (super-speed)', note: 'if nobody\'s looking', value: 'fake' }, { label: '"Not tonight."', note: pushy > 0.6 ? 'they won\'t take it well' : '', value: 'no' }] });
     if (v === 'drink') {
       this.g.state.addIntox(18); sfx.drink(); B.drank++;
+      if (!B.photo && this.caseDef.gen.twist === 'real') this.takePhoto({ real: true, how: 'drink' }); // (the shot itself: a real photo)
       if (s) comic.pow('GULP!', s.x, s.y, { size: 0.9 });
       this.addCard('drunk', 'Shots with the fans, phones up');
       toast('"LEGEND!" One of them leans in, loose-lipped:', 'good');
@@ -187,17 +200,21 @@ export const beatMethods = {
   async beatSelfie() {
     const B = this.gb, G = this.caseDef.gen, h = this.hero.position;
     this.formKnot(Math.max(4, G.profile.knot - 1), 2.2);
-    const poser = this.spawnSnapper(h.x + 0.85, h.z + 0.15);
+    // (r11 V2: only a real photo has a snapper who runs; for the other twists the poser is just a fan)
+    const snap = G.runner === 'snapper' && !B.snapper;
+    const poser = snap ? this.spawnSnapper(h.x + 0.85, h.z + 0.15) : this.npc({ ...npcLook('civilian'), top: '#e0b020', bottom: '#1a1a1a', skirt: null, hairStyle: 'slick' }, h.x + 0.85, h.z + 0.15, Math.PI);
+    if (!snap) this.wait(7).then(() => poser.parent?.remove(poser));
     poser.rotation.y = 0.2;
     if (poser.arms) poser.arms[1].rotation.x = -2.7; // (the selfie arm)
     const s = this.screenOf(poser.position, 2.1);
     if (s) comic.pow('GOTCHA!', s.x, s.y - 20, { size: 1.1 });
     sfx.shutter?.(); flash('#ffffff');
     const tipsy = this.g.state.intox >= INTOX_HAZE;
-    const v = await this.quickT({ speaker: 'A fan in a gold jacket', text: G.twist === 'lookalike' ? '"Do the bar dance again! Like an hour ago! Say cheese!"' : '"Squeeze in, Supergirl! Say cheese!"',
+    const own = G.lines?.selfie && G.twist === 'real';
+    const v = await this.quickT({ speaker: own ? G.crew : 'A fan in a gold jacket', text: own ? G.lines.selfie : G.twist === 'lookalike' ? '"Do the bar dance again! Like an hour ago! Say cheese!"' : '"Squeeze in, Supergirl! Say cheese!"',
       options: [{ label: 'Smile for it', value: 'smile' }, { label: 'Cover your face', value: 'cover' }, { label: 'Grab his phone', note: 'a scene, on camera', value: 'grab', cls: 'risky' }] }, 6);
     sfx.shutter?.(); flash('#ffffff');
-    B.photo = { real: tipsy, how: v };
+    this.takePhoto({ real: tipsy, how: v }); // (r11 V2: the real frame, for the paper)
     if (v === 'grab') {
       this.g.state.addRep(-2, 'Snatched a fan\'s phone');
       toast('She has it, but it\'s already sent. He yanks it back and bolts. Everyone filmed THAT.', 'bad');
@@ -206,7 +223,8 @@ export const beatMethods = {
     this.addCard('fans', tipsy ? 'Tipsy, cheek to cheek with a fan' : 'A "gotcha" selfie with a fan');
     await this.wait(1);
     this.releaseKnot();
-    this.snapperRun();
+    if (snap) this.snapperRun();
+    else if (G.twist === 'doctored') toast('He\'s already sending it to somebody with a photo editor. Find the original.', 'info');
   },
 
   /** Planted: a glass shoved into her hand, the flashes go before she can put it down. */
@@ -216,19 +234,22 @@ export const beatMethods = {
     const s = this.screenOf(this.hero.position, 2.2);
     if (s) comic.pow('HOLD THIS!', s.x, s.y - 30, { size: 1 });
     this.say(this.hero.position, '"Hold this a sec!"', { speaker: 'A man in a gold jacket' });
+    this.stageGlass(9); // (r11 V2: the glass, in her hand, in 3D)
     await this.wait(0.5);
     for (let i = 0; i < 3; i++) { sfx.shutter?.(); flash('#ffffff'); await this.wait(0.25); }
+    this.takePhoto({ real: false, planted: true, how: 'held' });
     const v = await this.quickT({ speaker: 'Glass in hand', text: 'A full glass, and every phone on her. Too late: they have it.',
       options: [{ label: 'Hand it back', value: 'back' }, { label: 'Drink it', note: '+18 intoxication', value: 'drink', cls: 'risky' }, { label: 'Fling it away', note: 'a scene', value: 'fling' }] }, 6);
     if (v === 'drink') { this.g.state.addIntox(18); sfx.drink(); }
     if (v === 'fling') { this.g.state.addRep(-2, 'Flung a drink'); if (s) comic.pow('SPLASH!', s.x, s.y, { size: 0.9 }); }
-    B.photo = { real: false, planted: true, how: v };
+    B.photo = { ...B.photo, real: false, planted: true, how: v };
+    if (v !== 'drink') this.stageGlassT = this.t + (v === 'fling' ? 0 : 1.2);
     this.addCard('fans', 'Glass in hand, mid-flash');
     toast('The guy in the gold jacket melts into the crowd, phone first.', 'bad');
     await this.wait(0.8);
     this.releaseKnot();
-    this.spawnSnapper(this.hero.position.x + 1.4, this.hero.position.z - 1);
-    this.snapperRun();
+    // (r11 V2: no snapper for a planted drink: the gold jacket comes back in the CCTV booth beat)
+    if (!this.caseDef.gen.beats.includes('booth')) { this.spawnSnapper(this.hero.position.x + 1.4, this.hero.position.z - 1, 'wiper'); this.runRunner(); }
   },
 
   /** The setup: a tight ring of hired fans, phones up, nobody lets her out. Lasts ≤ ~6 s. */
@@ -250,10 +271,11 @@ export const beatMethods = {
       if (s) comic.pow('WHOOSH!', s.x, s.y, { size: 1 });
       this.alert = Math.min(95, this.alert + 15);
     } else { for (let i = 0; i < 4; i++) { sfx.shutter?.(); flash('#ffffff'); await this.wait(0.35); } }
-    B.photo = { real: false, setup: true, how: v };
+    this.takePhoto({ real: false, setup: true, how: v });
     this.releaseKnot();
     if (again) toast('The ringleader slips away toward the bar. Whatever the plan was, it\'s written down somewhere.', 'info');
-    else { this.spawnSnapper(this.hero.position.x - 1.6, this.hero.position.z - 1.2); this.snapperRun(); }
+    // (r11 V2: no snapper for a setup: the ringleader shows herself in the break-out beat)
+    else if (!this.caseDef.gen.beats.includes('breakout')) { this.spawnSnapper(this.hero.position.x - 1.6, this.hero.position.z - 1.2, 'leader'); this.runRunner(); }
   },
 
   /** The payoff: her photo on the club's LIVE feed, the tabloid headline, the crowd's phones on her. */
@@ -277,12 +299,12 @@ export const beatMethods = {
   },
 
   // ------------------------------------------------------------------ the snapper
-  spawnSnapper(x, z) {
+  spawnSnapper(x, z, role = 'snapper') { // (r11 V2: role = snapper | wiper | double | leader, casestage.js)
     const B = this.gb;
     if (B.snapper) return B.snapper.m;
-    const m = this.npc({ ...npcLook('civilian'), top: '#e0b020', bottom: '#1a1a1a', skirt: null, hairStyle: 'slick' }, x, z, Math.PI);
-    const o = this.addInter(m.position, 'Get the phone back', () => !!B.snapper && !B.phoneBack && B.snapper.walk === 0, () => this.run(() => this.confrontSnapper()));
-    B.snapper = { m, o, walk: 0, path: [], room: null, moves: 0 };
+    const m = this.npc(this.runnerLook(role), x, z, Math.PI);
+    const o = this.addInter(m.position, this.runnerLabel(role), () => !!B.snapper && !B.phoneBack && !B.snapper.caught && B.snapper.walk === 0, () => this.run(() => (role === 'snapper' ? this.confrontSnapper() : this.confrontRunner())));
+    B.snapper = { m, o, walk: 0, path: [], room: null, moves: 0, role };
     return m;
   },
 
@@ -306,7 +328,8 @@ export const beatMethods = {
     if (!S.walk || !S.path.length) { S.walk = 0; return; }
     const p = S.path[0], dx = p.x - m.position.x, dz = p.z - m.position.z, d = Math.hypot(dx, dz);
     if (d < 0.3) { S.path.shift(); return; }
-    m.position.x += (dx / d) * 2.2 * dt; m.position.z += (dz / d) * 2.2 * dt;
+    const sp = S.role === 'snapper' || S.slow ? 2.2 : 3.0; // (r11 V2: the wiper, the double, the ringleader run)
+    m.position.x += (dx / d) * sp * dt; m.position.z += (dz / d) * sp * dt;
     m.rotation.y = Math.atan2(dx, dz);
     const sw = Math.sin(this.t * 9) * 0.45; if (m.legs) { m.legs[0].rotation.x = sw; m.legs[1].rotation.x = -sw; }
   },
@@ -345,6 +368,7 @@ export const beatMethods = {
     if (!B || !G) return null;
     if (G.twist === 'real' && B.snapper && !B.phoneBack) return { t: 'Get the snapper\'s phone back', target: B.snapper.m.position };
     if (G.twist === 'real') return { t: B.phoneBack ? 'The photo is gone' : `${G.short}'s crowd wants a photo: watch the drinks`, done: B.phoneBack };
+    const ro = this.runnerObjective(); if (ro) return ro; // (r11 V2: the wiper, the double, the ringleader)
     if (B.photo || B.headline) return { t: TWISTS[G.twist].obj, done: B.proof };
     return { t: `${G.short}'s crowd wants a photo of you: watch out`, done: false };
   },
@@ -354,15 +378,10 @@ export const beatMethods = {
     const B = this.gb, G = this.caseDef.gen;
     if (!B || !G) return;
     const st = this.g.state, card = (this.envelope || []).find((c) => c.id === 'fans') || this.envelope?.[0];
-    let paper;
-    if (G.twist === 'real' ? B.phoneBack : B.proof) {
-      st.addRep(8, 'Killed the story');
-      paper = { headline: G.twist === 'real' ? 'NO PHOTO, NO STORY' : `${HERO.toUpperCase()} PHOTO A FAKE`, sub: `${G.name} exposed`, rep: 8, body: [G.twist === 'real' ? 'The picture everyone was talking about has vanished. So has the man who took it.' : 'The picture was a fake, and the proof is on every desk in the city by morning.', `${G.name} declined to comment.`] };
-    } else {
-      st.addRep(-6, 'The photo ran');
-      paper = { headline: G.headline, sub: G.sub.replace('{CLUB}', this.clubName), rep: -6, photo: card?.img || 'tabloid', body: ['The case is cracked, but the picture ran anyway.', 'Next time: get the phone, or get the proof.'] };
-    }
-    await showNewspaper({ tabloid: true, photo: 'tabloid', ...paper });
+    // (r11 V2: casestage genPaper: the visit's own headline + lede, the real frame of the gotcha as the photo)
+    const win = G.twist === 'real' ? B.phoneBack : B.proof;
+    if (win) st.addRep(8, 'Killed the story'); else st.addRep(-6, 'The photo ran');
+    await showNewspaper({ tabloid: true, photo: 'tabloid', ...genPaper(G, B, this.clubName, win, card) });
   },
 
   /** Game seconds (stepBeats resolves it; a dialog or the pause holds it). */

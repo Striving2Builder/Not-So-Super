@@ -387,7 +387,7 @@ export class Club3D extends Special3D {
     // her, the screens are on her) it opens up: further back, aimed up the room, so the chase and the
     // DJ wall showing her are both in frame
     const inCrowd = clamp((this.cover - 1) / 4, 0, 1) * (this.room ? 0.5 : 1);
-    const hunted = !this.room && (this.cctvK > 0.3 || this.guards.some((gd) => gd.st === 'alert'));
+    const hunted = !this.room && ((this.cctvK > 0.3 && !this.camBeat) || this.guards.some((gd) => gd.st === 'alert')); // (r11 V2 hook: a beat's own screens aren't a hunt)
     this.huntK = clamp((this.huntK || 0) + (hunted ? dt * 1.4 : -dt * 0.7), 0, 1);
     const hk = this.huntK * this.huntK * (3 - 2 * this.huntK);
     const cO = camAt(CAM_OPEN), cC = camAt(CAM_CROWD, false, true), cH = camAt(CAM_HUNT, true), ck = camStep().k; // (live: read every frame)
@@ -396,7 +396,7 @@ export class Club3D extends Special3D {
     const k = 1 - Math.pow(0.02, dt);
     this.camPD[0] += (want[0] - this.camPD[0]) * k * 0.6; this.camPD[1] += (want[1] - this.camPD[1]) * k * 0.6;
     // walls between her and the camera: tip up toward top-down (rooms have no ceilings)
-    let pitch = this.camPD[0], dist = this.camPD[1] * (1 - L2B.grab.push * (this.grabK || 0)); // (r11 L2b: the grab pushes in)
+    let pitch = this.camPD[0], dist = this.camPD[1] * (1 - L2B.grab.push * (this.grabK || 0)) * (1 - 0.24 * (this.beatCamK || 0)); // (r11 L2b: the grab pushes in; r11 V2 hook: a crowd beat round her too, casestage.js)
     for (const p of [pitch, 0.95, 1.15, 1.32]) {
       const off = this.cameraOffset(p, dist);
       if (this.cameraReach(h, off) >= dist * 0.8 || p === 1.32) { pitch = p; break; }

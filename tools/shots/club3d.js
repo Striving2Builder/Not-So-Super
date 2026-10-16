@@ -623,13 +623,15 @@ const GEN = (() => { const g = arg('--gen', ''); if (!g) return []; const [a, b]
           await V.gwait(2.5);
           await V.page.evaluate(() => { const m = window.__game.mode, p = m.gb.snapper.m.position; m.hero.position.set(p.x + 1, 0, p.z + 0.6); m.camSnap = true; m.gb.snapper.walk = 0; m.gb.snapper.path = []; });
           await V.page.waitForTimeout(900);
-          await V.page.evaluate(() => { const m = window.__game.mode; m.run(() => m.confrontSnapper()); });
+          await V.page.evaluate(() => { const m = window.__game.mode; m.run(() => (m.gb.snapper.role === 'snapper' ? m.confrontSnapper() : m.confrontRunner())); }); // (r11 V2: the runner's role)
           await V.gwait(0.5); await V.shot(`gen${seed}_8_snapper`); await V.strip(`gen${seed}`, n++);
           await V.page.keyboard.press('2');
           await V.page.waitForTimeout(1200);
           await V.through(() => !window.__game.mode.busy && !document.querySelector('#c3-quick.on'), 15000);
         }
-        // the proof (a fake) or the phone (real): then solve it and read the morning paper
+        // a few clues off the trail first (r11 V2: each seed a different number), then the proof (a fake) or
+        // the phone (real): then solve it and read the morning paper
+        out.trail = await V.page.evaluate(async (n) => { const m = window.__game.mode, d = m.caseDef, T = (await import('/src/club3d/casedata.js')).TWISTS[d.gen.twist]; const ks = Object.keys(d.clues).filter((k) => d.clues[k].cat && !d.clues[k].proof && !d.clues[k].v3 && k !== T.proof).slice(0, n); for (const k of ks) { const [a, b] = k.split(':'); m.book.find(a, b); } m.objHud?.(); return ks; }, 1 + (seed * 7) % 4);
         await V.page.evaluate(async () => { const m = window.__game.mode, d = m.caseDef, T = (await import('/src/club3d/casedata.js')).TWISTS[d.gen.twist]; if (T.proof) m.run(() => m.gotClue(T.proof, { title: 'Proof' })); });
         await V.page.waitForTimeout(1200); await V.shot(`gen${seed}_9_proof`); await V.strip(`gen${seed}`, n++);
         await V.through(() => !window.__game.mode.busy, 10000);
