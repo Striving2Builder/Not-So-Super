@@ -197,7 +197,7 @@ export class Act2 {
       return;
     }
     if (!B.lairOpen && this.gatesMet()) { B.lairOpen = true; this.g.state.save(); q.push({ two: 'lair' }); }
-    if ((this.walkT -= dt) <= 0) { this.walkT = WALK_EVERY; this.ensureWalk(ow); this.ensureFactory(ow); }
+    if ((this.walkT -= dt) <= 0) { this.walkT = WALK_EVERY; this.ensureWalk(ow); this.ensureFactory(ow); this.ensureCasino(ow); }
     if (!ow.attract && !ow.zones.some((z) => z.promo) && (this.promoT -= dt) <= 0) {
       this.promoT = rand(...PROMO.every) * (B.counts.promotions >= GATES.promotions ? 1.5 : 1);
       this.spawnPromo(ow);
@@ -290,6 +290,16 @@ export class Act2 {
     const b = pick(this.g.city.blocks.filter((q) => q.d === 'factory' && ok(q))) || pick(this.g.city.blocks.filter((q) => q.d === 'factory' && !q.river));
     if (!b) return;
     ow.zones.push({ uid: ow.uid++, t: 0, ...f, ttl: Math.max(f.ttl || 0, 600), x: b.x0 + LOT / 2, y: b.y0 + LOT / 2, district: b.d, actGate: 'factory' });
+  }
+
+  /** And a night at the High-Roller Suite (job D, src/club3d/casino.js) while the casino gate is short. */
+  ensureCasino(ow) {
+    const B = this.B;
+    if (ow.attract || B.counts.casino >= GATES.casino || ow.zones.some((z) => z.casino || z.venue === 'High-Roller Suite')) return;
+    const h = ow.hero, ok = (b) => !b.river && dist(b.x0 + LOT / 2, b.y0 + LOT / 2, h.x, h.y) > 500 && ow.zones.every((z) => dist(z.x, z.y, b.x0 + LOT / 2, b.y0 + LOT / 2) > 400);
+    const b = pick(this.g.city.blocks.filter((q) => q.d === 'casino' && ok(q))) || pick(this.g.city.blocks.filter((q) => q.d === 'casino' && !q.river));
+    if (!b) return;
+    ow.zones.push({ uid: ow.uid++, t: 0, kind: 'special', mode: 'special', casino: true, venue: 'High-Roller Suite', theme: 'extortion', name: 'A night at the High-Roller Suite', reward: 0, lockKey: 'High-Roller Suite', ttl: 600, x: b.x0 + LOT / 2, y: b.y0 + LOT / 2, district: b.d, actGate: 'casino' });
   }
 
   // ------------------------------------------------------------------ the cult's Polaroids
