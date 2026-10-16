@@ -108,7 +108,7 @@ export class Special3D {
     this.buildWorld();
     this.finishLook();
     if (quality().look3d === 'full') { this.grade = gradeQuad(this.gradeTint ?? 0x07040c, this.gradeK ?? 0.6); S.add(this.grade); }
-    this.heroModel = heroReady() ? new HeroModel() : null;
+    this.heroModel = heroReady() ? new HeroModel(this.heroSrc?.() || null) : null; // (heroSrc: a zone's own costume, e.g. the casino's knockoff)
     this.keepAnimating = false;
     this.camPitch = null; // first frame places the camera directly (no sweep in through walls)
     this.landT = 0;

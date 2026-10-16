@@ -104,6 +104,20 @@ export const VARIANTS = {
     talkers: [[-18, 9], [17, -13], [-12, -17]], tvs: [[-20.5, 'W'], [-7.5, 'W'], [7.5, 'E'], [20.5, 'E']],
     accent: [0xff2a4a, 0x7fd0ff], bg: 0x12060a,
   },
+  // The High-Roller Suite (Act 2's casino, src/club3d/casino.js): a gold and red gaming floor, the two
+  // card tables she plays (high card, 21) either side of a roulette wheel, the cashier's cage by the door,
+  // slot banks along the walls, a lounge singer's stand where the DJ would be. Pit bosses walk the tables.
+  casino: {
+    name: 'The High-Roller Suite', story: true, hw: 30, hd: 22, wallH: 7, doors: [-13.5, 0, 13.5],
+    booth: { x: 0, z: -18.6, w: 8, d: 2.4 }, wall: { w: 18, h: 5.6, y: 1.4 },
+    floor: { x: 0, z: -13, w: 14, d: 6 }, bar: { wall: 'E', from: 2.5, to: 11 },
+    tables: [{ id: 'high', x: -12, z: 1, name: 'High card' }, { id: 'bj', x: 12, z: 1, name: '21' }],
+    roulette: { x: 0, z: 4 }, cashier: { x: -15, z: 15 }, slots: [[-26, -6], [-26, 6], [26, -6], [26, -16]],
+    crowd: [[-12, 1, 5.5, 4.5, 0.8], [12, 1, 5.5, 4.5, 0.8], [0, 4, 4, 3, 0.7], [0, -12, 7, 3.5, 1], [0, 14, 18, 4, 0.12]],
+    routes: [[[-26, -17], [26, -17]], [[-19, -4], [-5, -4], [-5, 7], [-19, 7]], [[19, 7], [5, 7], [5, -4], [19, -4]], [[-14, 11], [14, 11]], [[-27, 17], [-27, -15]], [[27, -15], [27, 17]]],
+    talkers: [[-22, 10], [21, -9], [8, 12]], tvs: [[-6.75, 'W'], [6.75, 'E']],
+    accent: [0xffc840, 0xff2a3a], bg: 0x160806,
+  },
 };
 /** The main rooms a visit can roll (the story clubs only ever host their own case). */
 export const VARIANT_IDS = Object.keys(VARIANTS).filter((k) => !VARIANTS[k].story);

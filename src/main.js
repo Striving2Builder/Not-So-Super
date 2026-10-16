@@ -16,7 +16,8 @@ import { UI, dialog, toast, clearToasts } from './ui.js';
 import { sfx } from './sfx.js';
 import { ambience } from './ambience.js';
 import { $, pick, chance, fmtTime } from './util.js';
-import { loadHero, HERO_SKIN, HERO_LOOK } from './hero3d.js';
+import { loadHero, loadSkin, skinScene, HERO_SKIN, HERO_LOOK } from './hero3d.js';
+import { KNOCKOFF } from './club3d/casino.js';
 import { loadEnemies } from './enemies.js';
 import { playCutscene, playScreenScene } from './cutscene.js';
 import { comic } from './comic.js';
@@ -96,12 +97,21 @@ game.gfxFailed = () => {
 
 /** Which game mode plays a zone. */
 function modeFor(z) {
+  if (z.casino) return 'club3'; // Act 2's casino night (src/club3d/casino.js)
   const clubVenue = VENUES[z.venue]?.club || VENUES[z.venue]?.kind === 'club';
   if (clubVenue && (z.mode === 'special' || z.mode === 'nightcase')) return 'club3';
   return { brawl: 'brawler', investigate: 'investigate', special: 'special', asylum: 'asylum', hotel: 'hotel', rldwalk: 'rldwalk' }[z.mode];
 }
 
 game.startZone = (z) => {
+  // Act 2 (after the opening): a High-Roller Suite mission is a casino night in the 3D club, in the knockoff
+  // (Act 1's High-Roller Suite stays the special zone it always was)
+  const two = game.act?.two;
+  if (!z.casino && z.mode === 'special' && VENUES[z.venue]?.kind === 'casino' && two?.on?.() && two.B?.opening === 'done') z.casino = true;
+  if (z.casino && !skinScene(KNOCKOFF) && z._suitWait !== 'done') { // (the knockoff loads once, ~2 MB: wait for it, 8 s at most)
+    if (!z._suitWait) { z._suitWait = 'pending'; Promise.race([loadSkin(KNOCKOFF), new Promise((r) => setTimeout(r, 8000))]).then(() => { z._suitWait = 'done'; game.startZone(z); }); }
+    return; // (the dive's safety net calls again meanwhile: ignored)
+  }
   const mode = modeFor(z);
   try { game.setMode(mode, { zone: z }); } catch (e) {
     // (a 3D zone without a WebGL context, out of memory…): not a frozen half-scene, back to the sky
@@ -381,6 +391,12 @@ $('btn-new').addEventListener('click', async () => {
 /** ?zone=rldwalk (&opening=1): straight into an RLD Walk once the game has started (tests). */
 function debugZone() {
   const q = new URLSearchParams(location.search);
+  if (q.get('zone') === 'casino') { // ?zone=casino: a casino night (disgraced: rep -30 if it was higher)
+    const ow = game.overworld, b = game.city.blocks.find((k) => k.d === 'casino' && !k.river);
+    if (game.state.rep >= 0) game.state.rep = -30;
+    game.startZone({ uid: ow.uid++, t: 0, kind: 'special', mode: 'special', casino: true, venue: 'High-Roller Suite', theme: 'extortion', name: 'A night at the High-Roller Suite', reward: 0, lockKey: 'High-Roller Suite', district: 'casino', x: b ? b.x0 + 60 : ow.hero.x, y: b ? b.y0 + 60 : ow.hero.y });
+    return;
+  }
   if (q.get('zone') !== 'rldwalk') return;
   const ow = game.overworld, b = game.city.blocks.find((k) => k.d === 'redlight' && !k.river);
   game.startZone({ uid: ow.uid++, t: 0, ...rldWalkFields({ opening: q.get('opening') === '1' }), x: b ? b.x0 + 60 : ow.hero.x, y: b ? b.y0 + 60 : ow.hero.y });
