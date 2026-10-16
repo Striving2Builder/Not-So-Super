@@ -25,7 +25,7 @@ const W = +arg('--w', 844), H = +arg('--h', 390);
 const EXTRA = arg('--query', ''); // e.g. --query '&camdist=closest' (appended to every page's query)
 const glOf = (V) => V.page.evaluate(() => { const r = window.__game.mode.renderer.info.render; return { calls: r.calls, tris: r.triangles }; });
 const OUT = path.join(ROOT, 'shots', LABEL, 'act');
-const ALL = ['board', 'trail', 'gates', 'polaroid', 'unmask', 'sighting', 'tower', 'hotel', 'kell', 'seal', 'ballroom', 'act1save', 'act2', 'act2gates', 'act2handoff'];
+const ALL = ['board', 'trail', 'gates', 'polaroid', 'unmask', 'sighting', 'tower', 'hotel', 'kell', 'seal', 'ballroom', 'act1save', 'act2', 'act2gates', 'act2handoff', 'act2promo'];
 const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
 
 (async () => {
@@ -422,6 +422,86 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     if (!report.act2boss.bossReady || !report.act2boss.met) throw new Error('act2boss state wrong');
     Bo.errors.unshift(...errs);
     return Bo;
+  });
+
+  // The pendulum (job B): a promotion on the map, its lineup called right (count, rep up, the
+  // impostors' rep down), one called wrong (the photo op), a disgraced-only door shut at rep 0+ and
+  // open below 0, the cult's Polaroid rate following the impostors' rep, and Act 1 untouched.
+  await flow('act2promo', async () => {
+    const V = await game('act=act2&flight=2d');
+    await V.through(() => window.__game.state.act?.act2?.opening === 'done' && !window.__game.act.busy && !window.__game.act.queue.length && !document.querySelector('#modal-root .modal-back'), 60000); // (the morning papers too)
+    const promo = () => V.page.evaluate(() => {
+      const g = window.__game, ow = g.overworld, h = ow.hero;
+      for (const q of [...ow.zones]) if (q.promo) ow.removeZone(q);
+      const z = g.act.two.spawnPromo(ow, { x: h.x, y: h.y, district: 'redlight' });
+      ow.near = z; ow.tryDive();
+      return { name: z.name, onMap: ow.zones.includes(z) };
+    });
+    /** Call each girl on the stage: right (the truth from two.lineup), or wrong on the first. */
+    const callAll = async (right, shot) => {
+      for (let i = 0; i < 6; i++) {
+        const ok = await V.page.waitForSelector('.spot .spot-b.real', { timeout: 15000 }).then(() => true, () => false);
+        if (!ok) break;
+        await V.page.waitForTimeout(300);
+        if (shot && i === 1) await V.shot(shot);
+        const fake = await V.page.evaluate(() => { const L = window.__game.act.two.lineup; return L[L.length - 1]; });
+        await V.press(fake === right ? '.spot-b.fake' : '.spot-b.real');
+        await V.page.waitForTimeout(250);
+        await V.press('.spot-b.next');
+        await V.page.waitForTimeout(300);
+        if (await V.page.evaluate(() => !window.__game.act.two.lineup)) break;
+      }
+      await V.page.waitForFunction(() => !window.__game.act.two.lineup && !document.querySelector('.spot'), null, { timeout: 15000 });
+    };
+    const state = () => V.page.evaluate(() => { const g = window.__game, B = g.state.act.act2; return { rep: g.state.rep, imp: g.act.two.impRep(), impAdj: B.impAdj, promotions: B.counts.promotions, rate: +g.act.strayRate().toFixed(2) }; });
+    const s0 = await state();
+    report.act2promoSpawn = await promo();
+    await callAll(true, 'act2promo_stage');
+    const s1 = await state();
+    await promo();
+    await callAll(false);
+    const s2 = await state();
+    report.act2promoModal = { top: await V.top(), uiOpen: await V.page.evaluate(async () => (await import('/src/ui.js')).UI.open) };
+    // the doors: a casino mission and the naughty district's club, at rep 10 (shut) and -10 (open)
+    const doors = await V.page.evaluate(async () => {
+      const g = window.__game, ow = g.overworld, h = ow.hero, st = g.state;
+      const casino = { uid: ow.uid++, kind: 'special', mode: 'special', venue: 'High-Roller Suite', district: 'casino', x: h.x, y: h.y, t: 0, ttl: 999, name: 'High-Roller Suite: Extortion', reward: 40, lockKey: 'High-Roller Suite', color: '#ff3fb8', glyph: '★', risk: 'CAPTURE', blurb: '' };
+      ow.zones.push(casino);
+      st.rep = 10;
+      const shutAt10 = g.act.doorShut(casino), gents = g.act.doorShut({ venue: "Gentlemen's Club", district: 'naughty', mode: 'special' });
+      const plainClub = g.act.doorShut({ venue: 'Nightclub', district: 'nightclub', mode: 'special' });
+      const story = g.act.doorShut({ venue: 'Velvet Lounge', storyId: 'auction', district: 'redlight', mode: 'special' });
+      ow.near = casino; ow.tryDive();
+      const dived = !!ow.diving;
+      await new Promise((r) => setTimeout(r, 400));
+      const prompt = (document.querySelector('#prompt')?.innerHTML || '') + ' near=' + (ow.near?.name || 'none') + ' hero=' + Math.round(h.x - casino.x) + ',' + Math.round(h.y - casino.y);
+      const rate10 = +g.act.strayRate().toFixed(2);
+      return { shutAt10, gents, plainClub, story, dived, prompt: prompt.slice(0, 160), rate10 };
+    });
+    await V.shot('act2promo_door');
+    const open = await V.page.evaluate(() => {
+      const g = window.__game, ow = g.overworld, z = ow.zones.find((q) => q.venue === 'High-Roller Suite');
+      g.state.rep = -10;
+      const r = { openAtNeg: g.act.doorShut(z), rateNeg: +g.act.strayRate().toFixed(2) };
+      ow.removeZone(z); g.state.rep = -50;
+      return r;
+    });
+    report.act2promo = { s0, s1, s2, doors, open };
+    const bad = [];
+    if (s1.promotions !== s0.promotions + 1 || Math.abs(s1.rep - s0.rep - 10) > 4 || s1.impAdj !== s0.impAdj - 15) bad.push('right call');
+    if (s2.promotions !== s1.promotions || Math.abs(s2.rep - s1.rep + 6) > 4 || s2.impAdj !== s1.impAdj + 12) bad.push('wrong call');
+    if (!doors.shutAt10 || !doors.gents || doors.plainClub || !doors.story || doors.dived || !/disgraced|nothing left/i.test(doors.prompt)) bad.push('doors shut');
+    if (open.openAtNeg) bad.push('doors open');
+    if (!(open.rateNeg > doors.rate10)) bad.push('stray rate');
+    if (bad.length) throw new Error(`act2promo: ${bad.join(', ')}: ${JSON.stringify(report.act2promo)}`);
+    const errs = [...V.errors];
+    await V.close();
+    // Act 1: none of it applies
+    const A1 = await game('flight=2d');
+    report.act2promoAct1 = await A1.page.evaluate(() => { const g = window.__game; return { shut: g.act.doorShut({ venue: 'High-Roller Suite', district: 'casino', mode: 'special' }), rate: g.act.strayRate() ?? 'default', title: g.act.title() }; });
+    if (report.act2promoAct1.shut || report.act2promoAct1.rate !== 'default') throw new Error(`Act 1 changed: ${JSON.stringify(report.act2promoAct1)}`);
+    A1.errors.unshift(...errs);
+    return A1;
   });
 
   fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(report, null, 2));

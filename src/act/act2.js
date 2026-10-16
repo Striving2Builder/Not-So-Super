@@ -101,3 +101,56 @@ export const LINES = {
   real: 'It\'s hers. Stained, but hers.',
   wrong: 'Not hers. The S is the wrong shape.',
 };
+
+// ------------------------------------------------------------------ the reputation pendulum
+/**
+ * The doors that only open to a disgraced hero (her rep below 0), Act 2 only (act2.md "The
+ * reputation pendulum"). WHICH CLUBS IS THE USER'S CALL: edit this table. A row matches a map
+ * mission by `venue` (a VENUES name), `casino: true` (any casino), `story` (a story club's case id,
+ * CLUB_CASE_LABELS) or `cases` (investigation ids, CASES); `districts` narrows it; `on: false`
+ * turns a row off. `why` is what the closed door says.
+ */
+export const DISGRACED_DOORS = [
+  { id: 'casino', on: true, casino: true, why: 'The pit bosses only let in a hero with nothing left to lose' },
+  { id: 'hive', on: true, story: 'halo', why: 'The Hive only lets in a disgraced hero' },
+  { id: 'cage', on: true, story: 'auction', why: 'The Gilded Cage only lets in a disgraced hero' },
+  { id: 'flashpoint', on: true, story: 'flashpoint', why: 'Flashpoint only lets in a disgraced hero' },
+  { id: 'gents', on: true, venue: "Gentlemen's Club", districts: ['naughty'], why: 'Only a disgraced hero gets in here' },
+  { id: 'spiked', on: true, cases: ['spiked'], why: 'Nobody talks to a clean hero about the spiked drinks' },
+];
+/** Under the closed door's line. */
+export const DOOR_HINT = 'Get your name dirty first: these doors open while your rep is below 0.';
+
+/** The impostors' rep: roughly the inverse of hers, plus what she does to them (state: B.impAdj). */
+export const IMP = {
+  promoCaught: -15,  // impostors caught at a promotion
+  promoLost: 12,     // the cult's photo op (a wrong call)
+  promoMissed: 8,    // nobody came: the photos ran
+  polaroidRight: -3, // a cult Polaroid proved a fake
+  min: -100, max: 300,
+};
+/** How fast the cult's Polaroids turn up for an impostors' rep (the rate in polaroids.js stepStrays). */
+export const strayRate = (imp) => Math.max(0.4, Math.min(3, 0.5 + imp / 60));
+
+/** Promotions and grand openings: the map event (act2.md "The cult and the Supergirl or Impostor games"). */
+export const PROMO = {
+  districts: ['redlight', 'nightclub', 'naughty'],
+  first: 50, every: [110, 170], ttl: 110, // s
+  lineup: 3,                              // girls on the stage, one call each
+  rep: 10, lostRep: 6, missedRep: 4,      // her rep: caught / the photo op / nobody came
+  color: '#ffd84d', glyph: '🎤',
+};
+/** Where the cult books its "Supergirls" (per district). */
+export const PROMO_VENUES = {
+  redlight: ['the Scarlet Lantern', 'Club Kiss Kiss', 'the Velvet Rope'],
+  nightclub: ['Neon Halo', 'Club Afterglow', 'the Glitter Box'],
+  naughty: ['the Pink Flamingo', 'Club Cherry', 'the Diamond Pole Lounge'],
+};
+export const PROMO_LINES = {
+  what: ['the grand opening of', 'a promo night at', 'the launch party at', 'ladies\' night at'],
+  blurb: 'The cult\'s "Supergirls" are on the stage for the cameras. Dive in and pick the impostors out of the lineup.',
+  sub: (i, n, v) => `${v}, girl ${i} of ${n}: you on the club's poster, or a cult girl?`,
+  caught: 'Every fake called. The bouncers walk the cult\'s girls out, wigs in hand.',
+  photoOp: 'You got one wrong, and the cult\'s photographer got his shot: you, arm in arm with the fakes.',
+  missed: 'Nobody stopped the promotion. The cult\'s "Supergirl" photos are everywhere.',
+};

@@ -629,6 +629,7 @@ export class Overworld {
           if (z.kind === 'street') st.addRep(-2, `${z.name} went unanswered`);
           else if (z.polaroid) strayLost(st, z);
           else if (z.impostor) this.g.act?.sightingLost(z);
+          else if (z.actDive) this.g.act?.diveLost(z);
           else if (!laneBusy()) toast(`${z.name} has gone cold.`, 'info');
           break;
         }
@@ -705,8 +706,11 @@ export class Overworld {
     }
     if (z.polaroid) { grabPolaroid(this, z); return; }
     if (z.impostor) { this.g.act?.catchImpostor(this, z); return; } // (only when something hands her in as `near`: her chase has its own DIVE range)
+    if (z.actDive) { this.g.act?.dive(this, z); return; } // (an act map event: Act 2's promotions)
     const lock = st.locked(z.lockKey);
     if (lock) { toast(`You promised to stay out of ${z.lockKey} zones for ${fmtTime(lock)}`, 'bad'); sfx.lose(); return; }
+    const shut = this.g.act?.doorShut?.(z); // (Act 2: a door only a disgraced hero gets through)
+    if (shut) { toast(`🔒 ${shut}`, 'bad'); sfx.lose(); return; }
     this.diving = { z, t: 0, sx: this.hero.x, sy: this.hero.y, z0: this.hero.z, zoom0: this.zoom };
     this.events.abandon(); // someone else handles the airborne stuff while she's busy
     this.moments.abandon();
@@ -727,11 +731,12 @@ export class Overworld {
       return;
     }
     if (!z || this.diving) { el.classList.remove('on'); return; }
-    const lock = this.g.state.locked(z.lockKey);
+    const lock = this.g.state.locked(z.lockKey), shut = !lock && this.g.act?.doorShut?.(z);
     const rc = z.risk === 'CAPTURE' ? '#ff3fb8' : z.risk === 'Traps' ? '#3fd0ff' : '#ffd23f';
     const key = document.body.classList.contains('touch') ? 'DIVE' : 'SPACE';
     const html = lock
       ? `🔒 <b>${z.name}</b> — locked by your deal for ${fmtTime(lock)}`
+      : shut ? `🔒 <b>${z.name}</b> · ${shut}<br><small>${this.g.act.doorHint?.() || ''}</small>`
       : `<b>${key}</b> to dive: <b>${z.name}</b> · ${DISTRICTS[z.district].name}<span class="risk" style="background:${rc}33;color:${rc}">${z.risk}</span><br><small>${z.blurb || ''} Reward +${z.reward} · ${z.leadId ? 'Case lead' : z.hotel ? 'The act boss' : z.storyId ? 'Open until solved' : `${fmtTime(z.ttl - z.t)} left`}</small>`;
     if (el._html !== html) { el.innerHTML = html; el._html = html; }
     el.classList.add('on');
@@ -1050,7 +1055,7 @@ export class Overworld {
       grd.addColorStop(0, rgba(z.color, 0.55)); grd.addColorStop(1, rgba(z.color, 0));
       ctx.strokeStyle = grd; ctx.lineWidth = 10 * k; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(tx, ty); ctx.stroke();
-      icons.push([tx, ty, 15 * k * P(top), z, st && st.locked(z.lockKey)]);
+      icons.push([tx, ty, 15 * k * P(top), z, st && (st.locked(z.lockKey) || !!this.g.act?.doorShut?.(z))]);
     }
 
     // airborne events and tabloid drones
