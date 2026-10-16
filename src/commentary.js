@@ -69,6 +69,7 @@ const ZONE_OPEN = {
   rldwalk: ['Meanwhile, in {D}… red lights, red doors, and somebody behind every one.', 'The canal smells of perfume tonight. Something is very wrong in {D}.'], // (src/rld/)
   nightcase: ['Meanwhile, after hours at {V}… the case of {T}!', 'Midnight at {V}. The music is loud, the secrets louder…', '{V} after dark… somebody here knows something!'],
   hotel: ['Thirteen floors up… the Puzzle Maker is expecting her.', 'Floor 13. Neon, velvet, and a man with a kryptonite ray.', 'The elevator doors open on the 13th floor. Every face on the walls is hers.'],
+  mirrors: ['The elevator goes past 13. The doors open on purple light, and a hundred of her.', "The hotel's new floor. Wet tiles, red robes, and her face in every glass."], // (src/mirrors/)
   factory: ['Meanwhile, in {D}… the belts never stop, and everything on them is pink.', 'The night shift at {V}. Red robes, a foreman, and Super Squirt by the crate.'], // (src/factory/)
 };
 const THUG_TAUNT = ['Get her, boys!', 'It\'s the cape! Get her!', 'Ha! Just one girl!', 'Nobody messes with our turf!', 'You picked the wrong street, sister!'];

@@ -199,6 +199,7 @@ export class Act2 {
       return;
     }
     if (!B.lairOpen && this.gatesMet()) { B.lairOpen = true; this.g.state.save(); q.push({ two: 'lair' }); }
+    if (B.lairOpen) this.ensureMirrors(ow); // (the hotel's new floor: src/mirrors/)
     if ((this.walkT -= dt) <= 0) { this.walkT = WALK_EVERY; this.ensureWalk(ow); this.ensureFactory(ow); this.ensureCasino(ow); }
     this.recall.update(dt, ow); // (a rooftop stash of Super Squirt on the map)
     if (!ow.attract && !ow.zones.some((z) => z.promo) && (this.promoT -= dt) <= 0) {
@@ -293,6 +294,14 @@ export class Act2 {
     const b = pick(this.g.city.blocks.filter((q) => q.d === 'factory' && ok(q))) || pick(this.g.city.blocks.filter((q) => q.d === 'factory' && !q.river));
     if (!b) return;
     ow.zones.push({ uid: ow.uid++, t: 0, ...f, ttl: Math.max(f.ttl || 0, 600), x: b.x0 + LOT / 2, y: b.y0 + LOT / 2, district: b.d, actGate: 'factory' });
+  }
+
+  /** The hotel's new floor, the hall of mirrors (job H1, src/mirrors/), on the hotel tower once the lair is open. */
+  ensureMirrors(ow) {
+    const f = typeof this.g.mirrorsFields === 'function' && this.g.modes?.mirrors ? this.g.mirrorsFields : null;
+    if (!f || ow.attract || ow.zones.some((z) => z.mirrors)) return;
+    const at = this.act.hotelSpot?.();
+    if (at) ow.zones.push({ uid: ow.uid++, t: 0, ...f(), x: at.x, y: at.y, district: at.district });
   }
 
   /** And a night at the High-Roller Suite (job D, src/club3d/casino.js) while the casino gate is short. */
