@@ -23,6 +23,7 @@ import { randomPerson } from './casefile.js';
 import { playCutscene, playScreenScene } from './cutscene.js';
 import { toon, lightPool, Particles } from './look3d.js';
 import { quality } from './settings.js';
+import { Act2Asylum } from './asylum2.js';
 
 // Layout (metres). Wings run outward from a square hub; cells sit on both sides of each wing.
 const HW = 1.6;              // hall half-width
@@ -362,15 +363,21 @@ export class AsylumZone extends NightCase {
   loadBuilding() { return buildAsylum(); }
 
   enter(p) {
-    if (!p.wake) { this.sedations = 0; this.keptCase = null; this.tipGivenEver = false; }
+    if (!p.wake) { this.sedations = 0; this.keptCase = null; this.tipGivenEver = false; this.a2 = Act2Asylum.wanted(this.g) ? new Act2Asylum(this) : null; }
     this.waking = !!p.wake;
+    this.a2?.entered(); // (Act 2: high, powers gone, the costume clue; asylum2.js)
     super.enter(p);
   }
+
+  setupControls() { if (this.a2) this.a2.controls(); else super.setupControls(); }
+  setXray(on) { if (!this.a2?.blockXray(on)) super.setXray(on); }
+  update(dt) { this.a2?.update(dt); super.update(dt); }
 
   // Waking up: she gets up off the cell floor instead of the superhero landing.
   heroClip(name, hold) { return this.waking && name === 'land' ? super.heroClip('getUp', 2.6) : super.heroClip(name, hold); }
 
   announce() {
+    if (this.a2?.announce()) return;
     if (this.waking) {
       banner('WAKE UP', `Cell ${this.wakeCell.id} · sedated ${this.sedations}×`, '#9fe8ff');
       setTimeout(() => { if (!this.done) toast('Your notes are gone. Same case, same culprit: find the clues again and name them to break free.', 'info'); }, 1800);
@@ -508,6 +515,7 @@ export class AsylumZone extends NightCase {
     }
     this.placeOrderlies(2 + (chance(0.5) ? 1 : 0));
     this.placeItems(3 + (th.extraTemptations || 0), { onTake: () => this.noteUnderDrink(), intox: ASYLUM_ITEMS, bait: ASYLUM_BAIT });
+    this.a2?.place(cells);
   }
 
   /** A patient NPC standing in a cell, facing the door. */
@@ -666,12 +674,13 @@ export class AsylumZone extends NightCase {
   objectives() {
     const list = super.objectives();
     list[list.length - 1].t = `Break free: name the culprit (SUSPECTS, ${this.case.found.length}/3 clues)`;
+    if (this.a2) list.splice(list.length - 1, 0, this.a2.objective());
     return list;
   }
 
   hud() {
     super.hud();
     if (!this.scene || this.warming) return;
-    $('hud-sub').textContent = `${this.sedations ? `Sedated ${this.sedations}× · ` : ''}Orderly alert ${Math.round(this.alert)}%${this.xray ? ' · X-RAY' : ''}`;
+    $('hud-sub').textContent = `${this.sedations ? `Sedated ${this.sedations}× · ` : ''}Orderly alert ${Math.round(this.alert)}%${this.xray ? ' · X-RAY' : ''}${this.a2 ? ` · ${this.a2.hudBit()}` : ''}`;
   }
 }

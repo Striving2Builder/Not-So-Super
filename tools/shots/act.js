@@ -25,7 +25,7 @@ const W = +arg('--w', 844), H = +arg('--h', 390);
 const EXTRA = arg('--query', ''); // e.g. --query '&camdist=closest' (appended to every page's query)
 const glOf = (V) => V.page.evaluate(() => { const r = window.__game.mode.renderer.info.render; return { calls: r.calls, tris: r.triangles }; });
 const OUT = path.join(ROOT, 'shots', LABEL, 'act');
-const ALL = ['board', 'trail', 'gates', 'polaroid', 'unmask', 'sighting', 'tower', 'hotel', 'kell', 'seal', 'ballroom', 'act1save', 'act2', 'act2gates', 'act2handoff', 'act2promo'];
+const ALL = ['board', 'trail', 'gates', 'polaroid', 'unmask', 'sighting', 'tower', 'hotel', 'kell', 'seal', 'ballroom', 'act1save', 'act2', 'act2gates', 'act2handoff', 'act2promo', 'act2asylum'];
 const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
 
 (async () => {
@@ -499,6 +499,48 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     const A1 = await game('flight=2d');
     report.act2promoAct1 = await A1.page.evaluate(() => { const g = window.__game; return { shut: g.act.doorShut({ venue: 'High-Roller Suite', district: 'casino', mode: 'special' }), rate: g.act.strayRate() ?? 'default', title: g.act.title() }; });
     if (report.act2promoAct1.shut || report.act2promoAct1.rate !== 'default') throw new Error(`Act 1 changed: ${JSON.stringify(report.act2promoAct1)}`);
+    A1.errors.unshift(...errs);
+    return A1;
+  });
+
+  // The Act 2 asylum (job F): high inside, X-ray/HEAR say her powers line, the costume clue's call
+  // brings them back (and a suit find), the crime spree on the act board; Act 1's asylum untouched.
+  await flow('act2asylum', async () => {
+    const ready = () => { const g = window.__game, m = g.mode; return g.modeName === 'asylum' && m.scene && !m.warming; };
+    const V = await game('act=act2&zone=asylum&flight=2d');
+    await V.page.waitForFunction(ready, null, { timeout: 120000 });
+    await V.page.evaluate(() => { window.__game.mode.grace = 1e9; });
+    await V.through(() => { const m = window.__game.mode; return m.a2?.intro && !m.busy && !document.querySelector('#modal-root .modal-back'); }, 40000);
+    const s0 = await V.page.evaluate(() => { const g = window.__game, m = g.mode; m.setXray(true); m.a2.hear(); return { a2: !!m.a2, xray: !!m.xray, lines: m.a2.lines.slice(), intox: g.state.intox, powers: m.a2.powers, poster: !!m.a2.poster, rep: g.state.rep, hud: document.querySelector('#hud-sub')?.innerText, hear: !!document.querySelector('#btns .slot5') }; });
+    await V.page.waitForFunction(() => !!window.__game.mode.a2.poster?.canvas, null, { timeout: 30000 });
+    V.page.evaluate(() => window.__game.mode.a2.examine()).catch(() => {});
+    await V.page.waitForSelector('.spot', { timeout: 15000 });
+    await V.page.waitForTimeout(400);
+    await V.shot('act2asylum_call');
+    const fake = await V.page.evaluate(() => window.__game.mode.a2.poster.fake);
+    await V.press(fake ? '.spot-b.fake' : '.spot-b.real');
+    await V.page.waitForTimeout(400);
+    await V.press('.spot-b.next');
+    await V.page.waitForFunction(() => window.__game.mode.a2.powers, null, { timeout: 10000 });
+    await V.page.evaluate(() => { window.__game.mode.a2.spreeT = 0; });
+    await V.page.waitForTimeout(1200);
+    await V.shot('act2asylum_powers');
+    const s1 = await V.page.evaluate(() => { const g = window.__game, m = g.mode; m.setXray(true); const r = { xray: !!m.xray, powers: m.a2.powers, suit: g.state.act.act2.suit, spree: g.state.act.act2.spree, intox: g.state.intox }; m.setXray(false); return r; });
+    V.page.evaluate(() => window.__game.act.openBoard()).catch(() => {});
+    await V.page.waitForTimeout(800);
+    s1.board = await V.page.evaluate(() => /crime spree/i.test(document.querySelector('.ab')?.innerText || ''));
+    await V.press('.ab-x');
+    report.act2asylum = { s0, s1 };
+    const bad = [];
+    if (!s0.a2 || s0.xray || s0.powers || !s0.lines.some((l) => /Where are my powers/.test(l)) || s0.intox < 35 || !s0.poster || !s0.hear) bad.push('powers gone');
+    if (!s1.xray || !s1.powers || s1.suit.cape !== 1 || !(s1.spree >= 1) || !s1.board || s1.intox < 35) bad.push('powers back');
+    if (bad.length) throw new Error(`act2asylum: ${bad.join(', ')}: ${JSON.stringify(report.act2asylum).slice(0, 400)}`);
+    const errs = [...V.errors];
+    await V.close();
+    const A1 = await game('zone=asylum&flight=2d'); // Act 1: no layer, X-ray works
+    await A1.page.waitForFunction(ready, null, { timeout: 120000 });
+    report.act2asylumAct1 = await A1.page.evaluate(() => { const m = window.__game.mode; m.grace = 1e9; m.setXray(true); const r = { a2: m.a2 ?? null, xray: !!m.xray, hear: !!document.querySelector('#btns .slot5') }; m.setXray(false); return r; });
+    if (report.act2asylumAct1.a2 || !report.act2asylumAct1.xray || report.act2asylumAct1.hear) throw new Error(`Act 1 asylum changed: ${JSON.stringify(report.act2asylumAct1)}`);
     A1.errors.unshift(...errs);
     return A1;
   });

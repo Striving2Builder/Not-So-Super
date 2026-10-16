@@ -378,9 +378,16 @@ $('btn-new').addEventListener('click', async () => {
   await dialog({ title: `Welcome to the city, ${HERO}`, text: HOWTO, options: [{ label: 'Start patrolling', value: true }] });
   debugZone();
 });
-/** ?zone=rldwalk (&opening=1): straight into an RLD Walk once the game has started (tests). */
+/** ?zone=rldwalk (&opening=1) or ?zone=asylum: straight into an RLD Walk / the asylum once the game has started (tests). */
 function debugZone() {
   const q = new URLSearchParams(location.search);
+  if (q.get('zone') === 'asylum') { // ?zone=asylum (&act=act2: the Act 2 asylum, the opening skipped, rep at the scandal's −50)
+    const B = game.state.act?.act2;
+    if (B && B.opening !== 'done') { B.opening = 'done'; game.state.rep = -50; }
+    const z = game.overworld.zones.find((k) => k.mode === 'asylum') || game.overworld.spawn('asylum', true);
+    if (z) game.startZone(z);
+    return;
+  }
   if (q.get('zone') !== 'rldwalk') return;
   const ow = game.overworld, b = game.city.blocks.find((k) => k.d === 'redlight' && !k.river);
   game.startZone({ uid: ow.uid++, t: 0, ...rldWalkFields({ opening: q.get('opening') === '1' }), x: b ? b.x0 + 60 : ow.hero.x, y: b ? b.y0 + 60 : ow.hero.y });

@@ -19,7 +19,22 @@ venues). Ravenmoor (`src/asylum.js`) plays exactly as now in Act 1; in Act 2 (`g
   later is not this job.)
 - Debug entry (`?act=act2` + the asylum) and a harness flow; Act 1's asylum flow must still pass.
 
-## Done
-(nothing yet)
+## Done (2026-10-16)
+- `src/asylum2.js` (new): `Act2Asylum`, made in `AsylumZone.enter` when `game.act.two.on()` and the
+  opening is done; kept across sedations. Intox held ≥ haze+12 (enters at haze+25); the doctor's intro
+  dialog with a Polaroid "proof" (alias Candy/Roxy/...), captions, her thought bubbles every ~18 s;
+  X-RAY ? / HEAR ? (slot5) say "What's going on? Where are my powers?"; a Supergirl poster in a free
+  cell (hotel `posterCanvas` + `spotCall`): right call = SHE REMEMBERS, powers back for the visit,
+  `game.act.suitFind(cape|boots|briefs by counts.asylum % 3)`; wrong = alert +10, a new picture
+  (obvious after 2 misses). With powers HEAR toasts the nearest clue + orderly. Crime spree:
+  `two.spree(1)` every 16-24 s with a MEANWHILE caption; HUD sub shows powers + spree.
+- Hooks in `src/asylum.js` (+9 lines, all `this.a2?.`): enter, setupControls, setXray, update,
+  announce, placeClubGameplay (`a2.place(cells)`), objectives, hud.
+- `src/act/act2run.js`: `spree(n)` (B.spree, default 0 via norm), board line in the ab-jig.
+- `src/main.js` debugZone: `?zone=asylum` (with `&act=act2`: opening marked done, rep −50).
+- Harness: `node tools/shots/act.js --flows act2asylum` (Act 2 visit + Act 1 asylum has no layer).
 
 ## Next / notes
+- Debug: `?act=act2&zone=asylum&flight=2d`.
+- Sedation cutscene/TV untouched (user's wiring); on waking a doctor caption instead of a dialog.
+- Not done: spree crimes as map missions (later job), red spree markers on the map.
