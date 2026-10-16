@@ -9,6 +9,7 @@ import { rand, pick } from '../util.js';
 export const VIOLET = [0xb040ff, 0xe050ff, 0x8a5aff]; // the tubes: purple, magenta, violet
 export const VIOLET_CSS = '#c050ff';
 
+const solid = (m) => { m.userData.solid = true; return m; };
 const speckle = (g, w, h, n, col, a) => { for (let i = 0; i < n; i++) { g.fillStyle = `rgba(${col},${Math.random() * a})`; g.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 3, 1 + Math.random() * 3); } };
 const TAGS = ['SUPERGURL', 'S', 'FAKE', 'WHICH 1?', 'LOOK CLOSER', 'MIRROR MIRROR', 'SHE\'S NOT YOU', 'CULT', 'XOXO', 'NOT SO SUPER', '13+1'];
 const INKS = ['#e050ff', '#ff4ab0', '#ffffff', '#8a5aff', '#c8102e', '#39d0ff'];
@@ -121,7 +122,7 @@ export function makeMirrorMaterials() {
     red: toon(0xa8101e),
     door: toon(0xffffff, { map: doorTex() }),
     neon,
-    glass: new THREE.MeshBasicMaterial({ color: 0xd8c8ff, transparent: true, opacity: 0.12, depthWrite: false, side }),
+    glass: solid(new THREE.MeshBasicMaterial({ color: 0xd8c8ff, transparent: true, opacity: 0.12, depthWrite: false, side })), // (it blocks: she can't walk into her reflection)
     smear: new THREE.MeshBasicMaterial({ color: 0xc050ff, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }),
   };
 }

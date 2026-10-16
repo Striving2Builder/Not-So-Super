@@ -109,7 +109,7 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     }
     if (!report.twin.visible) throw new Error(`no twin in the glass: ${JSON.stringify(report.twin)}`);
     // a portrait: Supergirl or Impostor?
-    await V.page.waitForFunction(() => window.__game.mode.portraits.every((p) => p.canvas), null, { timeout: 30000 });
+    await V.page.waitForFunction(() => window.__game.mode.portraits[0]?.canvas, null, { timeout: 90000 }); // (the clip frames load slowly in swiftshader)
     V.page.evaluate(() => { const m = window.__game.mode; m.callPortrait(m.portraits[0]); }).catch(() => {});
     await V.page.waitForSelector('.spot-b.real', { timeout: 8000 });
     await V.page.click('.spot-b.real'); await V.page.waitForTimeout(300); await V.page.click('.spot-b.next');
