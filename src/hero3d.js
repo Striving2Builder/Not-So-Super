@@ -36,18 +36,32 @@ export function loadHero() {
   const L = new GLTFLoader();
   loading = Promise.all([L.loadAsync(MODEL_URL), L.loadAsync(ANIMS_URL)])
     .then(([model, anims]) => {
-      asset.scene = model.scene;
+      asset.scene = prepScene(model.scene);
       for (const c of anims.animations) asset.clips[c.name] = c;
-      asset.scene.traverse((o) => {
-        if (o.isMesh) { o.frustumCulled = false; if (o.material) o.material.side = THREE.DoubleSide; }
-        if (o.isSkinnedMesh) { stripModelCape(o); shapeSkirt(o); } // cape: replaced by the simulated cloth cape; skirt: shortened, flutter shapes
-      });
       asset.ready = true;
       return true;
     })
     .catch((e) => { console.warn('Supergirl model failed to load; using procedural art.', e); asset.failed = true; return false; });
   return loading;
 }
+
+function prepScene(scene) {
+  scene.traverse((o) => {
+    if (o.isMesh) { o.frustumCulled = false; if (o.material) o.material.side = THREE.DoubleSide; }
+    if (o.isSkinnedMesh) { stripModelCape(o); shapeSkirt(o); } // cape: replaced by the simulated cloth cape; skirt: shortened, flutter shapes
+  });
+  return scene;
+}
+
+// Another costume on the same rig, loaded on demand (Act 2's knockoff for a casino night: Supergirl_Dark,
+// src/club3d/casino.js). skinScene(skin) is its scene once loaded (her own costume: the main asset).
+const skins = {};
+export function loadSkin(skin) {
+  if (skin === HERO_SKIN) return loading || loadHero();
+  if (!skins[skin]) skins[skin] = { scene: null, p: new GLTFLoader().loadAsync('assets/models/' + HERO_FILES[HERO_LOOK][skin]).then((m) => { skins[skin].scene = prepScene(m.scene); return true; }).catch((e) => { console.warn(`The ${skin} costume failed to load`, e); return false; }) };
+  return skins[skin].p;
+}
+export const skinScene = (skin) => (skin === HERO_SKIN ? asset.scene : skins[skin]?.scene || null);
 
 export const heroReady = () => asset.ready;
 
@@ -58,8 +72,9 @@ const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _q = new THREE.Quate
 const _res = new THREE.Vector2();
 
 export class HeroModel {
-  constructor() {
-    this.root = clone(asset.scene);
+  /** `src`: another costume's loaded scene (skinScene), same rig; her own costume by default. */
+  constructor(src = null) {
+    this.root = clone(src || asset.scene);
     this.mixer = new THREE.AnimationMixer(this.root);
     this.actions = {};
     this.cur = null;

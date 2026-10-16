@@ -126,6 +126,7 @@ export const castMethods = {
     }
     this.placeEvent?.();
     this.placeStory();
+    this.placeCasino?.(); // (Act 2's casino night: the tables, the cashier)
     this.makeTalkHud();
   },
 

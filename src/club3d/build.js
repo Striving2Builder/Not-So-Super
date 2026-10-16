@@ -11,6 +11,7 @@ import { Batch, Atlas, uvRect, floorQ, wallQ, coneMat, coneGeo, DOWN, pointsMat,
 import { quality } from '../settings.js';
 import { DOOR_W, floorY } from './plan.js';
 import { screenMat } from './video.js';
+import { buildCasinoHall } from './casino.js';
 
 const CAP = 0x17121c;     // ink-black wall caps
 export const CUT_H = 1.05; // the camera-side cutaway walls (the camera always looks north: these are the south walls)
@@ -342,6 +343,7 @@ const PART_H = 3.0; // the Hive's partitions: over every head, under the camera'
 /** The Hive's mirrored partitions, the Gilded Cage's booths and birdcages, Flashpoint's catwalk. */
 function buildStoryHall(zn, plan, M, X, A) {
   const V = plan.V, S = zn.scene;
+  if (V.tables) A.casino = buildCasinoHall(zn, plan, M, X); // (Act 2's High-Roller Suite: casino.js)
   if (V.partitions) {
     // honeycomb panels: amber hex cells over black glass, a neon edge along the top and the foot
     const S2 = 256, cell = tex(cnv(S2, S2, (c) => {

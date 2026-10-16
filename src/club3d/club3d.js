@@ -46,6 +46,7 @@ import { cctvMethods } from './cctv.js';
 import { selfTalkMethods } from './selftalk.js';
 import { feelFxMethods, L2B } from './feelfx.js';
 import { INTOX_HAZE } from '../state.js';
+import { casinoMethods, CASINO_CROWD } from './casino.js';
 
 const SPEED = 4.6;          // her walk (m/s); a packed crowd slows her by up to 40%
 const IDLE_FACE = 1.5;      // seconds standing still before she turns to the viewer
@@ -80,6 +81,7 @@ const VISIT = () => ({
   lastKnown: null, threat: 0, slowT: 0, slowK: 1, kickK: 0, kickAt: -9, pulseAt: -9, _hbN: null, _susQ: 0, wasHot: false, closeAt: -99,
   cctvK: 0, cctvWant: false, cctvHold: 0, cctvT: 0, camRT: null, camCam: null, camPos: null, camFed: false, _camMats: null, _camOn: false,
   talkTier: 0, thinkT: 18, takeTarget: null, freeAt: -999, huntK: 0,
+  casino: null, // (Act 2: a casino night's tables and stakes, casino.js)
 });
 
 export class Club3D extends Special3D {
@@ -90,13 +92,14 @@ export class Club3D extends Special3D {
     this.startCase(zone);   // (the world is placed from the case and the event)
     this.startStory();
     // a story club's case brings its own venue: its main room, its name over the door
-    this.plan = makePlan(seed, q.get('club3room') || this.caseDef.room);
+    this.plan = makePlan(seed, q.get('club3room') || (zone.casino ? 'casino' : this.caseDef.room)); // (Act 2's casino night: the High-Roller Suite)
     this.clubName = this.caseDef.club || zone.venue || 'the club';
     this.exposure = 1.15; this.gradeTint = 0x05020c; this.gradeK = 0.5;
     this.pickEvent();
     // the zone is this case now (the HUD title, the commentary's captions, the front page)
     zone.theme = this.caseDef.theme || zone.theme;
     zone.name = `${this.caseDef.title} at ${this.caseDef.club || /^the /i.test(this.clubName) ? this.clubName : 'the ' + this.clubName}`; // (a story club's name is its own: "at Flashpoint")
+    if (zone.casino) this.startCasino(zone);
     super.enter({ zone });
     // after the base zone's reset: the camera's own state
     this.yaw = 0; this.camPD = camAt(CAM_OPEN); this.camSnap = true; this.camPitch = null;
@@ -106,7 +109,7 @@ export class Club3D extends Special3D {
     this.startBeats(); // (a generated case's crowd beats: casebeats.js)
     this.startChatter();
     this.startFeelFx();
-    this.askUndercover();
+    if (this.casino) this.casinoDoor(); else this.askUndercover(); // (the casino: she's in the knockoff, one of the girls)
   }
 
   // ---------------------------------------------------------------- world
@@ -143,8 +146,8 @@ export class Club3D extends Special3D {
     this.placeGameplay();
     // everyone in the crowd: the hall's dancers + the DJs, the dark room's, the VIP's entourage, the loungers
     const Q = quality().club3;
-    const keepOut = [[plan.spawn.x, plan.spawn.z, 2.6], ...this.inter.map((o) => [o.pos.x, o.pos.z, 1.4]), ...this.castSpots()];
-    const people = placeCrowd(plan, Math.round(Q.crowd * (this.caseDef.gen?.profile.crowd || 1)), this.colliders, keepOut).map((p) => ({ ...p, pose: 'dance' }));
+    const keepOut = [[plan.spawn.x, plan.spawn.z, 2.6], ...this.inter.map((o) => [o.pos.x, o.pos.z, 1.4]), ...this.castSpots(), ...(this.casinoKeepOut?.() || [])];
+    const people = placeCrowd(plan, Math.round(Q.crowd * (this.caseDef.gen?.profile.crowd || 1) * (this.casino ? CASINO_CROWD : 1)), this.colliders, keepOut).map((p) => ({ ...p, pose: this.casino && Math.abs(p.z - V.floor.z) > V.floor.d ? 'stand' : 'dance' })); // (the casino: gamblers stand, only the stand's floor dances)
     const near = (p, cx, cz, r) => Math.hypot(p.x - cx, p.z - cz) < r;
     for (const p of people) if (near(p, this.hallA.spots.bar.x, this.hallA.spots.bar.z, 3)) p.pose = 'stand';
     people.push(...X.people, ...(this.roomA.dark?.dancers || []), ...(this.roomA.lounge?.loungers || []));
@@ -180,6 +183,7 @@ export class Club3D extends Special3D {
     document.body.classList.remove('c3-xray');
     if (this.envelope && this.g.state) stashFromEnvelope(this.g.state, this.envelope, this.zone?.venue);
     this.closeOverlays?.();
+    document.getElementById('cas-table')?.remove(); // (a casino table left open)
     this.closeQuick?.(null);
     this.endTips?.();
     for (const rt of this.cctvRT || []) rt.dispose();
@@ -208,6 +212,7 @@ export class Club3D extends Special3D {
       <div class="barlabel" id="c3-env-l"><span>His envelope: 0</span></div>`;
     this.storyHud();
     this.envHud?.();
+    this.casinoHud?.();
   }
 
   announce() {
@@ -466,4 +471,4 @@ export class Club3D extends Special3D {
 }
 
 Object.assign(Club3D.prototype, castMethods, eventMethods, powerMethods, chatterMethods, viceMethods, caseMethods, sedationMethods, vipMethods, officeMethods, brawlMethods, closeupMethods, undercoverMethods, quickMethods, feelMethods, dangerMethods, storyMethods, pressMethods, backroomMethods, clubFeedMethods,
-  stealthMethods, tensionMethods, cctvMethods, selfTalkMethods, beatMethods, feelFxMethods);
+  stealthMethods, tensionMethods, cctvMethods, selfTalkMethods, beatMethods, feelFxMethods, casinoMethods); // (casino last: its exits wrap the case's)
