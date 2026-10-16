@@ -11,7 +11,7 @@ import { Moment } from './base.js';
 import { RUN } from './actors3d.js';
 import { KIT } from './kit3d.js';
 import { reticle, tag } from './hud.js';
-import { HeroModel, heroReady, HERO_COMIC } from '../hero3d.js';
+import { HeroModel, heroReady, HERO_COMIC, HERO_SKIN, skinScene } from '../hero3d.js';
 import { heroMaterial, inkHull, SUIT, HERO_LIGHT } from '../herolook3d.js';
 import { inkCharacter } from '../look3d.js';
 import { M } from '../city3d.js';
@@ -50,7 +50,7 @@ let body = null; // her body, built once per flight scene and reused by every si
 function impostorBody(scene) {
   if (body && body.scene === scene) return body;
   if (!heroReady()) return null;
-  const m = new HeroModel();
+  const m = new HeroModel(skinScene(HERO_SKIN)); // (her own suit's look, not Act 2's crop top)
   m.cape.mesh.visible = false; // (a knockoff: no cape)
   if (HERO_COMIC) {
     m.root.traverse((o) => { if (o.isMesh && o !== m.cape.mesh && !o.userData.ink && o.material && !Array.isArray(o.material) && !o.material.isMeshBasicMaterial) o.material = knockoff(o.material); });

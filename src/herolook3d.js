@@ -13,7 +13,7 @@ import { HERO_SKIN } from './settings.js';
  * 0.92, upper thigh, a bit above the reference photo (in game it reads longer than it is). The legs
  * are modelled under it, so nothing opens up. ?skirt=<m> overrides every skin (?skirt=0: as modelled).
  */
-export const SKIRT_TRIM = { supergirl: 0.12, classic: 0.12, ponytail: 0.12, dark: 0.135 };
+export const SKIRT_TRIM = { supergirl: 0.12, classic: 0.12, ponytail: 0.12, dark: 0.135, croptop: 0.12 };
 /**
  * Her skirt's flutter (morph targets on the skirt's own vertices, so every material, the ink hull and
  * the skinning carry it): sway: hem shift (m) at full wind; flip: the flare angle (deg) of flip();

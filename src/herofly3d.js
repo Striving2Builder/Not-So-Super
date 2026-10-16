@@ -5,7 +5,7 @@
 // (herolook3d.js: pushed saturation, self-light, a cyan-white rim, so her red reads against a red
 // dusk sky and a night city alike); plus an inked contact shadow on the street or roof below her.
 import * as THREE from 'three';
-import { HeroModel, heroReady, HERO_COMIC } from './hero3d.js';
+import { HeroModel, heroReady, HERO_COMIC, wornSkin } from './hero3d.js';
 import { inkCharacter } from './look3d.js';
 import { heroMaterial, inkHull, SUIT, HERO_LIGHT } from './herolook3d.js';
 import { HERO_LAYER } from './heropass3d.js';
@@ -75,6 +75,7 @@ export class FlyHero3D {
   }
 
   ensure() {
+    if (this.model && this.model.skin !== wornSkin()) { this.pivot.remove(this.model.root); this.model = null; } // (Act 2's costume arrived)
     if (this.model || !heroReady()) return !!this.model;
     this.model = new HeroModel();
     this.model.root.scale.setScalar(POSE.scale);
@@ -170,7 +171,8 @@ export class FlyHero3D {
     // the side of her the cape lies on: her back faces the sky when flying, faces behind when upright
     const out = fly > 0.5 ? up : fwd.negate();
     anchor.addScaledVector(out, 0.06 * POSE.scale * this.size);
-    this.cape.visible = true;
+    this.cape.visible = !m.noCape; // (the crop top: no cape)
+    if (m.noCape) { if (this.sun) this.light(); return; }
     this.cape.update(anchor, back, out, side, h.speed * M, t, dt, POSE.scale * this.size, this.boostK);
     if (this.sun) this.light(); // her key light, time-of-day tint and rim colour follow the sun/moon
   }
