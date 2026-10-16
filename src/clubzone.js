@@ -59,6 +59,7 @@ export class ClubZone extends Special3D {
   /** Push the building's textures to the GPU a few at a time (else the first frame uploads them all). */
   uploadTextures() {
     const r = this.renderer, todo = new Set();
+    if (!this.scene || this.g.mode !== this || this.done) return Promise.resolve(); // (left before the shaders finished compiling)
     this.scene.traverse((o) => {
       if (!o.isMesh) return;
       for (const m of [].concat(o.material)) for (const v of Object.values(m)) if (v && v.isTexture) todo.add(v);
