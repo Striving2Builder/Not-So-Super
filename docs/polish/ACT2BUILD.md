@@ -26,8 +26,8 @@ you can build"). This file is the build board. A new thread picks the build up f
 | 3 | **F**: the Act 2 asylum (always high, powers lost, costume clue, the spree counter) | F | **merged** 5af8b89 (`src/asylum2.js`; flow act2asylum; debug `?act=act2&zone=asylum&flight=2d`) |
 | 4 | **G**: Recall + drug finds | G | **merged** 2731420 (`src/act/recall.js`; `node tools/shots/recall.js` 3 flows 0 errors) |
 | 3 | **E**: the factory lines (hotel engine, 4 levers, the foreman) | E | **merged** 05c9773 (`src/factory/`; `node tools/shots/factory.js` 4 flows; debug `?zone=factory&act=act2lair&flight=2d`) |
-| 5 | **H1**: the hotel's new floor, the hall of mirrors (games, puzzles, traps, fake reflections) | H | running, 2nd try (the 1st hit the spend limit before writing code) |
-| 5 | H2: the Supergurl boss fight (coat + mask off, the drug meter, the mirror call, the back-and-forth, the act's end) | H | next |
+| 5 | **H1**: the hotel's new floor, the hall of mirrors (games, puzzles, traps, fake reflections) | H | **merged** (`src/mirrors/`, branch act2-h1-mirrors 262ba3f; `node tools/shots/mirrors.js` 4 flows; debug `?zone=mirrors&act=act2lair&flight=2d`) |
+| 5 | **H2**: the Supergurl boss fight (coat + mask off, the drug meter, the mirror call, the back-and-forth, the act's end) | H | running (handoff `act2-h2.md`) |
 
 ## The contract between A and I (wave 1)
 - I owns `src/rld/` (new folder) and registers a zone mode **`rldwalk`** in `main.js` (`modes`,
@@ -60,3 +60,5 @@ you can build"). This file is the build board. A new thread picks the build up f
 - 2026-10-16: the monthly spend limit stopped G (nearly done) and H1 (still reading). User: "resume". Director committed
   G's harness, ran it (3 flows, 0 errors), wrote its handoff, merged (2731420; kept both the map helpers and the
   recall tick in act2run's update). H1 restarted as a fresh agent from phase-2.
+- 2026-10-16: H1 merged (2nd try, ~215k tokens). Perf: gallery 162 calls / 77k tris (twins in the glass; cut the
+  hunters' twins in `glass.js` `setupGlass` if phones struggle). Stale branch `act2-h1` (1st try, no code) can go. H2 launched.
