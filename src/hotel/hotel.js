@@ -345,7 +345,7 @@ export class HotelZone extends ClubZone {
     }
     // reading the room: a line of story, and in the Screening Rooms the film itself
     this.addInter(spot, wing === 'screening' ? 'Watch the screen' : wing === 'switchboard' ? 'Listen in on the phones' : 'Look around', () => true, async () => {
-      if (wing === 'screening') { await clipsReady; await playCutscene({ src: nextClip(CLIPS.press), maxSecs: 9, caption: 'The film on the screen: you, on a loop.' }); return; }
+      if (wing === 'screening') { await clipsReady; await playCutscene({ src: nextClip(CLIPS.press), caption: 'The film on the screen: you, on a loop.' }); return; }
       await dialog({ title: `Room ${r.num}`, text: wing === 'switchboard' ? `${look}<br><br>${pick(SWITCHBOARD)}` : look });
     });
   }
@@ -461,7 +461,7 @@ export class HotelZone extends ClubZone {
     await new Promise((r) => setTimeout(r, 900));
     if (this.g.mode !== this) return;
     await clipsReady;
-    await playCutscene({ src: nextClip(CLIPS.captive), maxSecs: 10, caption: 'Kryptonite. Everything goes green… then nothing.' });
+    await playCutscene({ src: nextClip(CLIPS.captive), caption: 'Kryptonite. Everything goes green… then nothing.' });
     if (this.g.mode !== this) return;
     this.wakeInRoom();
     const ex = pick(EXPERIMENTS);

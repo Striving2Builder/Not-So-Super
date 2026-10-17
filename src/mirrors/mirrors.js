@@ -339,7 +339,7 @@ export class MirrorsZone extends HotelZone {
     await new Promise((r) => setTimeout(r, 900));
     if (this.g.mode !== this) return;
     await clipsReady;
-    await playCutscene({ src: nextClip(CLIPS.captive), maxSecs: 10, caption: 'Purple light, a hundred of her in the glass… then nothing.' });
+    await playCutscene({ src: nextClip(CLIPS.captive), caption: 'Purple light, a hundred of her in the glass… then nothing.' });
     if (this.g.mode !== this) return;
     this.wakeInRoom();
     await dialog({

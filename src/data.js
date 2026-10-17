@@ -273,8 +273,7 @@ export const CITY_FEED = {
   cooldown: 35,        // seconds between district-entry clips elsewhere
   perchCooldown: 20,   // seconds between rooftop clips
   hotGap: [14, 24],    // seconds between clips while in a hot district
-  clipMax: 12,         // cut videos off after this many seconds
-  imageSecs: 6,        // how long a still stays up
+  imageSecs: 6,        // how long a still stays up (a video plays through, however long it is)
 };
 
 export const SIGN_WORDS = {

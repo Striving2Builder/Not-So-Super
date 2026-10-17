@@ -199,7 +199,7 @@ game.endCapture = async (zone, escaped, villain) => {
     // story beat: the city wakes up to her lost fight on every billboard
     const vice = BILLBOARDS.vice.includes(zone.district);
     await playScreenScene({
-      screens: vice ? BILLBOARDS.rld : BILLBOARDS.downtown, folder: BILLBOARDS.folders, maxSecs: 14, holdSecs: 4,
+      screens: vice ? BILLBOARDS.rld : BILLBOARDS.downtown, folder: BILLBOARDS.folders, holdSecs: 4,
       caption: `By morning, every billboard in ${DISTRICTS[zone.district]?.name || 'the city'} is playing the fight…`,
     });
   }

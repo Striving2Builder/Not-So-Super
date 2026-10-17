@@ -5,7 +5,7 @@
 //   intoxicated (the bar is in the warning range) → a clip from the "intox" folder
 //   perching on a roof  → a clip from the "rooftop" folder
 //   other hot districts (Entertainment) → flying clips keep coming while she's there
-// Flying-in clips play once; the others loop until CITY_FEED.clipMax.
+// Every clip plays through once, however long it is, then the corner closes.
 // Clips are listed in assets/video/manifest.json (tools/build_video_manifest.js); what plays where
 // is tuned in CITY_FEED (data.js). With no clips on disk it simply never shows.
 import { CITY_FEED } from './data.js';
@@ -82,12 +82,15 @@ export class CityFeed {
     if ((cat !== 'flying' || CITY_FEED.hot.includes(this.district)) && this.t - this.last > this.hotGap) this.play(cat, districtName, true);
   }
 
-  /** The clock, and the clip that's playing (kept looping, cut off at clipMax). True while one plays. */
+  /** The clock, and the clip that's playing (a video runs to its own end). True while one plays. */
   tick(dt) {
     this.t += dt;
     if (!this.playing) return false;
-    if (this.playing.video && this.t - (this.kickT || 0) > 0.6) { this.kickT = this.t; keepLooping(this.video); } // resume after a pause; a loop that hangs on its last frame wraps
-    if (this.t - this.playing.start > (this.playing.video ? CITY_FEED.clipMax : CITY_FEED.imageSecs)) this.stop();
+    if (this.playing.video) {
+      const v = this.video;
+      if (this.t - (this.kickT || 0) > 0.6) { this.kickT = this.t; keepLooping(v); } // resume after a pause; a finished clip is left alone
+      if (v.ended || (v.duration && v.currentTime >= v.duration - 0.05)) this.stop();
+    } else if (this.t - this.playing.start > CITY_FEED.imageSecs) this.stop();
     return true;
   }
 
@@ -113,7 +116,7 @@ export class CityFeed {
       this.img.removeAttribute('src');
       // with sound if the player turned it on (iOS may refuse outside a tap: then muted, badge says so)
       this.video.muted = !this.soundOn;
-      this.video.loop = cat !== 'flying'; // flying in plays once; the rest loop until clipMax
+      this.video.loop = false; // play the whole clip, then close
       this.video.src = url;
       this.video.play().catch(() => { this.video.muted = true; this.video.play().catch(() => {}); }).finally(() => this.showSound());
     }

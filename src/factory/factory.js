@@ -342,7 +342,7 @@ export class FactoryZone extends HotelZone {
     await new Promise((r) => setTimeout(r, 900));
     if (this.g.mode !== this) return;
     await clipsReady;
-    await playCutscene({ src: nextClip(CLIPS.captive), maxSecs: 10, caption: 'Super Squirt. Pink, sweet, everywhere… then nothing.' });
+    await playCutscene({ src: nextClip(CLIPS.captive), caption: 'Super Squirt. Pink, sweet, everywhere… then nothing.' });
     if (this.g.mode !== this) return;
     this.wakeInRoom();
     const on = this.leverObjs.filter((o) => o.on);

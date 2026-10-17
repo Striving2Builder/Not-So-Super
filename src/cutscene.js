@@ -24,7 +24,7 @@ function holdLoop(video) {
  * @param folder    assets/video/<folder>/ to pick a clip from
  * @param src       one file to play instead of a folder (the game intro)
  * @param caption   HTML over the bottom of the screen
- * @param maxSecs   cut videos off after this long (the clip loops until then); 0: no timer
+ * @param maxSecs   kept for callers; a clip plays through once unless `loops` or `untilTap` says otherwise
  * @param tapSkips  a tap always ends it (otherwise the first tap turns sound on)
  * @param loops     end after the clip has played this many times through (the forced capture clip: 3)
  * @param skipTaps  taps it takes to skip (after the sound tap); a counter shows what's left
@@ -81,11 +81,13 @@ export async function playCutscene({ folder, src, caption = '', maxSecs = 12, ho
     if (url && !isImage(url)) {
       el.classList.remove('still');
       video.src = url;
-      if (once) { video.loop = false; video.removeAttribute('loop'); } else holdLoop(video);
+      // one play-through, then it ends: the old maxSecs clock used to cut a long clip off early
+      const single = once || (maxSecs > 0 && !loops && !untilTap);
+      if (single) { video.loop = false; video.removeAttribute('loop'); } else holdLoop(video);
       // A pass ends with the browser wrapping it (the playhead jumps back to the start) or, when it
       // ignored `loop` (the first play of a clip with sound, iOS), with `ended`: we start it again.
       const pass = () => loops > 0 && !untilTap && ++played >= loops;
-      video.onended = () => { if (once || pass()) return end(); lastT = 0; video.currentTime = 0; go().catch(() => {}); };
+      video.onended = () => { if (single || pass()) return end(); lastT = 0; video.currentTime = 0; go().catch(() => {}); };
       video.ontimeupdate = () => {
         const t = video.currentTime;
         if (t < lastT - 0.5 && pass()) end();
@@ -95,7 +97,6 @@ export async function playCutscene({ folder, src, caption = '', maxSecs = 12, ho
       const go = () => video.play().catch(() => { video.muted = true; return video.play(); }); // sound if allowed
       go().catch(() => {});
       alive = setInterval(() => keepLooping(video, go), 600); // paused under it or hung on the last frame: back on
-      if (maxSecs > 0 && !loops && !untilTap) timer = setTimeout(end, maxSecs * 1000);
     } else {
       el.classList.add('still');
       if (url) img.src = url;
@@ -108,7 +109,7 @@ export async function playCutscene({ folder, src, caption = '', maxSecs = 12, ho
  * A clip played inside a green-screen still (a cell TV, a billboard…), full screen. Story beats are
  * told this way. `lockSecs` makes it unskippable for that long (a countdown shows; a short clip
  * loops); after that a tap ends it, or it ends with the clip. `untilTap` keeps the clip looping
- * until a tap, with no timer. With no clip in `folder` the screen shows static for `holdSecs`
+ * until a tap, with no timer. Any other clip plays once, through to the end. With no clip in `folder` the screen shows static for `holdSecs`
  * and the flow carries on.
  * @param screens  still URLs to pick from (see greenscreen.js)
  * @param folder   assets/video/<folder>/ for the clip, or a list (the first folder with clips wins)
@@ -157,7 +158,8 @@ export async function playScreenScene({ screens, folder, clipUrl = null, image =
     let source = null, failed = false;
     if (clip) {
       video.src = clip;
-      holdLoop(video); // shorter than the lock, and an untilTap scene, both repeat; the first play included
+      if (untilTap || lock > 0) holdLoop(video); // a short clip repeats through the lock; untilTap repeats until she skips
+      else { video.loop = false; video.removeAttribute('loop'); } // one full play, then the scene ends
       video.onerror = () => { source = null; failed = true; };
       video.play().then(() => { source = video; }).catch(() => { video.muted = true; video.play().then(() => { source = video; }).catch(() => {}); });
     }
@@ -178,8 +180,8 @@ export async function playScreenScene({ screens, folder, clipUrl = null, image =
       if (image) { if (!untilTap && t >= maxSecs) return end(); raf = requestAnimationFrame(frame); return; }
       if ((!clip || failed) && t >= holdSecs) return end();
       if (untilTap && clip && !failed) { raf = requestAnimationFrame(frame); return; }
-      if ((clip && !video.loop && video.ended) || t >= Math.max(maxSecs, lock)) return end();
-      if (clip && t >= lock && lock > 0) { video.loop = false; video.removeAttribute('loop'); } // served: let it finish on its own
+      if (clip && t >= lock && lock > 0) { video.loop = false; video.removeAttribute('loop'); } // served: let this pass finish
+      if (clip && !video.loop && video.ended) return end();
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
