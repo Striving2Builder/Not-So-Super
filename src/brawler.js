@@ -13,6 +13,7 @@ import { Stage } from './brawlstage.js';
 import { PlateStage } from './brawlplate.js';
 import { spriteBudget, prewarm, spritesReady, CORE_ANIMS, LOOKS, VARIANTS } from './brawlsprite.js';
 import { heroReady, HeroSprite } from './hero3d.js';
+import { heatVision } from './brawlpose.js';
 import { loadingPanel } from './gfx.js';
 import { EN, DZ } from './brawldata.js';
 import { actorDraw } from './brawlactors.js';
@@ -278,9 +279,12 @@ export class Brawler {
 
     const busy = p.st === 'attack' || p.st === 'hurt' || p.st === 'beam' || p.st === 'breath';
     const a = inp.axis();
-    // Which way the 3D model should face: toward her movement while walking, side-on otherwise.
+    // Which way the 3D model should face: toward her movement while walking, side-on otherwise
+    // (turned further to the viewer for her hands-on-hips pose on a clear street, so it reads).
     const moving = !busy && p.y <= 0 && Math.hypot(a.x, a.y) > 0.15;
-    const targetYaw = moving ? Math.atan2(a.x, a.y) : (p.facing > 0 ? Math.PI / 2 - 0.4 : -Math.PI / 2 + 0.4);
+    const proud = p.st === 'idle' && p.y <= 0 && !this.enemies.some((e) => !e.dead && Math.abs(e.x - p.x) < 520);
+    const turn = proud ? 0.95 : 0.4;
+    const targetYaw = moving ? Math.atan2(a.x, a.y) : (p.facing > 0 ? Math.PI / 2 - turn : -Math.PI / 2 + turn);
     let dyaw = targetYaw - (p.yaw ?? targetYaw);
     while (dyaw > Math.PI) dyaw -= Math.PI * 2;
     while (dyaw < -Math.PI) dyaw += Math.PI * 2;
@@ -376,7 +380,7 @@ export class Brawler {
         // (not a crook that's down: freezing a KO'd one mid-fall cancelled his death, and he stood back up at hp ≤ 0 holding the wave open)
         if (!e.dead && e.st !== 'down' && e.hp > 0 && dx > 0 && dx < 280 && Math.abs(e.z - p.z) < 0.2 && e.st !== 'frozen') { e.st = 'frozen'; e.st_t = 0; }
       }
-      if (chance(0.9)) this.fx.push({ kind: 'frost', x: p.x + p.facing * 40, y: 82, z: p.z, vx: p.facing * rand(380, 540), vy: rand(-40, 30), t: 0, max: 0.55, r: rand(0.7, 1.3) });
+      if (chance(0.9)) this.fx.push({ kind: 'frost', x: p.x + p.facing * 44, y: 90, z: p.z, vx: p.facing * rand(380, 540), vy: rand(-40, 30), t: 0, max: 0.55, r: rand(0.7, 1.3) });
       if (p.st_t > 0.9) p.st = 'idle';
     }
   }
@@ -433,10 +437,10 @@ export class Brawler {
   superMove(kind) {
     this.cut = { t: 0, kind };
     this.hitstop = 0.3; // the super freeze: world holds while the cut-in slams across
-    // a near-frontal portrait for the cut-in panel (guard pose), rendered once per special
+    // a near-frontal portrait for the cut-in panel (her heat vision / freeze breath stance), rendered once per special
     if (this.sprite) {
       const H = this.sprite.hero;
-      H.pose('punch', 1.2);
+      H.pose('happyIdle', 0); heatVision(H);
       // cape hidden: the snap to a frontal yaw would fling the cloth sim into a streak across the panel
       const cape = H.cape && H.cape.mesh; if (cape) cape.visible = false;
       const img = this.sprite.render({ view: 'side', yaw: 0.5, span: 2.6, lift: 0.12 });

@@ -157,19 +157,23 @@ export class FlyHero3D {
     const st = 1 + POSE.stretch[0] * Math.max(0, 1 - this.boostT / POSE.stretch[1]) * fly;
     m.root.scale.set(POSE.scale / Math.sqrt(st), POSE.scale / Math.sqrt(st), POSE.scale * st);
     if (fly > 0) this.pose.flying(m, fly, t); else if (!perched) this.pose.hovering(m, this.pose.hoverK, t);
-    // cape: chain from between her shoulders, streaming back along her body
-    const q = m.root.getWorldQuaternion(this._q);
-    // (the idle clip stands her facing the root's −x, her left along its +z: see FlightPose.axes)
-    const idle = perched || hover;
-    const fwd = this._f.set(idle ? -1 : 0, 0, idle ? 0 : 1).applyQuaternion(q), up = this._s.set(0, 1, 0).applyQuaternion(q), side = this._o.set(idle ? 0 : 1, 0, idle ? 1 : 0).applyQuaternion(q);
-    m.bones.LeftArm.getWorldPosition(this._l); m.bones.RightArm.getWorldPosition(this._r);
+    // cape: chain from between her shoulders, streaming back along her body. Her body's axes come
+    // from her bones: they turn with the fly ↔ idle cross-fade and the idle turn, which the root's
+    // axes (and a hover on / off switch) jumped across, swinging the cape round onto her front.
+    const B = m.bones;
+    B.LeftArm.getWorldPosition(this._l); B.RightArm.getWorldPosition(this._r);
+    const fwd = this._f.set(0, 0, 1).applyQuaternion(this.pivot.getWorldQuaternion(this._q));
+    const fl = fk * (1 - this.idleK), hk = perched ? 0 : 1 - fl; // (fl: eased with her pose, no jump when she starts to hover)
+    // her left, across her shoulders (hovering, the idle clip turns them off her heading: squaring
+    // the cape to the chase camera instead is what pushed its edge out across her front)
+    const side = this._o.subVectors(this._l, this._r).normalize();
+    const bUp = B.Neck.getWorldPosition(this._mid).sub(B.Hips.getWorldPosition(this._in)).normalize(); // hips → neck
+    const out = this._s.crossVectors(bUp, side).normalize(); // out of her back (the side the cape lies on)
     const anchor = this._l.add(this._r).multiplyScalar(0.5);
-    // flying, "back" runs down her body (head → feet); hovering upright that's straight down
-    // (hovering, it drifts back off her shoulders and sways a little, rather than hanging like a curtain)
-    const hk = perched ? 0 : 1 - fly;
-    const back = this._d.copy(fwd).negate().multiplyScalar(fly + 0.35 * hk).addScaledVector(up, -(1 - fly)).addScaledVector(side, Math.sin(t * 0.9) * 0.12 * hk).normalize();
-    // the side of her the cape lies on: her back faces the sky when flying, faces behind when upright
-    const out = fly > 0.5 ? up : fwd.negate();
+    // flying, "back" runs along her line of flight (head → feet); hovering upright it hangs down her
+    // back, drifting off her shoulders and swaying a little rather than hanging like a curtain; perched, straight down
+    const back = this._d.copy(bUp).multiplyScalar(-(1 - fl)).addScaledVector(out, 0.35 * hk * (1 - fl)).addScaledVector(fwd, -fl)
+      .addScaledVector(side, Math.sin(t * 0.9) * 0.12 * hk).normalize();
     anchor.addScaledVector(out, 0.06 * POSE.scale * this.size);
     this.cape.visible = !m.noCape; // (the crop top: no cape)
     if (m.noCape) { if (this.sun) this.light(); return; }

@@ -190,6 +190,10 @@ export class HeroModel {
     }
     const d = a.getClip().duration;
     a.time = LOOPS.has(name) ? ((time % d) + d) % d : Math.min(Math.max(time, 0), d - 1e-3);
+    // The mixer only writes a bone whose value changed since its last update: re-posing the same frame
+    // kept the bends a pose layered on top (brawlpose.js) left last time, and they compounded. Forget
+    // the last values so every bone is written from the clip.
+    for (const b of this.mixer._bindings) b.buffer.fill(NaN, b.valueSize, b.valueSize * 3);
     this.mixer.update(0);
   }
 
