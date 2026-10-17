@@ -14,7 +14,7 @@ export const FLASHPOINT = {
   id: 'flashpoint', title: 'Flashpoint Live', tagline: 'Stay out of the lenses. Find who runs the show.', theme: 'extortion',
   club: 'Flashpoint', room: 'runway', difficulty: 'hard',
   press: { n: 5, rate: 16, catwalk: 2.2, range: 8, fov: 0.9 },
-  clips: { wall: joinClips('shame', 'press'), trap: CLIPS.captive, shame: CLIPS.shame },
+  clips: { wall: joinClips('shame', 'high'), trap: CLIPS.captive, shame: CLIPS.shame },
   events: ['redcarpet', 'raid', 'firealarm', 'fight'],
   need: 8,
   rep: 40,

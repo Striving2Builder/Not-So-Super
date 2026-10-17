@@ -11,7 +11,7 @@ import { CLIPS, joinClips } from '../../club3d/clips.js';
 export const AUCTION = {
   id: 'auction', title: 'The Auction', tagline: 'Tonight\'s lot #1 is you. Stop the sale.', theme: 'blackmail',
   club: 'The Gilded Cage', room: 'gilded', difficulty: 'normal',
-  clips: { wall: joinClips('shame', 'captive'), trap: CLIPS.captive, shame: CLIPS.shame },
+  clips: { wall: joinClips('shame', 'high'), trap: CLIPS.captive, shame: CLIPS.shame },
   events: ['redcarpet', 'paparazzi', 'raid', 'fight'],
   need: 8,
   rep: 30,
