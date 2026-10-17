@@ -22,7 +22,8 @@ export const fxDraw = {
   drawBeam(ctx) {
     const p = this.p, s = this.sc(p.z) * HERO_SCALE;
     const x = this.sx(p.x), y = this.gy(p.z);
-    const ey = y - p.y * s - 90 * s, x0 = x + p.facing * 12 * s, x1 = x + p.facing * (p.beamEnd || 520) * this.k;
+    const ey = y - p.y * s - 98 * s, x0 = x + p.facing * 19 * s, // (her eyes in the heat vision lean, brawlpose.js)
+      x1 = x + p.facing * (p.beamEnd || 520) * this.k;
     const wob = 1 + Math.sin(this.t * 60) * 0.1, g = Math.min(1, p.st_t / 0.08);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';

@@ -193,6 +193,10 @@ export class FlightCape {
       this.p[i].lerp(tgt, Math.min(1, dt * (5 + v / 10))); // (a little lag down the chain: the wave reads as cloth, not a hinged board)
       const d = this._a.subVectors(this.p[i], this.p[i - 1]), len = d.length() || 1; // keep the segment length
       this.p[i].copy(this.p[i - 1]).addScaledVector(d, L / len);
+      // never through her: the spine stays on her back's side of the collar (the droop, a wave's trough
+      // or a quick turn would otherwise swing it under her and out across her front)
+      const behind = this._a.subVectors(this.p[i], anchor).dot(up);
+      if (behind < 0) this.p[i].addScaledVector(up, -behind);
     }
     const pos = this.cloth.geometry.attributes.position;
     for (let i = 0; i < n; i++) {

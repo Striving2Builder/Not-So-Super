@@ -3,6 +3,7 @@
 import { drawHumanoid, pose, HERO_LOOK, glow } from './art.js';
 import { rand } from './util.js';
 import { heroReady, HeroSprite } from './hero3d.js';
+import { heatVision, powerPose } from './brawlpose.js';
 import { INK, halftone as halftonePat } from './brawlpaint.js';
 import { frame as spriteFrame, inkOutline, SPAN, LIFT, LOOKS } from './brawlsprite.js';
 import { M, HERO_SCALE, CROOK_SCALE, BREAK } from './brawldata.js';
@@ -61,13 +62,13 @@ export const actorDraw = {
       case 'flykick': H.pose('kick2', 0.67); break;
       case 'hurt': H.pose('hit', 0.15 + p.st_t * 1.6); break;
       case 'down': H.pose(p.hp > 0 && p.st_t > 0.5 ? 'getUp' : 'fallFlat', p.hp > 0 && p.st_t > 0.5 ? 4 + (p.st_t - 0.5) * 6 : 0.6 + p.st_t * 1.8); break;
-      case 'beam': case 'breath': H.pose('punch', 1.2); break;
+      case 'beam': case 'breath': H.pose('happyIdle', 0); heatVision(H); break;
       default:
         // Guard up (fists raised, wide stance, chin up) while crooks are about; the hands-on-hips hero
-        // pose when the street is clear. (combatIdle hangs her head: it read as dejected.)
+        // pose when the street is clear (brawlpose.js). (combatIdle hangs her head: it read as dejected.)
         if (p.y > 0) H.pose('jump', 1.0);
         else if (this.enemies.some((e) => !e.dead && Math.abs(e.x - p.x) < 520)) H.pose('punch', 1.16 + Math.sin(this.t * 3) * 0.04);
-        else H.pose('pose', 0.5 + this.t * 0.4);
+        else { H.pose('happyIdle', this.t); powerPose(H, this.t); }
     }
     // Cape wind: running pushes it out behind her; jumping/falling lifts it.
     const run = p.st === 'walk' ? 7 : p.st === 'attack' || p.st === 'flykick' ? 3 : 0.8;
@@ -100,7 +101,7 @@ export const actorDraw = {
     this.drawSwing(ctx, x, y, s);
     if (p.st === 'breath') {
       ctx.fillStyle = 'rgba(200,240,255,.6)';
-      ctx.beginPath(); ctx.arc(x + p.facing * 14 * s, y - 88 * s, 6 * s, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x + p.facing * 21 * s, y - 96 * s, 6 * s, 0, Math.PI * 2); ctx.fill();
     }
   },
 
