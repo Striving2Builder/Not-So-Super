@@ -64,10 +64,9 @@ export const actorDraw = {
       case 'down': H.pose(p.hp > 0 && p.st_t > 0.5 ? 'getUp' : 'fallFlat', p.hp > 0 && p.st_t > 0.5 ? 4 + (p.st_t - 0.5) * 6 : 0.6 + p.st_t * 1.8); break;
       case 'beam': case 'breath': H.pose('happyIdle', 0); heatVision(H); break;
       default:
-        // Guard up (fists raised, wide stance, chin up) while crooks are about; the hands-on-hips hero
-        // pose when the street is clear (brawlpose.js). (combatIdle hangs her head: it read as dejected.)
+        // The hands-on-hips hero pose whenever she stands, crooks about or not (brawlpose.js).
+        // (combatIdle hangs her head: it read as dejected.)
         if (p.y > 0) H.pose('jump', 1.0);
-        else if (this.enemies.some((e) => !e.dead && Math.abs(e.x - p.x) < 520)) H.pose('punch', 1.16 + Math.sin(this.t * 3) * 0.04);
         else { H.pose('happyIdle', this.t); powerPose(H, this.t); }
     }
     // Cape wind: running pushes it out behind her; jumping/falling lifts it.

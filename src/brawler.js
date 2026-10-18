@@ -280,9 +280,9 @@ export class Brawler {
     const busy = p.st === 'attack' || p.st === 'hurt' || p.st === 'beam' || p.st === 'breath';
     const a = inp.axis();
     // Which way the 3D model should face: toward her movement while walking, side-on otherwise
-    // (turned further to the viewer for her hands-on-hips pose on a clear street, so it reads).
+    // (turned further to the viewer for her hands-on-hips standing pose, so it reads).
     const moving = !busy && p.y <= 0 && Math.hypot(a.x, a.y) > 0.15;
-    const proud = p.st === 'idle' && p.y <= 0 && !this.enemies.some((e) => !e.dead && Math.abs(e.x - p.x) < 520);
+    const proud = p.st === 'idle' && p.y <= 0;
     const turn = proud ? 0.95 : 0.4;
     const targetYaw = moving ? Math.atan2(a.x, a.y) : (p.facing > 0 ? Math.PI / 2 - turn : -Math.PI / 2 + turn);
     let dyaw = targetYaw - (p.yaw ?? targetYaw);
