@@ -19,6 +19,7 @@ import { lerp } from './util.js';
 import { sfx } from './sfx.js';
 import { hasWebGL } from './gfx.js';
 import { releaseOffscreen } from './offscreen3d.js';
+import { Beacons3D, signalSprite, SIGNAL_DISC } from './beacons3d.js';
 
 /**
  * Flight in 3D? The default since it beat the 2D view 6/6 in blind tests (2026-10-02). `?flight=2d`
@@ -54,8 +55,7 @@ const LOOK3 = {
   bands: [110, 560, 1100],     // world units (×0.5 m)
   speedMul: [0.5, 1, 1.3],     // top-speed multiplier per band in 3D
   fog: [1100, 1600, 2400],     // fog far (m) per band
-  beam: { width: 14, height: 420, alpha: 0.95, minPx: 0.03, max: 24 }, // m; minPx: width ≥ this × distance (a few px far off)
-  icons: { max: 3, cluster: 40, fade: [300, 1600] },
+  icons: { max: 4, cluster: 40, fade: [300, 1600], minAlpha: 0.8, r: [14, 34], size: 30, at: 300, climb: [45, 7] }, // the beacon-top signals: radius px [far, near], m; at: m up the beacon; climb: m a step, steps (to clear her)
   heroEllipse: [1.5, 1.25, 2.4], // her exclusion ellipse: × her screen radius (x, y); her radius in m (× her size) // on-screen incident icons: cap, merge radius (px), fade (m)
   iconPx: 26,
   patrolBelow: 150,             // speed under which high patrol cranes up to the overhead view
@@ -69,28 +69,7 @@ const LOOK3 = {
   hudAvoid: '#hud-left, #hud-top, #hud-right, #objectives.on, #prompt.on, #btns .tbtn, #stick-base, .caption',
 };
 
-// Incident beacon: a thin, perfectly vertical shaft of light. A quad that turns about its own
-// vertical axis to face the camera (never leans), a hot core with a soft glow across it, fading up
-// its height; soft edges only, so it never draws a hard stair-stepped one.
-const BEAM_VS = `attribute vec3 base; attribute vec3 bcol; attribute float bw; uniform float hgt; varying vec2 vQ; varying vec3 vCol;
-void main() {
-  vec3 to = cameraPosition - base; to.y = 0.0;
-  vec3 right = normalize(vec3(to.z, 0.0, -to.x) + 1e-5);
-  vQ = vec2(position.x * 2.0, position.y / hgt); vCol = bcol;
-  vec3 p = base + right * position.x * bw + vec3(0.0, position.y, 0.0);
-  gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
-}`;
-const BEAM_FS = `uniform float alpha; uniform float time; varying vec2 vQ; varying vec3 vCol;
-void main() {
-  float x = vQ.x, core = exp(-x * x * 40.0), glow = exp(-x * x * 6.0) * 0.6;
-  float up = pow(1.0 - vQ.y, 1.4) * smoothstep(0.0, 0.02, vQ.y);
-  float pulse = 0.85 + 0.15 * sin(time * 3.0 - vQ.y * 14.0 + vCol.r * 9.0);
-  float a = clamp((core + glow) * up * pulse * alpha, 0.0, 1.0);
-  // a white-hot core in a coloured glow; alpha-blended so it still reads against a bright day sky
-  gl_FragColor = vec4(mix(vCol, vec3(1.0), core / (core + glow + 1e-4) * 0.7), a);
-}`;
-
-const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _uv = new THREE.Vector2(), _c = new THREE.Color(), _s2 = new THREE.Vector2();
+const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _uv = new THREE.Vector2(), _s2 = new THREE.Vector2();
 
 export class Flight3D {
   constructor(ow) {
@@ -163,7 +142,7 @@ export class Flight3D {
   drop2D() {
     document.body.classList.remove('fly3d');
     this.bands2d.forEach(([z, k], i) => { BANDS[i].z = z; BANDS[i].speedMul = k; });
-    this.post?.dispose(); this.heroPass?.dispose();
+    this.post?.dispose(); this.heroPass?.dispose(); this.beacons?.dispose();
     this.scene = null;
   }
 
@@ -221,41 +200,10 @@ export class Flight3D {
   /** Drag on the screen (not the stick): orbit the camera round her. */
   orbit(dx) { if (this.cam) this.cam.orbit += dx * 0.006; }
 
-  /** All the incident beacons in one mesh (one draw call): a quad per incident, placed in the shader. */
-  syncBeams(t) {
-    const ow = this.ow, cp = this.cam.cam.position, B = LOOK3.beam, N = B.max;
-    if (!this.beamMesh) {
-      const g = new THREE.BufferGeometry(), pos = [], idx = [];
-      for (let i = 0; i < N; i++) {
-        const o = i * 4;
-        pos.push(-0.5, 0, 0, 0.5, 0, 0, 0.5, B.height, 0, -0.5, B.height, 0);
-        idx.push(o, o + 1, o + 2, o, o + 2, o + 3);
-      }
-      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      for (const [k, n] of [['base', 3], ['bcol', 3], ['bw', 1]]) g.setAttribute(k, new THREE.BufferAttribute(new Float32Array(N * 4 * n), n).setUsage(THREE.DynamicDrawUsage));
-      g.setIndex(idx);
-      this.beamMesh = new THREE.Mesh(g, new THREE.ShaderMaterial({
-        uniforms: { alpha: { value: B.alpha }, time: { value: 0 }, hgt: { value: B.height } },
-        vertexShader: BEAM_VS, fragmentShader: BEAM_FS, transparent: true, depthWrite: false, toneMapped: false, side: THREE.DoubleSide,
-      }));
-      this.beamMesh.frustumCulled = false; // (the quads are placed in the vertex shader)
-      this.beamMesh.renderOrder = 6;
-      this.scene.add(this.beamMesh);
-    }
-    const g = this.beamMesh.geometry, base = g.attributes.base, col = g.attributes.bcol, bw = g.attributes.bw;
-    let i = 0;
-    for (const z of ow.zones) {
-      if (i >= N) break;
-      const x = z.x * M, y = z.y * M, d = Math.hypot(x - cp.x, y - cp.z);
-      // thin up close, a constant few pixels far off (never a hairline, never a fat stick)
-      const w = Math.max(B.width, d * B.minPx);
-      _c.set(z.color);
-      for (let k = 0; k < 4; k++) { base.setXYZ(i * 4 + k, x, 0, y); col.setXYZ(i * 4 + k, _c.r, _c.g, _c.b); bw.setX(i * 4 + k, w); }
-      i++;
-    }
-    g.setDrawRange(0, i * 6);
-    base.needsUpdate = col.needsUpdate = bw.needsUpdate = true;
-    this.beamMesh.material.uniforms.time.value = t;
+  /** The incident beacons (src/beacons3d.js): the one in DIVE range and the waypoint's target bolder. */
+  syncBeams(t, night) {
+    const ow = this.ow, bold = [ow.near, ow.nav.target?.ref].filter(Boolean);
+    (this.beacons || (this.beacons = new Beacons3D())).sync(this.scene, ow.zones, bold, this.cam.cam, this.g.h, t, night);
   }
 
   /** Screen projection helpers for the 2D overlay (markers), in CSS px. */
@@ -345,7 +293,7 @@ export class Flight3D {
     _v.copy(this.hero.group.position).project(this.cam.cam); _uv.set(_v.x, _v.y);
     this.sky.update(clock, night, D?.map, this.cam.cam.position, fogFar, this.cam.patrolK, this.cam.cam.position.distanceTo(this.hero.group.position), Math.max(this.cam.highK || 0, this.cam.patrolK), _uv);
     this.city3.update(this.cam.cam, { far: fogFar, near: Math.min(700, fogFar * 0.5), night, frame: this.frame });
-    this.syncBeams(ow.t);
+    this.syncBeams(ow.t, night);
     this.fx3.update(dt, this.hero, h, frac, boosting, this.cam.cam, ow.fx.rings.length);
     ow.moments?.render3d(this, dt); // the flight moments and air events (src/moments/)
     // render
@@ -401,45 +349,63 @@ export class Flight3D {
   }
 
   /**
-   * Incident icons at the beam tops: at most a few (the one in dive range first, then nearest),
-   * icons within a thumb's width merge into one with a count, far ones fade, never over the HUD.
+   * The signals at the beacon tops, bat-signal style (src/beacons3d.js: a glowing disc with the
+   * incident's glyph in silhouette), sized by how far off they really are, within a readable range.
+   * At most a few (the one in dive range first, then nearest); signals that land on one another merge
+   * into one with a count; far ones fade a little; never over the HUD or her.
    */
   icons(ctx, P, W, H) {
-    const ow = this.ow, h = ow.hero, I = LOOK3.icons, list = [];
+    const ow = this.ow, h = ow.hero, I = LOOK3.icons, list = [], cam = this.cam.cam, cp = cam.position;
+    const ppm = H / (2 * Math.tan((cam.fov * Math.PI) / 360)); // css px per metre at 1 m
     for (const z of ow.zones) {
-      const [x, y, front] = P.proj(z.x, z.y, LOOK3.beam.height / M * 0.55);
-      if (!front || x < -20 || y < -20 || x > W + 20 || y > H + 20 || this.underHud(x, y, 4)) continue; // (never printed over the HUD)
-      if (this.onHero(x, y, 14)) continue; // (nor over her)
-      list.push({ z, x, y, d: Math.hypot(z.x - h.x, z.y - h.y) * M });
+      // never over her: a signal that lands on her climbs its own shaft until it's clear of her
+      let alt = I.at, x, y, front;
+      for (let k = 0; k <= I.climb[1]; k++, alt += I.climb[0]) { [x, y, front] = P.proj(z.x, z.y, alt / M); if (!front || !this.onHero(x, y, 14)) break; }
+      if (!front || x < -30 || y < -30 || x > W + 30 || y > H + 30 || this.underHud(x, y, 4) || this.onHero(x, y, 14)) continue; // (never printed over the HUD)
+      const dc = Math.max(1, Math.hypot(z.x * M - cp.x, alt - cp.y, z.y * M - cp.z)), r = Math.min(I.r[1], Math.max(I.r[0], (I.size * ppm) / dc));
+      if (alt > I.at && y < r + 8) continue; // (climbed off the top: its shaft is right there anyway)
+      list.push({ z, x, y, r, d: Math.hypot(z.x - h.x, z.y - h.y) * M });
     }
     list.sort((a, b) => (b.z === ow.near) - (a.z === ow.near) || a.d - b.d);
     const shown = [];
     for (const c of list) {
-      const near = shown.find((s) => Math.hypot(s.x - c.x, s.y - c.y) < I.cluster);
+      const near = shown.find((s) => Math.hypot(s.x - c.x, s.y - c.y) < Math.max(I.cluster, s.r + c.r));
       if (near) { near.n++; continue; }
       if (shown.length < I.max) shown.push({ ...c, n: 1 });
     }
-    for (const c of shown) {
-      ctx.globalAlpha = 1 - 0.55 * Math.min(1, Math.max(0, (c.d - I.fade[0]) / (I.fade[1] - I.fade[0])));
-      ow.drawIcon(ctx, c.x, c.y, 11, c.z, ow.g.state && ow.g.state.locked(c.z.lockKey), c.z === ow.near);
+    const st = ow.g.state;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    for (const c of shown.reverse()) { // (the nearest drawn last, on top)
+      const isNear = c.z === ow.near, locked = st && (st.locked(c.z.lockKey) || !!ow.g.act?.doorShut?.(c.z));
+      const r = c.r * (isNear ? 1.2 : 1) * (1 + 0.05 * Math.sin(ow.t * 3 + (c.z.uid || 0))), s = r / SIGNAL_DISC;
+      ctx.globalAlpha = 1 - (1 - I.minAlpha) * Math.min(1, Math.max(0, (c.d - I.fade[0]) / (I.fade[1] - I.fade[0])));
+      ctx.drawImage(signalSprite(c.z, locked), c.x - s / 2, c.y - s / 2, s, s);
       if (c.n > 1) {
-        ctx.fillStyle = '#fff'; ctx.strokeStyle = '#0b0b16'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(c.x + 11, c.y - 11, 7.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#0b0b16'; ctx.font = '900 10px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(c.n), c.x + 11, c.y - 10.5);
+        const bx = c.x + r * 0.8, by = c.y - r * 0.8;
+        ctx.fillStyle = '#fff'; ctx.strokeStyle = '#0b0b16'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(bx, by, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#0b0b16'; ctx.font = '900 10px system-ui, sans-serif'; ctx.fillText(String(c.n), bx, by + 0.5);
+      }
+      if (!isNear) { // distance in an ink pill under it (the one in range has its DIVE! tag); the edge chips' units
+        const label = `${Math.round(c.d / M / 10).toLocaleString()}m`, ly = c.y + r + 11;
+        ctx.font = '800 10px system-ui, sans-serif';
+        const tw = ctx.measureText(label).width + 10;
+        ctx.fillStyle = 'rgba(11,11,22,.82)'; ctx.beginPath(); ctx.roundRect(c.x - tw / 2, ly - 7, tw, 14, 7); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.fillText(label, c.x, ly);
       }
       ctx.globalAlpha = 1;
-      if (c.z === ow.near && !ow.diving) this.diveTag(ctx, c.x, c.y, ow.t);
+      if (isNear && !ow.diving) this.diveTag(ctx, c.x, c.y, ow.t, r);
     }
   }
 
   /** In range of an incident: a pulsing ring and a "DIVE!" tag on it, so the move reads in the world too. */
-  diveTag(ctx, x, y, t) {
+  diveTag(ctx, x, y, t, r = 12) {
     const p = 0.5 + 0.5 * Math.sin(t * 7);
     ctx.save();
     ctx.lineWidth = 3; ctx.strokeStyle = `rgba(255,226,58,${0.5 + 0.5 * p})`;
-    ctx.beginPath(); ctx.arc(x, y, 17 + 5 * p, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, r + 8 + 5 * p, 0, Math.PI * 2); ctx.stroke();
     ctx.font = '900 13px Bangers, Impact, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
-    ctx.lineWidth = 4; ctx.strokeStyle = '#0b0b16'; ctx.strokeText('DIVE! ▼', x, y - 30);
-    ctx.fillStyle = '#ffe23a'; ctx.fillText('DIVE! ▼', x, y - 30);
+    ctx.lineWidth = 4; ctx.strokeStyle = '#0b0b16'; ctx.strokeText('DIVE! ▼', x, y - r - 20);
+    ctx.fillStyle = '#ffe23a'; ctx.fillText('DIVE! ▼', x, y - r - 20);
     ctx.restore();
   }
 
@@ -479,7 +445,7 @@ export class Flight3D {
     const camYaw = Math.atan2(_f.z, _f.x);
     const list = [];
     const add = (m, waypoint) => {
-      const [x, y, front] = P.proj(m.x, m.y, waypoint ? 0 : LOOK3.beam.height / M * 0.55);
+      const [x, y, front] = P.proj(m.x, m.y, waypoint ? 0 : LOOK3.icons.at / M);
       if (front && x > 24 && x < W - 24 && y > 60 && y < H - 24) return; // its beam/icon is in view
       list.push({ m, waypoint, d: Math.hypot(m.x - h.x, m.y - h.y), rel: Math.atan2(m.y - h.y, m.x - h.x) - camYaw });
     };
