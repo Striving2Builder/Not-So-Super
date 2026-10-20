@@ -668,11 +668,13 @@ export class Special3D {
     }
 
     // interactables
-    let best = null, bd = 2.0;
+    let best = null, bd = Infinity;
     for (const o of this.inter) {
       if (!o.can()) continue;
       const d = Math.hypot(o.pos.x - h.position.x, o.pos.z - h.position.z);
-      if (d < bd) { bd = d; best = o; }
+      if (d >= 2.0) continue;
+      const k = d - (o.prio || 0); // (a door outranks clutter on the floor beside it)
+      if (k < bd) { bd = k; best = o; }
     }
     this.near = best;
     if (best && inp.pressed('interact') && !this.busy) {

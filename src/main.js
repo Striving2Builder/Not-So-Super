@@ -117,7 +117,9 @@ game.startZone = (z) => {
   const two = game.act?.two;
   if (!z.casino && z.mode === 'special' && VENUES[z.venue]?.kind === 'casino' && two?.on?.() && two.B?.opening === 'done') z.casino = true;
   setActSkin(two?.on?.() ? ACT2_SKIN : null); // (Act 2's default costume: the crop top)
-  const suit = z.casino ? (!skinScene(KNOCKOFF) && KNOCKOFF) : actSkinPending();
+  const suit = z.casino ? (!skinScene(KNOCKOFF) && KNOCKOFF)
+    : z.mode === 'rldwalk' && z.opening ? (!skinScene(ACT2_SKIN) && ACT2_SKIN) // (Act 2's opening: she wakes in the crop top, whatever costume is picked)
+    : actSkinPending();
   if (suit && z._suitWait !== 'done') { // (the knockoff / the crop top load once, ~2 MB: wait for it, 8 s at most)
     if (!z._suitWait) { z._suitWait = 'pending'; Promise.race([loadSkin(suit), new Promise((r) => setTimeout(r, 8000))]).then(() => { z._suitWait = 'done'; game.startZone(z); }); }
     return; // (the dive's safety net calls again meanwhile: ignored)

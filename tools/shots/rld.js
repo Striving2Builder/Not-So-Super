@@ -1,7 +1,7 @@
 // RLD Walks (src/rld/; docs/design/act2.md): the level played through in headless Chromium. Entering
 // the walk, entering with the act's opening (tied up, the note, the Polaroids), a capture + escape,
 // X-ray and a rescue, the perfume, a lead door + "Which one is hers?", and the asylum still opening.
-//   node tools/shots/rld.js [--label rld] [--port 8897] [--flows all|walk,opening,capture,lead,asylum] [--w 844 --h 390] [--query '&rldcam=far']
+//   node tools/shots/rld.js [--label rld] [--port 8897] [--flows all|walk,opening,trapped,capture,lead,asylum] [--w 844 --h 390] [--query '&rldcam=far']
 // → shots/<label>/rld/*.png + report.json (errors per flow; draw calls/triangles per view)
 const path = require('path');
 const fs = require('fs');
@@ -25,7 +25,7 @@ const W = +arg('--w', 844), H = +arg('--h', 390);
 const EXTRA = arg('--query', '');
 const glOf = (V) => V.page.evaluate(() => { const r = window.__game.mode.renderer.info.render; return { calls: r.calls, tris: r.triangles }; });
 const OUT = path.join(ROOT, 'shots', LABEL, 'rld');
-const ALL = ['walk', 'opening', 'capture', 'lead', 'asylum'];
+const ALL = ['walk', 'opening', 'trapped', 'capture', 'lead', 'asylum'];
 const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
 
 (async () => {
@@ -137,6 +137,42 @@ const want = (f) => (FLOWS === 'all' ? ALL : FLOWS.split(',')).includes(f);
     await V.shot('opening_polaroids');
     await V.through(() => !document.querySelector('#modal-root .modal-back'), 8000);
     report.opening = await V.page.evaluate(() => { const m = window.__game.mode; return { intox: window.__game.state.intox, clues: m.zone.clues, busy: m.busy }; });
+    return V;
+  });
+
+  // the opening: the door's USE prompt beats the props on the floor; the third capture never throws
+  // her out, it locks her in another room in front of 3 to 5 clips
+  await flow('trapped', async () => {
+    const V = await game('zone=rldwalk&opening=1&flight=2d');
+    await ready(V);
+    await V.page.waitForSelector('.c3-struggle', { timeout: 20000 });
+    await V.page.waitForFunction(() => !document.querySelector('.c3-struggle') && !window.__game.mode.busy, null, { timeout: 40000 });
+    report.trapped = await V.page.evaluate(async () => {
+      const m = window.__game.mode, r = m.opening.room, out = {};
+      // every spot on the inside of the door, across the doorway: what does USE pick?
+      out.doorPicks = [];
+      for (const s of [-0.4, -0.2, 0, 0.2, 0.4]) {
+        const side = r.alongX ? [s, 0] : [0, s];
+        m.hero.position.set(r.door.x + r.inward.x * 0.45 + side[0], 0, r.door.z + r.inward.z * 0.45 + side[1]);
+        m.grace = 1e9;
+        await new Promise((res) => setTimeout(res, 250));
+        out.doorPicks.push(m.near?.label || null);
+      }
+      m.hero.position.copy(r.wake);
+      return out;
+    });
+    await V.page.evaluate(() => { const m = window.__game.mode; m.captures = 2; window.__cuts = 0; new MutationObserver(() => { const on = document.querySelector('#cutscene').classList.contains('on'); if (on && !window.__was) window.__cuts++; window.__was = on; }).observe(document.querySelector('#cutscene'), { attributes: true }); m.capture('The minders spot you and close in.'); });
+    await V.page.waitForSelector('#cutscene.on', { timeout: 15000 });
+    await V.page.waitForTimeout(1500);
+    await V.shot('trapped_clip');
+    for (let i = 0; i < 12 && !(await V.page.evaluate(() => !!document.querySelector('.c3-struggle'))); i++) {
+      await V.page.evaluate(() => { const c = document.querySelector('#cutscene'); if (c.classList.contains('on')) for (let k = 0; k < 4; k++) c.click(); });
+      await V.page.waitForTimeout(700);
+    }
+    await V.page.waitForFunction(() => !document.querySelector('.c3-struggle') && !window.__game.mode.busy, null, { timeout: 40000 });
+    await V.page.waitForTimeout(1500);
+    await V.shot('trapped_after');
+    Object.assign(report.trapped, await V.page.evaluate(() => { const m = window.__game.mode; return { clips: window.__cuts, captures: m.captures, done: m.done, mode: window.__game.modeName, room: m.lastWake?.num }; }));
     return V;
   });
 

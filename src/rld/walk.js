@@ -22,10 +22,12 @@ import { CLIPS, clipsReady, nextClip } from '../club3d/clips.js';
 import { INTOX_HAZE } from '../state.js';
 import { npcLook } from '../art.js';
 import { dialog, toast, banner, flash } from '../ui.js';
+import { playCutscene } from '../cutscene.js';
 import { sfx } from '../sfx.js';
 import { lightPool } from '../look3d.js';
 import { pick, shuffle, chance, rand, $ } from '../util.js';
 import { HERO } from '../data.js';
+import { skinScene, ACT2_SKIN } from '../hero3d.js';
 import { memoryClue, stainRead, recallOf } from '../act/recall.js';
 
 export const RLD = {
@@ -33,7 +35,11 @@ export const RLD = {
   reward: 30, rescueRep: 4, captures: 3,
   captives: [3, 5], minders: 2, hostesses: 2, vents: 5,
   easy: { traces: 2, time: 14, slip: 0.2, idle: 0.3 }, // the tied-up struggle: easy, no spiral
+  // Act 2's opening never throws her out (device test 2026-10-20): from the third capture on she's
+  // locked in another room and the TV plays her own footage at her, clip after clip
+  trapped: { clips: [3, 5], folders: ['SG_RLD_Game', 'SG_Humiliation_Game', 'SG_Captured_Game'], skipTaps: 3 },
 };
+const TRAPPED_CAPS = ['The TV on the wall switches on by itself.', 'Another one. They saved them all.', 'Every camera in the house was on her.', 'Somebody laughs behind the door.', 'The volume goes up.'];
 const MOOD = { bg: 0x0a0306, fog: [0x1a0610, 12, 34], hemi: [0xffa0b4, 0x2a0a18, 0.8], amb: 0.16, key: 0xffc0d0, keyK: 0.7 };
 const THANKS = ['"They took my passport. I thought nobody was coming."', '"Is it over? Can I go home?"', '"There are more of us. Behind the other doors."', '"Supergirl? They said you were one of them now."'];
 
@@ -56,9 +62,12 @@ export class RldWalk extends ClubZone {
 
   enter(p) {
     const z = p.zone || {};
-    Object.assign(this, { captures: 0, tying: false, leadRooms: [], openingRun: false, opening: null, isOpening: !!(p.opening || z.opening) });
+    Object.assign(this, { captures: 0, tying: false, lastWake: null, leadRooms: [], openingRun: false, opening: null, isOpening: !!(p.opening || z.opening) });
     super.enter(p);
   }
+
+  // Act 2's opening: she wakes in the crop top, her own suit gone, whatever costume is picked
+  heroSrc() { return this.isOpening ? skinScene(ACT2_SKIN) : null; }
 
   spawnPoint() { return this.wakeAt ? { pos: this.wakeAt.pos.clone(), heading: this.wakeAt.heading } : super.spawnPoint(); }
 
@@ -131,7 +140,7 @@ export class RldWalk extends ClubZone {
       this.colliders.push(col);
       const d = { room: r, i, col, open: false, k: 0, home: pos.clone(), rot: q.clone(), slide: r.alongX ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1) };
       r.doorRef = d;
-      this.addInter(r.door.clone().addScaledVector(r.inward, -0.6), 'Open the red door', () => !d.open && !this.busy, () => this.openRedDoor(d), 'door');
+      this.addInter(r.door.clone().addScaledVector(r.inward, -0.6), 'Open the red door', () => !d.open && !this.busy, () => this.openRedDoor(d), 'door').prio = 0.8;
       return d;
     });
     inst.instanceMatrix.needsUpdate = true;
@@ -358,7 +367,8 @@ export class RldWalk extends ClubZone {
     sfx.trap(); flash('#ff2244');
     banner('CAUGHT!', '', '#ff2244');
     $('prompt').classList.remove('on');
-    if (this.captures >= RLD.captures) { // the third time: thrown out on the canal bank (the situation changes)
+    const trapped = this.isOpening && this.captures >= RLD.captures; // (the opening: nowhere to be thrown out to)
+    if (this.captures >= RLD.captures && !trapped) { // the third time: thrown out on the canal bank (the situation changes)
       this.done = true;
       setTimeout(() => this.g.endZone(this.zone, { outcome: 'lose', rep: -5, text: `${reason} This time the minders don't bother with the ropes: they throw ${HERO} out on the canal bank and lock the gate.` }), 1300);
       return;
@@ -372,7 +382,11 @@ export class RldWalk extends ClubZone {
       this.yaw = r.faceDoor - Math.PI;
       this._lastGood = null; this.camPitch = null;
       this.heroClip('getUp', 2.6);
-      await this.tiedStruggle({ title: 'TIED UP', text: `${reason}<br>You come to in room ${r.num}, tied to the bedpost.` });
+      if (trapped) {
+        await this.watchTrapped(r);
+        if (this.g.mode !== this || this.done) return;
+      }
+      await this.tiedStruggle({ title: trapped ? 'TRAPPED' : 'TIED UP', text: trapped ? `Room ${r.num}. The screen goes dark at last. The ropes are still there.` : `${reason}<br>You come to in room ${r.num}, tied to the bedpost.` });
       if (this.g.mode !== this || this.done) return;
       this.openRedDoor(r.doorRef, true);
       this.alert = 0;
@@ -382,15 +396,27 @@ export class RldWalk extends ClubZone {
       this.busy = false;
       this.tying = false;
       this.grace = this.t + 3;
-      toast(this.captures === RLD.captures - 1 ? 'Once more and they\'ll throw you out for good.' : 'Out of the ropes. The minders think you\'re still tied up.', 'info');
+      toast(trapped ? 'Out again. They\'ll only catch you and lock you in another room. Nobody leaves this street.'
+        : this.captures === RLD.captures - 1 ? (this.isOpening ? 'Once more and they won\'t just tie you up.' : 'Once more and they\'ll throw you out for good.')
+        : 'Out of the ropes. The minders think you\'re still tied up.', 'info');
     }, 1300);
+  }
+
+  /** Trapped (the opening): tied up in front of the room's TV, 3 to 5 of her own clips in a row. */
+  async watchTrapped(r) {
+    const T = RLD.trapped, n = Math.floor(rand(T.clips[0], T.clips[1] + 1)), folders = shuffle([...T.folders]);
+    banner('TRAPPED', `Room ${r.num}`, '#ff2244');
+    for (let i = 0; i < n; i++) {
+      if (this.g.mode !== this || this.done) return;
+      await playCutscene({ folder: folders[i % folders.length], skipTaps: T.skipTaps, caption: `Room ${r.num} · ${i + 1} of ${n} · ${i ? pick(TRAPPED_CAPS.slice(1)) : TRAPPED_CAPS[0]}` });
+    }
   }
 
   /** An empty room away from where she was caught. */
   roomToWake() {
-    const h = this.hero.position, ok = this.club.rooms.filter((r) => !r.captive && !r.minder && (!this.opening || r !== this.opening.room));
+    const h = this.hero.position, ok = this.club.rooms.filter((r) => !r.captive && !r.minder && r !== this.lastWake && (!this.opening || r !== this.opening.room));
     ok.sort((a, b) => b.door.distanceTo(h) - a.door.distanceTo(h));
-    return pick(ok.slice(0, 5));
+    return (this.lastWake = pick(ok.slice(0, 5)));
   }
 
   /** The struggle: easy, and either way she's out (a fail just costs rep: no dead ends). */

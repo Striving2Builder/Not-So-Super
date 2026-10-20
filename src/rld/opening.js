@@ -42,9 +42,14 @@ export const openingMethods = {
   placeOpening(room) {
     const S = this.scene, p = room.wake;
     this.opening = { room, polaroids: [], seenPols: false, readNote: false, pics: POL_CAPTIONS.slice(0, 4).map(polaroid) };
+    // everything lies on the bed side of her, never between her and the door (device test 2026-10-20:
+    // the props' USE prompts used to win over the door's)
+    const back = room.inward, side = room.alongX ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1);
+    const at = (b, s) => p.clone().addScaledVector(back, b).addScaledVector(side, s);
+    const fwd = Math.atan2(back.z, back.x);
     const mats = this.opening.pics.map((c) => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return new THREE.MeshBasicMaterial({ map: t }); });
     for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 + rand(-0.3, 0.3), r = rand(0.5, 1.1);
+      const a = fwd + ((i + 0.5) / 6 - 0.5) * Math.PI * 0.9 + rand(-0.15, 0.15), r = rand(0.35, 0.85);
       const m = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.24).rotateX(-Math.PI / 2).rotateY(rand(0, 6)), mats[i % mats.length]);
       m.position.set(p.x + Math.cos(a) * r, 0.015 + i * 0.002, p.z + Math.sin(a) * r);
       m.raycast = () => {};
@@ -52,15 +57,16 @@ export const openingMethods = {
       this.opening.polaroids.push(m);
     }
     // the note (folded paper) and the cassette, by her hand
+    const np = at(0.45, 0.35), tp = at(0.6, 0.55), gp = at(0.5, 0.45);
     const note = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.01, 0.16), new THREE.MeshBasicMaterial({ color: 0xfff6e0 }));
-    note.position.set(p.x + 0.35, 0.02, p.z - 0.3); note.rotation.y = 0.4; S.add(note);
+    note.position.set(np.x, 0.02, np.z); note.rotation.y = 0.4; S.add(note);
     const tape = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.025, 0.12), new THREE.MeshLambertMaterial({ color: 0x141018 }));
-    tape.position.set(p.x + 0.55, 0.02, p.z - 0.1); tape.rotation.y = -0.3; S.add(tape);
+    tape.position.set(tp.x, 0.02, tp.z); tape.rotation.y = -0.3; S.add(tape);
     const glow = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.36, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.5, depthWrite: false }));
-    glow.position.set(p.x + 0.42, 0.03, p.z - 0.2); S.add(glow);
+    glow.position.set(gp.x, 0.03, gp.z); S.add(glow);
     this.anims.push((t) => { glow.material.opacity = this.opening.readNote && this.opening.seenPols ? 0 : 0.3 + 0.25 * Math.sin(t * 4); });
-    this.addInter(new THREE.Vector3(p.x + 0.4, 0, p.z - 0.2), 'Read the note', () => true, () => this.readNote(), 'clue');
-    this.addInter(new THREE.Vector3(p.x - 0.4, 0, p.z + 0.3), 'Pick up the Polaroids', () => !this.opening.seenPols, () => this.seePolaroids(), 'clue');
+    this.addInter(gp, 'Read the note', () => true, () => this.readNote(), 'clue');
+    this.addInter(at(0.5, -0.4), 'Pick up the Polaroids', () => !this.opening.seenPols, () => this.seePolaroids(), 'clue');
   },
 
   /** On her feet: the struggle first (easy), then the perfume from the door. */
