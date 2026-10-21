@@ -6,6 +6,7 @@ import { dialog, openModal, closeModal } from './ui.js';
 import { portrait, drawHumanoid, pose, HERO_LOOK } from './art.js';
 import { glyphURL } from './evidenceart.js';
 import { sfx } from './sfx.js';
+import { heroPhoto } from './herophotos.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 // Splash timing (ms): the panel slams in, the hero steps up, the verdict lands, the recap follows.
@@ -140,9 +141,16 @@ export function accuseSplash(cf, s) {
       <div class="rv-flash"></div>
     </div>`, 'reveal');
   el.querySelector('.rv-mug').appendChild(bust(s.look, 420));
-  const hero = document.createElement('canvas'); hero.height = 560; hero.width = 360;
-  drawHumanoid(hero.getContext('2d'), 190, 700, 6, -1, HERO_LOOK, pose('idle', 0), 0);
-  el.querySelector('.rv-hero').appendChild(inked(hero, 6));
+  // her photo steps into frame: pointing the finger when she's right, caught out when she isn't
+  const src = heroPhoto('full', good ? 'focused' : 'worried', { pose: 'standing' });
+  if (src) {
+    const im = document.createElement('img'); im.alt = ''; im.src = src;
+    el.querySelector('.rv-hero').appendChild(im);
+  } else {
+    const hero = document.createElement('canvas'); hero.height = 560; hero.width = 360;
+    drawHumanoid(hero.getContext('2d'), 190, 700, 6, -1, HERO_LOOK, pose('idle', 0), 0);
+    el.querySelector('.rv-hero').appendChild(inked(hero, 6));
+  }
   setTimeout(() => { sfx.pow(); el.querySelector('.rv2')?.classList.add('hit'); }, REVEAL.stamp);
   return new Promise((resolve) => {
     let done = false;

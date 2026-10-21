@@ -2,6 +2,8 @@
 // "EXTRA!" news flashes and the spinning-emblem scene transition. Pure DOM + CSS animation,
 // drawn in screen space over whichever game mode is running.
 import { $, pick, rand } from './util.js';
+import { HERO } from './data.js';
+import { heroPhoto, heroMood, moodOfLine } from './herophotos.js';
 
 const MAX_BUBBLES = 3, MAX_BURSTS = 4;
 const BURST_COLORS = [
@@ -113,6 +115,11 @@ export const comic = {
     el.className = `bubble ${kind}`;
     if (opts.prio) el.dataset.k = String(opts.prio);
     el.innerHTML = `${speaker ? `<b>${esc(speaker)}</b>` : ''}${esc(text)}`;
+    // her own lines (her thoughts, anything she says) wear her photo face on the corner
+    if (opts.hero ?? (kind === 'thought' || speaker.toUpperCase() === HERO.toUpperCase())) {
+      const src = heroPhoto('face', moodOfLine(text, kind) || heroMood());
+      if (src) { const f = document.createElement('img'); f.className = 'bub-face'; f.alt = ''; f.onerror = () => f.remove(); f.src = src; el.prepend(f); }
+    }
     l.appendChild(el);
     // Place above the point (or below if too close to the top), keeping it on screen.
     const r = el.getBoundingClientRect();

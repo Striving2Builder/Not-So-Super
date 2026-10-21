@@ -55,6 +55,12 @@ body.three #c2d { display: none; }
 body.title-on #hud, body.title-on #btns, body.title-on #touch { display: none !important; }
 .panel { background: rgba(10, 10, 20, .74); border: 2px solid #050508; border-radius: 7px; box-shadow: 3px 3px 0 rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(255, 255, 255, .09); }
 #hud-left { position: absolute; left: calc(10px + var(--sl)); top: calc(10px + var(--st)); padding: 8px 11px 9px; width: 178px; }
+.me { display: flex; align-items: center; gap: 8px; }
+/* her face (herophotos.js): the expression follows her rep and the drink, the costume the act */
+#hud-face { flex: none; width: 42px; height: 42px; border-radius: 50%; object-fit: cover; background: radial-gradient(circle at 50% 35%, #3f7ee0, #142a66); border: 2px solid var(--gold); box-shadow: 0 0 0 2px #050508; }
+#hud-face:not([src]) { display: none; }
+#hud-face.pop { animation: face-pop .35s cubic-bezier(.2, 1.7, .5, 1); }
+@keyframes face-pop { from { transform: scale(.6) rotate(-8deg); } }
 .rep { font: 400 24px/1 "Bangers", Impact, sans-serif; letter-spacing: .05em; }
 .rep small { font-size: 11px; margin-left: 5px; opacity: .7; font-weight: 700; }
 .rank { font-size: 10px; opacity: .85; text-transform: uppercase; letter-spacing: .12em; margin-top: 3px; color: var(--gold); }
@@ -206,6 +212,7 @@ body[data-mode="captured"] .dlg .opt { min-height: 40px; padding: 7px 10px; font
   body[data-mode="captured"] .dlg .opt { min-height: 36px; padding: 5px 9px; }
 }
 .portrait canvas { width: 84px; height: 110px; border-radius: 10px; background: #0005; border: 1px solid var(--line); }
+.portrait img.hero-face { display: block; width: 96px; height: 96px; border-radius: 50%; object-fit: cover; background: radial-gradient(circle at 50% 35%, #3f7ee0, #142a66); border: 3px solid var(--gold); box-shadow: 3px 3px 0 rgba(0, 0, 0, .5); }
 .list { font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
 .list .item { padding: 8px 10px; background: rgba(255, 255, 255, .05); border-radius: 8px; margin-bottom: 6px; }
 .list .item b { color: var(--gold); }
@@ -268,6 +275,10 @@ body[data-mode="captured"] .dlg .opt { min-height: 40px; padding: 7px 10px; font
 /* ---------- Title ---------- */
 #title { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(5, 8, 20, .35), rgba(5, 8, 20, .85)); padding: 16px; overflow: auto; }
 body.title-on #title { display: flex; }
+/* her photo beside the title card (a full-body green-screen cutout, herophotos.js); landscape only */
+#title-hero { order: 2; flex: none; height: min(86vh, 640px); max-width: 38vw; object-fit: contain; margin-left: 2vw; filter: drop-shadow(0 0 28px rgba(126, 200, 244, .45)) drop-shadow(6px 6px 0 rgba(0, 0, 0, .45)); animation: rv-hero .6s cubic-bezier(.2, 1.2, .4, 1) both; }
+#title-hero:not([src]) { display: none; }
+@media (max-aspect-ratio: 1/1) { #title-hero { display: none; } }
 .title-card { text-align: center; max-width: 520px; }
 .logo { display: flex; justify-content: center; margin-bottom: 4px; }
 .shield { width: 74px; height: 64px; background: var(--gold); color: var(--red); font: 900 44px Georgia, serif; display: grid; place-items: center; clip-path: polygon(0 0, 100% 0, 100% 38%, 50% 100%, 0 38%); border: none; filter: drop-shadow(0 0 16px rgba(247, 211, 30, .6)); padding-bottom: 12px; }
@@ -289,6 +300,8 @@ body.title-on #title { display: flex; }
 @media (max-height: 480px), (max-width: 560px) {
   #hud-left { width: 146px; padding: 6px 9px 7px; }
   .rep { font-size: 18px; }
+  #hud-face { width: 32px; height: 32px; }
+  .me { gap: 6px; }
   #mapbox { width: 92px; height: 92px; }
   #mapbox.feed-on { width: min(250px, 40vw); height: calc(min(250px, 40vw) * 9 / 16); }
   #mapbox.feed-on #minimap { width: 46px; height: 46px; }
@@ -335,6 +348,9 @@ body.title-on #comic-layer { display: none; }
 
 /* Speech / shout / thought bubbles */
 .bubble { position: absolute; max-width: min(280px, 60vw); padding: 9px 14px 8px; background: #fff; color: #111; border: 3px solid #111; border-radius: 22px; font-size: clamp(15px, 2.1vw, 21px); letter-spacing: .04em; line-height: 1.1; text-align: center; box-shadow: 4px 4px 0 rgba(0, 0, 0, .45); animation: bub-in .32s cubic-bezier(.2, 1.7, .5, 1) both; --tail: 50%; }
+/* her own lines (thoughts, and anything she says) carry her face on the corner (herophotos.js) */
+.bubble .bub-face { position: absolute; left: -22px; top: -24px; width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: radial-gradient(circle at 50% 35%, #3f7ee0, #142a66); border: 3px solid #111; box-shadow: 2px 2px 0 rgba(0, 0, 0, .45); }
+.bubble .bub-face:not([src]) { display: none; }
 .bubble b { display: block; font-size: .7em; color: #d8122e; letter-spacing: .1em; margin-bottom: 1px; }
 .bubble::after, .bubble::before { content: ""; position: absolute; left: var(--tail); top: 100%; transform: translateX(-50%); border-style: solid; }
 .bubble::before { border-width: 20px 11px 0 11px; border-color: #111 transparent transparent transparent; }
@@ -489,6 +505,7 @@ body.title-on #comic-layer { display: none; }
 .rv-cap small { display: block; font: 700 11px system-ui; letter-spacing: .14em; text-transform: uppercase; opacity: .75; margin-top: 2px; }
 .rv-hero { position: absolute; right: 1%; bottom: -2%; width: 28%; height: 100%; display: grid; place-items: end center; animation: rv-hero .45s .32s cubic-bezier(.2, 1.2, .4, 1) both; filter: drop-shadow(6px 6px 0 #120a16); }
 .rv-hero canvas { height: 100%; width: auto; }
+.rv-hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center bottom; }
 .rv-word { position: absolute; left: 41%; top: 7%; font: clamp(44px, 16vh, 96px)/1 "Bangers", Impact, sans-serif; letter-spacing: .04em; color: #ffe600; -webkit-text-stroke: 3px #120a16; paint-order: stroke fill; text-shadow: 6px 6px 0 #d8122e, 10px 10px 0 #120a16; transform: rotate(-6deg); animation: rv-word .3s .7s cubic-bezier(.3, 1.8, .5, 1) both; }
 .rv2.bad .rv-word { color: #cfd4dc; text-shadow: 6px 6px 0 #4a4f5a, 10px 10px 0 #120a16; }
 .rv-stamp { position: absolute; left: 40%; top: 44%; font: clamp(30px, 11vh, 64px)/1 "Bangers", Impact, sans-serif; letter-spacing: .08em; padding: 6px 16px 0; border: 6px solid currentColor; color: #ff2d4a; background: rgba(255, 255, 255, .12); transform: translate(-50%, -50%) rotate(-14deg); white-space: nowrap; animation: rv-stamp .3s .7s cubic-bezier(.3, 1.6, .5, 1) both; }

@@ -1,5 +1,7 @@
 import { sfx } from './sfx.js';
 import { $ } from './util.js';
+import { HERO } from './data.js';
+import { heroPhoto, heroMood, moodOfLine } from './herophotos.js';
 
 /** UI.open > 0 means a modal is up and the game simulation is paused. */
 export const UI = { open: 0 };
@@ -24,6 +26,7 @@ export function closeModal(el) {
  * Number keys 1-n pick options on keyboard.
  */
 export function dialog({ title, speaker, text, options = [{ label: 'Continue', value: true }], cls = '', portrait } = {}) {
+  if (!portrait && speaker && String(speaker).toUpperCase() === HERO.toUpperCase()) portrait = heroFacePortrait(text);
   return new Promise((resolve) => {
     const el = openModal(
       `${portrait ? '<div class="portrait"></div>' : ''}` +
@@ -52,6 +55,15 @@ export function dialog({ title, speaker, text, options = [{ label: 'Continue', v
     };
     addEventListener('keydown', onKey, true);
   });
+}
+
+/** Her photo face for a line of hers (herophotos.js), as a dialog portrait; null until the photos load. */
+function heroFacePortrait(text) {
+  const src = heroPhoto('face', moodOfLine(String(text || '').replace(/<[^>]+>/g, ' ')) || heroMood());
+  if (!src) return null;
+  const im = document.createElement('img');
+  im.className = 'hero-face'; im.alt = HERO; im.src = src;
+  return im;
 }
 
 // ---------------------------------------------------------------- HUD-safe placement

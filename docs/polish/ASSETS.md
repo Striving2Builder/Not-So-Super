@@ -9,6 +9,7 @@ cutscene), `asylum/tv/` (sedation TV). Not yet: `asylum/cell/`, `capture/room-20
 |---|---|
 | `assets/scenes/` | 13 painted investigation rooms (2000x1200) |
 | `assets/brawl/backdrops/` | `rld-alley-01..10`, `downtown-01..10` side-view façades |
+| `assets/greenscreen/` (2026-10-21) | her photo cutouts, keyed from the user's green-screen stills (`tools/export_greenscreen.py`; raw JPGs in `raw/`, local only): `full/` 100 full-body, `portrait/` 206 waist-up expressions, `face/` 144 head crops, each split `classic` / `croptop` (Act 2) / `tube` (the knockoff); `manifest.json` lists them. Used through `src/herophotos.js`: HUD face, her bubbles and dialog lines, title screen, victory front pages, the accusation splash |
 | `assets/billboards/downtown/` | green-screen billboards: `downtown-gs-01..05`, `sg-bb-01..10`, `sg-mix-01,03,05,07,09` |
 | `assets/billboards/rld/` | red-light green-screen billboards `sg-mix-02..10` (even) |
 | `assets/asylum/tv/` | 30 padded-cell stills with a wall TV (27 green-screen; tv2-01/03/06 show static) |

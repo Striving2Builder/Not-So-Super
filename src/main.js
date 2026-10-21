@@ -30,6 +30,7 @@ import { gfxLost, crashedLastTime } from './gfx.js';
 import { BUILD } from './version.js';
 import { Act } from './act/act.js';
 import { CLIPS, clipsReady, nextClip } from './club3d/clips.js';
+import { heroPhoto, photoImage, photosReady, setPhotoCostume, setHeroMood, moodOfState } from './herophotos.js';
 
 loadHero();
 loadEnemies(); // guard and boss models for the 3D zones (procedural stand-ins until they arrive)
@@ -363,6 +364,10 @@ function showTitle() {
   document.body.classList.add('title-on');
   const saved = GameState.load();
   $('btn-continue').style.display = saved ? '' : 'none';
+  photosReady().then(() => { // her photo beside the card: her own suit, standing tall
+    const src = heroPhoto('full', 'heroic', { pose: 'standing', c: 'classic' });
+    if (src) photoImage(src).then((im) => { if (im && game.title) $('title-hero').src = src; });
+  });
   const seed = saved ? saved.seed : Math.floor(Math.random() * 1e8);
   $('seed-input').value = seed;
   game.city = new City(seed);
@@ -449,9 +454,32 @@ function updateHUD() {
     if (row._nil !== nil) { row._nil = nil; row.classList.toggle('nil', nil); row.previousElementSibling.classList.toggle('nil', nil); }
   }
   $('intox-tint').style.opacity = Math.max(0, (st.intox - 25) / 110);
+  heroFace(st);
   const lk = Object.entries(st.lockouts).map(([k, s]) => `<div>🔒 ${k} · ${fmtTime(s)}</div>`).join('');
   const el = $('lockouts');
   if (el._h !== lk) { el.innerHTML = lk; el._h = lk; }
+}
+
+/**
+ * Her photo face in the HUD (herophotos.js): the costume she's in now (the casino's knockoff, Act 2's
+ * crop top, else her own suit) and a mood from her rep and the drink. A new shot only when either changes.
+ */
+let faceKey = '';
+function heroFace(st) {
+  const z = game.modeName !== 'overworld' ? game.mode?.zone : null;
+  const costume = z?.casino ? 'tube' : game.act?.two?.on?.() || (z?.mode === 'rldwalk' && z.opening) || HERO_SKIN === 'croptop' ? 'croptop' : 'classic';
+  const mood = moodOfState(st.rep, st.intox, INTOX_LIMIT);
+  setPhotoCostume(costume); setHeroMood(mood);
+  const key = costume + mood;
+  if (key === faceKey) return;
+  const src = heroPhoto('face', mood);
+  if (!src) return; // (manifest still loading: try again next tick)
+  faceKey = key;
+  photoImage(src).then((im) => {
+    if (!im || faceKey !== key) return;
+    const f = $('hud-face'); f.src = src;
+    f.classList.remove('pop'); void f.offsetWidth; f.classList.add('pop');
+  });
 }
 
 // Objectives show just the current step on a phone; tap to see the whole list.

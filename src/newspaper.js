@@ -4,6 +4,7 @@ import { PAPER, TABLOID } from './data.js';
 import { drawHumanoid, pose, HERO_LOOK, npcLook } from './art.js';
 import { sfx } from './sfx.js';
 import { heroReady, HeroSprite } from './hero3d.js';
+import { heroPhotoImage } from './herophotos.js';
 
 let photoSprite = null;
 /** Draw the 3D heroine into the photo; returns false if the model isn't loaded. */
@@ -22,7 +23,16 @@ function modelShot(g, clip, time, x, feetY, heightPx, yaw = 0.45) {
   return true;
 }
 
-export function showNewspaper({ headline, sub = '', body = [], rep = 0, tabloid = false, photo = 'hero', stamp = null }) {
+/** Front pages that show her at her best use a real photo of her (a standing full-body cutout). */
+const PHOTO_MOOD = { hero: 'heroic', special: 'heroic', case: 'focused' };
+
+export async function showNewspaper(opts) {
+  const mood = typeof opts.photo === 'string' || opts.photo === undefined ? PHOTO_MOOD[opts.photo ?? 'hero'] : null;
+  const shot = mood ? await heroPhotoImage('full', mood, { pose: 'standing' }, 700) : null;
+  return paper(opts, shot);
+}
+
+function paper({ headline, sub = '', body = [], rep = 0, tabloid = false, photo = 'hero', stamp = null }, shot) {
   return new Promise((resolve) => {
     sfx.paper();
     const date = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
@@ -32,7 +42,7 @@ export function showNewspaper({ headline, sub = '', body = [], rep = 0, tabloid 
       <div class="cols"><canvas class="photo" width="400" height="250"></canvas><div class="txt">${body.map((p) => `<p>${p}</p>`).join('')}</div></div>
       <div class="repd ${rep >= 0 ? 'good' : 'bad'}">${rep >= 0 ? '+' : ''}${rep} REPUTATION</div>
       <div class="tap">Tap to continue</div></div>`, 'paper-back');
-    drawPhoto(el.querySelector('canvas'), photo, tabloid, stamp); // (r11 V2: a real frame can carry its own stamp)
+    drawPhoto(el.querySelector('canvas'), photo, tabloid, stamp, shot); // (r11 V2: a real frame can carry its own stamp)
     let closed = false;
     const close = () => {
       if (closed) return;
@@ -53,7 +63,14 @@ function drawStamp(g, W, text) {
   g.fillText(text, 0, 1); g.restore();
 }
 
-function drawPhoto(c, kind, tabloid, stamp = null) {
+/** Her photo cutout standing at (x, feetY), `heightPx` tall (no wider than `maxW`). */
+function photoShot(g, im, x, feetY, heightPx, maxW = 240) {
+  const s = Math.min(heightPx / im.naturalHeight, maxW / im.naturalWidth), w = im.naturalWidth * s, h = im.naturalHeight * s;
+  g.drawImage(im, x - w / 2, feetY - h, w, h);
+  return true;
+}
+
+function drawPhoto(c, kind, tabloid, stamp = null, shot = null) {
   const g = c.getContext('2d'), W = c.width, H = c.height;
   if (kind && typeof kind !== 'string') {
     // a real picture of her (a leaked polaroid): cover-fit, a little crooked, stamped
@@ -93,7 +110,7 @@ function drawPhoto(c, kind, tabloid, stamp = null) {
       drawHumanoid(g, hx - 110, hy, 1.5, 1, s, pose('hurt'), 0);
       g.strokeStyle = '#ccc'; g.lineWidth = 3; g.beginPath(); g.arc(hx - 100, hy - 80, 6, 0, Math.PI * 2); g.stroke();
     }
-    if (!modelShot(g, kind === 'case' ? 'pose' : 'excited', kind === 'case' ? 0 : 1.4, hx, hy, 185))
+    if (!(shot && photoShot(g, shot, hx, hy + 6, 215)) && !modelShot(g, kind === 'case' ? 'pose' : 'excited', kind === 'case' ? 0 : 1.4, hx, hy, 185))
       drawHumanoid(g, hx, hy, 1.75, 1, HERO_LOOK, pose('cheer', 0.6), 0.6);
     for (let i = 0; i < 18; i++) {
       g.fillStyle = '#2a2a30';
