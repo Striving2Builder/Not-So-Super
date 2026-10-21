@@ -156,11 +156,13 @@ export const beatMethods = {
     return p.finally(() => { this.gb.deadline = 0; });
   },
 
-  /** A fan blurts out something useful (a rumour or whisper she hasn't noted). */
+  /**
+   * A fan blurts out something useful: a rumour she hasn't noted. Never a whisper: those are
+   * super-hearing's to find (device test 2026-10-21: shots were filing them, "Overheard", unheard).
+   */
   blurt() {
-    const d = this.caseDef, all = [...(d.whispers || []).map((r) => [r, true]), ...(d.rumours || []).map((r) => [r, false])];
-    const got = all.find(([r]) => !this.noted.has(r.id));
-    if (got) this.noteRumour(got[0], got[1]);
+    const got = (this.caseDef.rumours || []).find((r) => !this.noted.has(r.id));
+    if (got) this.noteRumour(got);
   },
 
   // ------------------------------------------------------------------ the beats

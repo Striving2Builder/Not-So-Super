@@ -45,18 +45,23 @@ export const chatterMethods = {
     this.chatterT -= dt;
     if (this.chatterT > 0) return;
     this.chatterT = 2 + Math.random() * 1.8;
-    if (this.quietT > 0 || this.idleRing || this.hunted?.() || this.bubblesFull?.()) return; // (r11 L2b: she's just been made, the ring has the floor, or two are talking already)
+    if (this.quietT > 0 || this.hunted?.()) return; // (r11 L2b: she's just been made)
     const h = this.hero.position, st = this.g.state, d = this.caseDef;
+    // super-hearing's whispers cut through the idle ring and the bubble cap: listening means standing
+    // still, and standing still brings the ring (device test 2026-10-21: no purple bubbles at all)
+    const whispers = (d.whispers || []).filter((r) => !this.noted.has(r.id));
+    const listen = this.hearing && whispers.length && !(this.taps || []).some((b) => b.kind === 'whisper' && !b.gone);
+    const crowded = this.idleRing || this.bubblesFull?.(); // (r11 L2b: the ring has the floor, or two are talking already)
+    if (crowded && !listen) return;
     const p = this.crowd.nearest(h.x + (Math.random() - 0.5) * 5, h.z - 1 - Math.random() * 4, 6, (q) => Math.hypot(q.x - h.x, q.z - h.z) > 1.0 && !q.talking);
     if (!p) return;
     const anchor = () => this.screenOf({ x: p.x, y: p.y ?? 0, z: p.z }, 2.05);
     const a0 = anchor();
     const W = this.g.w, H = this.g.h;
     if (!a0 || a0.x < W * 0.2 || a0.x > W * 0.8 || a0.y < H * 0.24 || a0.y > H * 0.8) return; // (on screen, clear of the HUD panels and the buttons)
-    const whispers = (d.whispers || []).filter((r) => !this.noted.has(r.id));
     const rumours = (d.rumours || []).filter((r) => !this.noted.has(r.id));
     const roll = Math.random();
-    if (this.hearing && whispers.length && roll < 0.55) return this.tapBubble(p, anchor, whispers[0], 'whisper');
+    if (listen && (crowded || roll < 0.55)) return this.tapBubble(p, anchor, whispers[0], 'whisper');
     if (rumours.length && roll < 0.3) return this.tapBubble(p, anchor, pick(rumours), 'rumour');
     if (roll < 0.42 && !this.offerOut) return this.tapBubble(p, anchor, pick(OFFERS), 'offer');
     let line;
