@@ -1,0 +1,425 @@
+<title>GameKit Parts</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..800&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a parts catalog. Filter rail on top, a grid of part cards, a pick tray docked at the bottom. */
+:root {
+  --bg: #eef0f4;
+  --surface: #ffffff;
+  --ink: #161a22;
+  --muted: #5b6372;
+  --line: #d6dae3;
+  --accent: #2b55d9;
+  --accent-soft: #e3e9fb;
+  --ready: #1f8a4c;
+  --light: #4d6a8f;
+  --split: #b26a00;
+  --specific: #7a4bc4;
+  --ready-bg: #e2f3e9;
+  --light-bg: #e6ecf4;
+  --split-bg: #fbeed9;
+  --specific-bg: #eee6f9;
+  --shadow: 0 1px 2px rgba(22, 26, 34, .06), 0 6px 18px rgba(22, 26, 34, .06);
+  --display: "Archivo", "Arial Narrow", Arial, sans-serif;
+  --body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151b; --surface: #1b1f27; --ink: #e8ebf1; --muted: #9aa3b4; --line: #2c323d;
+    --accent: #7c9cff; --accent-soft: #232c45;
+    --ready: #5fd08f; --light: #9db4d4; --split: #f0b04f; --specific: #b996f0;
+    --ready-bg: #17301f; --light-bg: #1f2735; --split-bg: #33270f; --specific-bg: #2a2140;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12151b; --surface: #1b1f27; --ink: #e8ebf1; --muted: #9aa3b4; --line: #2c323d;
+  --accent: #7c9cff; --accent-soft: #232c45;
+  --ready: #5fd08f; --light: #9db4d4; --split: #f0b04f; --specific: #b996f0;
+  --ready-bg: #17301f; --light-bg: #1f2735; --split-bg: #33270f; --specific-bg: #2a2140;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+.wrap {
+  max-width: 1240px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 140px;
+  display: grid; gap: 22px;
+}
+header { display: grid; gap: 10px; }
+.eyebrow { font: 600 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font: 800 clamp(34px, 6vw, 56px)/0.95 var(--display); font-stretch: 112%; margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+.lede { margin: 0; max-width: 64ch; color: var(--muted); }
+.tally { display: flex; flex-wrap: wrap; gap: 8px; }
+.tally span { font: 500 13px/1 var(--mono); padding: 7px 10px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.controls { display: grid; gap: 10px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.row .label { font: 600 12px/1 var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); min-width: 72px; }
+.chip {
+  font: 500 13px/1 var(--body); padding: 8px 12px; border-radius: 999px; cursor: pointer;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line);
+}
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chip:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#q { font: 15px var(--body); padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); width: min(360px, 100%); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr)); gap: 16px; }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  display: grid; grid-template-rows: auto 1fr; box-shadow: var(--shadow); min-width: 0;
+}
+.card.picked { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.card.auto { border-color: var(--accent); border-style: dashed; }
+.shot { aspect-ratio: 16 / 9; width: 100%; max-width: 100%; display: block; object-fit: cover; background: var(--line); }
+.noshot { aspect-ratio: 16 / 9; display: grid; place-items: center; background: var(--accent-soft); color: var(--muted); font: 500 12px var(--mono); }
+.body { padding: 14px 16px 16px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.top { display: flex; justify-content: space-between; gap: 10px; align-items: start; }
+.name { font: 700 20px/1.1 var(--display); font-stretch: 100%; margin: 0; }
+.cat { font: 500 12px/1 var(--mono); color: var(--muted); margin-top: 6px; }
+.pill { font: 600 11.5px/1 var(--body); padding: 6px 8px; border-radius: 6px; white-space: nowrap; }
+.pill.ready { color: var(--ready); background: var(--ready-bg); }
+.pill.light { color: var(--light); background: var(--light-bg); }
+.pill.split { color: var(--split); background: var(--split-bg); }
+.pill.specific { color: var(--specific); background: var(--specific-bg); }
+.summary { margin: 0; }
+.good { margin: 0; color: var(--muted); font-size: 14px; }
+.good b { color: var(--ink); font-weight: 600; }
+.files { font: 12.5px/1.6 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.files .n { color: var(--ink); font-variant-numeric: tabular-nums; }
+.deps { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+.dep { font: 500 12px/1 var(--mono); padding: 5px 7px; border-radius: 5px; background: var(--accent-soft); color: var(--ink); }
+.pick {
+  justify-self: start; font: 600 14px/1 var(--body); padding: 10px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--accent); background: transparent; color: var(--accent);
+}
+.card.picked .pick { background: var(--accent); color: var(--surface); }
+.why { font-size: 12.5px; color: var(--accent); }
+.empty { padding: 40px 20px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; display: grid; gap: 6px; }
+.empty b { color: var(--ink); font: 700 18px var(--display); }
+.tray {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  background: var(--surface); border-top: 1px solid var(--line); box-shadow: 0 -6px 20px rgba(0, 0, 0, .08);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px calc(12px + env(safe-area-inset-bottom, 0px));
+}
+.tray-in { max-width: 1240px; margin: 0 auto; display: grid; gap: 10px; }
+.tray-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.count { font: 600 14px var(--body); font-variant-numeric: tabular-nums; }
+.count small { font-weight: 400; color: var(--muted); }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { font: 600 14px/1 var(--body); padding: 10px 14px; border-radius: 8px; cursor: pointer; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.btn:disabled { opacity: .45; cursor: default; }
+.request { margin: 0; padding: 12px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); font: 13px/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 38vh; overflow: auto; }
+.note { font-size: 12.5px; color: var(--muted); margin: 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.more {
+  font: 600 14px/1 var(--body); padding: 10px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+}
+.level-tag { font: 500 12px/1 var(--mono); color: var(--muted); }
+.legend { font-size: 13.5px; color: var(--muted); margin: 0; max-width: 72ch; }
+.legend b { color: var(--ink); font-weight: 600; }
+.scrim { position: fixed; inset: 0; background: rgba(10, 12, 16, .45); z-index: 20; }
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(580px, 100%); z-index: 21; overflow: auto;
+  background: var(--surface); color: var(--ink); border-left: 1px solid var(--line); box-shadow: -10px 0 30px rgba(0, 0, 0, .18);
+  padding-top: calc(20px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+  padding-left: 24px;
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 22px; align-content: start;
+}
+.d-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+.d-head h2 { font: 800 28px/1 var(--display); font-stretch: 108%; margin: 6px 0 0; text-wrap: balance; }
+.close { font: 600 14px/1 var(--body); padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.d-sec { display: grid; gap: 10px; }
+.d-sec h3 { font: 700 13px/1 var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.d-sec .hint { margin: 0; font-size: 13.5px; color: var(--muted); }
+.ladder { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.rung { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 6px; }
+.rung.here { border-color: var(--accent); background: var(--accent-soft); }
+.rung-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; }
+.rung-lvl { font: 600 12px/1 var(--mono); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.rung-method { font: 700 18px/1.15 var(--display); }
+.rung p { margin: 0; }
+.rung .cost { font-size: 13.5px; color: var(--muted); }
+.here-tag { font: 600 11.5px/1 var(--body); padding: 5px 8px; border-radius: 6px; background: var(--accent); color: var(--surface); }
+.enh { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.up { border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 6px; background: var(--bg); }
+.up b { font: 700 18px/1.15 var(--display); }
+.up p { margin: 0; }
+.up .effort { font: 500 12.5px var(--mono); color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) { .card { transition: box-shadow .15s, border-color .15s; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Parts inventory · from Not So Super</div>
+    <h1>GameKit Parts</h1>
+    <p class="lede">Every reusable piece of the game, with how easily it lifts out. Pick the parts a new game needs: their dependencies come along, and the tray writes the request to hand Claude.</p>
+    <div class="tally" id="tally"></div>
+    <p class="legend">Every part has three quality levels: <b>Works</b>, <b>Polished</b> and <b>Showcase</b>. Open <b>Levels &amp; upgrades</b> on a card to see the method behind each level, what it costs, where Not So Super sits today and the next step up.</p>
+  </header>
+
+  <section class="controls" aria-label="Filters">
+    <div class="row"><span class="label">Search</span><input id="q" type="search" placeholder="city, camera, sprite…" autocomplete="off"></div>
+    <div class="row" id="cats"><span class="label">Area</span></div>
+    <div class="row" id="stats"><span class="label">Lifts out</span></div>
+  </section>
+
+  <main class="grid" id="grid" aria-live="polite">
+    <div class="empty" id="loading"><b>Loading the inventory</b><span>The parts list lives in this page's database. If nothing appears, ask Claude to add the first part.</span></div>
+  </main>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden role="dialog" aria-modal="true" aria-labelledby="d-title"></aside>
+
+<div class="tray" id="tray">
+  <div class="tray-in">
+    <div class="tray-bar">
+      <div class="count" id="count">No parts picked <small>· pick a card to start a list</small></div>
+      <div class="btns">
+        <button class="btn" id="toggle" type="button" disabled aria-expanded="false">Show request</button>
+        <button class="btn" id="clear" type="button" disabled>Clear</button>
+        <button class="btn primary" id="copy" type="button" disabled>Copy request</button>
+      </div>
+    </div>
+    <div id="panel" hidden>
+      <pre class="request" id="request"></pre>
+      <p class="note">The scaffold command comes with the kit extraction (see the GameKit doc); until then, paste the request to Claude.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const STATUS = {
+  ready: 'Lifts out as is',
+  light: 'Light dependencies',
+  split: 'Needs a split',
+  specific: 'Project-specific',
+};
+const KEY = 'gamekit.picked';
+let parts = [];
+let picked = new Set();
+const filt = { cat: null, status: null, q: '' };
+
+try { picked = new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch (e) { /* storage off */ }
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify([...picked])); } catch (e) { /* storage off */ } };
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+const byId = () => Object.fromEntries(parts.map((p) => [p.id, p]));
+
+// picked parts + everything they depend on, transitively
+function closure() {
+  const map = byId(), out = new Map();
+  const walk = (id, via) => {
+    const p = map[id]; if (!p || out.has(id)) return;
+    out.set(id, via);
+    for (const d of p.deps || []) walk(d, via || id);
+  };
+  for (const id of picked) walk(id, null);
+  for (const id of picked) out.set(id, null);
+  return out; // id -> null (picked) | id of the pick that pulled it in
+}
+
+function chips(rowId, values, key, labels) {
+  const row = $(rowId);
+  row.querySelectorAll('.chip').forEach((c) => c.remove());
+  for (const v of [null, ...values]) {
+    const b = el('button', 'chip', v == null ? 'All' : (labels ? labels[v] : v));
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(filt[key] === v));
+    b.onclick = () => { filt[key] = v; render(); };
+    row.append(b);
+  }
+}
+
+function card(p, state) {
+  const c = el('article', 'card' + (state === 'picked' ? ' picked' : state === 'auto' ? ' auto' : ''));
+  if (p.image) {
+    const img = el('img', 'shot'); img.src = p.image; img.alt = p.name + ' in Not So Super'; img.loading = 'lazy';
+    c.append(img);
+  } else c.append(el('div', 'noshot', 'no screenshot yet'));
+  const b = el('div', 'body');
+  const top = el('div', 'top');
+  const t = el('div'); t.append(el('h2', 'name', p.name), el('div', 'cat', p.category));
+  top.append(t, el('span', 'pill ' + p.status, STATUS[p.status] || p.status));
+  b.append(top, el('p', 'summary', p.summary));
+  if (p.goodFor) { const g = el('p', 'good'); g.append(el('b', null, 'Good for '), document.createTextNode(p.goodFor)); b.append(g); }
+  if (p.files && p.files.length) {
+    const f = el('div', 'files');
+    f.append(document.createTextNode(p.files.join(' · ')));
+    if (p.lines) { f.append(document.createTextNode('  ')); f.append(el('span', 'n', '~' + p.lines.toLocaleString() + ' lines')); }
+    b.append(f);
+  }
+  if (p.deps && p.deps.length) {
+    const map = byId(), d = el('div', 'deps');
+    d.append(document.createTextNode('Needs'));
+    for (const id of p.deps) d.append(el('span', 'dep', map[id] ? map[id].name : id));
+    b.append(d);
+  }
+  if (p.notes) b.append(el('p', 'good', p.notes));
+  if (state === 'auto') b.append(el('div', 'why', 'Included as a dependency'));
+  if (p.levels && p.levels[p.here]) b.append(el('div', 'level-tag', 'Today: level ' + (p.here + 1) + ' of 3 · ' + p.levels[p.here].name));
+  const acts = el('div', 'actions');
+  const btn = el('button', 'pick', state === 'picked' ? 'Picked' : 'Pick for next game');
+  btn.type = 'button';
+  btn.setAttribute('aria-pressed', String(state === 'picked'));
+  btn.onclick = () => { picked.has(p.id) ? picked.delete(p.id) : picked.add(p.id); save(); render(); };
+  acts.append(btn);
+  if (p.levels) {
+    const more = el('button', 'more', 'Levels & upgrades');
+    more.type = 'button';
+    more.onclick = () => openLadder(p, more);
+    acts.append(more);
+  }
+  b.append(acts);
+  c.append(b);
+  return c;
+}
+
+function request(set) {
+  const map = byId();
+  const chosen = [...set.keys()].filter((id) => map[id]).sort((a, b) => (map[a].order || 0) - (map[b].order || 0));
+  const lines = chosen.map((id) => {
+    const p = map[id], via = set.get(id);
+    return '- ' + p.name + ' (' + (p.files || []).join(', ') + ')' + (via ? '  [needed by ' + (map[via] ? map[via].name : via) + ']' : '');
+  });
+  return 'Start a new game from the GameKit (Not So Super) with these parts:\n' + lines.join('\n') +
+    '\n\nSplit anything marked "needs a split" so only its engine side comes over. Game idea: <describe it here>' +
+    '\n\nScaffold (once the kit is extracted): node kit/new-game.js --modules ' + chosen.join(',');
+}
+
+function render() {
+  const set = closure();
+  const cats = [...new Set(parts.map((p) => p.category))];
+  chips('cats', cats, 'cat');
+  chips('stats', Object.keys(STATUS).filter((s) => parts.some((p) => p.status === s)), 'status', STATUS);
+
+  const tally = $('tally'); tally.replaceChildren();
+  tally.append(el('span', null, parts.length + ' parts'));
+  for (const s of Object.keys(STATUS)) {
+    const n = parts.filter((p) => p.status === s).length;
+    if (n) tally.append(el('span', null, n + ' ' + STATUS[s].toLowerCase()));
+  }
+
+  const q = filt.q.trim().toLowerCase();
+  const shown = parts.filter((p) =>
+    (!filt.cat || p.category === filt.cat) &&
+    (!filt.status || p.status === filt.status) &&
+    (!q || [p.name, p.category, p.summary, p.goodFor, (p.files || []).join(' ')].join(' ').toLowerCase().includes(q)));
+  const grid = $('grid'); grid.replaceChildren();
+  if (!parts.length) {
+    const e = el('div', 'empty'); e.append(el('b', null, 'No parts in the inventory yet'), el('span', null, 'Ask Claude to add parts from the codebase; they show up here as cards.'));
+    grid.append(e);
+  } else if (!shown.length) {
+    const e = el('div', 'empty'); e.append(el('b', null, 'Nothing matches'), el('span', null, 'Clear the search or pick another filter.'));
+    grid.append(e);
+  } else {
+    for (const p of shown) grid.append(card(p, picked.has(p.id) ? 'picked' : set.has(p.id) ? 'auto' : null));
+  }
+
+  const n = picked.size, auto = set.size - [...picked].filter((id) => set.has(id)).length;
+  $('count').replaceChildren(document.createTextNode(n ? n + ' picked' : 'No parts picked'),
+    el('small', null, n ? ' · ' + auto + ' added as dependencies · ' + set.size + ' in total' : ' · pick a card to start a list'));
+  for (const id of ['toggle', 'clear', 'copy']) $(id).disabled = !n;
+  if (!n) { $('panel').hidden = true; $('toggle').setAttribute('aria-expanded', 'false'); $('toggle').textContent = 'Show request'; }
+  $('request').textContent = n ? request(set) : '';
+}
+
+let opener = null;
+function openLadder(p, from) {
+  opener = from;
+  const d = $('drawer'); d.replaceChildren();
+  const head = el('div', 'd-head');
+  const t = el('div'); t.append(el('div', 'eyebrow', p.category));
+  const h = el('h2', null, p.name); h.id = 'd-title'; t.append(h);
+  const x = el('button', 'close', 'Close'); x.type = 'button'; x.onclick = closeLadder;
+  head.append(t, x);
+  d.append(head);
+
+  const m = el('section', 'd-sec');
+  m.append(el('h3', null, 'Methods of approach'), el('p', 'hint', 'The technique behind each quality level. Search the method names to learn more.'));
+  const ol = el('ol', 'ladder');
+  p.levels.forEach((lv, i) => {
+    const li = el('li', 'rung' + (i === p.here ? ' here' : ''));
+    const top = el('div', 'rung-top');
+    top.append(el('span', 'rung-lvl', 'Level ' + (i + 1) + ' · ' + lv.name));
+    if (i === p.here) top.append(el('span', 'here-tag', 'Not So Super is here'));
+    li.append(top, el('div', 'rung-method', lv.method), el('p', null, lv.how), el('p', 'cost', 'Cost: ' + lv.cost));
+    ol.append(li);
+  });
+  m.append(ol);
+  d.append(m);
+
+  if (p.enhancements && p.enhancements.length) {
+    const e = el('section', 'd-sec');
+    e.append(el('h3', null, 'Possible enhancements'), el('p', 'hint', 'Small wins at today\'s level.'));
+    const ul = el('ul', 'enh');
+    for (const s of p.enhancements) ul.append(el('li', null, s));
+    e.append(ul);
+    d.append(e);
+  }
+  if (p.upgrade) {
+    const u = el('section', 'd-sec');
+    u.append(el('h3', null, 'Upgrades'), el('p', 'hint', 'The recommended next step up.'));
+    const box = el('div', 'up');
+    box.append(el('b', null, p.upgrade.title), el('p', null, p.upgrade.how), el('div', 'effort', 'Effort: ' + p.upgrade.effort));
+    u.append(box);
+    d.append(u);
+  }
+  $('scrim').hidden = false; d.hidden = false; d.scrollTop = 0; x.focus();
+}
+function closeLadder() {
+  $('drawer').hidden = true; $('scrim').hidden = true;
+  if (opener && document.contains(opener)) opener.focus();
+}
+$('scrim').onclick = closeLadder;
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('drawer').hidden) closeLadder(); });
+
+$('q').addEventListener('input', (e) => { filt.q = e.target.value; render(); });
+$('toggle').onclick = () => {
+  const p = $('panel'); p.hidden = !p.hidden;
+  $('toggle').setAttribute('aria-expanded', String(!p.hidden));
+  $('toggle').textContent = p.hidden ? 'Show request' : 'Hide request';
+};
+$('clear').onclick = () => { picked.clear(); save(); render(); };
+$('copy').onclick = () => {
+  const text = $('request').textContent;
+  const done = () => { $('copy').textContent = 'Copied'; setTimeout(() => { $('copy').textContent = 'Copy request'; }, 1600); };
+  const fallback = () => {
+    $('panel').hidden = false; $('toggle').textContent = 'Hide request'; $('toggle').setAttribute('aria-expanded', 'true');
+    const r = document.createRange(); r.selectNodeContents($('request'));
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    $('copy').textContent = 'Selected: press Ctrl+C';
+  };
+  try { navigator.clipboard.writeText(text).then(done, fallback); } catch (e) { fallback(); }
+};
+
+render();
+(async () => {
+  const db = window.claude && window.claude.use ? await window.claude.use('db') : null;
+  if (!db) {
+    const g = $('grid'); g.replaceChildren();
+    const e = el('div', 'empty'); e.append(el('b', null, 'The inventory could not load here'), el('span', null, 'Open this page on claude.ai while signed in to see the parts.'));
+    g.append(e);
+    return;
+  }
+  db.collection('parts').orderBy('order').onSnapshot((snap) => {
+    parts = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    for (const id of [...picked]) if (!parts.some((p) => p.id === id)) picked.delete(id);
+    render();
+  }, () => {
+    const g = $('grid'); g.replaceChildren();
+    const e = el('div', 'empty'); e.append(el('b', null, 'The inventory could not load'), el('span', null, 'Reload the page; if it keeps failing, ask Claude to check the parts database.'));
+    g.append(e);
+  });
+})();
+</script>
