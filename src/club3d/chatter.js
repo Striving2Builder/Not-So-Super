@@ -40,19 +40,21 @@ export const chatterMethods = {
   stepChatter(dt) {
     if (!this.chatLayer) return;
     this.updateTapBubbles();
-    if (this.busy || this.room && this.room.kind !== 'dark' && this.room.kind !== 'lounge') { this.chatterT = Math.max(this.chatterT, 1); return; }
+    if (this.busy) return;
     this.stepRecognition(dt);
+    // Super-hearing's purple clue boxes are not floor chatter. Letting them past the idle ring
+    // (2026-10-21) still left them dead: one random dancer had to land inside a centre-screen
+    // window the ring's heads miss as soon as the camera isn't Far, a spotted bouncer or the
+    // chase hush returned before that, and layoutBubbles then deleted any box with no free gap.
+    if (this.stepWhispers(dt)) return;
+    if (this.room && this.room.kind !== 'dark' && this.room.kind !== 'lounge') { this.chatterT = Math.max(this.chatterT, 1); return; }
     this.chatterT -= dt;
     if (this.chatterT > 0) return;
     this.chatterT = 2 + Math.random() * 1.8;
     if (this.quietT > 0 || this.hunted?.()) return; // (r11 L2b: she's just been made)
     const h = this.hero.position, st = this.g.state, d = this.caseDef;
-    // super-hearing's whispers cut through the idle ring and the bubble cap: listening means standing
-    // still, and standing still brings the ring (device test 2026-10-21: no purple bubbles at all)
-    const whispers = (d.whispers || []).filter((r) => !this.noted.has(r.id));
-    const listen = this.hearing && whispers.length && !(this.taps || []).some((b) => b.kind === 'whisper' && !b.gone);
     const crowded = this.idleRing || this.bubblesFull?.(); // (r11 L2b: the ring has the floor, or two are talking already)
-    if (crowded && !listen) return;
+    if (crowded) return;
     const p = this.crowd.nearest(h.x + (Math.random() - 0.5) * 5, h.z - 1 - Math.random() * 4, 6, (q) => Math.hypot(q.x - h.x, q.z - h.z) > 1.0 && !q.talking);
     if (!p) return;
     const anchor = () => this.screenOf({ x: p.x, y: p.y ?? 0, z: p.z }, 2.05);
@@ -61,7 +63,6 @@ export const chatterMethods = {
     if (!a0 || a0.x < W * 0.2 || a0.x > W * 0.8 || a0.y < H * 0.24 || a0.y > H * 0.8) return; // (on screen, clear of the HUD panels and the buttons)
     const rumours = (d.rumours || []).filter((r) => !this.noted.has(r.id));
     const roll = Math.random();
-    if (listen && (crowded || roll < 0.55)) return this.tapBubble(p, anchor, whispers[0], 'whisper');
     if (rumours.length && roll < 0.3) return this.tapBubble(p, anchor, pick(rumours), 'rumour');
     if (roll < 0.42 && !this.offerOut) return this.tapBubble(p, anchor, pick(OFFERS), 'offer');
     let line;
@@ -76,6 +77,46 @@ export const chatterMethods = {
     comic.say(st.intox >= 60 ? scramble(line, 0.2) : line, a.x, a.y, { kind: 'speech', ms: 2000, anchor });
   },
 
+  /** The next unheard whisper, while super-hearing is on and a purple box isn't already up. */
+  pendingWhisper() {
+    if (!this.hearing || !this.caseDef || !this.noted) return null;
+    if ((this.taps || []).some((b) => b.kind === 'whisper' && !b.gone)) return null;
+    return (this.caseDef.whispers || []).find((r) => !this.noted.has(r.id)) || null;
+  },
+
+  /**
+   * One purple clue box. True while hearing still has a whisper to deliver, so a rumour
+   * doesn't take the slot out from under it.
+   */
+  stepWhispers(dt) {
+    const item = this.pendingWhisper();
+    if (!item) return false;
+    this.hearT = (this.hearT == null ? 0 : this.hearT) - dt;
+    if (this.hearT > 0) return true;
+    const p = this.whisperSpeaker();
+    if (!p) { this.hearT = 0.4; return true; }
+    const anchor = () => this.screenOf({ x: p.x, y: p.fy ?? p.y ?? 0, z: p.z }, 2.05);
+    this.tapBubble(p, anchor, item, 'whisper');
+    this.hearT = 1.4;
+    return true;
+  },
+
+  /** Someone within earshot to hang the box on. On-screen if anyone is; otherwise the nearest, and the box clamps onto the screen. */
+  whisperSpeaker() {
+    const h = this.hero.position, W = this.g.w, H = this.g.h;
+    let best = null, bd = 1e9, on = null, od = 1e9;
+    for (const p of this.crowd?.people || []) {
+      if (p.left || p.talking) continue;
+      if (p.pose !== 'dance' && p.pose !== 'stand' && p.pose !== 'sit') continue;
+      const d = Math.hypot(p.x - h.x, p.z - h.z);
+      if (d < 0.65 || d > 9) continue;
+      if (d < bd) { bd = d; best = p; }
+      const s = this.screenOf({ x: p.x, y: p.fy ?? p.y ?? 0, z: p.z }, 2.05);
+      if (s && s.x > 4 && s.x < W - 4 && s.y > 4 && s.y < H - 4 && d < od) { od = d; on = p; }
+    }
+    return on || best;
+  },
+
   /** A bubble you can tap: a rumour or whisper (noted) or an offer (accepted). Lives in its own layer. */
   tapBubble(p, anchor, item, kind) {
     const st = this.g.state;
@@ -84,7 +125,7 @@ export const chatterMethods = {
     const text = kind === 'offer' ? item.text : `"${this.rumourText(item)}"`;
     el.innerHTML = `${kind === 'whisper' ? '<b>WHISPER</b>' : ''}<span>${this.garbled() && kind !== 'offer' ? scramble(text, 0.25) : text}</span><small>${kind === 'offer' ? item.label : 'TAP TO NOTE'}</small>`;
     p.talking = true;
-    const b = { el, anchor, p, t: kind === 'whisper' ? 5.5 : 4.4, item, kind };
+    const b = { el, anchor, p, t: kind === 'whisper' ? 8 : 4.4, item, kind, keep: kind === 'whisper' };
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault(); e.stopPropagation();
       if (b.gone) return;
@@ -97,28 +138,46 @@ export const chatterMethods = {
     if (kind === 'offer') this.offerOut = true;
     this.taps = this.taps || [];
     this.taps.push(b);
+    this.placeBubble(b);
     sfx.click();
-    while (this.taps.length > 2) this.dropBubble(this.taps[0]);
+    while (this.taps.length > 2) {
+      const victim = this.taps.find((q) => q !== b && !q.keep);
+      if (!victim) break;
+      this.dropBubble(victim);
+    }
   },
 
   dropBubble(b) {
+    const again = b.kind === 'whisper' && this.hearing && !(this.noted && this.noted.has(b.item?.id));
     b.gone = true; b.p.talking = false;
     if (b.kind === 'offer') this.offerOut = false;
     b.el.classList.add('out');
     setTimeout(() => b.el.remove(), 300);
     this.taps = this.taps.filter((q) => q !== b);
+    if (again) this.hearT = Math.min(this.hearT ?? 0.45, 0.45);
+  },
+
+  /** Screen position for a tap bubble. A whisper keeps its last spot if the speaker slips off-camera for a moment. */
+  placeBubble(b) {
+    const a = b.anchor();
+    if (!a) {
+      b.miss = (b.miss || 0) + (this.frameDt || 1 / 60);
+      return !!(b.keep && b.bx != null && b.miss < 0.75);
+    }
+    b.miss = 0;
+    const w = b.el.offsetWidth || 180, hgt = b.el.offsetHeight || 72;
+    const x = clamp(a.x - w / 2, 8, this.g.w - w - 8), y = clamp(a.y - hgt - 18, 56, this.g.h - hgt - 90);
+    b.bx = x; b.by = y; b.bw = w; b.bh = hgt; // (r11 L2b: feelfx layoutBubbles keeps it clear of the rest)
+    b.el.style.transform = `translate(${Math.round(x + (b._dx || 0))}px,${Math.round(y + (b._dy || 0))}px)`;
+    return true;
   },
 
   updateTapBubbles() {
     const dt = this.frameDt || 1 / 60;
     for (const b of [...(this.taps || [])]) {
       b.t -= dt;
-      const a = b.anchor();
-      if (b.gone || b.t <= 0 || !a || this.busy) { this.dropBubble(b); continue; }
-      const w = b.el.offsetWidth || 180, hgt = b.el.offsetHeight || 60;
-      const x = clamp(a.x - w / 2, 8, this.g.w - w - 8), y = clamp(a.y - hgt - 18, 56, this.g.h - hgt - 90);
-      b.bx = x; b.by = y; b.bw = w; b.bh = hgt; // (r11 L2b: feelfx layoutBubbles keeps it clear of the rest)
-      b.el.style.transform = `translate(${Math.round(x + (b._dx || 0))}px,${Math.round(y + (b._dy || 0))}px)`;
+      if (b.gone || b.t <= 0 || this.busy) { this.dropBubble(b); continue; }
+      if (!this.placeBubble(b)) this.dropBubble(b);
     }
   },
 

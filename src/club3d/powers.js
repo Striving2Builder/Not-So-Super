@@ -148,6 +148,6 @@ export const powerMethods = {
     if (on && this.undercover) { toast('No powers while you\'re undercover.', 'bad'); return; }
     this.hearing = on;
     this.g.input.setButton('hear', { toggled: on });
-    if (on) { sfx.whoosh(); this.chatterT = Math.min(this.chatterT || 0, 0.6); }
+    if (on) { sfx.whoosh(); this.hearT = 0; }
   },
 };

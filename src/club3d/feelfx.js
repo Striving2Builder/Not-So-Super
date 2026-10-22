@@ -115,6 +115,14 @@ export const feelFxMethods = {
       if (it.b) ({ bx: x, by: y0, bw: w, bh: h } = it.b);
       else { x = parseFloat(o.style.left) || 0; y0 = parseFloat(o.style.top) || 0; w = o.offsetWidth; h = o.offsetHeight; }
       let d = fit(x, y0, w, h, o._t);
+      // a whisper is the clue she turned hearing on to catch: park it in the open rather than delete it
+      if (!d && it.b?.keep) {
+        const Wg = this.g?.w || W, Hg = this.g?.h || H;
+        it.b.bx = clamp((Wg - w) / 2, 8, Math.max(8, Wg - w - 8));
+        it.b.by = clamp(Hg * 0.34, 64, Math.max(64, Hg - h - 80));
+        x = it.b.bx; y0 = it.b.by;
+        d = fit(x, y0, w, h, null) || [0, 0];
+      }
       if (!d) {
         if (it.b) { this.dropBubble(it.b); continue; }
         if (!it.keep) { o.classList.add('out'); setTimeout(() => o.remove(), 300); continue; }
